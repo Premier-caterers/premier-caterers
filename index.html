@@ -348,8 +348,9 @@ async function seedIfEmpty(){
     const batch = db.batch();
     const seedEvents = events.slice(); // use hardcoded events as seed
     seedEvents.forEach(e=>{ 
-    if(!e.weekOf) e.weekOf='2026-06-08';
-    // Convert old job format (#1, #2a) to new format (060826-1, 060826-2a)
+    // Na'aleh (#9) is this week (Jun 8), all others are last week (Jun 1)
+    if(!e.weekOf) e.weekOf = (e.id==='9') ? '2026-06-08' : '2026-06-01';
+    // Convert old job format (#1, #2a) to new format
     if(e.job && e.job.startsWith('#') && !e.job.includes('-')){
       const n = e.job.replace('#','');
       const d = new Date((e.weekOf||'2026-06-08')+'T12:00:00');
@@ -520,7 +521,7 @@ function renderEvents(){
   const currentWeekStr = currentWeekDate.toISOString().split('T')[0];
   const weekEvents = events.filter(e => {
     // Events without weekOf belong to the base week (2026-06-08)
-    const ew = e.weekOf || '2026-06-08';
+    const ew = e.weekOf || '2026-06-01';
     return ew === currentWeekStr;
   });
   const weekLabel = document.getElementById('wePill')?.textContent || ('W/E '+currentWeekStr);
@@ -602,7 +603,7 @@ function renderEvents(){
           ${e.floorplan ? statusBadge('Floorplan','attached',e.floorplan) : ''}
           ${e.venueLink||true ? statusBadge('Venue', (e.venueLink?'attached':'missing'), e.venueLink||'https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0') : ''}
         </div>
-        <div style="margin-top:8px" onclick="event.stopPropagation()">
+        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
           <button onclick="goChecklist('${e.id}')" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
           ${role.canViewInvoices ? `<button onclick="showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid ${
             !invoices[e.id]||invoices[e.id].status==='none' ? 'var(--border2)' :
@@ -622,6 +623,7 @@ function renderEvents(){
             invoices[e.id].status==='approved' ? 'Quote approved' :
             invoices[e.id].status==='invoice' ? 'Invoice open' :
             'Paid ✓'}</button>` : ''}
+          <button onclick="deleteEvent('${e.id}')" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
         </div>
       </div>`;
     });
@@ -2409,6 +2411,13 @@ function printList(id) {
 function renderSettings(){
   const connected=!!localStorage.getItem('scriptUrl');
   return `
+  <div style="background:var(--amber-bg);border:0.5px solid var(--amber-text);border-radius:var(--radius-lg);padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+    <div>
+      <div style="font-size:13px;font-weight:500;color:var(--amber-text)">One-time fix: move events to correct week</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px">Moves all events except Na'aleh to W/E Jun 1 (last week). Run once then this button can be ignored.</div>
+    </div>
+    <button onclick="migrateWeekOf()" style="padding:7px 16px;border:none;border-radius:var(--radius);background:var(--amber-text);color:#fff;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap">Fix weeks now</button>
+  </div>
   <div class="section-header"><div class="section-title">Google Sheets live sync</div></div>
   ${connected?`<div class="banner green" style="margin-bottom:1rem"><i class="ti ti-circle-check" style="font-size:16px;color:var(--green-text);flex-shrink:0"></i><div class="banner-text"><strong>Connected!</strong> Platform is reading live data from your Google Sheet.</div></div>`:''}
   <div class="settings-card">
@@ -2764,6 +2773,33 @@ async function confirmAddFromList(id){
   renderEquipDetail();
 }
 
+
+// ── ONE-TIME MIGRATION: fix weekOf on existing events ──
+async function migrateWeekOf(){
+  if(!confirm('This will move all events except Na\'aleh to last week (W/E Jun 1). Continue?')) return;
+  const batch = db.batch();
+  events.forEach(e=>{
+    const correctWeek = (e.id==='9' || e.name==="Na'aleh") ? '2026-06-08' : '2026-06-01';
+    if(e.weekOf !== correctWeek){
+      e.weekOf = correctWeek;
+      batch.set(db.collection('events').doc(e.id), e);
+    }
+  });
+  await batch.commit();
+  showToast('Events updated ✓');
+  render();
+}
+
+async function deleteEvent(id){
+  if(!confirm('Delete this event permanently? This cannot be undone.')) return;
+  await db.collection('events').doc(id).delete();
+  await db.collection('checklists').doc(id).delete().catch(()=>{});
+  await db.collection('equipment').doc(id).delete().catch(()=>{});
+  await db.collection('invoices').doc(id).delete().catch(()=>{});
+  selectedId = null;
+  showToast('Event deleted');
+  render();
+}
 function save(){ /* Firebase handles all saves */ }
 function load(){ /* Firebase handles all loads */ }
 
@@ -2865,6 +2901,8 @@ window.driveSearchUrl = driveSearchUrl;
 window.filterDay = filterDay;
 window.saveScriptUrl = ()=>{};
 window.testConnection = ()=>{};
+window.migrateWeekOf = migrateWeekOf;
+window.deleteEvent = deleteEvent;
 window.copyScript = ()=>{ navigator.clipboard?.writeText(document.getElementById('scriptBox')?.innerText||''); };
 
 // Mark app as ready and flush queued calls
