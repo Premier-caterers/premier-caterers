@@ -2485,7 +2485,25 @@ function loadFromSheet(url){ return; //
 }
 
 // ── ADD EVENT ──
-function openModal(){ document.getElementById('addModal').classList.add('open'); }
+function openModal(){
+  // Update day options for current week
+  const weDate = getWeekEndDate(currentWeekOffset);
+  const days = ['thursday','friday','saturday','sunday','monday'];
+  const dayLabels = ['Thursday','Friday','Saturday','Sunday','Monday'];
+  // Week ending date is Monday, so calculate back
+  // weDate = Monday of that week
+  const dayOffsets = {thursday:-4, friday:-3, saturday:-2, sunday:-1, monday:0};
+  const sel = document.getElementById('m-day');
+  if(sel){
+    sel.innerHTML = days.map((d,i)=>{
+      const dt = new Date(weDate);
+      dt.setDate(dt.getDate() + dayOffsets[d]);
+      const label = dayLabels[i]+' '+( dt.getMonth()+1)+'/'+dt.getDate();
+      return `<option value="${d}">${label}</option>`;
+    }).join('');
+  }
+  document.getElementById('addModal').classList.add('open');
+}
 function closeModal(){ document.getElementById('addModal').classList.remove('open'); }
 function addEvent(){
   const job=document.getElementById('m-job').value.trim();
