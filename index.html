@@ -2486,39 +2486,68 @@ function loadFromSheet(url){ return; //
 
 // ── ADD EVENT ──
 function openModal(){
-  // Update day options for current week
-  const weDate = getWeekEndDate(currentWeekOffset);
-  const days = ['thursday','friday','saturday','sunday','monday'];
-  const dayLabels = ['Thursday','Friday','Saturday','Sunday','Monday'];
-  // Week ending date is Monday, so calculate back
-  // weDate = Monday of that week
-  const dayOffsets = {thursday:-4, friday:-3, saturday:-2, sunday:-1, monday:0};
+  // Update day options for current week - show all 7 days
+  const weDate = getWeekEndDate(currentWeekOffset); // This is Monday (week end)
+  const allDays = [
+    {key:'tuesday',  label:'Tuesday',   offset:-6},
+    {key:'wednesday',label:'Wednesday', offset:-5},
+    {key:'thursday', label:'Thursday',  offset:-4},
+    {key:'friday',   label:'Friday',    offset:-3},
+    {key:'saturday', label:'Saturday',  offset:-2},
+    {key:'sunday',   label:'Sunday',    offset:-1},
+    {key:'monday',   label:'Monday',    offset:0},
+  ];
   const sel = document.getElementById('m-day');
   if(sel){
-    sel.innerHTML = days.map((d,i)=>{
+    sel.innerHTML = allDays.map(d=>{
       const dt = new Date(weDate);
-      dt.setDate(dt.getDate() + dayOffsets[d]);
-      const label = dayLabels[i]+' '+( dt.getMonth()+1)+'/'+dt.getDate();
-      return `<option value="${d}">${label}</option>`;
+      dt.setDate(dt.getDate() + d.offset);
+      const label = d.label+' '+(dt.getMonth()+1)+'/'+dt.getDate();
+      return `<option value="${d.key}">${label}</option>`;
     }).join('');
+    // Default to first available day
+    sel.value = 'thursday';
   }
   document.getElementById('addModal').classList.add('open');
 }
 function closeModal(){ document.getElementById('addModal').classList.remove('open'); }
 function addEvent(){
-  const job=document.getElementById('m-job').value.trim();
-  const name=document.getElementById('m-name').value.trim();
-  if(!job||!name) return;
-  const type=document.getElementById('m-type').value;
-  const day=document.getElementById('m-day').value;
-  const dlMap={thursday:'Thu',friday:'Fri',saturday:'Sat',sunday:'Sun',monday:'Mon'};
-  const weDate = getWeekEndDate(currentWeekOffset);
-  const weekOf = weDate.toISOString().split('T')[0];
-  // Auto-generate job number if not manually entered, or format existing one
-  const jobInput = document.getElementById('m-job').value.trim();
-  const autoJob = jobInput ? makeJobId(weekOf, jobInput.replace('#','')) : nextJobNumber(weekOf);
-  const newEv={id:Date.now()+'',job:autoJob,name,addr:document.getElementById('m-addr').value,type,typeLabel:typeMap[type],day,dayLabel:dlMap[day],weekOf,waiters:0,waiterNames:'',waiterTime:'-',waiterTime2:'',bartenders:0,bartenderNames:'',bartenderTime:'',bartenderTime2:'',chefs:0,chefNames:'',chefTime:'-',chefTime2:'',porters:0,porterNames:'',porterTime:'',porterTime2:'',manager:'-',mashgiach:'-',mashgiachNames:'',menuLink:'',groceryLink:'',floorplan:'',venueLink:'',pdfMenuLink:'',logoData:'',notes:document.getElementById('m-notes').value};
-  _saveEvent(newEv); closeModal(); render();
+  try{
+    const name=document.getElementById('m-name').value.trim();
+    if(!name){ alert('Please enter a client name.'); return; }
+    const type=document.getElementById('m-type').value;
+    const day=document.getElementById('m-day').value;
+    const dlMap={tuesday:'Tue',wednesday:'Wed',thursday:'Thu',friday:'Fri',saturday:'Sat',sunday:'Sun',monday:'Mon'};
+    const weDate = getWeekEndDate(currentWeekOffset);
+    const weekOf = weDate.toISOString().split('T')[0];
+    const jobInput = document.getElementById('m-job').value.trim();
+    const autoJob = jobInput ? makeJobId(weekOf, jobInput.replace('#','')) : nextJobNumber(weekOf);
+    const typeLabelMap = {
+      dinner:'Dinner', lunch:'Lunch', engagement:'Engagement', barmitzvah:'Bar / Bat Mitzvah',
+      shalosh:'Shalosh seudah', dropoff:'Drop off', breakfast:'Breakfast', brunch:'Brunch',
+      kiddush:'Kiddush', bris:'Bris', corporate:'Corporate', other:'Other'
+    };
+    const newEv={
+      id:Date.now()+'', job:autoJob, name,
+      addr:document.getElementById('m-addr')?.value||'',
+      type, typeLabel:typeLabelMap[type]||type,
+      day, dayLabel:dlMap[day]||day,
+      weekOf,
+      waiters:0,waiterNames:'',waiterTime:'-',waiterTime2:'',
+      bartenders:0,bartenderNames:'',bartenderTime:'',bartenderTime2:'',
+      chefs:0,chefNames:'',chefTime:'-',chefTime2:'',
+      porters:0,porterNames:'',porterTime:'',porterTime2:'',
+      manager:'-',mashgiach:'-',mashgiachNames:'',
+      menuLink:'',groceryLink:'',floorplan:'',venueLink:'',pdfMenuLink:'',logoData:'',
+      notes:document.getElementById('m-notes')?.value||''
+    };
+    _saveEvent(newEv);
+    closeModal();
+    render();
+  } catch(err){
+    alert('Error saving event: '+err.message);
+    console.error(err);
+  }
 }
 
 // ── PERSISTENCE ──
