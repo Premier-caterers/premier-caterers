@@ -349,11 +349,11 @@ async function seedIfEmpty(){
     const seedEvents = events.slice(); // use hardcoded events as seed
     seedEvents.forEach(e=>{ 
     // Na'aleh (#9) is this week (Jun 8), all others are last week (Jun 1)
-    if(!e.weekOf) e.weekOf = (e.id==='9') ? '2026-06-08' : '2026-06-01';
+    if(!e.weekOf) e.weekOf = (e.id==='9') ? '2026-06-07' : '2026-05-31';
     // Convert old job format (#1, #2a) to new format
     if(e.job && e.job.startsWith('#') && !e.job.includes('-')){
       const n = e.job.replace('#','');
-      const d = new Date((e.weekOf||'2026-06-08')+'T12:00:00');
+      const d = new Date((e.weekOf||'2026-06-07')+'T12:00:00');
       const mm = String(d.getMonth()+1).padStart(2,'0');
       const dd = String(d.getDate()).padStart(2,'0');
       const yy = String(d.getFullYear()).slice(2);
@@ -426,7 +426,7 @@ const typeMap = {dinner:'Dinner',lunch:'Lunch',engagement:'Engagement',barmitzva
 // Display format: #N (e.g. #1)
 
 function makeJobId(weekOfStr, n){
-  // weekOfStr = '2026-06-08'
+  // weekOfStr = '2026-06-07'
   const d = new Date(weekOfStr + 'T12:00:00');
   const mm = String(d.getMonth()+1).padStart(2,'0');
   const dd = String(d.getDate()).padStart(2,'0');
@@ -443,7 +443,7 @@ function displayJob(fullJob){
 
 function nextJobNumber(weekOf){
   // Find highest number for this week
-  const weStr = weekOf || '2026-06-08';
+  const weStr = weekOf || '2026-06-07';
   const d = new Date(weStr + 'T12:00:00');
   const mm = String(d.getMonth()+1).padStart(2,'0');
   const dd = String(d.getDate()).padStart(2,'0');
@@ -521,7 +521,7 @@ function renderEvents(){
   const currentWeekStr = currentWeekDate.toISOString().split('T')[0];
   const weekEvents = events.filter(e => {
     // Events without weekOf belong to the base week (2026-06-08)
-    const ew = e.weekOf || '2026-06-01';
+    const ew = e.weekOf || '2026-05-31';
     return ew === currentWeekStr;
   });
   const weekLabel = document.getElementById('wePill')?.textContent || ('W/E '+currentWeekStr);
@@ -1665,7 +1665,7 @@ function calcInvoiceTotals(inv){
 function renderInvoices(){
   const weekDate = getWeekEndDate(currentWeekOffset);
   const weekStr = weekDate.toISOString().split('T')[0];
-  const weekEvts = events.filter(e=>(e.weekOf||'2026-06-08')===weekStr && e.type!=='dropoff');
+  const weekEvts = events.filter(e=>(e.weekOf||'2026-06-07')===weekStr && e.type!=='dropoff');
   
   let h = `<div class="section-header">
     <div class="section-title">Quotes & Invoices</div>
@@ -2489,13 +2489,13 @@ function openModal(){
   // Update day options for current week - show all 7 days
   const weDate = getWeekEndDate(currentWeekOffset); // This is Monday (week end)
   const allDays = [
-    {key:'tuesday',  label:'Tuesday',   offset:-6},
-    {key:'wednesday',label:'Wednesday', offset:-5},
-    {key:'thursday', label:'Thursday',  offset:-4},
-    {key:'friday',   label:'Friday',    offset:-3},
-    {key:'saturday', label:'Saturday',  offset:-2},
-    {key:'sunday',   label:'Sunday',    offset:-1},
-    {key:'monday',   label:'Monday',    offset:0},
+    {key:'monday',   label:'Monday',    offset:-6},
+    {key:'tuesday',  label:'Tuesday',   offset:-5},
+    {key:'wednesday',label:'Wednesday', offset:-4},
+    {key:'thursday', label:'Thursday',  offset:-3},
+    {key:'friday',   label:'Friday',    offset:-2},
+    {key:'saturday', label:'Saturday',  offset:-1},
+    {key:'sunday',   label:'Sunday',    offset:0},
   ];
   const sel = document.getElementById('m-day');
   if(sel){
@@ -2667,11 +2667,13 @@ function printChecklist(eid){
 }
 
 const eventDayDates = {
-  thursday: new Date('2026-05-28'),
-  friday:   new Date('2026-05-29'),
-  saturday: new Date('2026-05-30'),
-  sunday:   new Date('2026-05-31'),
-  monday:   new Date('2026-06-01'),
+  monday:    new Date('2026-05-31'),
+  tuesday:   new Date('2026-06-02'),
+  wednesday: new Date('2026-06-03'),
+  thursday:  new Date('2026-06-04'),
+  friday:    new Date('2026-06-05'),
+  saturday:  new Date('2026-06-06'),
+  sunday:    new Date('2026-06-07'),
 };
 
 function getEventIsoDate(day){
@@ -2721,7 +2723,7 @@ function toggleAssigned(eid, idx, name, val){
 let currentWeekOffset = 0; // 0 = current week
 
 function getWeekEndDate(offset){
-  const base = new Date('2026-06-08'); // Monday Jun 8 = W/E this week
+  const base = new Date('2026-06-07'); // Sunday Jun 7 = W/E this week
   base.setDate(base.getDate() + (offset * 7));
   return base;
 }
@@ -2752,7 +2754,7 @@ function showWeekPicker(){
 function jumpToWeek(val){
   if(!val) return;
   const d = new Date(val);
-  const base = new Date('2026-06-08');
+  const base = new Date('2026-06-07');
   const diff = Math.round((d - base) / (7*24*60*60*1000));
   currentWeekOffset = diff;
   updateWeekLabel();
@@ -2826,7 +2828,7 @@ async function migrateWeekOf(){
   if(!confirm('This will move all events except Na\'aleh to last week (W/E Jun 1). Continue?')) return;
   const batch = db.batch();
   events.forEach(e=>{
-    const correctWeek = (e.id==='9' || e.name==="Na'aleh") ? '2026-06-08' : '2026-06-01';
+    const correctWeek = (e.id==='9' || e.name==="Na'aleh") ? '2026-06-07' : '2026-05-31';
     if(e.weekOf !== correctWeek){
       e.weekOf = correctWeek;
       batch.set(db.collection('events').doc(e.id), e);
