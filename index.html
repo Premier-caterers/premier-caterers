@@ -2975,6 +2975,7 @@ window.copyScript = ()=>{ navigator.clipboard?.writeText(document.getElementById
 
 // ── INIT (polls until Firebase SDK available) ──
 function _startApp() {
+  if(db) return; // already initialized
   if(typeof firebase === 'undefined' || typeof firebase.firestore === 'undefined') {
     setTimeout(_startApp, 50);
     return;
@@ -3027,7 +3028,32 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
   }, 1500);
 });
-window.addEventListener("load", _startApp);
+// Initialize Firebase immediately - no waiting
+(function initNow(){
+  try {
+    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    eventsCol    = db.collection('events');
+    changesCol   = db.collection('changes');
+    inquiriesCol = db.collection('inquiries');
+    checklistCol = db.collection('checklists');
+    equipCol     = db.collection('equipment');
+    invoicesCol  = db.collection('invoices');
+    render();
+    seedIfEmpty().then(()=>{
+      startFirebaseListeners();
+      window._firebaseReady = true;
+      const dot=document.getElementById('syncDot');
+      const lbl=document.getElementById('syncLabel');
+      if(dot) dot.className='sync-dot';
+      if(lbl) lbl.textContent='Live ✓';
+      document.getElementById('syncBtn')?.classList.add('connected');
+    }).catch(err=>{ console.error(err); render(); });
+  } catch(e) {
+    // Firebase not ready yet, wait and retry
+    setTimeout(initNow, 100);
+  }
+})();
 </script>
 </body>
 </html>
