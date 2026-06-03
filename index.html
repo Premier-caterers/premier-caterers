@@ -1,4 +1,6 @@
-<html lang="en"><head>
+<!DOCTYPE html>
+<html lang="en">
+<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
@@ -212,11 +214,13 @@ a{color:var(--blue-mid);text-decoration:none}
 
 .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--green-text);display:inline-block;margin-right:4px;}
 .sync-dot.offline{background:var(--amber-text);}
+@keyframes pulse-red{0%,100%{opacity:1}50%{opacity:.3}}
+.overdue-dot{width:10px;height:10px;border-radius:50%;background:#e05c5c;display:inline-block;animation:pulse-red 1.2s ease-in-out infinite;flex-shrink:0}
 .saving-toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius-lg);padding:.75rem 1.25rem;font-size:13px;color:var(--text2);box-shadow:0 4px 20px rgba(0,0,0,.12);z-index:999;display:flex;align-items:center;gap:8px;transform:translateY(100px);opacity:0;transition:all .3s;}
 .saving-toast.show{transform:none;opacity:1;}
 
 </style>
-<link rel="stylesheet" href="chrome-extension://081e799f-8e5d-4430-85ba-8162dd13706a/app/content-style.css"></head>
+</head>
 <body>
 
 
@@ -238,9 +242,9 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <button class="sync-btn connected" id="syncBtn" onclick="showView('settings')">
+  <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
-    <span id="syncLabel">Live ✓</span>
+    <span id="syncLabel">Connect Sheets</span>
   </button>
 </div>
 
@@ -248,9 +252,9 @@ a{color:var(--blue-mid);text-decoration:none}
   <div class="sidebar">
     <div class="sidebar-label">Views</div>
     <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
-    <button class="nav-item" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
+    <button class="nav-item active" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
     <button class="nav-item" id="nav-schedule" onclick="showView('schedule')"><i class="ti ti-users"></i>Staff schedule</button>
-    <button class="nav-item" id="nav-checklists" onclick="showView('checklists')"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">504</span></button>
+    <button class="nav-item" id="nav-checklists" onclick="showView('checklists')"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">5</span></button>
     <button class="nav-item" id="nav-changes" onclick="showView('changes')"><i class="ti ti-refresh-alert"></i>Changes log<span class="nav-badge">2</span></button>
     <button class="nav-item" id="nav-invoices" onclick="showView('invoices')"><i class="ti ti-file-invoice"></i>Quotes / Invoices</button>
     <button class="nav-item" id="nav-reports" onclick="showView('reports')"><i class="ti ti-chart-bar"></i>Reports</button>
@@ -258,102 +262,30 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="nav-item" id="nav-equipment" onclick="showView('equipment')"><i class="ti ti-tool"></i>Equipment</button>
     <button class="nav-item" id="nav-venues" onclick="showView('venues')"><i class="ti ti-building"></i>Venues</button>
     <div class="sidebar-label">Setup</div>
-    <button class="nav-item active" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
+    <button class="nav-item" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
   </div>
   <div class="main" style="padding:0;display:flex;flex-direction:column">
-  <div id="globalChangeBanner" style="background: var(--amber-bg); border-bottom: 0.5px solid var(--amber-border); padding: 0.6rem 1.25rem; display: flex; align-items: center; gap: 10px; cursor: pointer;" onclick="showView('changes')">
+  <div id="globalChangeBanner" style="display:none;background:var(--amber-bg);border-bottom:0.5px solid var(--amber-border);padding:.6rem 1.25rem;display:none;align-items:center;gap:10px;cursor:pointer" onclick="showView('changes')">
     <i class="ti ti-alert-triangle" style="font-size:15px;color:var(--amber-text);flex-shrink:0"></i>
-    <span id="globalChangeBannerText" style="font-size:13px;color:var(--amber-text);font-weight:500;flex:1">1 unacknowledged change order — 060726-5</span>
+    <span id="globalChangeBannerText" style="font-size:13px;color:var(--amber-text);font-weight:500;flex:1"></span>
     <span style="font-size:12px;color:var(--amber-text);text-decoration:underline">View changes →</span>
   </div>
-  <div id="mainArea" style="padding:1.25rem;flex:1;overflow-x:hidden;min-width:0">
-  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1rem">
-      <div>
-        <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:2px">Push update to GitHub</div>
-        <div style="font-size:12px;color:var(--text3)">Automatically updates the live site in ~60 seconds</div>
-      </div>
-      <button id="githubPushBtn" onclick="pushToGitHub()" style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:none;border-radius:var(--radius);background:#24292e;color:#fff;font-size:14px;font-weight:500;cursor:pointer" disabled=""><i class="ti ti-loader" style="font-size:14px"></i> Pushing...</button>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--green-text)"><i class="ti ti-circle-check"></i> Token saved — ready to push<button onclick="clearGitHubToken()" style="border:none;background:none;color:var(--text3);font-size:12px;cursor:pointer;text-decoration:underline;margin-left:8px">Clear token</button></div>
-  </div>
-  <div class="section-header"><div class="section-title">Google Sheets live sync</div></div>
-  
-  <div class="settings-card">
-    <h3>How to connect — 3 steps, ~10 minutes</h3>
-    <ul class="step-list">
-      <li>In your Google Sheet, click <strong>Extensions</strong> in the top menu, then <strong>Apps Script</strong></li>
-      <li>Delete any existing code in the editor, then paste the script below</li>
-      <li>Click <strong>Save</strong> (floppy disk icon), then click <strong>Deploy → New deployment</strong></li>
-      <li>Set type to <strong>Web app</strong>, set "Who has access" to <strong>Anyone</strong>, click Deploy</li>
-      <li>Copy the web app URL it gives you and paste it in the box below, then click Save</li>
-    </ul>
-  </div>
-  <div class="settings-card">
-    <h3>Apps Script to paste</h3>
-    <p>This goes inside your Google Sheet. It lets the platform read and write your event data.</p>
-    <div class="script-box" id="scriptBox">// Paste this in your Google Sheet:
-// Extensions → Apps Script → paste → Save → Deploy
-
-function doGet(e) {
-  const sheet = SpreadsheetApp.openById('1azVbq-bgpISGNX3I9c6UBLTDVv4SyRWzCA64ziUG67s')
-                  .getSheetByName('Front cover sheet');
-  const data = sheet.getDataRange().getValues();
-  const headers = data[2]; // Row 3 has headers
-  const rows = data.slice(3).filter(r =&gt; r[0] &amp;&amp; r[1]);
-  const events = rows.map(r =&gt; {
-    const obj = {};
-    headers.forEach((h, i) =&gt; { if(h) obj[h] = r[i]; });
-    return obj;
-  });
-  return ContentService
-    .createTextOutput(JSON.stringify({events}))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  const body = JSON.parse(e.postData.contents);
-  const sheet = SpreadsheetApp.openById('1azVbq-bgpISGNX3I9c6UBLTDVv4SyRWzCA64ziUG67s')
-                  .getSheetByName('Front cover sheet');
-  // Find row by Job # and update
-  const data = sheet.getDataRange().getValues();
-  for (let i = 3; i &lt; data.length; i++) {
-    if (data[i][0] === body.job) {
-      // Update notes column (adjust index to match your sheet)
-      sheet.getRange(i+1, 18).setValue(body.notes);
-      break;
-    }
-  }
-  return ContentService.createTextOutput('OK');
-}</div>
-    <button class="copy-btn" onclick="copyScript()"><i class="ti ti-copy" style="font-size:13px"></i> Copy script</button>
-  </div>
-  <div class="settings-card">
-    <h3>Paste your web app URL here</h3>
-    <p>After deploying the Apps Script, paste the URL it gives you below. This is what connects the platform to your live sheet data.</p>
-    <input id="scriptUrlInput" placeholder="https://script.google.com/macros/s/..." value="">
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn-save" onclick="saveScriptUrl()">Save &amp; connect</button>
-      
-    </div>
-  </div>
-  <div class="settings-card">
-    <h3>Your sheet ID</h3>
-    <p>Already in the script above: <code>1azVbq-bgpISGNX3I9c6UBLTDVv4SyRWzCA64ziUG67s</code><br>This matches the Google Sheet you shared with us.</p>
-  </div>
-  </div>
+  <div id="mainArea" style="padding:1.25rem;flex:1;overflow-x:hidden;min-width:0"></div>
 </div>
 </div>
 
 <!-- Attach document modal -->
-<div style="display: none; position: fixed; inset: 0px; background: rgba(0, 0, 0, 0.45); z-index: 999; align-items: center; justify-content: center; padding: 2rem;" id="attachModal">
+<div style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:center;justify-content:center;padding:2rem" id="attachModal">
   <div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
-    <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1rem" id="attachModalTitle">Attach menu</div>
+    <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1rem" id="attachModalTitle">Attach file</div>
     <div style="margin-bottom:.75rem">
-      <a id="attachDriveSearchBtn" href="https://drive.google.com/drive/u/1/folders/1SXKlQ-KttKGXXShVxzofkZXs3LJGu9KV?q=Saltzman%20Drop%20off" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;text-decoration:none;margin-bottom:10px"><i class="ti ti-search" style="font-size:14px"></i>Search Drive for "Saltzman"</a>
+      <a id="attachDriveSearchBtn" href="#" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;text-decoration:none;margin-bottom:10px">
+        <i class="ti ti-search" style="font-size:14px"></i>Search Drive
+      </a>
     </div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Paste the Google Drive or Docs URL:</div>
-    <input type="text" id="attachInput" placeholder="https://docs.google.com/..." style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;margin-bottom:6px">
+    <input type="text" id="attachInput" placeholder="https://docs.google.com/..." 
+      style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;margin-bottom:6px">
     <div style="font-size:11px;color:var(--text3);margin-bottom:1rem">In Google Drive: right-click file → Share → Copy link → paste above</div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn-cancel" onclick="closeAttachModal()">Cancel</button>
@@ -372,7 +304,7 @@ function doPost(e) {
       <select id="m-type"><option value="dinner">Dinner</option><option value="lunch">Lunch</option><option value="engagement">Engagement</option><option value="barmitzvah">Bar / Bat Mitzvah</option><option value="shalosh">Shalosh seudah</option><option value="dropoff">Drop off</option></select>
     </div>
     <div class="modal-row"><label>Day</label>
-      <select id="m-day"><option value="monday">Monday 6/1</option><option value="tuesday">Tuesday 6/2</option><option value="wednesday">Wednesday 6/3</option><option value="thursday">Thursday 6/4</option><option value="friday">Friday 6/5</option><option value="saturday">Saturday 6/6</option><option value="sunday">Sunday 6/7</option></select>
+      <select id="m-day"><option value="thursday">Thursday 5/28</option><option value="friday">Friday 5/29</option><option value="saturday">Saturday 5/30</option><option value="sunday">Sunday 5/31</option><option value="monday">Monday 6/1</option></select>
     </div>
     <div class="modal-row"><label>Notes</label><textarea id="m-notes" placeholder="Any details..."></textarea></div>
     <div class="modal-actions">
@@ -384,9 +316,9 @@ function doPost(e) {
 
 
 
-<div class="saving-toast show" id="savingToast">
+<div class="saving-toast" id="savingToast">
   <i class="ti ti-cloud-upload" style="font-size:16px;color:var(--blue-mid)"></i>
-  <span id="toastMsg">Uploading to GitHub...</span>
+  <span id="toastMsg">Saving...</span>
 </div>
 
 <!-- Firebase Compat SDK -->
@@ -1410,15 +1342,16 @@ function renderChecklists(){
       <div id="cl-body-${eid}" style="display:${isOpen?'block':'none'}">
         <div style="height:3px;background:var(--bg3);overflow:hidden"><div style="height:100%;width:${pct}%;background:${pct===100?'var(--green-text)':'var(--blue-mid)'};transition:width .3s" id="cl-bar-${eid}"></div></div>
         <div style="padding:.5rem 1.25rem 1rem;overflow-x:auto">
-          <div style="display:grid;grid-template-columns:42px 1fr repeat(6,52px) 130px;gap:6px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;min-width:700px">
+          <div style="display:grid;grid-template-columns:42px 1fr repeat(6,52px) 130px;gap:6px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;grid-column:1/-1">
             <span style="font-size:10px;text-align:center">✓ / N/A</span><span style="font-size:12px">Task</span>
             ${['Kenny','Shelley','Josh','Commissary','Client','Other'].map(a=>`<span style="text-align:center">${a}</span>`).join('')}
             <span style="text-align:center">Due date</span>
           </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
           ${sorted.map((item)=>{
             const idx=item._origIdx;
             return `
-          <div class="check-item" id="cli-${eid}-${idx}" style="display:grid;grid-template-columns:42px 1fr repeat(6,52px) 130px;gap:6px;align-items:center;${item.na?'opacity:.6':''}min-width:700px">
+          <div class="check-item" id="cli-${eid}-${idx}" style="display:grid;grid-template-columns:42px 1fr repeat(6,52px) 130px;gap:6px;align-items:center;${item.na?'opacity:.6':''}">
             <div style="display:flex;align-items:center;gap:4px">
               <input type="checkbox" ${item.done&&!item.na?'checked':''} ${item.na?'disabled':''} onchange="toggleCheck('${eid}','${item.id}',this.checked)"
                 style="width:${item.done?'18':'15'}px;height:${item.done?'18':'15'}px;accent-color:var(--blue-mid);flex-shrink:0;cursor:pointer;${item.done?'outline:2px solid var(--blue-mid);border-radius:3px':''}">
@@ -1455,6 +1388,7 @@ function renderChecklists(){
                     </select>`}
             </div>
           </div>`;}).join('')}
+          </div>
           <div id="add-item-area-${eid}"></div>
         </div>
       </div>
@@ -1836,6 +1770,8 @@ function getDefaultInvoice(e){
     eventType: e.typeLabel,
     eventDate: e.dayLabel,
     address: e.addr || '',
+    clientPhone: '',
+    clientEmail: '',
     lines: [
       {id:'food',     category:'Food',      description:'Catering — '+e.typeLabel, qty:1, unit:'event', price:0},
       {id:'wait',     category:'Staffing',  description:'Waiters ('+e.waiters+' × rate)', qty:e.waiters||0, unit:'person', price:0},
@@ -1877,41 +1813,120 @@ function calcInvoiceTotals(inv){
 }
 
 function renderInvoices(){
-  const weekDate = getWeekEndDate(currentWeekOffset);
-  const weekStr = weekDate.toISOString().split('T')[0];
-  const weekEvts = events.filter(e=>(e.weekOf||'2026-06-07')===weekStr && e.type!=='dropoff');
-  
-  let h = `<div class="section-header">
-    <div class="section-title">Quotes & Invoices</div>
-  </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-bottom:1.25rem">
-    ${weekEvts.map(e=>{
-      const inv = invoices[e.id];
-      const status = inv?.status || 'none';
-      const statusColors = {
-        none:     'background:var(--bg2);color:var(--text3)',
-        quote:    'background:var(--amber-bg);color:var(--amber-text)',
-        approved: 'background:var(--blue-bg);color:var(--blue-text)',
-        invoice:  'background:var(--purple-bg);color:var(--purple-text)',
-        paid:     'background:var(--green-bg);color:var(--green-text)'
-      };
-      const statusLabels = {none:'No quote yet',quote:'Quote',approved:'Approved',invoice:'Invoice',paid:'Paid'};
-      const tots = inv ? calcInvoiceTotals(inv) : null;
-      return `<div class="event-card" onclick="openInvoice('${e.id}')" style="cursor:pointer">
-        <div class="card-top">
-          <span class="job-pill">${displayJob(e.job)}</span>
-          <span style="font-size:11px;padding:2px 8px;border-radius:8px;font-weight:500;${statusColors[status]}">${statusLabels[status]}</span>
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const currentWeekStr = getWeekEndDate(currentWeekOffset).toISOString().split('T')[0];
+
+  // Get all catered events
+  const allEvts = events.filter(e=>e.type!=='dropoff');
+
+  // Split into past/this/future based on weekOf
+  const pastEvts    = allEvts.filter(e=>(e.weekOf||'2026-05-31') < currentWeekStr);
+  const thisEvts    = allEvts.filter(e=>(e.weekOf||'2026-05-31') === currentWeekStr);
+  const futureEvts  = allEvts.filter(e=>(e.weekOf||'2026-05-31') > currentWeekStr);
+
+  // Invoice view filter
+  const invView = window._invView || 'default';
+
+  const viewBtns = [
+    {key:'default',  label:'Default view'},
+    {key:'all',      label:'All invoices'},
+    {key:'paid',     label:'Paid only'},
+    {key:'quotes',   label:'Quotes only'},
+  ];
+
+  function filterEvts(evts){
+    if(invView==='paid')   return evts.filter(e=>invoices[e.id]?.status==='paid');
+    if(invView==='quotes') return evts.filter(e=>!invoices[e.id]||invoices[e.id]?.status==='quote'||invoices[e.id]?.status==='none');
+    if(invView==='all')    return evts;
+    // default: exclude fully paid
+    return evts.filter(e=>invoices[e.id]?.status!=='paid');
+  }
+
+  function buildRow(e){
+    const inv = invoices[e.id];
+    const status = inv?.status||'none';
+    const tots = inv ? calcInvoiceTotals(inv) : null;
+    const grand = tots ? tots.grand : 0;
+    const deposit = inv ? parseFloat(inv.deposit||0) : 0;
+    const balance = tots ? tots.balance : 0;
+    const isPaid = status==='paid';
+    const hasBalance = !isPaid && balance > 0.01;
+
+    // Check if overdue (balance due AND event was > 30 days ago)
+    let overdue = false;
+    if(hasBalance && e.weekOf){
+      const evtDate = new Date(e.weekOf+'T12:00:00Z');
+      const daysDiff = (now - evtDate) / (1000*60*60*24);
+      if(daysDiff > 30) overdue = true;
+    }
+
+    // Status color
+    const statusColors = {
+      none:'color:var(--text3)', quote:'color:var(--amber-text)',
+      approved:'color:var(--blue-text)', invoice:'color:#7c3aed', paid:'color:var(--green-text)'
+    };
+    const statusLabels = {none:'No quote',quote:'Quote',approved:'Approved',invoice:'Invoice open',paid:'Paid'};
+
+    // Full event date
+    const fullDate = getFullEventDate(e);
+
+    // Check for unacknowledged changes where Invoice dept hasn't acked
+    const hasUnackedChange = changes.some(c=>c.job===e.job && (c.notifyDepts||changeDepts).includes('Invoice') && !(c.acks||{})['Invoice']);
+
+    return \`<div onclick="openInvoice('\${e.id}')" style="display:grid;grid-template-columns:130px 1fr 110px 100px 110px 90px 30px;gap:8px;align-items:center;padding:9px 14px;border-bottom:0.5px solid var(--border);cursor:pointer;font-size:13px;transition:background .1s" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+      <span style="color:var(--text3);font-size:12px">\${fullDate}</span>
+      <div style="overflow:hidden">
+        <div style="font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">\${displayJob(e.job)} · \${e.name}</div>
+
+      </div>
+      <span style="text-align:right;color:var(--text)">\${grand>0?'$'+grand.toFixed(2):'—'}</span>
+      <span style="text-align:right;color:var(--text2)">\${deposit>0?'$'+deposit.toFixed(2):'—'}</span>
+      <span style="text-align:right;color:var(--text)">\${tots?'$'+balance.toFixed(2):'—'}</span>
+      <span style="text-align:right;font-weight:700;\${isPaid?'color:var(--green-text)':hasBalance?'color:#e05c5c':'color:var(--text3)'}">
+        \${isPaid?'PAID':hasBalance?'BALANCE DUE':statusLabels[status]||'—'}
+      </span>
+      <span style="display:flex;justify-content:center;gap:3px">
+        \${overdue?'<span class="overdue-dot" title="Overdue 30+ days"></span>':''}
+        \${hasUnackedChange?'<span title="Unacknowledged change order" style="font-size:14px;color:var(--amber-text)">⚠</span>':''}
+      </span>
+    </div>\`;
+  }
+
+  function buildSection(label, evts){
+    const filtered = filterEvts(evts).sort((a,b)=>(a.weekOf||'').localeCompare(b.weekOf||''));
+    if(!filtered.length) return '';
+    return \`<div style="margin-bottom:1.25rem">
+      <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.07em;padding:6px 14px;background:var(--bg2);border-radius:var(--radius) var(--radius) 0 0;border:0.5px solid var(--border)">\${label}</div>
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-top:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);overflow:hidden">
+        <div style="display:grid;grid-template-columns:130px 1fr 110px 100px 110px 90px 30px;gap:8px;padding:6px 14px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border)">
+          <span>Date</span><span>Event</span><span style="text-align:right">Total</span><span style="text-align:right">Paid</span><span style="text-align:right">Balance</span><span style="text-align:right">Status</span><span></span>
         </div>
-        <div class="client-name">${e.name}</div>
-        <div style="font-size:12px;color:var(--text3)">${e.dayLabel} · ${e.typeLabel}</div>
-        ${tots ? `<div style="font-size:13px;font-weight:500;color:var(--text);margin-top:8px">$${tots.grand.toFixed(2)}</div>` : ''}
-      </div>`;
-    }).join('')}
-    ${weekEvts.length===0?`<div style="grid-column:1/-1;padding:2rem;text-align:center;color:var(--text3);font-size:14px">No catered events this week</div>`:''}
-  </div>
-  <div id="invoiceDetail"></div>`;
+        \${filtered.map(e=>buildRow(e)).join('')}
+      </div>
+    </div>\`;
+  }
+
+  let h = \`<div class="section-header" style="margin-bottom:.75rem">
+    <div class="section-title">Quotes & Invoices</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap">
+      \${viewBtns.map(b=>\`<button onclick="window._invView='\${b.key}';render()" style="padding:5px 12px;border-radius:var(--radius);border:0.5px solid \${invView===b.key?'var(--blue-border)':'var(--border2)'};background:\${invView===b.key?'var(--blue-bg)':'var(--bg)'};color:\${invView===b.key?'var(--blue-text)':'var(--text2)'};font-size:12px;cursor:pointer;font-weight:\${invView===b.key?'500':'400'}">\${b.label}</button>\`).join('')}
+    </div>
+  </div>\`;
+
+  if(invView==='default'){
+    h += buildSection('Previous Weeks', pastEvts);
+    h += buildSection('This Week', thisEvts);
+    h += buildSection('Future Weeks', futureEvts);
+    if(!filterEvts(allEvts).length) h += \`<div style="padding:2rem;text-align:center;color:var(--text3)">No open invoices or quotes.</div>\`;
+  } else {
+    h += buildSection('All Events', allEvts);
+  }
+
+  h += \`<div id="invoiceDetail" style="margin-top:1rem"></div>\`;
   return h;
 }
+
 
 let activeInvoiceId = null;
 
@@ -1945,6 +1960,7 @@ function renderInvoiceDetail(){
       <div class="detail-title">
         ${isInvoice?'Invoice':'Quote'} — ${displayJob(e.job)} ${e.name}
         <span style="font-size:12px;font-weight:400;padding:3px 10px;border-radius:8px;margin-left:8px;${inv.status==='paid'?'background:var(--green-bg);color:var(--green-text)':inv.status==='invoice'?'background:var(--purple-bg);color:var(--purple-text)':inv.status==='approved'?'background:var(--blue-bg);color:var(--blue-text)':'background:var(--amber-bg);color:var(--amber-text)'}">${inv.status.charAt(0).toUpperCase()+inv.status.slice(1)}</span>
+        ${changes.some(c=>c.job===e.job&&(c.notifyDepts||changeDepts).includes('Invoice')&&!(c.acks||{})['Invoice'])?'<span style="margin-left:8px;padding:3px 10px;border-radius:8px;background:var(--amber-bg);color:var(--amber-text);font-size:12px;font-weight:600;border:1.5px solid var(--amber-text)">⚠ CHANGE ORDER PENDING</span>':''}
       </div>
       <div class="detail-actions">
         ${inv.status==='quote'?`<button class="btn-save" style="font-size:12px;padding:5px 12px" onclick="approveQuote('${eid}')">Approve quote</button>`:''}
@@ -1956,10 +1972,13 @@ function renderInvoiceDetail(){
       </div>
     </div>
 
-    <div style="background:var(--bg2);border-radius:var(--radius);padding:.75rem 1rem;margin-bottom:1rem;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">
+    <div style="background:var(--bg2);border-radius:var(--radius);padding:.75rem 1rem;margin-bottom:1rem;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:13px">
       <div><span style="font-size:11px;color:var(--text3);display:block">${isInvoice?'Invoice':'Quote'} #</span>${e.job}</div>
       <div><span style="font-size:11px;color:var(--text3);display:block">Event date</span>${getFullEventDate(e)}</div>
       <div><span style="font-size:11px;color:var(--text3);display:block">Created</span>${inv.createdAt}</div>
+      <div><span style="font-size:11px;color:var(--text3);display:block">Client phone</span>${canEdit?`<input type="text" value="${inv.clientPhone||''}" onchange="invoices['${eid}'].clientPhone=this.value" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:(inv.clientPhone||'—')}</div>
+      <div><span style="font-size:11px;color:var(--text3);display:block">Client email</span>${canEdit?`<input type="text" value="${inv.clientEmail||''}" onchange="invoices['${eid}'].clientEmail=this.value" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:(inv.clientEmail||'—')}</div>
+      <div><span style="font-size:11px;color:var(--text3);display:block">Address</span>${e.addr||'—'}</div>
     </div>
 
     <div style="overflow-x:auto">
@@ -2383,6 +2402,8 @@ function buildInvoiceHTML(eid){
       '<div><strong>Event type</strong>'+e.typeLabel+'</div>'+
       '<div><strong>Event date</strong>'+getFullEventDate(e)+'</div>'+
       (e.addr?'<div><strong>Venue</strong>'+e.addr+'</div>':'')+
+      (inv.clientPhone?'<div><strong>Phone</strong>'+inv.clientPhone+'</div>':'')+
+      (inv.clientEmail?'<div><strong>Email</strong>'+inv.clientEmail+'</div>':'')+
       (inv.status==='paid'?'<div><strong>Paid on</strong>'+(inv.paidDate||'')+'</div>':'')+ 
       (inv.paymentMethod?'<div><strong>Payment method</strong>'+inv.paymentMethod+(inv.checkNumber?' #'+inv.checkNumber:'')+'</div>':'')+
       (inv.taxExempt?'<div><strong>Tax status</strong>Exempt (non-profit)</div>':'')+
@@ -3832,6 +3853,5 @@ function initNow(){
 }
 initNow();
 </script>
-
-
-</body></html>
+</body>
+</html>
