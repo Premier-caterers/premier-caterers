@@ -1754,7 +1754,7 @@ function getDefaultInvoice(e){
 
 function calcInvoiceTotals(inv){
   const subtotal = inv.lines.reduce((s,l)=>s+(parseFloat(l.qty||0)*parseFloat(l.price||0)),0);
-  const logRate = parseFloat(inv.logisticsRate ?? LOGISTICS_RATE);
+  const logRate = inv.logisticsRate !== undefined ? parseFloat(inv.logisticsRate) : LOGISTICS_RATE;
   const logistics = subtotal * logRate;
   const taxBase = subtotal + logistics;
   const tax = inv.taxExempt ? 0 : taxBase * TAX_RATE;
@@ -1883,15 +1883,26 @@ function renderInvoiceDetail(){
 
     <div style="display:flex;justify-content:flex-end">
       <div style="min-width:280px">
-        ${[
-          ['Subtotal', tots.subtotal],
-          ['Logistics fee (2.875%)', tots.logistics],
-          [inv.taxExempt ? 'Sales tax (exempt)' : 'Sales tax (6.625%)', tots.tax],
-        ].map(([label,val])=>`
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px">
-          <span style="color:var(--text2)">${label}</span>
-          <span>$${val.toFixed(2)}</span>
-        </div>`).join('')}
+          <span style="color:var(--text2)">Subtotal</span>
+          <span>$${tots.subtotal.toFixed(2)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+          <span style="color:var(--text2);display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+            Logistics fee
+            ${canEdit ? `<span style="display:inline-flex;align-items:center;gap:3px">
+              (<input type="number" value="${((inv.logisticsRate??LOGISTICS_RATE)*100).toFixed(2)}" min="0" max="100" step="0.01"
+                onchange="updateLogisticsRate('${eid}',this.value)"
+                style="width:52px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:2px 5px;font-size:12px;color:var(--text);font-family:inherit;text-align:right">%)
+              <button onclick="removeLogisticsFee('${eid}')" title="Remove logistics fee" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:13px;padding:0 2px"><i class="ti ti-trash"></i></button>
+            </span>` : `(${((inv.logisticsRate??LOGISTICS_RATE)*100).toFixed(2)}%)`}
+          </span>
+          <span>$${tots.logistics.toFixed(2)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+          <span style="color:var(--text2)">${inv.taxExempt?'Sales tax (exempt)':'Sales tax (6.625%)'}</span>
+          <span>$${tots.tax.toFixed(2)}</span>
+        </div>
         <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);font-size:16px;font-weight:600">
           <span>Grand total</span>
           <span>$${tots.grand.toFixed(2)}</span>
@@ -1912,7 +1923,7 @@ function renderInvoiceDetail(){
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
         <button onclick="addInvoiceLine('${eid}')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;cursor:pointer"><i class="ti ti-plus" style="font-size:13px"></i>Add line item</button>
         <button onclick="toggleTaxExempt('${eid}')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border:0.5px solid ${inv.taxExempt?'var(--green-border)':'var(--border2)'};border-radius:var(--radius);background:${inv.taxExempt?'var(--green-bg)':'var(--bg2)'};color:${inv.taxExempt?'var(--green-text)':'var(--text2)'};font-size:13px;cursor:pointer"><i class="ti ti-receipt-tax" style="font-size:13px"></i>${inv.taxExempt?'Tax exempt ✓':'Tax exempt?'}</button>
-        ${e.menuLink?`<button onclick="attachMenuToInvoice('${eid}')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:13px;cursor:pointer"><i class="ti ti-file-text" style="font-size:13px"></i>Attach menu</button>`:''}
+        ${e.menuLink?`<button onclick="attachMenuToInvoice('${eid}')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:13px;cursor:pointer"><i class="ti ti-file-text" style="font-size:13px"></i>Attach menu${inv.menuLink?' ✓':''}</button>`:''}        ${e.menuLink?`<button onclick="attachMenuToInvoice('${eid}')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:13px;cursor:pointer"><i class="ti ti-file-text" style="font-size:13px"></i>Attach menu</button>`:''}
       </div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:4px">Notes</div>
       <textarea onchange="updateInvoiceNotes('${eid}',this.value)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px;font-size:13px;color:var(--text);font-family:inherit;resize:vertical;min-height:60px">${inv.notes||''}</textarea>
@@ -1950,6 +1961,12 @@ function removeInvoiceLine(eid, idx){
   renderInvoiceDetail();
 }
 
+function removeLogisticsFee(eid){
+  if(!invoices[eid]) return;
+  invoices[eid].logisticsRate = 0;
+  renderInvoiceDetail();
+}
+
 function updateLogisticsRate(eid, val){
   if(!invoices[eid]) return;
   invoices[eid].logisticsRate = parseFloat(val)/100 || LOGISTICS_RATE;
@@ -1978,6 +1995,7 @@ function addInvoiceLine(eid){
       <select id="nl-category">
         <option value="Food">Food</option>
         <option value="Staffing">Staffing</option>
+        <option value="Delivery">Delivery fee</option>
         <option value="Rental">Rental</option>
         <option value="Other">Other</option>
       </select>
@@ -3361,6 +3379,7 @@ window.toggleTaxExempt = toggleTaxExempt;
 window.attachMenuToInvoice = attachMenuToInvoice;
 window.removeInvoiceLine = removeInvoiceLine;
 window.updateLogisticsRate = updateLogisticsRate;
+window.removeLogisticsFee = removeLogisticsFee;
 window.quickPasteMenu = quickPasteMenu;
 window.saveQuickMenu = saveQuickMenu;
 window.confirmAddFromList = confirmAddFromList;
