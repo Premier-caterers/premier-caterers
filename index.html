@@ -1,6 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
+<html lang="en"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
@@ -218,7 +216,7 @@ a{color:var(--blue-mid);text-decoration:none}
 .saving-toast.show{transform:none;opacity:1;}
 
 </style>
-</head>
+<link rel="stylesheet" href="chrome-extension://081e799f-8e5d-4430-85ba-8162dd13706a/app/content-style.css"></head>
 <body>
 
 
@@ -240,9 +238,9 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
+  <button class="sync-btn connected" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
-    <span id="syncLabel">Connect Sheets</span>
+    <span id="syncLabel">Live ✓</span>
   </button>
 </div>
 
@@ -250,9 +248,9 @@ a{color:var(--blue-mid);text-decoration:none}
   <div class="sidebar">
     <div class="sidebar-label">Views</div>
     <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
-    <button class="nav-item active" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
+    <button class="nav-item" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
     <button class="nav-item" id="nav-schedule" onclick="showView('schedule')"><i class="ti ti-users"></i>Staff schedule</button>
-    <button class="nav-item" id="nav-checklists" onclick="showView('checklists')"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">5</span></button>
+    <button class="nav-item" id="nav-checklists" onclick="showView('checklists')"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">486</span></button>
     <button class="nav-item" id="nav-changes" onclick="showView('changes')"><i class="ti ti-refresh-alert"></i>Changes log<span class="nav-badge">2</span></button>
     <button class="nav-item" id="nav-invoices" onclick="showView('invoices')"><i class="ti ti-file-invoice"></i>Quotes / Invoices</button>
     <button class="nav-item" id="nav-reports" onclick="showView('reports')"><i class="ti ti-chart-bar"></i>Reports</button>
@@ -260,15 +258,97 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="nav-item" id="nav-equipment" onclick="showView('equipment')"><i class="ti ti-tool"></i>Equipment</button>
     <button class="nav-item" id="nav-venues" onclick="showView('venues')"><i class="ti ti-building"></i>Venues</button>
     <div class="sidebar-label">Setup</div>
-    <button class="nav-item" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
+    <button class="nav-item active" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
   </div>
   <div class="main" style="padding:0;display:flex;flex-direction:column">
-  <div id="globalChangeBanner" style="display:none;background:var(--amber-bg);border-bottom:0.5px solid var(--amber-border);padding:.6rem 1.25rem;display:none;align-items:center;gap:10px;cursor:pointer" onclick="showView('changes')">
+  <div id="globalChangeBanner" style="background: var(--amber-bg); border-bottom: 0.5px solid var(--amber-border); padding: 0.6rem 1.25rem; display: flex; align-items: center; gap: 10px; cursor: pointer;" onclick="showView('changes')">
     <i class="ti ti-alert-triangle" style="font-size:15px;color:var(--amber-text);flex-shrink:0"></i>
-    <span id="globalChangeBannerText" style="font-size:13px;color:var(--amber-text);font-weight:500;flex:1"></span>
+    <span id="globalChangeBannerText" style="font-size:13px;color:var(--amber-text);font-weight:500;flex:1">1 unacknowledged change order — 060726-5</span>
     <span style="font-size:12px;color:var(--amber-text);text-decoration:underline">View changes →</span>
   </div>
-  <div id="mainArea" style="padding:1.25rem;flex:1;overflow-x:hidden;min-width:0"></div>
+  <div id="mainArea" style="padding:1.25rem;flex:1;overflow-x:hidden;min-width:0">
+  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1rem">
+      <div>
+        <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:2px">Push update to GitHub</div>
+        <div style="font-size:12px;color:var(--text3)">Automatically updates the live site in ~60 seconds</div>
+      </div>
+      <button id="githubPushBtn" onclick="pushToGitHub()" style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:none;border-radius:var(--radius);background:#24292e;color:#fff;font-size:14px;font-weight:500;cursor:pointer" disabled=""><i class="ti ti-loader" style="font-size:14px"></i> Pushing...</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--green-text)"><i class="ti ti-circle-check"></i> Token saved — ready to push<button onclick="clearGitHubToken()" style="border:none;background:none;color:var(--text3);font-size:12px;cursor:pointer;text-decoration:underline;margin-left:8px">Clear token</button></div>
+  </div>
+  <div style="background:var(--amber-bg);border:0.5px solid var(--amber-text);border-radius:var(--radius-lg);padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+    <div>
+      <div style="font-size:13px;font-weight:500;color:var(--amber-text)">One-time fix: move events to correct week</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px">Moves all events except Na'aleh to W/E Jun 1 (last week). Run once then this button can be ignored.</div>
+    </div>
+    <button onclick="migrateWeekOf()" style="padding:7px 16px;border:none;border-radius:var(--radius);background:var(--amber-text);color:#fff;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap">Fix weeks now</button>
+  </div>
+  <div class="section-header"><div class="section-title">Google Sheets live sync</div></div>
+  
+  <div class="settings-card">
+    <h3>How to connect — 3 steps, ~10 minutes</h3>
+    <ul class="step-list">
+      <li>In your Google Sheet, click <strong>Extensions</strong> in the top menu, then <strong>Apps Script</strong></li>
+      <li>Delete any existing code in the editor, then paste the script below</li>
+      <li>Click <strong>Save</strong> (floppy disk icon), then click <strong>Deploy → New deployment</strong></li>
+      <li>Set type to <strong>Web app</strong>, set "Who has access" to <strong>Anyone</strong>, click Deploy</li>
+      <li>Copy the web app URL it gives you and paste it in the box below, then click Save</li>
+    </ul>
+  </div>
+  <div class="settings-card">
+    <h3>Apps Script to paste</h3>
+    <p>This goes inside your Google Sheet. It lets the platform read and write your event data.</p>
+    <div class="script-box" id="scriptBox">// Paste this in your Google Sheet:
+// Extensions → Apps Script → paste → Save → Deploy
+
+function doGet(e) {
+  const sheet = SpreadsheetApp.openById('1azVbq-bgpISGNX3I9c6UBLTDVv4SyRWzCA64ziUG67s')
+                  .getSheetByName('Front cover sheet');
+  const data = sheet.getDataRange().getValues();
+  const headers = data[2]; // Row 3 has headers
+  const rows = data.slice(3).filter(r =&gt; r[0] &amp;&amp; r[1]);
+  const events = rows.map(r =&gt; {
+    const obj = {};
+    headers.forEach((h, i) =&gt; { if(h) obj[h] = r[i]; });
+    return obj;
+  });
+  return ContentService
+    .createTextOutput(JSON.stringify({events}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  const body = JSON.parse(e.postData.contents);
+  const sheet = SpreadsheetApp.openById('1azVbq-bgpISGNX3I9c6UBLTDVv4SyRWzCA64ziUG67s')
+                  .getSheetByName('Front cover sheet');
+  // Find row by Job # and update
+  const data = sheet.getDataRange().getValues();
+  for (let i = 3; i &lt; data.length; i++) {
+    if (data[i][0] === body.job) {
+      // Update notes column (adjust index to match your sheet)
+      sheet.getRange(i+1, 18).setValue(body.notes);
+      break;
+    }
+  }
+  return ContentService.createTextOutput('OK');
+}</div>
+    <button class="copy-btn" onclick="copyScript()"><i class="ti ti-copy" style="font-size:13px"></i> Copy script</button>
+  </div>
+  <div class="settings-card">
+    <h3>Paste your web app URL here</h3>
+    <p>After deploying the Apps Script, paste the URL it gives you below. This is what connects the platform to your live sheet data.</p>
+    <input id="scriptUrlInput" placeholder="https://script.google.com/macros/s/..." value="">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-save" onclick="saveScriptUrl()">Save &amp; connect</button>
+      
+    </div>
+  </div>
+  <div class="settings-card">
+    <h3>Your sheet ID</h3>
+    <p>Already in the script above: <code>1azVbq-bgpISGNX3I9c6UBLTDVv4SyRWzCA64ziUG67s</code><br>This matches the Google Sheet you shared with us.</p>
+  </div>
+  </div>
 </div>
 </div>
 
@@ -294,9 +374,9 @@ a{color:var(--blue-mid);text-decoration:none}
 
 
 
-<div class="saving-toast" id="savingToast">
+<div class="saving-toast show" id="savingToast">
   <i class="ti ti-cloud-upload" style="font-size:16px;color:var(--blue-mid)"></i>
-  <span id="toastMsg">Saving...</span>
+  <span id="toastMsg">Uploading to GitHub...</span>
 </div>
 
 <!-- Firebase Compat SDK -->
@@ -3670,5 +3750,6 @@ function initNow(){
 }
 initNow();
 </script>
-</body>
-</html>
+
+
+</body></html>
