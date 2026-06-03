@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
+<!-- saved from url=(0043)file:///C:/Users/premi/Downloads/index.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link rel="stylesheet" href="./index_files/tabler-icons.min.css">
 <style>
 
 *{box-sizing:border-box;margin:0;padding:0}
@@ -234,13 +234,13 @@ a{color:var(--blue-mid);text-decoration:none}
   </div>
   <div class="topbar-spacer"></div>
   <div class="role-switcher" id="roleSwitcher">
-    <button class="role-btn active" onclick="setRole('admin',this)">Admin</button>
-    <button class="role-btn" onclick="setRole('shelley',this)">Shelley</button>
-    <button class="role-btn" onclick="setRole('kenny',this)">Kenny</button>
-    <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
-    <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
+    <button class="role-btn active" onclick="setRole(&#39;admin&#39;,this)">Admin</button>
+    <button class="role-btn" onclick="setRole(&#39;shelley&#39;,this)">Shelley</button>
+    <button class="role-btn" onclick="setRole(&#39;kenny&#39;,this)">Kenny</button>
+    <button class="role-btn" onclick="setRole(&#39;josh&#39;,this)">Josh</button>
+    <button class="role-btn" onclick="setRole(&#39;kitchen&#39;,this)">Kitchen</button>
   </div>
-  <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
+  <button class="sync-btn" id="syncBtn" onclick="showView(&#39;settings&#39;)">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
   </button>
@@ -249,17 +249,17 @@ a{color:var(--blue-mid);text-decoration:none}
 <div class="layout">
   <div class="sidebar">
     <div class="sidebar-label">Views</div>
-    <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
-    <button class="nav-item active" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
-    <button class="nav-item" id="nav-schedule" onclick="showView('schedule')"><i class="ti ti-users"></i>Staff schedule</button>
-    <button class="nav-item" id="nav-checklists" onclick="showView('checklists')"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">5</span></button>
-    <button class="nav-item" id="nav-changes" onclick="showView('changes')"><i class="ti ti-refresh-alert"></i>Changes log<span class="nav-badge">2</span></button>
-    <button class="nav-item" id="nav-invoices" onclick="showView('invoices')"><i class="ti ti-file-invoice"></i>Quotes / Invoices</button>
-    <button class="nav-item" id="nav-reports" onclick="showView('reports')"><i class="ti ti-chart-bar"></i>Reports</button>
-    <button class="nav-item" id="nav-grocery" onclick="showView('grocery')"><i class="ti ti-shopping-cart"></i>Grocery</button>
-    <button class="nav-item" id="nav-equipment" onclick="showView('equipment')"><i class="ti ti-tool"></i>Equipment</button>
+    <button class="nav-item" id="nav-pipeline" onclick="showView(&#39;pipeline&#39;)"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
+    <button class="nav-item active" id="nav-events" onclick="showView(&#39;events&#39;)"><i class="ti ti-calendar"></i>This week</button>
+    <button class="nav-item" id="nav-schedule" onclick="showView(&#39;schedule&#39;)"><i class="ti ti-users"></i>Staff schedule</button>
+    <button class="nav-item" id="nav-checklists" onclick="showView(&#39;checklists&#39;)"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">5</span></button>
+    <button class="nav-item" id="nav-changes" onclick="showView(&#39;changes&#39;)"><i class="ti ti-refresh-alert"></i>Changes log<span class="nav-badge">2</span></button>
+    <button class="nav-item" id="nav-invoices" onclick="showView(&#39;invoices&#39;)"><i class="ti ti-file-invoice"></i>Quotes / Invoices</button>
+    <button class="nav-item" id="nav-reports" onclick="showView(&#39;reports&#39;)"><i class="ti ti-chart-bar"></i>Reports</button>
+    <button class="nav-item" id="nav-grocery" onclick="showView(&#39;grocery&#39;)"><i class="ti ti-shopping-cart"></i>Grocery</button>
+    <button class="nav-item" id="nav-equipment" onclick="showView(&#39;equipment&#39;)"><i class="ti ti-tool"></i>Equipment</button>
     <div class="sidebar-label">Setup</div>
-    <button class="nav-item" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
+    <button class="nav-item" id="nav-settings" onclick="showView(&#39;settings&#39;)"><i class="ti ti-settings"></i>Google Sheets</button>
   </div>
   <div class="main" id="mainArea"></div>
 </div>
@@ -292,8 +292,8 @@ a{color:var(--blue-mid);text-decoration:none}
 </div>
 
 <!-- Firebase Compat SDK -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
+<script src="./index_files/firebase-app-compat.js.download"></script>
+<script src="./index_files/firebase-firestore-compat.js.download"></script>
 
 <script>
 
@@ -323,7 +323,16 @@ function showToast(msg,dur=2000){
 }
 
 // Firebase save helpers
-async function _saveEvent(e){ try{ await db.collection('events').doc(e.id).set(e); showToast('Saved ✓'); }catch(err){ showToast('Save failed'); console.error(err); } }
+async function _saveEvent(e){ 
+  try{ 
+    if(!db) throw new Error('Database not connected yet');
+    await db.collection('events').doc(e.id).set(e); 
+    showToast('Saved ✓'); 
+  }catch(err){ 
+    showToast('Save failed: '+err.code||err.message); 
+    console.error('Save error:',err); 
+  } 
+}
 async function _saveChange(c){ try{ await db.collection('changes').doc(c.id).set(c); }catch(err){ console.error(err); } }
 async function _saveInquiry(i){ try{ await db.collection('inquiries').doc(i.id).set(i); }catch(err){ console.error(err); } }
 async function _saveChecklist(eid,items){ try{ await db.collection('checklists').doc(eid).set({items,ts:Date.now()}); }catch(err){ console.error(err); } }
@@ -1515,48 +1524,52 @@ const equipTemplates = {
     color: 'var(--teal-bg)',
     colorText: 'var(--teal-text)',
     sections: [
-      { name: 'Plasticware — Plates', items: ['6" white round','9" white round','10" white round','White soup bowl','White coffee w/ handle','6" clear round','9" clear round','Clear soup bowl','Clear coffee w/ handle'] },
-      { name: 'Plasticware — Cups', items: ['Plastic soda cup','Plastic 7oz juice cup','Paper coffee cup','Plastic shot cup'] },
-      { name: 'Plasticware — Cutlery', items: ['Clear fork','Clear knife','Clear tea spoons','Clear soup spoons','Silver fork','Silver knife','Silver tea spoons','Silver soup spoons'] },
-      { name: 'China — Plates', items: ['6" / bb plate','8" plate','9" plate','10" plate','Rectangle plate','2 section dip','Soup bowl','Ramekin, large','Ramekin, small','Crock','Charger, gold','Coffee cup / saucer'] },
-      { name: 'China — Cutlery', items: ['Fork','Knives','Tea spoons','Soup spoons'] },
-      { name: 'China — Glassware', items: ['Water glass','Wine glass','Soda glass','Shot glass','Martini glass','Cosmo glass'] },
+      { name: 'Plasticware — Passed items', items: ['Cocktail napkins','Bread baskets','Chop sticks','6\" plate','7\" plate','9\" plate','Soup bowl','Ice cream bowl','Coffee cup (plastic)','Soda cup','Wine cup','Shot','Color tumblers / lid','Paper cup / lid (coffee)','Bamboo sushi plate','Soup shot','Paper fry boat','Mini spoon','Fork','Knife','Soup spoon','Tea spoon','Chinese spoon','Plasticware'] },
+      { name: 'Table Service', items: ['Table cloths','Table numbers','Salt & pepper','Water pitcher','Coffee pitcher','Bread baskets','Menus'] },
+      { name: 'Bar', items: ['Ice chest / cooler','Ice bowl','Ice scoop','Bar tools','Straws (long)','Bar straw','Carafe'] },
+      { name: 'Documents', items: ['Equipment list','Food list','Kosher box','Cleaning box'] },
+      { name: 'Other', items: ['Aluminum foil','Rags','Garbage bags','Clear bags','Tape','White gloves','Half pan (aluminum)','Round pan (aluminum)','Ext. cord / pwr strip','Butane','Sterno (small)','Gloves','Brown paper','Plastic wrap'] },
+      { name: 'Documents', items: ['Copies of menu','Equipment and food list','Sign in sheet'] }
     ]
   },
-  'papergood': {
+  'paper': {
     label: 'Paper goods list',
     icon: 'ti-package',
     color: 'var(--amber-bg)',
     colorText: 'var(--amber-text)',
     sections: [
-      { name: 'Plasticware', items: ['Plastic 9oz','Plastic 5oz (wine)','Plastic shot glass','Plastic martini glass','Plastic champagne'] },
-      { name: 'Clear Plates & Bowls', items: ['6" plate','9" plates','10" plate','Coffee cups white paper','Soup bowls','Ice cream dish'] },
-      { name: 'Cutlery', items: ['Plastic fork','Plastic knife','Plastic teaspoon','Plastic soupspoon'] },
-      { name: 'Supplies', items: ['Rags','Gloves','Foil','Plastic S&P shakers','Half pans','Linen','Plastic serving pieces','Plastic bagel knives','Small platters','Large platters','Small salad bowl','Large salad bowl'] },
-      { name: 'Napkins & Disposables', items: ['Paper dinner napkins','Cocktail napkins','Wire racks','Disposable water pan','Sterno','Matches','Disposable table cloths'] },
-      { name: 'Beverages', items: ['Soda','Seltzer','Bottled water','OJ','Grape juice'] },
-      { name: 'Coffee Station', items: ['Coffee urn','Instant regular','Instant decaf','Tea bags','Sugar / sweetener / splenda','Milk red','Milk blue','Paper coffee cups','Non dairy creamer'] },
-      { name: 'Misc', items: ['Tea lights','Matches'] },
+      { name: 'Paper Goods', items: ['Cocktail napkins','Dinner napkins','6\" plate','7\" plate','9\" plate','Soup bowl','Ice cream bowl','Coffee cup (plastic)','Soda cup','Wine cup','Shot','Color tumblers / lid','Paper cup / lid (coffee)','Bamboo sushi plate','Soup shot','Paper fry boat','Mini spoon','Fork','Knife','Soup spoon','Tea spoon','Chinese spoon','Plasticware'] },
+      { name: 'Serving', items: ['Aluminum foil','Plastic wrap','Garbage bags','Clear bags','Brown paper','Rags','Half pan (aluminum)','Round pan (aluminum)'] },
+      { name: 'Coffee Station', items: ['Coffee cups / saucers','Coffee signs','Sugar / sweetener / splenda','Milk red','Milk blue','Paper coffee cups','Non dairy creamer'] },
+      { name: 'Misc', items: ['Tea lights','Matches'] }
     ]
   },
-  'equipment': {
-    label: 'Full equipment list',
-    icon: 'ti-tool',
-    color: 'var(--purple-bg)',
-    colorText: 'var(--purple-text)',
+  'dairy': {
+    label: 'Dairy equipment list',
+    icon: 'ti-droplet',
+    color: 'var(--blue-bg)',
+    colorText: 'var(--blue-text)',
     sections: [
-      { name: 'Table Setup', items: ['Salt & pepper','Table numbers','Sugar holders','Mocha pitchers','Coffee pots','Linen','Spice box','Rags','4x4 square','5x5 square','8x8 square','10x10 square','Glass shelves','Coffee signs x2','Carafes'] },
-      { name: 'China', items: ['China 6"','China 9"','China 10"','Soup bowls','Coffee cups / saucers','Forks','Knives','T spoons','Soup spoons','Water glasses','Wine glasses','Soda glass','Shot glass','Crocks','Ramekins','Chinese spoons'] },
-      { name: 'Serving & Platters', items: ['Serving pieces','Serving spoons','Serving forks','Ice cream scoops','Soup terrines / ladles','Ceramic platters','Silver platters','XL white oval platters for hot food','White platter / bowls','White pastry boards','Glass cookie jars','Dairy wooden boards','Pizza boards / props','Small platters','Large platters'] },
-      { name: 'Hot Equipment', items: ['Chafers','Rectangular inserts','Split inserts','Sterno','Large sterno','Jack stacks','Mini chafer / crock pot','Soup kettles / pots','Shabbos oven — large','Shabbos oven — small','Convection oven / sheetpans','Hot boxes','Sheet pans','Cutting boards','Large fry pans','Station fry pans','Sauce pot','GI pot / spider','Large soup pot','Iwatanys','Iwatany covers','Butane','Parchment paper'] },
-      { name: 'Disposables', items: ['Plastic 10oz','Plastic 5oz (wine)','Plastic shot glass','Plastic martini glass','Plastic champagne','7" plate','9" plates','Coffee cups','Soup bowls','Ice cream dish','Plastic fork','Plastic knife','Plastic teaspoon','Plastic soupspoon','Half pans','Aluminum foil','Seran wrap','Garbage bags','Brown paper / tape','Clear bags','Pastry bag / tips'] },
-      { name: 'Bar', items: ['Vodka glasses','Silver punch bowl','Shaker / strainer','Blender','Martini mixes','Bar mixes','Olives / onions','Tonic water','Kids mixes','Colored tumblers'] },
-      { name: 'Beverages', items: ['Coke','Diet coke','Seltzer','Sprite','Diet sprite','Fresca','Ginger ale','Orange','CF coke','CF diet coke','Flat water','Cranberry juice','Tomato juice','Grapefruit juice','Pineapple juice','Apple juice'] },
-      { name: 'Coffee Station', items: ['Coffee urns','Coffee samovar','Coffee regular','Coffee decaf','Tea / herbal tea','Flavored coffee','Instant coffee regular','Instant coffee decaf','Instant tea','Coffee cups with lids','Non dairy creamer'] },
-      { name: 'Specialty Stations', items: ['Heat lamps','Grill plates / housings','Carving marble board','Wok','Oriental basket','Pasta station','Pasta props','Omlette station','Sushi box','Waffle machine','Panini machine','Shwarma machine','Candy jars display','Ice cream buckets','Mortar / pestle','Wood boxes'] },
-      { name: 'Operations', items: ['Tool box','Power strip / ext cord','Bus box','Wash station','Garbage can / broom','Ice cooler','Kosher box','Cleaning box','Squeeze bottles','Bamboo toothpicks','Coat check numbers','White gloves','Disclosure form','Candle lighting box','Wedding candle holder / candles','BBQ / char / fluid / tools'] },
-      { name: 'Display & Décor', items: ['Acrylic risers','White risers','Glass block','Acrylic cutlery holders','Dairy glass platter','Baskets','4x4 square','5x5 square','8x8 square','10x10 square','Glass shelves'] },
-      { name: 'Documents', items: ['Copies of menu','Equipment and food list','Sign in sheet'] },
+      { name: 'Misc', items: ['MISC.', 'TABLE CLOTHS', 'MENUS', 'EQUIPMENT LIST', 'FOOD LIST', 'CLEANING BOX', 'KOSHER BOX', 'BROWN PAPER', 'ALUMINUM FOIL', 'RAGS', 'PLARTIC WRAP', 'GARBAGE BAGS', 'CLEAR BAGS', 'TAPE', 'WHITE GLOVES', 'HALF PAN (ALUMINUM)', 'ROUND PAN (ALUMINUM)', 'EXT. CORD/ PWR STRIP', 'BUTANE', 'STERNO (SMALL)', 'GLOVES', 'PAPERGOODS', 'COCKTAIL NAPKINS', 'DINNER NAPKINS', '6" PLATE', '7" PLATE', '9" PLATE', 'SOUP BOWL', 'ICE CREAM BOWL', 'COFFEE CUP (PLASTIC)', 'SODA CUP', 'WINE CUP', 'SHOT', 'CHAMPAGNE', 'MARTINI', 'COLOR TUMBLERS/ LID', 'PAPER CUP/LID (COFFEE)', 'CHOP STICKS', 'PAPER FRY BOAT', 'SOUP SHOT', 'BAMBOO SUSHI PLATE', 'PLASTICWARE', 'MINI SPOON', 'FORK', 'KNIFE', 'SOUP SPOON', 'TEA SPOON', 'CHINESE SPOON'] },
+      { name: 'Table Service', items: ['TABLE NUMBERS', 'SALT & PEPPER', 'SUGAR HOLDER', 'MILKPITCHER', 'WATER PITCHER', 'COFFEE PITCHER', 'BREAD BASKETS', 'BRIS - TO GO BAGS', 'FOIL SHEETS', 'WEDDING - TO GO', 'BRIS TOYS', 'BABY BOY BOXES', 'STUFFES ANIMALS', 'FIRE TRUCK', 'RED BRICKS', 'TOYS', 'CANDY JARS', 'COOKIE JARS', 'CANDY SCOOP/ TONGS', 'CANDY BAGS', 'COOKIE BAGS', 'MIXED PASSING PLATES', 'TOOTHPICKS', 'SPECIAL TOOTHPICK', 'CHEESE KNIFE SET'] },
+      { name: 'Bar', items: ['BAR', 'ICE CHEST/ COOLER', 'ICE BOWL', 'ICE SCOOP', 'BLENDER', 'BAR TOOLS', 'STRAWS (LONG)', 'BAR STRAW', 'CARAFE', 'WATER', 'SELTZER', 'COKE', 'DIET COKE', 'SPRITE', 'DIET SPRITE', 'GINGER ALE', 'ORANGE SODA', 'FRESCA', 'TONIC WATER', 'PINEAPPLE JUICE', 'TOMATO JUICE', 'APPLE JUICE', 'CRANBERRY JUICE', 'ORANGE JUICE', 'GRAPEFRUIT JUICE', 'GRENADINE', 'STRAWBERRY DAQURI', 'SOUR MIX', 'MARGARITA MIX', 'MARTINI MIX', 'PINA COLADA MIX', 'LIME JUICE', 'SIMPLE SYRUP', 'STATIONS', 'WASH STATION', 'CANDLE LIGHTING', 'CHALLAH TRAY/ KNIFE', 'GLASS SHEETS', 'KOSHER SIGNS', 'PLASTIC DRINK DISP.', 'TABLE RISERS', 'CONVECTION OVEN/ SHEET PANS', 'GAS FOR OVEN'] },
+      { name: 'Kitchen Tools', items: ['TOOL BOX', 'CUTTING BOARDS', 'SHEET PANS', 'SAUCE POT', 'SOUP POT', 'G. I. POT', 'SPIDER', 'LARGE FRY PAN', 'BUS BUCKET', 'INSERT', '1/2 INSERT', 'HOT BOX', 'LARGE STERNO', 'i WATANI', 'SPICE BOX', 'PASTRY BAG/ TIP', 'SQUEEZE BOTTLES', 'PARCHMENT PAPER', 'CADCO OVEN', 'FRY PAN', 'COPPER PAN', 'OMELETTE PAN', 'WOK', 'SILVER TRAYS', 'CAST IRON', 'CAST IRON POT', 'CAST IRON PAN', 'CAST IRON FLAT TOP', 'SM CAST IRON STAND', 'LG CAST IRON STAND', 'GLASS BOWLS', 'SMALL', 'MEDIUM', 'LARGE', 'GLASS PLATTER', 'SQUARE BASKETS', 'BLACK BASKETS', 'LG REC BASKETS', 'ACRYLIC RISERS', 'GLASS BLOCK', 'WOOD RISERS'] },
+      { name: 'Bowls / Platters', items: ['WHITE', '4" BOWL', '5" BOWL', '8"BOWL', '10" BOWL', 'SMALL BOARD', 'MEDIUM BOARD', 'LARGE BOARD', 'SQUARE BOARD', 'XL OVAL', 'SMALL PLATTER (REC)', 'MED PLATTER (REC)', 'LG PLATTER (REC)', 'RICE BOWLS', 'WOOD', 'SMALL WOOD BOWLS', 'MEDIUM WOOD BOWLS', 'LARGE WOOD BOWLS', 'SMALL WOOD PLATTERS', 'MEDIUM WOOD PLATTERS', 'LARGE WOOD PLATTERS', 'LONG BOWL', 'SMALL WOOD BOARDS', 'LAGRE WOOD BOARD', 'WOOD SQUARE TRAYS', 'REC MARBLE BOARDS', 'ROUND MARBLE BOARDS', 'PIZZA SHAKER', 'SUGAR SHAKER', 'SYRUP POURER', 'SPRAY OIL', 'COFFEE/ TEA', 'COFFEE URN', 'SAMOVAR', 'REGULAR COFFEE', 'DECAF COFFEE', 'TEA/ HERBAL TEA', 'TEA BOX', 'COFFEE SIGNS', 'FLAVOR SYRUPS', 'PUMP POTS', 'STIR STICKS'] },
+      { name: 'Buffet / Stations', items: ['REC CHAFER', 'ROUND CHAFER', 'COVER UP/ STOVE', 'CARVING BOARD', 'BLACK GRILL', 'MINI CHAFER', 'PIZZA OVEN - OLD', 'PIZZA PEEL', 'UNI PIZZA OVEN', 'MORTER/ PESTLE', 'PASTA PROPS', 'ELECTRIC FLAT TOP', 'WOOD TRAYS (HANDLES)', 'ACRYLIC TRAYS (HANDLES)', 'FRY BASKET/ PAPER', 'HEAT LAMP', 'PANINI MACHINE', 'WAFFLE MACHINE', 'GELATO STAND', 'SMORE DISPLAY / ROCKS', 'COTTON CANDY MACHINE', 'POPCORN MACHINE/ SUGAR', 'FONDU POT', 'SUSHI BOX', 'RICE COOKER', 'SOY SAUCE POURER', 'SERVING PIECES', 'SPOON', 'FORK', 'TONGS', 'PIZZA CUTTER', 'SOUP LADDLE', 'ICE CREAM SCOOP', 'FALAFEL / SMALL SCOOP', 'CARVING KNIFE', 'SOUP SPOONS (SAUCES)'] }
+    ]
+  },
+  'meat': {
+    label: 'Meat equipment list',
+    icon: 'ti-flame',
+    color: 'var(--coral-bg)',
+    colorText: 'var(--coral-text)',
+    sections: [
+      { name: 'Misc', items: ['TABLE CLOTHS', 'MENUS', 'EQUIPMENT LIST', 'FOOD LIST', 'CLEANING BOX', 'KOSHER BOX', 'BROWN PAPER', 'ALUMINUM FOIL', 'RAGS', 'PLARTIC WRAP', 'GARBAGE BAGS', 'CLEAR BAGS', 'TAPE', 'WHITE GLOVES', 'HALF PAN (ALUMINUM)', 'ROUND PAN (ALUMINUM)', 'EXT. CORD/ PWR STRIP', 'BUTANE', 'STERNO (SMALL)', 'GLOVES', 'PAPERGOODS', 'COCKTAIL NAPKINS', 'DINNER NAPKINS', '6" PLATE', '7" PLATE', '9" PLATE', 'SOUP BOWL', 'ICE CREAM BOWL', 'COFFEE CUP (PLASTIC)', 'SODA CUP', 'WINE CUP', 'SHOT CUP', 'COLOR TUMBLERS/ LID', 'PAPER CUP/LID (COFFEE)', 'BAMBOO SUSHI PLATE', 'FRY BOAT', 'CHINESE TAKE OUT CONT.', 'TIMBALE', 'SOUP SHOT', 'PLASTICWARE', 'MINI SPOON - SILVER', 'FORK', 'KNIFE', 'SOUP SPOON', 'TEASPOON', 'CHINESE SPOON', 'COOKIE BAGS', 'CANDY BAGS'] },
+      { name: 'Table Service', items: ['TABLE NUMBERS', 'SALT & PEPPER', 'SUGAR HOLDER', 'MOCHA PITCHER', 'WATER PITCHER', 'COFFEE PITCHER', 'BREAD BASKETS', 'CHINA', '6" PLATE', '8" PLATE', '9" PLATE', '10" PLATE', 'SOUP BOWL', 'SMALL RAMIKIN', 'RAMIKIN', 'SOMBRERO BOWL', 'COFFEECUP/ SAUCER', 'CHINESE SPOON', 'RECTANGLE PLATE', '2 SECTION DIP PLATE', 'OLD SOUP BOWL', 'SMALL BOWL', 'GLASSES', 'WATER', 'WINE', 'SHOT', 'SODA', 'A / P', 'MARTINI', 'SILVERWARE', 'FORK', 'KNIFE', 'SOUP SPOON', 'TEA SPOON', 'SMORG FORK', 'NEW CHARGER', 'BLUE CHARGER', 'GOLD RIM CHARGER', 'SCOOP BOWL', 'ESPRESSO MUG', 'GLASS MASON MUG', '3" BOWL', '4" SUSHI PLATE', 'WEDDING - TO GO', '9" PLATE', 'FORK', 'KNIFE', 'BLACK CONTAINER/ LID', 'SODA CUP'] },
+      { name: 'Bar', items: ['ICE CHEST/ COOLER', 'ICE BOWL', 'ICE SCOOP', 'BLENDER', 'BAR TOOLS', 'STRAWS (LONG)', 'BAR STRAW', 'CARAFE', 'WATER', 'SELTZER', 'COKE', 'DIET COKE', 'SPRITE', 'DIET SPRITE', 'GINGER ALE', 'ORANGE SODA', 'FRESCA', 'TONIC WATER', 'TOMATO JUICE', 'APPLE JUICE', 'CRANBERRY JUICE', 'ORANGE JUICE', 'GRAPEFRUIT JUICE', 'PINEAPPLE JUICE', 'GRENADINE', 'SOUR MIX', 'MARGARITA MIX', 'MARTINI MIX', 'TRIPLE SEC', 'SIMPLE SYRUP', 'PINA COLADA MIX', 'STRAWBERRY DAQURI', 'LEMONADE', 'ICED TEA', 'LIME JUICE', 'STATIONS', 'WASH STATION', 'CANDLE LIGHTING', 'CHALLAH TRAY/ KNIFE', 'GLASS SHEETS', 'PLASTIC DRINK DISP.', 'GLASS DRINK DISP.', 'TABLE RISERS', 'KOSHER SIGNS', 'CHEF COATS'] },
+      { name: 'Kitchen Tools', items: ['TOOL BOX', 'CUTTING BOARDS', 'SHEET PANS', 'SAUCE POT', 'SOUP POT', 'G. I. POT', 'SPIDER', 'LARGE FRY PAN', 'BUS BUCKET', 'INSERT', '1/2 INSERT', 'NEW ROUND INSERT', 'HOT BOX', 'LARGE STERNO', 'i WATANI', 'CADCO OVEN', 'SHABBOS OVEN (LARGE)', 'SHABBOS OVEN (SMALL)', 'HOT PLATE', 'SPICE BOX', 'PASTRY BAG/ TIP', 'SQUEEZE BOTTLES', 'PARCHMENT PAPER', 'BLACK WOK', 'WOK', 'FRY PAN', 'COPPER PAN', 'OMELETTE PAN', 'CAST IRON PAN', 'GRAVY POT', 'OLD POT W/ GLASS LID', 'NEW POT W/ LID', 'GREY SOUP POT', 'MIXED PASSING PLATES', 'WHITE PASSING PLATES', 'BLACK PASSING PLATES', 'WOOD PASSING PLATES', 'BAMBOO TOOTHPICKS', '6" SKEWERS', '10" SKEWERS', 'CANDY SCOOP/ TONGS', 'CANDY JARS', 'COOKIE JARS', 'XL MARTINI GLASS', 'CONVECTION OVEN', 'GAS FOR OVEN', 'BBQ', 'CHARCOAL/ FLUID', 'GRILL TOOLS'] },
+      { name: 'Bowls / Platters', items: ['WHITE', '4" BOWL', '5" BOWL', '8"BOWL', '10" BOWL', 'SMALL BOARD', 'MEDIUM BOARD', 'LARGE BOARD', 'SQUARE BOARD', 'XL OVAL', 'SMALL PLATTER (REC)', 'MED PLATTER (REC)', 'LG PLATTER (REC)', 'WOOD', 'WOOD BOWLS', 'WOOD PLATTERS', 'WOOD BOARDS', 'CHARCUTERIE BOARD', 'HAMMER STEEL BOX', 'OVAL TRAYS', 'OVAL BOWL', 'CHARGERS', 'ROUND TRAYS', 'REC TRAY', 'SOUP TERENE', 'QUART BOWL', 'SAUCE BOWL', 'COPPER BOX', 'SILVER TRAYS', 'OVAL SILVER TRAY', 'ACRYLIC TRAYS (HANDLES)', 'ACRYLIC RISERS', 'WOOD RISERS', 'GLASS BLOCK', 'CANDLE STICK RISERS', 'COFFEE/ TEA', 'COFFEE URN', 'SAMOVAR', 'REGULAR COFFEE', 'DECAF COFFEE', 'TEA/ HERBAL TEA', 'TEA BOX - WOOD BOX', 'COFFEE SIGNS', 'STIR STICKS', 'FLAVOR SYRUPS', 'PUMP POTS'] },
+      { name: 'Buffet / Stations', items: ['REC CHAFER', 'COVER UP/ STOVE', 'CARVING BOARD', 'MARBLE CARVING BOARD', 'MARBLE RISERS', 'PAELLA STAND', 'PAELLA PAN', 'LONG HIBACHI', 'RED BRICKS', 'BLACK FLAT TOP', 'SILVER FLAT TOP', 'BLACK HIBACHI', 'WHITE- 2 TIER STANDS', 'COPPER CHAFER', 'MORTER/ PESTLE', 'PASTA PROPS', 'SUSHI BOX', 'CHOP STICKS', 'FRY BASKET/ PAPER', 'METAL BASKET- LARGE', 'METAL BASKET - SMALL', 'METAL BASKET - SILVER', 'BLACK BASKETS (3TIER)', 'ACRYLIC STEPS', 'GELATO STAND', 'HEAT LAMP', 'PANINI MACHINE', 'SCHWARMA MACHINE', 'SOUP KETTLE - BLACK', 'HOT DOG ROLLER', 'DONUT WALL/ STICKS', 'WAFFLE MACHINE', 'SMORE TRAY/ ROCKS', 'COTTON CANDY MACHINE', 'CHOCOLATE FOUNTAIN', 'FONDU POT', 'SPRAY OIL', 'SERVING PIECES', 'SPOON', 'FORK', 'TONGS', 'PIZZA CUTTER', 'SOUP LADDLE', 'ICE CREAM SCOOP', 'RUBBER SPATULA', 'CARVING KNIFE', 'BIG SOUP SPOON', 'PIE / CAKE CUTTING', 'FALAFEL SCOOP (PURPLE'] }
     ]
   }
 };
@@ -2513,6 +2526,7 @@ function openModal(){
 function closeModal(){ document.getElementById('addModal').classList.remove('open'); }
 function addEvent(){
   try{
+    if(!db){ alert('Still connecting to database — please wait a moment and try again.'); return; }
     const name=document.getElementById('m-name').value.trim();
     if(!name){ alert('Please enter a client name.'); return; }
     const type=document.getElementById('m-type').value;
@@ -2667,7 +2681,7 @@ function printChecklist(eid){
 }
 
 const eventDayDates = {
-  monday:    new Date('2026-05-31'),
+  monday:    new Date('2026-06-01'),
   tuesday:   new Date('2026-06-02'),
   wednesday: new Date('2026-06-03'),
   thursday:  new Date('2026-06-04'),
@@ -3013,5 +3027,5 @@ document.addEventListener('DOMContentLoaded', ()=>{
 });
 _startApp();
 </script>
-</body>
-</html>
+
+</body></html>
