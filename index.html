@@ -1814,32 +1814,24 @@ function calcInvoiceTotals(inv){
 
 function renderInvoices(){
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
   const currentWeekStr = getWeekEndDate(currentWeekOffset).toISOString().split('T')[0];
-
-  // Get all catered events
   const allEvts = events.filter(e=>e.type!=='dropoff');
-
-  // Split into past/this/future based on weekOf
-  const pastEvts    = allEvts.filter(e=>(e.weekOf||'2026-05-31') < currentWeekStr);
-  const thisEvts    = allEvts.filter(e=>(e.weekOf||'2026-05-31') === currentWeekStr);
-  const futureEvts  = allEvts.filter(e=>(e.weekOf||'2026-05-31') > currentWeekStr);
-
-  // Invoice view filter
+  const pastEvts   = allEvts.filter(e=>(e.weekOf||'2026-05-31') < currentWeekStr);
+  const thisEvts   = allEvts.filter(e=>(e.weekOf||'2026-05-31') === currentWeekStr);
+  const futureEvts = allEvts.filter(e=>(e.weekOf||'2026-05-31') > currentWeekStr);
   const invView = window._invView || 'default';
 
   const viewBtns = [
-    {key:'default',  label:'Default view'},
-    {key:'all',      label:'All invoices'},
-    {key:'paid',     label:'Paid only'},
-    {key:'quotes',   label:'Quotes only'},
+    {key:'default', label:'Default view'},
+    {key:'all',     label:'All invoices'},
+    {key:'paid',    label:'Paid only'},
+    {key:'quotes',  label:'Quotes only'},
   ];
 
   function filterEvts(evts){
     if(invView==='paid')   return evts.filter(e=>invoices[e.id]?.status==='paid');
     if(invView==='quotes') return evts.filter(e=>!invoices[e.id]||invoices[e.id]?.status==='quote'||invoices[e.id]?.status==='none');
     if(invView==='all')    return evts;
-    // default: exclude fully paid
     return evts.filter(e=>invoices[e.id]?.status!=='paid');
   }
 
@@ -1852,80 +1844,69 @@ function renderInvoices(){
     const balance = tots ? tots.balance : 0;
     const isPaid = status==='paid';
     const hasBalance = !isPaid && balance > 0.01;
-
-    // Check if overdue (balance due AND event was > 30 days ago)
+    const statusLabels = {none:'No quote',quote:'Quote',approved:'Approved',invoice:'Invoice open',paid:'Paid'};
+    const fullDate = getFullEventDate(e);
     let overdue = false;
     if(hasBalance && e.weekOf){
       const evtDate = new Date(e.weekOf+'T12:00:00Z');
-      const daysDiff = (now - evtDate) / (1000*60*60*24);
-      if(daysDiff > 30) overdue = true;
+      if((now - evtDate)/(1000*60*60*24) > 30) overdue = true;
     }
-
-    // Status color
-    const statusColors = {
-      none:'color:var(--text3)', quote:'color:var(--amber-text)',
-      approved:'color:var(--blue-text)', invoice:'color:#7c3aed', paid:'color:var(--green-text)'
-    };
-    const statusLabels = {none:'No quote',quote:'Quote',approved:'Approved',invoice:'Invoice open',paid:'Paid'};
-
-    // Full event date
-    const fullDate = getFullEventDate(e);
-
-    // Check for unacknowledged changes where Invoice dept hasn't acked
     const hasUnackedChange = changes.some(c=>c.job===e.job && (c.notifyDepts||changeDepts).includes('Invoice') && !(c.acks||{})['Invoice']);
+    const statusColor = isPaid?'color:var(--green-text)':hasBalance?'color:#e05c5c':'color:var(--text3)';
+    const statusText = isPaid?'PAID':hasBalance?'BALANCE DUE':(statusLabels[status]||'—');
+    const overdueHtml = overdue ? '<span class="overdue-dot" title="Overdue 30+ days"></span>' : '';
+    const changeHtml = hasUnackedChange ? '<span title="Change order pending" style="font-size:13px;color:var(--amber-text)">⚠</span>' : '';
+    return '<div onclick="openInvoice(\''+e.id+'\')" style="display:grid;grid-template-columns:130px 1fr 110px 100px 110px 90px 30px;gap:8px;align-items:center;padding:9px 14px;border-bottom:0.5px solid var(--border);cursor:pointer;font-size:13px;transition:background .1s" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
+      + '<span style="color:var(--text3);font-size:12px">'+fullDate+'</span>'
+      + '<span style="font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+displayJob(e.job)+' · '+e.name+'</span>'
+      + '<span style="text-align:right;color:var(--text)">'+(grand>0?'$'+grand.toFixed(2):'—')+'</span>'
+      + '<span style="text-align:right;color:var(--text2)">'+(deposit>0?'$'+deposit.toFixed(2):'—')+'</span>'
+      + '<span style="text-align:right;color:var(--text)">'+(tots?'$'+balance.toFixed(2):'—')+'</span>'
+      + '<span style="text-align:right;font-weight:700;'+statusColor+'">'+statusText+'</span>'
+      + '<span style="display:flex;justify-content:center;gap:3px">'+overdueHtml+changeHtml+'</span>'
+      + '</div>';
+  }
 
-    return \`<div onclick="openInvoice('\${e.id}')" style="display:grid;grid-template-columns:130px 1fr 110px 100px 110px 90px 30px;gap:8px;align-items:center;padding:9px 14px;border-bottom:0.5px solid var(--border);cursor:pointer;font-size:13px;transition:background .1s" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
-      <span style="color:var(--text3);font-size:12px">\${fullDate}</span>
-      <div style="overflow:hidden">
-        <div style="font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">\${displayJob(e.job)} · \${e.name}</div>
-
-      </div>
-      <span style="text-align:right;color:var(--text)">\${grand>0?'$'+grand.toFixed(2):'—'}</span>
-      <span style="text-align:right;color:var(--text2)">\${deposit>0?'$'+deposit.toFixed(2):'—'}</span>
-      <span style="text-align:right;color:var(--text)">\${tots?'$'+balance.toFixed(2):'—'}</span>
-      <span style="text-align:right;font-weight:700;\${isPaid?'color:var(--green-text)':hasBalance?'color:#e05c5c':'color:var(--text3)'}">
-        \${isPaid?'PAID':hasBalance?'BALANCE DUE':statusLabels[status]||'—'}
-      </span>
-      <span style="display:flex;justify-content:center;gap:3px">
-        \${overdue?'<span class="overdue-dot" title="Overdue 30+ days"></span>':''}
-        \${hasUnackedChange?'<span title="Unacknowledged change order" style="font-size:14px;color:var(--amber-text)">⚠</span>':''}
-      </span>
-    </div>\`;
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function weekLabel(weekStr){
+    const d = new Date(weekStr+'T12:00:00Z');
+    return 'W/E '+months[d.getUTCMonth()]+' '+d.getUTCDate()+', '+String(d.getUTCFullYear()).slice(2);
   }
 
   function buildSection(label, evts){
     const filtered = filterEvts(evts).sort((a,b)=>(a.weekOf||'').localeCompare(b.weekOf||''));
     if(!filtered.length) return '';
-    return \`<div style="margin-bottom:1.25rem">
-      <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.07em;padding:6px 14px;background:var(--bg2);border-radius:var(--radius) var(--radius) 0 0;border:0.5px solid var(--border)">\${label}</div>
-      <div style="background:var(--bg);border:0.5px solid var(--border);border-top:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);overflow:hidden">
-        <div style="display:grid;grid-template-columns:130px 1fr 110px 100px 110px 90px 30px;gap:8px;padding:6px 14px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border)">
-          <span>Date</span><span>Event</span><span style="text-align:right">Total</span><span style="text-align:right">Paid</span><span style="text-align:right">Balance</span><span style="text-align:right">Status</span><span></span>
-        </div>
-        \${filtered.map(e=>buildRow(e)).join('')}
-      </div>
-    </div>\`;
+    const headerRow = '<div style="display:grid;grid-template-columns:130px 1fr 110px 100px 110px 90px 30px;gap:8px;padding:6px 14px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border)">'
+      + '<span>Date</span><span>Event</span><span style="text-align:right">Total</span><span style="text-align:right">Paid</span><span style="text-align:right">Balance</span><span style="text-align:right">Status</span><span></span>'
+      + '</div>';
+    return '<div style="margin-bottom:1.25rem">'
+      + '<div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.07em;padding:6px 14px;background:var(--bg2);border-radius:var(--radius) var(--radius) 0 0;border:0.5px solid var(--border)">'+label+'</div>'
+      + '<div style="background:var(--bg);border:0.5px solid var(--border);border-top:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);overflow:hidden">'
+      + headerRow
+      + filtered.map(buildRow).join('')
+      + '</div></div>';
   }
 
-  let h = \`<div class="section-header" style="margin-bottom:.75rem">
-    <div class="section-title">Quotes & Invoices</div>
-    <div style="display:flex;gap:5px;flex-wrap:wrap">
-      \${viewBtns.map(b=>\`<button onclick="window._invView='\${b.key}';render()" style="padding:5px 12px;border-radius:var(--radius);border:0.5px solid \${invView===b.key?'var(--blue-border)':'var(--border2)'};background:\${invView===b.key?'var(--blue-bg)':'var(--bg)'};color:\${invView===b.key?'var(--blue-text)':'var(--text2)'};font-size:12px;cursor:pointer;font-weight:\${invView===b.key?'500':'400'}">\${b.label}</button>\`).join('')}
-    </div>
-  </div>\`;
+  const viewBtnHtml = viewBtns.map(function(b){
+    const active = invView===b.key;
+    return '<button onclick="window._invView=\''+b.key+'\';render()" style="padding:5px 12px;border-radius:var(--radius);border:0.5px solid '+(active?'var(--blue-border)':'var(--border2)')+';background:'+(active?'var(--blue-bg)':'var(--bg)')+';color:'+(active?'var(--blue-text)':'var(--text2)')+';font-size:12px;cursor:pointer;font-weight:'+(active?'500':'400')+'">'+b.label+'</button>';
+  }).join('');
+
+  let h = '<div class="section-header" style="margin-bottom:.75rem"><div class="section-title">Quotes & Invoices</div><div style="display:flex;gap:5px;flex-wrap:wrap">'+viewBtnHtml+'</div></div>';
 
   if(invView==='default'){
     h += buildSection('Previous Weeks', pastEvts);
     h += buildSection('This Week', thisEvts);
     h += buildSection('Future Weeks', futureEvts);
-    if(!filterEvts(allEvts).length) h += \`<div style="padding:2rem;text-align:center;color:var(--text3)">No open invoices or quotes.</div>\`;
+    if(!filterEvts(allEvts).length) h += '<div style="padding:2rem;text-align:center;color:var(--text3)">No open invoices or quotes.</div>';
   } else {
     h += buildSection('All Events', allEvts);
   }
 
-  h += \`<div id="invoiceDetail" style="margin-top:1rem"></div>\`;
+  h += '<div id="invoiceDetail" style="margin-top:1rem"></div>';
   return h;
 }
+
 
 
 let activeInvoiceId = null;
