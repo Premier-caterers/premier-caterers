@@ -2865,6 +2865,9 @@ async function deleteEvent(id){
   showToast('Event deleted');
   render();
 }
+function toggleEquipItem(id, idx, val){ toggleSelect(id, idx, val); }
+function setEquipFilter(f){ /* placeholder */ }
+function filterDay(d){ setDay(d); }
 function save(){ /* Firebase handles all saves */ }
 function load(){ /* Firebase handles all loads */ }
 
