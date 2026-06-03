@@ -2515,7 +2515,7 @@ function openModal(){
     sel.innerHTML = allDays.map(d=>{
       // Use UTC to avoid timezone day-shift issues
       const weDate2 = getWeekEndDate(currentWeekOffset);
-      const ms = Date.UTC(weDate2.getFullYear(), weDate2.getMonth(), weDate2.getDate() + d.offset);
+      const ms = Date.UTC(weDate2.getUTCFullYear(), weDate2.getUTCMonth(), weDate2.getUTCDate() + d.offset);
       const dt = new Date(ms);
       const label = d.label+' '+(dt.getUTCMonth()+1)+'/'+dt.getUTCDate();
       return `<option value="${d.key}">${label}</option>`;
