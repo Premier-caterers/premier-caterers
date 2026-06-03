@@ -2739,9 +2739,9 @@ function toggleAssigned(eid, idx, name, val){
 let currentWeekOffset = 0; // 0 = current week
 
 function getWeekEndDate(offset){
-  const base = new Date('2026-06-07'); // Sunday Jun 7 = W/E this week
-  base.setDate(base.getDate() + (offset * 7));
-  return base;
+  // Use UTC to avoid timezone day-shift
+  const ms = Date.UTC(2026, 5, 7) + (offset * 7 * 24 * 60 * 60 * 1000); // Jun 7 2026 = Sunday
+  return new Date(ms);
 }
 
 function formatWeekLabel(d){
@@ -2757,7 +2757,8 @@ function changeWeek(dir){
 
 function updateWeekLabel(){
   const d = getWeekEndDate(currentWeekOffset);
-  const label = 'W/E '+d.toLocaleDateString('en-US',{month:'short',day:'numeric'}).replace(',',' ')+', '+String(d.getFullYear()).slice(2);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const label = 'W/E '+months[d.getUTCMonth()]+' '+d.getUTCDate()+', '+String(d.getUTCFullYear()).slice(2);
   const pill = document.getElementById('wePill');
   if(pill) pill.textContent = label;
 }
