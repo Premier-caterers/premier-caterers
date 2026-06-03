@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<!-- saved from url=(0043)file:///C:/Users/premi/Downloads/index.html -->
-<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-
+<html lang="en">
+<head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
-<link rel="stylesheet" href="./index_files/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <style>
 
 *{box-sizing:border-box;margin:0;padding:0}
@@ -234,13 +234,13 @@ a{color:var(--blue-mid);text-decoration:none}
   </div>
   <div class="topbar-spacer"></div>
   <div class="role-switcher" id="roleSwitcher">
-    <button class="role-btn active" onclick="setRole(&#39;admin&#39;,this)">Admin</button>
-    <button class="role-btn" onclick="setRole(&#39;shelley&#39;,this)">Shelley</button>
-    <button class="role-btn" onclick="setRole(&#39;kenny&#39;,this)">Kenny</button>
-    <button class="role-btn" onclick="setRole(&#39;josh&#39;,this)">Josh</button>
-    <button class="role-btn" onclick="setRole(&#39;kitchen&#39;,this)">Kitchen</button>
+    <button class="role-btn active" onclick="setRole('admin',this)">Admin</button>
+    <button class="role-btn" onclick="setRole('shelley',this)">Shelley</button>
+    <button class="role-btn" onclick="setRole('kenny',this)">Kenny</button>
+    <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
+    <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <button class="sync-btn" id="syncBtn" onclick="showView(&#39;settings&#39;)">
+  <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
   </button>
@@ -249,17 +249,17 @@ a{color:var(--blue-mid);text-decoration:none}
 <div class="layout">
   <div class="sidebar">
     <div class="sidebar-label">Views</div>
-    <button class="nav-item" id="nav-pipeline" onclick="showView(&#39;pipeline&#39;)"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
-    <button class="nav-item active" id="nav-events" onclick="showView(&#39;events&#39;)"><i class="ti ti-calendar"></i>This week</button>
-    <button class="nav-item" id="nav-schedule" onclick="showView(&#39;schedule&#39;)"><i class="ti ti-users"></i>Staff schedule</button>
-    <button class="nav-item" id="nav-checklists" onclick="showView(&#39;checklists&#39;)"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">5</span></button>
-    <button class="nav-item" id="nav-changes" onclick="showView(&#39;changes&#39;)"><i class="ti ti-refresh-alert"></i>Changes log<span class="nav-badge">2</span></button>
-    <button class="nav-item" id="nav-invoices" onclick="showView(&#39;invoices&#39;)"><i class="ti ti-file-invoice"></i>Quotes / Invoices</button>
-    <button class="nav-item" id="nav-reports" onclick="showView(&#39;reports&#39;)"><i class="ti ti-chart-bar"></i>Reports</button>
-    <button class="nav-item" id="nav-grocery" onclick="showView(&#39;grocery&#39;)"><i class="ti ti-shopping-cart"></i>Grocery</button>
-    <button class="nav-item" id="nav-equipment" onclick="showView(&#39;equipment&#39;)"><i class="ti ti-tool"></i>Equipment</button>
+    <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
+    <button class="nav-item active" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
+    <button class="nav-item" id="nav-schedule" onclick="showView('schedule')"><i class="ti ti-users"></i>Staff schedule</button>
+    <button class="nav-item" id="nav-checklists" onclick="showView('checklists')"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">5</span></button>
+    <button class="nav-item" id="nav-changes" onclick="showView('changes')"><i class="ti ti-refresh-alert"></i>Changes log<span class="nav-badge">2</span></button>
+    <button class="nav-item" id="nav-invoices" onclick="showView('invoices')"><i class="ti ti-file-invoice"></i>Quotes / Invoices</button>
+    <button class="nav-item" id="nav-reports" onclick="showView('reports')"><i class="ti ti-chart-bar"></i>Reports</button>
+    <button class="nav-item" id="nav-grocery" onclick="showView('grocery')"><i class="ti ti-shopping-cart"></i>Grocery</button>
+    <button class="nav-item" id="nav-equipment" onclick="showView('equipment')"><i class="ti ti-tool"></i>Equipment</button>
     <div class="sidebar-label">Setup</div>
-    <button class="nav-item" id="nav-settings" onclick="showView(&#39;settings&#39;)"><i class="ti ti-settings"></i>Google Sheets</button>
+    <button class="nav-item" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
   </div>
   <div class="main" id="mainArea"></div>
 </div>
@@ -292,8 +292,8 @@ a{color:var(--blue-mid);text-decoration:none}
 </div>
 
 <!-- Firebase Compat SDK -->
-<script src="./index_files/firebase-app-compat.js.download"></script>
-<script src="./index_files/firebase-firestore-compat.js.download"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <script>
 
@@ -3027,5 +3027,5 @@ document.addEventListener('DOMContentLoaded', ()=>{
 });
 _startApp();
 </script>
-
-</body></html>
+</body>
+</html>
