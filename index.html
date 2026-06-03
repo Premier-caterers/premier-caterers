@@ -228,7 +228,7 @@ a{color:var(--blue-mid);text-decoration:none}
   </div>
   <div style="display:flex;align-items:center;gap:6px">
     <button onclick="changeWeek(-1)" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:18px;padding:2px 6px;border-radius:4px;line-height:1" title="Previous week">‹</button>
-    <span class="we-pill" id="wePill" onclick="showWeekPicker()" style="cursor:pointer" title="Click to jump to a date">W/E Jun 8, 26</span>
+    <span class="we-pill" id="wePill" onclick="showWeekPicker()" style="cursor:pointer" title="Click to jump to a date">W/E Jun 7, 26</span>
     <button onclick="changeWeek(1)" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:18px;padding:2px 6px;border-radius:4px;line-height:1" title="Next week">›</button>
     <input type="date" id="weekJumper" style="display:none;font-size:12px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-family:inherit" onchange="jumpToWeek(this.value)">
   </div>
@@ -1041,7 +1041,7 @@ function renderSchedule(){
     <div class="stat-card"><div class="stat-n">${events.reduce((s,e)=>s+(e.chefs||0),0)}</div><div class="stat-l">chefs</div></div>
     <div class="stat-card"><div class="stat-n">${events.reduce((s,e)=>s+(e.porters||0),0)}</div><div class="stat-l">porters</div></div>
   </div>
-  <div class="section-header"><div class="section-title">Staff schedule — W/E Jun 8, 26</div></div>`;
+  <div class="section-header"><div class="section-title">Staff schedule — W/E Jun 7, 26</div></div>`;
 
   eventsWithStaff.forEach(e => {
     const isEditing = schedEditId === e.id;
@@ -2017,7 +2017,7 @@ function renderEquipment() {
   const all = events;
   let h = `
   <div class="section-header">
-    <div class="section-title">Equipment — W/E Jun 8</div>
+    <div class="section-title">Equipment — W/E Jun 7</div>
   </div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-bottom:1.25rem">
     ${all.map(e => {
