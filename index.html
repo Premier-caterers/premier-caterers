@@ -2882,7 +2882,31 @@ function printList(id) {
 // ── SETTINGS ──
 function renderSettings(){
   const connected=!!localStorage.getItem('scriptUrl');
+  const ghToken = localStorage.getItem('githubToken');
   return `
+  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1rem">
+      <div>
+        <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:2px">Push update to GitHub</div>
+        <div style="font-size:12px;color:var(--text3)">Automatically updates the live site in ~60 seconds</div>
+      </div>
+      <button id="githubPushBtn" onclick="pushToGitHub()" ${ghToken?'':'disabled'} style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:none;border-radius:var(--radius);background:${ghToken?'#24292e':'var(--bg3)'};color:${ghToken?'#fff':'var(--text3)'};font-size:14px;font-weight:500;cursor:${ghToken?'pointer':'not-allowed'}">
+        <i class="ti ti-brand-github" style="font-size:16px"></i> Push to GitHub
+      </button>
+    </div>
+    ${ghToken
+      ? `<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--green-text)"><i class="ti ti-circle-check"></i> Token saved — ready to push<button onclick="clearGitHubToken()" style="border:none;background:none;color:var(--text3);font-size:12px;cursor:pointer;text-decoration:underline;margin-left:8px">Clear token</button></div>`
+      : `<div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Enter your GitHub Personal Access Token to enable one-click deploys:</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input type="password" id="githubTokenInput" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="flex:1;min-width:200px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px 12px;font-size:13px;color:var(--text);font-family:inherit">
+            <button onclick="saveGitHubToken()" class="btn-save">Save token</button>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.6">
+            To get a token: <strong>github.com → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token</strong>. Select <strong>repo</strong> scope. Copy and paste here.
+          </div>
+        </div>`}
+  </div>
   <div style="background:var(--amber-bg);border:0.5px solid var(--amber-text);border-radius:var(--radius-lg);padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
     <div>
       <div style="font-size:13px;font-weight:500;color:var(--amber-text)">One-time fix: move events to correct week</div>
@@ -3342,6 +3366,87 @@ async function deleteEvent(id){
 function toggleEquipItem(id, idx, val){ toggleSelect(id, idx, val); }
 function setEquipFilter(f){ /* placeholder */ }
 function filterDay(d){ setDay(d); }
+
+// ── GITHUB AUTO-DEPLOY ──
+async function pushToGitHub(){
+  const token = localStorage.getItem('githubToken');
+  const repo = 'Premier-caterers/premier-caterers';
+  const path = 'index.html';
+
+  if(!token){
+    alert('Please save your GitHub token first in the Settings page.');
+    return;
+  }
+
+  const btn = document.getElementById('githubPushBtn');
+  if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader" style="font-size:14px"></i> Pushing...'; }
+  showToast('Uploading to GitHub...', 10000);
+
+  try {
+    // Step 1: Get current file SHA (required for update)
+    const getResp = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+      headers: {
+        'Authorization': 'token ' + token,
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+
+    if(!getResp.ok){
+      const err = await getResp.json();
+      throw new Error(err.message || 'Failed to get file info');
+    }
+
+    const fileData = await getResp.json();
+    const sha = fileData.sha;
+
+    // Step 2: Get the current page HTML
+    const html = document.documentElement.outerHTML;
+    const encoded = btoa(unescape(encodeURIComponent(html)));
+
+    // Step 3: Push update
+    const pushResp = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': 'token ' + token,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: 'Update app — ' + new Date().toLocaleString(),
+        content: encoded,
+        sha: sha
+      })
+    });
+
+    if(!pushResp.ok){
+      const err = await pushResp.json();
+      throw new Error(err.message || 'Push failed');
+    }
+
+    showToast('✓ Pushed! Site updates in ~60 seconds', 5000);
+    if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-brand-github" style="font-size:14px"></i> Push to GitHub'; }
+
+  } catch(err){
+    console.error('GitHub push error:', err);
+    showToast('Push failed: ' + err.message, 5000);
+    if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-brand-github" style="font-size:14px"></i> Push to GitHub'; }
+  }
+}
+
+function saveGitHubToken(){
+  const token = document.getElementById('githubTokenInput')?.value?.trim();
+  if(!token){ alert('Please enter your token.'); return; }
+  localStorage.setItem('githubToken', token);
+  showToast('Token saved ✓');
+  render();
+}
+
+function clearGitHubToken(){
+  localStorage.removeItem('githubToken');
+  showToast('Token cleared');
+  render();
+}
+
 function save(){ /* Firebase handles all saves */ }
 function load(){ /* Firebase handles all loads */ }
 
@@ -3463,6 +3568,9 @@ window.editVenue = editVenue;
 window.updateVenue = updateVenue;
 window.deleteVenue = deleteVenue;
 window.showVenuePopup = showVenuePopup;
+window.pushToGitHub = pushToGitHub;
+window.saveGitHubToken = saveGitHubToken;
+window.clearGitHubToken = clearGitHubToken;
 window.copyScript = ()=>{ navigator.clipboard?.writeText(document.getElementById('scriptBox')?.innerText||''); };
 
 // Mark app as ready and flush queued calls
