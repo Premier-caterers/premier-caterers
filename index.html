@@ -258,10 +258,18 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="nav-item" id="nav-reports" onclick="showView('reports')"><i class="ti ti-chart-bar"></i>Reports</button>
     <button class="nav-item" id="nav-grocery" onclick="showView('grocery')"><i class="ti ti-shopping-cart"></i>Grocery</button>
     <button class="nav-item" id="nav-equipment" onclick="showView('equipment')"><i class="ti ti-tool"></i>Equipment</button>
+    <button class="nav-item" id="nav-venues" onclick="showView('venues')"><i class="ti ti-building"></i>Venues</button>
     <div class="sidebar-label">Setup</div>
     <button class="nav-item" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
   </div>
-  <div class="main" id="mainArea"></div>
+  <div class="main" style="padding:0;display:flex;flex-direction:column">
+  <div id="globalChangeBanner" style="display:none;background:var(--amber-bg);border-bottom:0.5px solid var(--amber-border);padding:.6rem 1.25rem;display:none;align-items:center;gap:10px;cursor:pointer" onclick="showView('changes')">
+    <i class="ti ti-alert-triangle" style="font-size:15px;color:var(--amber-text);flex-shrink:0"></i>
+    <span id="globalChangeBannerText" style="font-size:13px;color:var(--amber-text);font-weight:500;flex:1"></span>
+    <span style="font-size:12px;color:var(--amber-text);text-decoration:underline">View changes →</span>
+  </div>
+  <div id="mainArea" style="padding:1.25rem;flex:1;overflow-x:hidden;min-width:0"></div>
+</div>
 </div>
 
 <div class="modal-wrap" id="addModal">
@@ -311,8 +319,9 @@ const firebaseConfig = {
   appId: "1:471701398759:web:559a7bee3b645ce545ee42"
 };
 // db and collections initialized in _startApp() after Firebase SDK loads
-let db, eventsCol, changesCol, inquiriesCol, checklistCol, equipCol, invoicesCol;
+let db, eventsCol, changesCol, inquiriesCol, checklistCol, equipCol, invoicesCol, venuesCol;
 let invoices = {}; // keyed by eventId
+let venues = []; // venues database
 
 // Toast
 let _toastTimer;
@@ -336,6 +345,18 @@ async function _saveEvent(e){
 async function _saveChange(c){ try{ await db.collection('changes').doc(c.id).set(c); }catch(err){ console.error(err); } }
 async function _saveInquiry(i){ try{ await db.collection('inquiries').doc(i.id).set(i); }catch(err){ console.error(err); } }
 async function _saveChecklist(eid,items){ try{ await db.collection('checklists').doc(eid).set({items,ts:Date.now()}); }catch(err){ console.error(err); } }
+async function _saveVenue(v){ try{ await venuesCol.doc(v.id).set(v); }catch(err){ console.error(err); } }
+
+function autoSaveVenue(name, addr){
+  if(!name || !addr) return;
+  const existing = venues.find(v=>v.name===name || v.addr===addr);
+  if(!existing){
+    const v = {id: Date.now()+'', name, addr, notes:'', contact:'', parking:'', createdAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})};
+    venues.push(v);
+    _saveVenue(v);
+  }
+}
+
 async function _saveInvoice(eid,inv){ try{ await invoicesCol.doc(eid).set({...inv,ts:Date.now()}); }catch(err){ console.error(err); } }
 
 async function _saveEquipment(eid,eq){ try{ await db.collection('equipment').doc(eid).set({...eq,ts:Date.now()}); }catch(err){ console.error(err); } }
@@ -348,6 +369,7 @@ function startFirebaseListeners(){
   checklistCol.onSnapshot( snap=>{ checklists={}; snap.docs.forEach(d=>{ checklists[d.id]=d.data().items||[]; }); if(currentView==='checklists') render(); updateBadge(); });
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
   invoicesCol.onSnapshot( snap=>{ invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); }); if(currentView==='invoices') render(); });
+  venuesCol.onSnapshot( snap=>{ venues=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='venues') render(); });
 }
 
 async function seedIfEmpty(){
@@ -474,7 +496,7 @@ const roles = {
   kitchen: {canEdit:false, showStaff:false, showLinks:false, canViewInvoices:false, canViewReports:false},
 };
 
-let currentView='events', currentRole='admin', selectedId=null, editingId=null, activeDay='all';
+let currentView='events', currentRole='admin', selectedId=null, editingId=null, activeDay='all', eventsViewMode='card';
 
 function setRole(r,btn){
   currentRole=r;
@@ -513,6 +535,7 @@ function render(){
            currentView==='reports'   ? renderReports()   :
            currentView==='grocery'   ? renderGrocery()   :
            currentView==='equipment' ? renderEquipment() :
+           currentView==='venues'    ? renderVenues()    :
            currentView==='settings'  ? renderSettings()  : '';
   } catch(err) {
     html = '<div style="padding:2rem;color:red;font-size:13px;font-family:monospace"><strong>Error in '+currentView+':</strong><br>'+err.message+'</div>';
@@ -520,6 +543,19 @@ function render(){
   }
   document.getElementById('mainArea').innerHTML = html;
   updateBadge();
+  // Update global change banner
+  const _unacked = changes.filter(c=>{ const _a=c.acks||{}; return changeDepts.some(d=>!_a[d]); });
+  const _banner = document.getElementById('globalChangeBanner');
+  const _bannerText = document.getElementById('globalChangeBannerText');
+  if(_banner && _bannerText){
+    if(_unacked.length > 0){
+      _banner.style.display='flex';
+      const _jobs = [...new Set(_unacked.map(c=>c.job))].join(', ');
+      _bannerText.textContent = _unacked.length + ' unacknowledged change order' + (_unacked.length>1?'s':'') + ' — ' + _jobs;
+    } else {
+      _banner.style.display='none';
+    }
+  }
 }
 
 // ── EVENTS ──
@@ -571,7 +607,13 @@ function renderEvents(){
   </div>
   <div class="section-header">
     <div class="section-title">Events — ${weekLabel}</div>
-    ${role.canEdit?'<button class="add-btn" onclick="openModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add event</button>':''}
+    <div style="display:flex;gap:6px;align-items:center">
+      <button onclick="eventsViewMode=eventsViewMode==='card'?'list':'card';render()" style="padding:5px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px">
+        <i class="ti ${eventsViewMode==='card'?'ti-list':'ti-layout-grid'}" style="font-size:13px"></i>
+        ${eventsViewMode==='card'?'List view':'Card view'}
+      </button>
+      ${role.canEdit?'<button class="add-btn" onclick="openModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add event</button>':''}
+    </div>
   </div>
   <div class="filter-bar">
     ${['all','monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(d=>`<button class="filter-btn ${activeDay===d?'active':''}" onclick="setDay('${d}')">${d==='all'?'All':d.charAt(0).toUpperCase()+d.slice(1)}</button>`).join('')}
@@ -600,20 +642,32 @@ function renderEvents(){
         return url ? `<a href="${url}" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()">${inner}</a>` : inner;
       };
       h+=`<div class="event-card ${selectedId===e.id?'selected':''}" onclick="selectEvent('${e.id}')">
-        <div class="card-top"><span class="job-pill">${displayJob(e.job)}</span><span class="type-badge t-${e.type}">${e.typeLabel}</span></div>
+        <div class="card-top">
+          <span class="job-pill">${displayJob(e.job)}</span>
+          <span class="type-badge t-${e.type}">${e.typeLabel}</span>
+          ${changes.some(c=>c.job===e.job && changeDepts.some(d=>!(c.acks||{})[d])) ? '<i class="ti ti-alert-triangle" style="font-size:14px;color:var(--amber-text);margin-left:auto" title="Unacknowledged changes"></i>' : ''}
+        </div>
         <div class="client-name">${e.name}</div>
         ${e.addr?`<div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>${e.addr}</div>`:''}
         ${role.showStaff&&chips?`<div class="staff-chips">${chips}</div>`:''}
         ${e.logoData ? `<div style="margin-top:8px;margin-bottom:6px"><img src="${driveImgUrl(e.logoData)}" style="max-height:36px;max-width:80px;object-fit:contain;border-radius:4px;opacity:.9" onerror="this.style.display='none'"></div>` : ''}
         <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
           ${statusBadge('Equipment', equipStatus, '')}
-          ${e.menuLink ? statusBadge('Menu','attached',e.menuLink) : statusBadge('Menu','missing','')}
+          ${e.menuLink
+            ? `<a href="${e.menuLink}" target="_blank" onclick="event.stopPropagation()" style="text-decoration:none">${statusBadge('Menu','attached',e.menuLink)}</a>`
+            : `<button onclick="event.stopPropagation();attachDoc('${e.id}','menuLink')" style="border:none;background:none;padding:0;cursor:pointer">${statusBadge('Menu','missing','')}</button>`}
+          ${e.menuLink && e.pdfMenuLink
+            ? `<a href="${e.pdfMenuLink}" target="_blank" onclick="event.stopPropagation()" style="text-decoration:none">${statusBadge('PDF menu','attached',e.pdfMenuLink)}</a>`
+            : e.menuLink
+              ? `<button onclick="event.stopPropagation();createPdfVersion('${e.id}')" style="border:none;background:none;padding:0;cursor:pointer" title="Generate PDF">${statusBadge('PDF menu','missing','')}</button>`
+              : ''}
           ${e.groceryLink ? statusBadge('Grocery','attached',e.groceryLink) : statusBadge('Grocery','missing','')}
           ${e.floorplan ? statusBadge('Floorplan','attached',e.floorplan) : ''}
           ${e.venueLink||true ? statusBadge('Venue', (e.venueLink?'attached':'missing'), e.venueLink||'https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0') : ''}
         </div>
         <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
           <button onclick="goChecklist('${e.id}')" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
+          ${(()=>{ const _v=venues.find(v=>v.addr===e.addr||v.name===e.name); return _v ? `<button onclick="showVenuePopup('${e.id}')" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--teal-text);border-radius:6px;background:var(--teal-bg);color:var(--teal-text);cursor:pointer;display:inline-flex;align-items:center;gap:4px" title="View venue info"><i class="ti ti-building" style="font-size:12px"></i>Venue</button>` : ''; })()}
           ${role.canViewInvoices ? `<button onclick="showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid ${
             !invoices[e.id]||invoices[e.id].status==='none' ? 'var(--border2)' :
             invoices[e.id].status==='paid' ? 'var(--green-text)' :
@@ -638,6 +692,37 @@ function renderEvents(){
     });
     h+='</div>';
   });
+
+  // ── LIST VIEW ──
+  if(eventsViewMode==='list'){
+    h = h.replace(/<div class="event-grid">[\s\S]*?<\/div>\s*(?=<div class="event-grid">|$)/g, '') // clear card grids
+    // Rebuild as list
+    let listH = '';
+    dayOrder.forEach(d=>{
+      if(!byDay[d]) return;
+      listH += `<div class="day-label">${byDay[d][0].dayLabel}</div>
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:8px">`;
+      byDay[d].forEach((e,i)=>{
+        const inv = invoices[e.id];
+        const invStatus = inv?.status;
+        const invColor = !invStatus||invStatus==='none' ? 'var(--text3)' : invStatus==='paid' ? 'var(--green-text)' : invStatus==='invoice' ? '#7c3aed' : 'var(--amber-text)';
+        const hasChange = changes.some(c=>c.job===e.job && changeDepts.some(d=>!(c.acks||{})[d]));
+        listH += `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:${i<byDay[d].length-1?'0.5px solid var(--border)':'none'};cursor:pointer;transition:background .1s" onclick="selectEvent('${e.id}')" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+          <span class="job-pill" style="flex-shrink:0">${displayJob(e.job)}</span>
+          <span style="font-size:14px;font-weight:500;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.name}</span>
+          <span style="font-size:12px;color:var(--text2);flex-shrink:0">${e.dayLabel}</span>
+          <span class="type-badge t-${e.type}" style="flex-shrink:0">${e.typeLabel}</span>
+          ${hasChange ? `<i class="ti ti-alert-triangle" style="font-size:14px;color:var(--amber-text);flex-shrink:0" title="Unacknowledged changes"></i>` : ''}
+          ${invStatus && invStatus!=='none' ? `<i class="ti ti-file-invoice" style="font-size:14px;color:${invColor};flex-shrink:0" title="${invStatus}"></i>` : ''}
+        </div>`;
+      });
+      listH += '</div>';
+    });
+    // Replace all event-grid sections with list
+    const gridStart = h.indexOf('<div class="day-label">');
+    if(gridStart > -1) h = h.substring(0, gridStart) + listH;
+    else h += listH;
+  }
 
   if(selectedId){
     const e=events.find(x=>x.id===selectedId);
@@ -809,7 +894,7 @@ function saveEdit(id){
   ['waiters','chefs','porters'].forEach(k=>{const el=document.getElementById('f-'+k);if(el)e[k]=parseInt(el.value)||0;});
   const te=document.getElementById('f-type'); if(te){e.type=te.value;e.typeLabel=typeMap[te.value]||te.value;}
   const de=document.getElementById('f-day'); if(de)e.day=de.value;
-  editingId=null; _saveEvent(events.find(x=>x.id===id)); render();
+  editingId=null; const _ev=events.find(x=>x.id===id); if(_ev) autoSaveVenue(_ev.name, _ev.addr); _saveEvent(_ev); render();
 }
 
 // ── SCHEDULE ──
@@ -2013,6 +2098,184 @@ function renderReports(){
   </div>`;
 }
 
+
+function renderVenues(){
+  let h = `<div class="section-header">
+    <div class="section-title">Venues</div>
+    <button class="add-btn" onclick="openAddVenueModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add venue</button>
+  </div>`;
+
+  if(venues.length === 0){
+    h += `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:2.5rem;text-align:center;color:var(--text2)">
+      <i class="ti ti-building-off" style="font-size:32px;margin-bottom:1rem;display:block;color:var(--text3)"></i>
+      <div style="font-size:15px;font-weight:500;margin-bottom:.5rem">No venues yet</div>
+      <div style="font-size:13px;color:var(--text3)">Venues are automatically added when you save an event with an address, or click Add venue.</div>
+    </div>`;
+    return h;
+  }
+
+  h += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">
+    ${venues.map(v=>`
+    <div class="event-card" onclick="openVenueDetail('${v.id}')" style="cursor:pointer">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px">
+        <div style="font-size:15px;font-weight:500;color:var(--text)">${v.name}</div>
+        <i class="ti ti-building" style="font-size:16px;color:var(--text3);flex-shrink:0;margin-top:2px"></i>
+      </div>
+      ${v.addr ? `<div style="font-size:12px;color:var(--text3);display:flex;gap:5px;align-items:flex-start;margin-bottom:6px"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:1px"></i>${v.addr}</div>` : ''}
+      ${v.contact ? `<div style="font-size:12px;color:var(--text2)"><i class="ti ti-phone" style="font-size:11px"></i> ${v.contact}</div>` : ''}
+      ${v.parking ? `<div style="font-size:12px;color:var(--text2)"><i class="ti ti-car" style="font-size:11px"></i> ${v.parking}</div>` : ''}
+      ${v.notes ? `<div style="font-size:12px;color:var(--text3);margin-top:6px;font-style:italic">${v.notes}</div>` : ''}
+    </div>`).join('')}
+  </div>
+  <div id="venueDetail"></div>`;
+  return h;
+}
+
+function openVenueDetail(id){
+  const v = venues.find(x=>x.id===id);
+  if(!v) return;
+  const el = document.getElementById('venueDetail');
+  if(!el) return;
+  el.innerHTML = `<div class="detail-panel" style="margin-top:1rem">
+    <div class="detail-header">
+      <div class="detail-title">${v.name}</div>
+      <div class="detail-actions">
+        <button class="icon-btn" onclick="editVenue('${v.id}')" title="Edit"><i class="ti ti-edit"></i></button>
+        <button class="icon-btn" onclick="deleteVenue('${v.id}')" title="Delete" style="color:#e05c5c"><i class="ti ti-trash"></i></button>
+        <button class="icon-btn" onclick="document.getElementById('venueDetail').innerHTML=''" title="Close"><i class="ti ti-x"></i></button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div>
+        ${v.addr ? `<div class="drow"><span class="dkey">Address</span><span class="dval">${v.addr}</span></div>` : ''}
+        ${v.contact ? `<div class="drow"><span class="dkey">Contact</span><span class="dval">${v.contact}</span></div>` : ''}
+        ${v.parking ? `<div class="drow"><span class="dkey">Parking</span><span class="dval">${v.parking}</span></div>` : ''}
+      </div>
+      <div>
+        ${v.notes ? `<div class="drow" style="flex-direction:column;gap:4px"><span class="dkey">Notes</span><span class="dval" style="text-align:left">${v.notes}</span></div>` : ''}
+        <div class="drow"><span class="dkey">Added</span><span class="dval">${v.createdAt||''}</span></div>
+      </div>
+    </div>
+  </div>`;
+  el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function openAddVenueModal(){
+  document.getElementById('addVenueModal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'addVenueModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
+  const fields = [
+    {id:'vn-name', label:'Venue name', placeholder:'Temple Beth El'},
+    {id:'vn-addr', label:'Address', placeholder:'123 Main St, Teaneck'},
+    {id:'vn-contact', label:'Contact info', placeholder:'Phone, email, manager name'},
+    {id:'vn-parking', label:'Parking info', placeholder:'Lot behind building, 200 spaces'},
+    {id:'vn-notes', label:'Notes', placeholder:'Loading dock on south side, etc.', textarea:true},
+  ];
+  m.innerHTML = `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Add venue</div>
+    ${fields.map(f=>`<div class="modal-row">
+      <label>${f.label}</label>
+      ${f.textarea
+        ? `<textarea id="${f.id}" placeholder="${f.placeholder}" style="min-height:70px"></textarea>`
+        : `<input type="text" id="${f.id}" placeholder="${f.placeholder}">`}
+    </div>`).join('')}
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem">
+      <button class="btn-cancel" onclick="document.getElementById('addVenueModal').remove()">Cancel</button>
+      <button class="btn-save" onclick="saveNewVenue()">Save venue</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+function saveNewVenue(){
+  const name = document.getElementById('vn-name')?.value?.trim();
+  if(!name){ alert('Please enter a venue name.'); return; }
+  const v = {
+    id: Date.now()+'',
+    name,
+    addr: document.getElementById('vn-addr')?.value?.trim()||'',
+    contact: document.getElementById('vn-contact')?.value?.trim()||'',
+    parking: document.getElementById('vn-parking')?.value?.trim()||'',
+    notes: document.getElementById('vn-notes')?.value?.trim()||'',
+    createdAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+  };
+  venues.push(v);
+  _saveVenue(v);
+  document.getElementById('addVenueModal')?.remove();
+  showToast('Venue saved ✓');
+  if(currentView==='venues') render();
+}
+
+function editVenue(id){
+  const v = venues.find(x=>x.id===id);
+  if(!v) return;
+  document.getElementById('addVenueModal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'addVenueModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
+  m.innerHTML = `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Edit venue</div>
+    <div class="modal-row"><label>Venue name</label><input type="text" id="vn-name" value="${v.name}"></div>
+    <div class="modal-row"><label>Address</label><input type="text" id="vn-addr" value="${v.addr||''}"></div>
+    <div class="modal-row"><label>Contact info</label><input type="text" id="vn-contact" value="${v.contact||''}"></div>
+    <div class="modal-row"><label>Parking info</label><input type="text" id="vn-parking" value="${v.parking||''}"></div>
+    <div class="modal-row"><label>Notes</label><textarea id="vn-notes" style="min-height:70px">${v.notes||''}</textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem">
+      <button class="btn-cancel" onclick="document.getElementById('addVenueModal').remove()">Cancel</button>
+      <button class="btn-save" onclick="updateVenue('${id}')">Save changes</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+function updateVenue(id){
+  const v = venues.find(x=>x.id===id);
+  if(!v) return;
+  v.name = document.getElementById('vn-name')?.value?.trim()||v.name;
+  v.addr = document.getElementById('vn-addr')?.value?.trim()||'';
+  v.contact = document.getElementById('vn-contact')?.value?.trim()||'';
+  v.parking = document.getElementById('vn-parking')?.value?.trim()||'';
+  v.notes = document.getElementById('vn-notes')?.value?.trim()||'';
+  _saveVenue(v);
+  document.getElementById('addVenueModal')?.remove();
+  showToast('Venue updated ✓');
+  if(currentView==='venues') render();
+}
+
+async function deleteVenue(id){
+  if(!confirm('Delete this venue?')) return;
+  venues = venues.filter(x=>x.id!==id);
+  await venuesCol.doc(id).delete();
+  document.getElementById('venueDetail').innerHTML='';
+  showToast('Venue deleted');
+  if(currentView==='venues') render();
+}
+
+
+function showVenuePopup(eid){
+  const e = events.find(x=>x.id===eid);
+  const v = venues.find(v=>v.addr===e?.addr||v.name===e?.name);
+  if(!v) return;
+  document.getElementById('venuePopupModal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'venuePopupModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
+  m.innerHTML = `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <div style="font-size:16px;font-weight:600;color:var(--text)">${v.name}</div>
+      <button onclick="document.getElementById('venuePopupModal').remove()" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:20px">×</button>
+    </div>
+    ${v.addr?`<div style="font-size:13px;color:var(--text2);margin-bottom:8px;display:flex;gap:6px"><i class="ti ti-map-pin" style="font-size:14px;flex-shrink:0;margin-top:1px;color:var(--text3)"></i>${v.addr}</div>`:''}
+    ${v.contact?`<div style="font-size:13px;color:var(--text2);margin-bottom:8px;display:flex;gap:6px"><i class="ti ti-phone" style="font-size:14px;flex-shrink:0;margin-top:1px;color:var(--text3)"></i>${v.contact}</div>`:''}
+    ${v.parking?`<div style="font-size:13px;color:var(--text2);margin-bottom:8px;display:flex;gap:6px"><i class="ti ti-car" style="font-size:14px;flex-shrink:0;margin-top:1px;color:var(--text3)"></i>${v.parking}</div>`:''}
+    ${v.notes?`<div style="font-size:13px;color:var(--text2);margin-bottom:8px;display:flex;gap:6px"><i class="ti ti-notes" style="font-size:14px;flex-shrink:0;margin-top:1px;color:var(--text3)"></i>${v.notes}</div>`:''}
+    <div style="margin-top:1rem;text-align:right">
+      <button onclick="document.getElementById('venuePopupModal').remove();showView('venues')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);cursor:pointer">Edit venue info</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
 function renderEquipment() {
   const all = events;
   let h = `
@@ -2533,6 +2796,18 @@ function addEvent(){
     const type=document.getElementById('m-type')?.value;
     const day=document.getElementById('m-day')?.value;
     if(!name){ alert('Please enter a client name.'); return; }
+    // Check for duplicate job number (allow 3a, 3b style suffixes)
+    if(jobInput){
+      const inputNum = jobInput.replace('#','');
+      const weDate2 = getWeekEndDate(currentWeekOffset);
+      const weekOf2 = weDate2.toISOString().split('T')[0];
+      const fullJob = makeJobId(weekOf2, inputNum);
+      const duplicate = events.find(e => e.weekOf === weekOf2 && e.job === fullJob);
+      if(duplicate){
+        alert('Job #' + inputNum + ' is already used this week for "' + duplicate.name + '". Please use a different number.');
+        return;
+      }
+    }
     const dlMap={tuesday:'Tue',wednesday:'Wed',thursday:'Thu',friday:'Fri',saturday:'Sat',sunday:'Sun',monday:'Mon'};
     const weDate = getWeekEndDate(currentWeekOffset);
     const weekOf = weDate.toISOString().split('T')[0];
@@ -2642,10 +2917,12 @@ function createPdfVersion(id){
   const sheetMatch = e.menuLink.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
   const driveMatch = e.menuLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
 
+  // Always use export URL so it reflects latest version of the doc
   if(docMatch)        pdfUrl = `https://docs.google.com/document/d/${docMatch[1]}/export?format=pdf`;
   else if(sheetMatch) pdfUrl = `https://docs.google.com/spreadsheets/d/${sheetMatch[1]}/export?format=pdf`;
   else if(driveMatch) pdfUrl = `https://drive.google.com/uc?export=download&id=${driveMatch[1]}`;
   else                pdfUrl = e.menuLink; // fallback — use as-is
+  // Note: Google export URLs always fetch the CURRENT version, so edits are auto-reflected
 
   e.pdfMenuLink = pdfUrl;
   save();
@@ -2972,6 +3249,13 @@ window.saveScriptUrl = ()=>{};
 window.testConnection = ()=>{};
 window.migrateWeekOf = migrateWeekOf;
 window.deleteEvent = deleteEvent;
+window.openVenueDetail = openVenueDetail;
+window.openAddVenueModal = openAddVenueModal;
+window.saveNewVenue = saveNewVenue;
+window.editVenue = editVenue;
+window.updateVenue = updateVenue;
+window.deleteVenue = deleteVenue;
+window.showVenuePopup = showVenuePopup;
 window.copyScript = ()=>{ navigator.clipboard?.writeText(document.getElementById('scriptBox')?.innerText||''); };
 
 // Mark app as ready and flush queued calls
@@ -2992,6 +3276,7 @@ function _startApp() {
   checklistCol = db.collection('checklists');
   equipCol     = db.collection('equipment');
   invoicesCol  = db.collection('invoices');
+  venuesCol    = db.collection('venues');
 
   // Apply initial role visibility
   (function(){
@@ -3051,6 +3336,7 @@ function initNow(){
     checklistCol = db.collection('checklists');
     equipCol     = db.collection('equipment');
     invoicesCol  = db.collection('invoices');
+  venuesCol    = db.collection('venues');
     console.log('Firebase initialized! db=', !!db);
     render();
     seedIfEmpty().then(function(){
