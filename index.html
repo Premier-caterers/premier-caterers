@@ -3028,8 +3028,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
   }, 1500);
 });
-// Initialize Firebase immediately - no waiting
-(function initNow(){
+// Initialize Firebase - retry until firebase global is available
+var _initAttempts = 0;
+function initNow(){
+  _initAttempts++;
+  console.log('initNow attempt', _initAttempts, 'firebase=', typeof firebase);
+  if(typeof firebase === 'undefined' || !firebase.firestore){
+    if(_initAttempts < 50) setTimeout(initNow, 200);
+    else console.error('Firebase failed to load after 50 attempts');
+    return;
+  }
   try {
     if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
@@ -3039,21 +3047,23 @@ document.addEventListener('DOMContentLoaded', ()=>{
     checklistCol = db.collection('checklists');
     equipCol     = db.collection('equipment');
     invoicesCol  = db.collection('invoices');
+    console.log('Firebase initialized! db=', !!db);
     render();
-    seedIfEmpty().then(()=>{
+    seedIfEmpty().then(function(){
       startFirebaseListeners();
       window._firebaseReady = true;
-      const dot=document.getElementById('syncDot');
-      const lbl=document.getElementById('syncLabel');
+      var dot=document.getElementById('syncDot');
+      var lbl=document.getElementById('syncLabel');
       if(dot) dot.className='sync-dot';
       if(lbl) lbl.textContent='Live ✓';
-      document.getElementById('syncBtn')?.classList.add('connected');
-    }).catch(err=>{ console.error(err); render(); });
+      var btn=document.getElementById('syncBtn');
+      if(btn) btn.classList.add('connected');
+    }).catch(function(err){ console.error('seedIfEmpty error:',err); render(); });
   } catch(e) {
-    // Firebase not ready yet, wait and retry
-    setTimeout(initNow, 100);
+    console.error('initNow error:', e);
   }
-})();
+}
+initNow();
 </script>
 </body>
 </html>
