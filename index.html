@@ -321,6 +321,7 @@ const firebaseConfig = {
 // db and collections initialized in _startApp() after Firebase SDK loads
 let db, eventsCol, changesCol, inquiriesCol, checklistCol, equipCol, invoicesCol, venuesCol;
 let invoices = {}; // keyed by eventId
+let savedLineItems = JSON.parse(localStorage.getItem('savedLineItems')||'[]');
 let venues = []; // venues database
 
 // Toast
@@ -655,7 +656,7 @@ function renderEvents(){
           ${statusBadge('Equipment', equipStatus, '')}
           ${e.menuLink
             ? `<a href="${e.menuLink}" target="_blank" onclick="event.stopPropagation()" style="text-decoration:none">${statusBadge('Menu','attached',e.menuLink)}</a>`
-            : `<button onclick="event.stopPropagation();attachDoc('${e.id}','menuLink')" style="border:none;background:none;padding:0;cursor:pointer">${statusBadge('Menu','missing','')}</button>`}
+            : `<button onclick="quickPasteMenu('${e.id}',event)" style="border:none;background:none;padding:0;cursor:pointer">${statusBadge('Menu','missing','')}</button>`}
           ${e.menuLink && e.pdfMenuLink
             ? `<a href="${e.pdfMenuLink}" target="_blank" onclick="event.stopPropagation()" style="text-decoration:none">${statusBadge('PDF menu','attached',e.pdfMenuLink)}</a>`
             : e.menuLink
@@ -1754,7 +1755,7 @@ function calcInvoiceTotals(inv){
   const subtotal = inv.lines.reduce((s,l)=>s+(parseFloat(l.qty||0)*parseFloat(l.price||0)),0);
   const logistics = subtotal * LOGISTICS_RATE;
   const taxBase = subtotal + logistics;
-  const tax = taxBase * TAX_RATE;
+  const tax = inv.taxExempt ? 0 : taxBase * TAX_RATE;
   const grand = taxBase + tax;
   const balance = grand - parseFloat(inv.deposit||0);
   return {subtotal, logistics, tax, grand, balance};
@@ -1879,7 +1880,7 @@ function renderInvoiceDetail(){
         ${[
           ['Subtotal', tots.subtotal],
           ['Logistics fee (2.875%)', tots.logistics],
-          ['Sales tax (6.625%)', tots.tax],
+          [inv.taxExempt ? 'Sales tax (exempt)' : 'Sales tax (6.625%)', tots.tax],
         ].map(([label,val])=>`
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px">
           <span style="color:var(--text2)">${label}</span>
@@ -1902,6 +1903,11 @@ function renderInvoiceDetail(){
 
     ${canEdit?`
     <div style="margin-top:1rem;padding-top:1rem;border-top:0.5px solid var(--border)">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
+        <button onclick="addInvoiceLine('${eid}')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;cursor:pointer"><i class="ti ti-plus" style="font-size:13px"></i>Add line item</button>
+        <button onclick="toggleTaxExempt('${eid}')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border:0.5px solid ${inv.taxExempt?'var(--green-border)':'var(--border2)'};border-radius:var(--radius);background:${inv.taxExempt?'var(--green-bg)':'var(--bg2)'};color:${inv.taxExempt?'var(--green-text)':'var(--text2)'};font-size:13px;cursor:pointer"><i class="ti ti-receipt-tax" style="font-size:13px"></i>${inv.taxExempt?'Tax exempt ✓':'Tax exempt?'}</button>
+        ${e.menuLink?`<button onclick="attachMenuToInvoice('${eid}')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:13px;cursor:pointer"><i class="ti ti-file-text" style="font-size:13px"></i>Attach menu</button>`:''}
+      </div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:4px">Notes</div>
       <textarea onchange="updateInvoiceNotes('${eid}',this.value)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px;font-size:13px;color:var(--text);font-family:inherit;resize:vertical;min-height:60px">${inv.notes||''}</textarea>
     </div>
@@ -1928,6 +1934,93 @@ function updateDeposit(eid,val){
 function updateInvoiceNotes(eid,val){
   if(!invoices[eid]) return;
   invoices[eid].notes = val;
+}
+
+
+function addInvoiceLine(eid){
+  if(!invoices[eid]) return;
+  // Show saved items as suggestions
+  const saved = savedLineItems;
+  document.getElementById('addLineModal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'addLineModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
+  m.innerHTML = `
+  <div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+    <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Add line item</div>
+    ${saved.length>0?`
+    <div style="margin-bottom:1rem">
+      <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Saved items</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${saved.map((s,i)=>`<button onclick="selectSavedLine(${i})" style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer">${s.description}</button>`).join('')}
+      </div>
+    </div>`:``}
+    <div class="modal-row"><label>Category</label>
+      <select id="nl-category">
+        <option value="Food">Food</option>
+        <option value="Staffing">Staffing</option>
+        <option value="Rental">Rental</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="modal-row"><label>Description</label><input type="text" id="nl-description" placeholder="e.g. Floral arrangement, Tent rental..."></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="modal-row"><label>Quantity</label><input type="number" id="nl-qty" value="1" min="0"></div>
+      <div class="modal-row"><label>Unit price ($)</label><input type="number" id="nl-price" value="0" min="0" step="0.01"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:4px;margin-bottom:1rem">
+      <input type="checkbox" id="nl-save" checked style="accent-color:var(--blue-mid)">
+      <label for="nl-save" style="font-size:12px;color:var(--text2);cursor:pointer">Save this item for future use</label>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn-cancel" onclick="document.getElementById('addLineModal').remove()">Cancel</button>
+      <button class="btn-save" onclick="confirmAddLine('${eid}')">Add line</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  setTimeout(()=>document.getElementById('nl-description')?.focus(), 50);
+}
+
+function selectSavedLine(idx){
+  const s = savedLineItems[idx];
+  if(!s) return;
+  document.getElementById('nl-category').value = s.category||'Other';
+  document.getElementById('nl-description').value = s.description||'';
+  document.getElementById('nl-price').value = s.price||0;
+}
+
+function confirmAddLine(eid){
+  const category = document.getElementById('nl-category')?.value||'Other';
+  const description = document.getElementById('nl-description')?.value?.trim();
+  const qty = parseFloat(document.getElementById('nl-qty')?.value)||1;
+  const price = parseFloat(document.getElementById('nl-price')?.value)||0;
+  const saveItem = document.getElementById('nl-save')?.checked;
+  if(!description){ alert('Please enter a description.'); return; }
+  if(!invoices[eid]) return;
+  invoices[eid].lines.push({id:'custom_'+Date.now(), category, description, qty, unit:'item', price});
+  // Save for future use
+  if(saveItem && !savedLineItems.find(s=>s.description===description)){
+    savedLineItems.push({category, description, price});
+    localStorage.setItem('savedLineItems', JSON.stringify(savedLineItems));
+  }
+  document.getElementById('addLineModal')?.remove();
+  renderInvoiceDetail();
+}
+
+function toggleTaxExempt(eid){
+  if(!invoices[eid]) return;
+  invoices[eid].taxExempt = !invoices[eid].taxExempt;
+  renderInvoiceDetail();
+}
+
+function attachMenuToInvoice(eid){
+  const e = events.find(x=>x.id===eid);
+  if(!e||!e.menuLink) return;
+  if(!invoices[eid]) return;
+  invoices[eid].menuLink = e.menuLink;
+  invoices[eid].pdfMenuLink = e.pdfMenuLink||'';
+  showToast('Menu attached to invoice ✓');
+  renderInvoiceDetail();
 }
 
 async function saveInvoiceNow(eid){
@@ -2061,6 +2154,8 @@ function printInvoice(eid){
       (e.addr?'<div><strong>Venue</strong>'+e.addr+'</div>':'')+
       (inv.status==='paid'?'<div><strong>Paid on</strong>'+(inv.paidDate||'')+'</div>':'')+ 
       (inv.paymentMethod?'<div><strong>Payment method</strong>'+inv.paymentMethod+(inv.checkNumber?' #'+inv.checkNumber:'')+'</div>':'')+
+      (inv.taxExempt?'<div><strong>Tax status</strong>Exempt (non-profit)</div>':'')+
+      (inv.menuLink?'<div><strong>Menu</strong><a href="'+inv.menuLink+'" target="_blank">View menu</a></div>':'')+
     '</div>'+
     '<table><thead><tr><th>Description</th><th class="c">Qty</th><th class="r">Unit price</th><th class="r">Total</th></tr></thead><tbody>'+
     inv.lines.map(l=>{
@@ -2275,6 +2370,49 @@ function showVenuePopup(eid){
     </div>
   </div>`;
   document.body.appendChild(m);
+}
+
+function quickPasteMenu(eid, event){
+  event.stopPropagation();
+  // Remove any existing paste boxes
+  document.querySelectorAll('.menu-paste-box').forEach(el=>el.remove());
+  const btn = event.currentTarget;
+  const box = document.createElement('div');
+  box.className = 'menu-paste-box';
+  box.style.cssText = 'position:fixed;z-index:500;background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius-lg);padding:1rem;box-shadow:0 4px 20px rgba(0,0,0,.15);width:320px';
+  // Position near the button
+  const rect = btn.getBoundingClientRect();
+  box.style.top = (rect.bottom + 8) + 'px';
+  box.style.left = Math.min(rect.left, window.innerWidth - 340) + 'px';
+  box.innerHTML = `
+    <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:8px">Paste menu link</div>
+    <input type="text" id="quick-menu-input-${eid}" placeholder="Paste Google Drive or Docs URL..." 
+      style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px 10px;font-size:13px;color:var(--text);font-family:inherit;margin-bottom:8px">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">In Google Drive: right-click file → Share → Copy link</div>
+    <div style="display:flex;gap:6px;justify-content:flex-end">
+      <button onclick="document.querySelectorAll('.menu-paste-box').forEach(el=>el.remove())" 
+        style="padding:5px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);font-size:12px;cursor:pointer">Cancel</button>
+      <button onclick="saveQuickMenu('${eid}')" 
+        style="padding:5px 12px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;font-size:12px;cursor:pointer">Save</button>
+    </div>`;
+  document.body.appendChild(box);
+  setTimeout(()=>document.getElementById('quick-menu-input-${eid}')?.focus(), 50);
+  // Close on outside click
+  setTimeout(()=>document.addEventListener('click', function handler(e){
+    if(!box.contains(e.target)){ box.remove(); document.removeEventListener('click',handler); }
+  }), 100);
+}
+
+async function saveQuickMenu(eid){
+  const url = document.getElementById('quick-menu-input-'+eid)?.value?.trim();
+  if(!url) return;
+  const e = events.find(x=>x.id===eid);
+  if(!e) return;
+  e.menuLink = url;
+  await _saveEvent(e);
+  document.querySelectorAll('.menu-paste-box').forEach(el=>el.remove());
+  showToast('Menu linked ✓');
+  render();
 }
 function renderEquipment() {
   const all = events;
@@ -3197,6 +3335,13 @@ window.openPaymentModal = openPaymentModal;
 window.confirmPayment = confirmPayment;
 window.toggleCheckNum = toggleCheckNum;
 window.printInvoice = printInvoice;
+window.addInvoiceLine = addInvoiceLine;
+window.confirmAddLine = confirmAddLine;
+window.selectSavedLine = selectSavedLine;
+window.toggleTaxExempt = toggleTaxExempt;
+window.attachMenuToInvoice = attachMenuToInvoice;
+window.quickPasteMenu = quickPasteMenu;
+window.saveQuickMenu = saveQuickMenu;
 window.confirmAddFromList = confirmAddFromList;
 window.togglePackedCheck = togglePackedCheck;
 window.setEquipFilter = setEquipFilter;
