@@ -1725,7 +1725,7 @@ function downloadEventSchedule(id){
 }
 
 // ── QUOTES / INVOICES ──
-const LOGISTICS_RATE = 0.02875;
+const LOGISTICS_RATE = 0.0284; // default 2.84%, customizable per invoice
 const TAX_RATE = 0.06625;
 
 function getDefaultInvoice(e){
@@ -1738,12 +1738,13 @@ function getDefaultInvoice(e){
     eventDate: e.dayLabel,
     address: e.addr || '',
     lines: [
-      {id:'food',   category:'Food',      description:'Catering — '+e.typeLabel, qty:1, unit:'event', price:0},
-      {id:'wait',   category:'Staffing',  description:'Waiters ('+e.waiters+' × rate)', qty:e.waiters||0, unit:'person', price:0},
-      {id:'bar',    category:'Staffing',  description:'Bartenders ('+e.bartenders+' × rate)', qty:e.bartenders||0, unit:'person', price:0},
-      {id:'chef',   category:'Staffing',  description:'Chefs ('+e.chefs+' × rate)', qty:e.chefs||0, unit:'person', price:0},
-      {id:'mgmt',   category:'Staffing',  description:'Management team', qty:1, unit:'event', price:0},
-      {id:'mash',   category:'Staffing',  description:'Mashgiach / Hashgacha fee', qty:1, unit:'event', price:0},
+      {id:'food',     category:'Food',      description:'Catering — '+e.typeLabel, qty:1, unit:'event', price:0},
+      {id:'wait',     category:'Staffing',  description:'Waiters ('+e.waiters+' × rate)', qty:e.waiters||0, unit:'person', price:0},
+      {id:'bar',      category:'Staffing',  description:'Bartenders ('+e.bartenders+' × rate)', qty:e.bartenders||0, unit:'person', price:0},
+      {id:'chef',     category:'Staffing',  description:'Chefs ('+e.chefs+' × rate)', qty:e.chefs||0, unit:'person', price:0},
+      {id:'mgmt',     category:'Staffing',  description:'Management team', qty:1, unit:'event', price:0},
+      {id:'mash',     category:'Staffing',  description:'Mashgiach / Hashgacha fee', qty:1, unit:'event', price:0},
+      {id:'delivery', category:'Logistics', description:'Delivery fee', qty:1, unit:'event', price:0},
     ],
     deposit: 0,
     notes: '',
@@ -1753,12 +1754,13 @@ function getDefaultInvoice(e){
 
 function calcInvoiceTotals(inv){
   const subtotal = inv.lines.reduce((s,l)=>s+(parseFloat(l.qty||0)*parseFloat(l.price||0)),0);
-  const logistics = subtotal * LOGISTICS_RATE;
+  const logRate = parseFloat(inv.logisticsRate ?? LOGISTICS_RATE);
+  const logistics = subtotal * logRate;
   const taxBase = subtotal + logistics;
   const tax = inv.taxExempt ? 0 : taxBase * TAX_RATE;
   const grand = taxBase + tax;
   const balance = grand - parseFloat(inv.deposit||0);
-  return {subtotal, logistics, tax, grand, balance};
+  return {subtotal, logistics, tax, grand, balance, logRate};
 }
 
 function renderInvoices(){
@@ -1854,6 +1856,7 @@ function renderInvoiceDetail(){
           <th style="padding:8px 10px;text-align:center;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;border-bottom:0.5px solid var(--border);width:80px">Qty</th>
           <th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;border-bottom:0.5px solid var(--border);width:110px">Unit price</th>
           <th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;border-bottom:0.5px solid var(--border);width:110px">Total</th>
+          <th style="padding:8px 10px;border-bottom:0.5px solid var(--border);width:32px"></th>
         </tr>
       </thead>
       <tbody>
@@ -1870,6 +1873,9 @@ function renderInvoiceDetail(){
             ${canEdit?`<input type="number" value="${line.price}" min="0" step="0.01" onchange="updateInvoiceLine('${eid}',${i},'price',this.value)" style="${inpStyle}">`:('$'+parseFloat(line.price||0).toFixed(2))}
           </td>
           <td style="padding:8px 10px;text-align:right;font-weight:500">$${(parseFloat(line.qty||0)*parseFloat(line.price||0)).toFixed(2)}</td>
+          <td style="padding:4px 6px;text-align:center;width:32px">
+            ${canEdit?`<button onclick="removeInvoiceLine('${eid}',${i})" title="Remove line" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:14px;padding:2px"><i class="ti ti-trash"></i></button>`:''}
+          </td>
         </tr>`).join('')}
       </tbody>
     </table>
@@ -1936,6 +1942,19 @@ function updateInvoiceNotes(eid,val){
   invoices[eid].notes = val;
 }
 
+
+
+function removeInvoiceLine(eid, idx){
+  if(!invoices[eid]) return;
+  invoices[eid].lines.splice(idx, 1);
+  renderInvoiceDetail();
+}
+
+function updateLogisticsRate(eid, val){
+  if(!invoices[eid]) return;
+  invoices[eid].logisticsRate = parseFloat(val)/100 || LOGISTICS_RATE;
+  renderInvoiceDetail();
+}
 
 function addInvoiceLine(eid){
   if(!invoices[eid]) return;
@@ -2166,7 +2185,7 @@ function printInvoice(eid){
     '</tbody></table>'+
     '<div class="totals"><div class="totals-inner">'+
       '<div class="tot-row"><span>Subtotal</span><span>$'+tots.subtotal.toFixed(2)+'</span></div>'+
-      '<div class="tot-row"><span>Logistics fee (2.875%)</span><span>$'+tots.logistics.toFixed(2)+'</span></div>'+
+      '<div class="tot-row"><span>Logistics fee ('+( tots.logRate*100).toFixed(2)+'%)</span><span>$'+tots.logistics.toFixed(2)+'</span></div>'+
       '<div class="tot-row"><span>Sales tax (6.625%)</span><span>$'+tots.tax.toFixed(2)+'</span></div>'+
       '<div class="tot-row grand"><span>Grand total</span><span>$'+tots.grand.toFixed(2)+'</span></div>'+
       '<div class="tot-row"><span>Deposit paid</span><span>$'+parseFloat(inv.deposit||0).toFixed(2)+'</span></div>'+
@@ -3340,6 +3359,8 @@ window.confirmAddLine = confirmAddLine;
 window.selectSavedLine = selectSavedLine;
 window.toggleTaxExempt = toggleTaxExempt;
 window.attachMenuToInvoice = attachMenuToInvoice;
+window.removeInvoiceLine = removeInvoiceLine;
+window.updateLogisticsRate = updateLogisticsRate;
 window.quickPasteMenu = quickPasteMenu;
 window.saveQuickMenu = saveQuickMenu;
 window.confirmAddFromList = confirmAddFromList;
