@@ -427,7 +427,7 @@ const checklistTemplate = [
 
 let checklists = {};
 
-const dayOrder = ['thursday','friday','saturday','sunday','monday'];
+const dayOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
 const typeMap = {dinner:'Dinner',lunch:'Lunch',engagement:'Engagement',barmitzvah:'Bar mitzvah',shalosh:'Shalosh seudah',dropoff:'Drop off'};
 
 // ── JOB NUMBER HELPERS ──
@@ -574,7 +574,7 @@ function renderEvents(){
     ${role.canEdit?'<button class="add-btn" onclick="openModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add event</button>':''}
   </div>
   <div class="filter-bar">
-    ${['all','thursday','friday','saturday','sunday','monday'].map(d=>`<button class="filter-btn ${activeDay===d?'active':''}" onclick="setDay('${d}')">${d==='all'?'All':d.charAt(0).toUpperCase()+d.slice(1)}</button>`).join('')}
+    ${['all','monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(d=>`<button class="filter-btn ${activeDay===d?'active':''}" onclick="setDay('${d}')">${d==='all'?'All':d.charAt(0).toUpperCase()+d.slice(1)}</button>`).join('')}
   </div>`;
 
   dayOrder.forEach(d=>{
