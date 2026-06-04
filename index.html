@@ -1,4 +1,6 @@
-<html lang="en"><head>
+<!DOCTYPE html>
+<html lang="en">
+<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
@@ -218,7 +220,7 @@ a{color:var(--blue-mid);text-decoration:none}
 .saving-toast.show{transform:none;opacity:1;}
 
 </style>
-<link rel="stylesheet" href="chrome-extension://081e799f-8e5d-4430-85ba-8162dd13706a/app/content-style.css"></head>
+</head>
 <body>
 
 
@@ -240,10 +242,10 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 03, 2026 11:57 PM</span>
-  <button class="sync-btn connected" id="syncBtn" onclick="showView('settings')">
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 03, 2026 08:02 PM ET</span>
+  <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
-    <span id="syncLabel">Live ✓</span>
+    <span id="syncLabel">Connect Sheets</span>
   </button>
 </div>
 
@@ -251,9 +253,9 @@ a{color:var(--blue-mid);text-decoration:none}
   <div class="sidebar">
     <div class="sidebar-label">Views</div>
     <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
-    <button class="nav-item" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
+    <button class="nav-item active" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
     <button class="nav-item" id="nav-schedule" onclick="showView('schedule')"><i class="ti ti-users"></i>Staff schedule</button>
-    <button class="nav-item" id="nav-checklists" onclick="showView('checklists')"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">504</span></button>
+    <button class="nav-item" id="nav-checklists" onclick="showView('checklists')"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">5</span></button>
     <button class="nav-item" id="nav-changes" onclick="showView('changes')"><i class="ti ti-refresh-alert"></i>Changes log<span class="nav-badge">2</span></button>
     <button class="nav-item" id="nav-invoices" onclick="showView('invoices')"><i class="ti ti-file-invoice"></i>Quotes / Invoices</button>
     <button class="nav-item" id="nav-reports" onclick="showView('reports')"><i class="ti ti-chart-bar"></i>Reports</button>
@@ -261,90 +263,15 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="nav-item" id="nav-equipment" onclick="showView('equipment')"><i class="ti ti-tool"></i>Equipment</button>
     <button class="nav-item" id="nav-venues" onclick="showView('venues')"><i class="ti ti-building"></i>Venues</button>
     <div class="sidebar-label">Setup</div>
-    <button class="nav-item active" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
+    <button class="nav-item" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
   </div>
   <div class="main" style="padding:0;display:flex;flex-direction:column">
-  <div id="globalChangeBanner" style="background: var(--amber-bg); border-bottom: 0.5px solid var(--amber-border); padding: 0.6rem 1.25rem; display: none; align-items: center; gap: 10px; cursor: pointer;" onclick="showView('changes')">
+  <div id="globalChangeBanner" style="display:none;background:var(--amber-bg);border-bottom:0.5px solid var(--amber-border);padding:.6rem 1.25rem;display:none;align-items:center;gap:10px;cursor:pointer" onclick="showView('changes')">
     <i class="ti ti-alert-triangle" style="font-size:15px;color:var(--amber-text);flex-shrink:0"></i>
-    <span id="globalChangeBannerText" style="font-size:13px;color:var(--amber-text);font-weight:500;flex:1">2 unacknowledged change orders — #2a, #2b</span>
+    <span id="globalChangeBannerText" style="font-size:13px;color:var(--amber-text);font-weight:500;flex:1"></span>
     <span style="font-size:12px;color:var(--amber-text);text-decoration:underline">View changes →</span>
   </div>
-  <div id="mainArea" style="padding:1.25rem;flex:1;overflow-x:hidden;min-width:0">
-  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1rem">
-      <div>
-        <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:2px">Push update to GitHub</div>
-        <div style="font-size:12px;color:var(--text3)">Automatically updates the live site in ~60 seconds</div>
-      </div>
-      <button id="githubPushBtn" onclick="pushToGitHub()" style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:none;border-radius:var(--radius);background:#24292e;color:#fff;font-size:14px;font-weight:500;cursor:pointer" disabled=""><i class="ti ti-loader" style="font-size:14px"></i> Pushing...</button>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--green-text)"><i class="ti ti-circle-check"></i> Token saved — ready to push<button onclick="clearGitHubToken()" style="border:none;background:none;color:var(--text3);font-size:12px;cursor:pointer;text-decoration:underline;margin-left:8px">Clear token</button></div>
-  </div>
-  <div class="section-header"><div class="section-title">Google Sheets live sync</div></div>
-  
-  <div class="settings-card">
-    <h3>How to connect — 3 steps, ~10 minutes</h3>
-    <ul class="step-list">
-      <li>In your Google Sheet, click <strong>Extensions</strong> in the top menu, then <strong>Apps Script</strong></li>
-      <li>Delete any existing code in the editor, then paste the script below</li>
-      <li>Click <strong>Save</strong> (floppy disk icon), then click <strong>Deploy → New deployment</strong></li>
-      <li>Set type to <strong>Web app</strong>, set "Who has access" to <strong>Anyone</strong>, click Deploy</li>
-      <li>Copy the web app URL it gives you and paste it in the box below, then click Save</li>
-    </ul>
-  </div>
-  <div class="settings-card">
-    <h3>Apps Script to paste</h3>
-    <p>This goes inside your Google Sheet. It lets the platform read and write your event data.</p>
-    <div class="script-box" id="scriptBox">// Paste this in your Google Sheet:
-// Extensions → Apps Script → paste → Save → Deploy
-
-function doGet(e) {
-  const sheet = SpreadsheetApp.openById('1azVbq-bgpISGNX3I9c6UBLTDVv4SyRWzCA64ziUG67s')
-                  .getSheetByName('Front cover sheet');
-  const data = sheet.getDataRange().getValues();
-  const headers = data[2]; // Row 3 has headers
-  const rows = data.slice(3).filter(r =&gt; r[0] &amp;&amp; r[1]);
-  const events = rows.map(r =&gt; {
-    const obj = {};
-    headers.forEach((h, i) =&gt; { if(h) obj[h] = r[i]; });
-    return obj;
-  });
-  return ContentService
-    .createTextOutput(JSON.stringify({events}))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  const body = JSON.parse(e.postData.contents);
-  const sheet = SpreadsheetApp.openById('1azVbq-bgpISGNX3I9c6UBLTDVv4SyRWzCA64ziUG67s')
-                  .getSheetByName('Front cover sheet');
-  // Find row by Job # and update
-  const data = sheet.getDataRange().getValues();
-  for (let i = 3; i &lt; data.length; i++) {
-    if (data[i][0] === body.job) {
-      // Update notes column (adjust index to match your sheet)
-      sheet.getRange(i+1, 18).setValue(body.notes);
-      break;
-    }
-  }
-  return ContentService.createTextOutput('OK');
-}</div>
-    <button class="copy-btn" onclick="copyScript()"><i class="ti ti-copy" style="font-size:13px"></i> Copy script</button>
-  </div>
-  <div class="settings-card">
-    <h3>Paste your web app URL here</h3>
-    <p>After deploying the Apps Script, paste the URL it gives you below. This is what connects the platform to your live sheet data.</p>
-    <input id="scriptUrlInput" placeholder="https://script.google.com/macros/s/..." value="">
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn-save" onclick="saveScriptUrl()">Save &amp; connect</button>
-      
-    </div>
-  </div>
-  <div class="settings-card">
-    <h3>Your sheet ID</h3>
-    <p>Already in the script above: <code>1azVbq-bgpISGNX3I9c6UBLTDVv4SyRWzCA64ziUG67s</code><br>This matches the Google Sheet you shared with us.</p>
-  </div>
-  </div>
+  <div id="mainArea" style="padding:1.25rem;flex:1;overflow-x:hidden;min-width:0"></div>
 </div>
 </div>
 
@@ -358,7 +285,8 @@ function doPost(e) {
       </a>
     </div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Paste the Google Drive or Docs URL:</div>
-    <input type="text" id="attachInput" placeholder="https://docs.google.com/..." style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;margin-bottom:6px">
+    <input type="text" id="attachInput" placeholder="https://docs.google.com/..." 
+      style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;margin-bottom:6px">
     <div style="font-size:11px;color:var(--text3);margin-bottom:1rem">In Google Drive: right-click file → Share → Copy link → paste above</div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn-cancel" onclick="closeAttachModal()">Cancel</button>
@@ -389,9 +317,9 @@ function doPost(e) {
 
 
 
-<div class="saving-toast show" id="savingToast">
+<div class="saving-toast" id="savingToast">
   <i class="ti ti-cloud-upload" style="font-size:16px;color:var(--blue-mid)"></i>
-  <span id="toastMsg">Uploading to GitHub...</span>
+  <span id="toastMsg">Saving...</span>
 </div>
 
 <!-- Firebase Compat SDK -->
@@ -1198,117 +1126,216 @@ function openAddInquiryModal(){
 
 function renderSchedule(){
   const depts = [
-    {key:'waiters',    label:'Waiters',     countKey:'waiters',    namesKey:'waiterNames',     t1:'waiterTime',    t2:'waiterTime2',    rc:'r-waiter'},
-    {key:'bartenders', label:'Bartenders',  countKey:'bartenders', namesKey:'bartenderNames',  t1:'bartenderTime', t2:'bartenderTime2', rc:'r-bartender'},
-    {key:'chefs',      label:'Chefs',       countKey:'chefs',      namesKey:'chefNames',       t1:'chefTime',      t2:'chefTime2',      rc:'r-chef'},
-    {key:'porters',    label:'Porters',     countKey:'porters',    namesKey:'porterNames',     t1:'porterTime',    t2:'porterTime2',    rc:'r-porter'},
-    {key:'mashgiach',  label:'Mashgiach',   countKey:'mashgiach',  namesKey:'mashgiachNames',  t1:'waiterTime',    t2:'',               rc:'r-mashgiach'},
-    {key:'manager',    label:'Manager',     countKey:'manager',    namesKey:'manager',         t1:'chefTime',      t2:'',               rc:'r-manager'},
+    {key:'waiters',    label:'Waiters',     countKey:'waiters',    namesKey:'waiterNames',     t1:'waiterTime',    t2:'waiterTime2',    rc:'r-waiter',    hasCount:true},
+    {key:'bartenders', label:'Bartenders',  countKey:'bartenders', namesKey:'bartenderNames',  t1:'bartenderTime', t2:'bartenderTime2', rc:'r-bartender', hasCount:true},
+    {key:'chefs',      label:'Chefs',       countKey:'chefs',      namesKey:'chefNames',       t1:'chefTime',      t2:'chefTime2',      rc:'r-chef',      hasCount:true},
+    {key:'porters',    label:'Porters',     countKey:'porters',    namesKey:'porterNames',     t1:'porterTime',    t2:'porterTime2',    rc:'r-porter',    hasCount:true},
+    {key:'mashgiach',  label:'Mashgiach',   countKey:'mashgiachCount', namesKey:'mashgiachNames', t1:'waiterTime', t2:'',              rc:'r-mashgiach', hasCount:true},
+    {key:'manager',    label:'Manager',     countKey:'managerCount',   namesKey:'manager',      t1:'chefTime',   t2:'',              rc:'r-manager',   hasCount:true},
   ];
 
   const schedEditId = window._schedEditId || null;
-
   const inpStyle = 'width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:4px 7px;font-size:12px;color:var(--text);font-family:inherit';
 
-  // Filter to current week first
+  // Filter to current week
   const schedWeekDate = getWeekEndDate(currentWeekOffset);
   const schedWeekStr = schedWeekDate.toISOString().split('T')[0];
-  const schedWeekLabel = (() => {
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return 'W/E ' + months[schedWeekDate.getUTCMonth()] + ' ' + schedWeekDate.getUTCDate() + ', ' + String(schedWeekDate.getUTCFullYear()).slice(2);
-  })();
-  // Show ALL events this week so staff can be added to any event
-  const eventsWithStaff = events.filter(e=>(e.weekOf||'2026-05-31') === schedWeekStr);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const schedWeekLabel = 'W/E '+months[schedWeekDate.getUTCMonth()]+' '+schedWeekDate.getUTCDate()+', '+String(schedWeekDate.getUTCFullYear()).slice(2);
 
-  let h = `
-  <div class="stats-row">
-    <div class="stat-card"><div class="stat-n">${eventsWithStaff.reduce((s,e)=>s+(e.waiters||0),0)}</div><div class="stat-l">waiters</div></div>
-    <div class="stat-card"><div class="stat-n">${eventsWithStaff.reduce((s,e)=>s+(e.bartenders||0),0)}</div><div class="stat-l">bartenders</div></div>
-    <div class="stat-card"><div class="stat-n">${eventsWithStaff.reduce((s,e)=>s+(e.chefs||0),0)}</div><div class="stat-l">chefs</div></div>
-    <div class="stat-card"><div class="stat-n">${eventsWithStaff.reduce((s,e)=>s+(e.porters||0),0)}</div><div class="stat-l">porters</div></div>
-  </div>
-  <div class="section-header"><div class="section-title">Staff schedule — ${schedWeekLabel}</div></div>`;
+  const weekEvents = events.filter(e=>(e.weekOf||'2026-05-31') === schedWeekStr);
 
-  eventsWithStaff.forEach(e => {
+  // Separate: no-staffing events go to bottom
+  const staffEvents = weekEvents.filter(e=>!e.noStaffing);
+  const noStaffEvents = weekEvents.filter(e=>e.noStaffing);
+
+  // Totals from staffEvents only (those needing staffing)
+  const totWaiters    = staffEvents.reduce((s,e)=>s+(parseInt(e.waiters)||0),0);
+  const totBartenders = staffEvents.reduce((s,e)=>s+(parseInt(e.bartenders)||0),0);
+  const totChefs      = staffEvents.reduce((s,e)=>s+(parseInt(e.chefs)||0),0);
+  const totPorters    = staffEvents.reduce((s,e)=>s+(parseInt(e.porters)||0),0);
+
+  let h = '<div class="stats-row">'
+    + '<div class="stat-card"><div class="stat-n">'+totWaiters+'</div><div class="stat-l">waiters</div></div>'
+    + '<div class="stat-card"><div class="stat-n">'+totBartenders+'</div><div class="stat-l">bartenders</div></div>'
+    + '<div class="stat-card"><div class="stat-n">'+totChefs+'</div><div class="stat-l">chefs</div></div>'
+    + '<div class="stat-card"><div class="stat-n">'+totPorters+'</div><div class="stat-l">porters</div></div>'
+    + '</div>'
+    + '<div class="section-header">'
+    + '<div class="section-title">Staff schedule — '+schedWeekLabel+'</div>'
+    + '<div style="display:flex;gap:6px">'
+    + '<button onclick="printFullSchedule()" class="icon-btn" title="Print full schedule"><i class="ti ti-printer"></i></button>'
+    + '<button onclick="downloadFullSchedule()" class="icon-btn" title="Download full schedule"><i class="ti ti-download"></i></button>'
+    + '</div>'
+    + '</div>';
+
+  function renderEventBlock(e){
     const isEditing = schedEditId === e.id;
-    h += `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:1rem;overflow:hidden">
-      <div style="display:flex;align-items:center;gap:10px;padding:.75rem 1.25rem;background:var(--bg2);border-bottom:0.5px solid var(--border)">
-        <span class="job-pill">${displayJob(e.job)}</span>
-        <span style="font-size:15px;font-weight:500;color:var(--text)">${e.name}</span>
-        <span style="font-size:12px;color:var(--text2)">${e.dayLabel} · ${e.typeLabel}</span>
-        <div style="margin-left:auto">
-          ${isEditing
-            ? `<button class="btn-save" style="padding:4px 12px;font-size:12px" onclick="saveSchedEdit('${e.id}')">Save</button>
-               <button class="btn-cancel" style="padding:4px 10px;font-size:12px;margin-left:4px" onclick="cancelSchedEdit()">Cancel</button>`
-            : `<div style="display:flex;gap:4px">
-                <button class="icon-btn" onclick="startSchedEdit('${e.id}')" title="Edit staff"><i class="ti ti-edit"></i></button>
-                <button class="icon-btn" onclick="printEventSchedule('${e.id}')" title="Print"><i class="ti ti-printer"></i></button>
-                <button class="icon-btn" onclick="downloadEventSchedule('${e.id}')" title="Download"><i class="ti ti-download"></i></button>
-              </div>`}
-        </div>
-      </div>
-      <div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead>
-          <tr style="background:var(--bg2)">
-            <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;min-width:100px">Dept.</th>
-            <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;width:50px">#</th>
-            <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);min-width:160px">Names</th>
-            <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;width:110px">Call time #1</th>
-            <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;width:110px">Call time #2</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${depts.map(d => {
-            const count = (d.countKey==='mashgiach') ? (e.mashgiach&&e.mashgiach!=='-'?1:0) : (d.countKey==='manager') ? (e.manager&&e.manager!=='-'?1:0) : (e[d.countKey]||0);
-            const names = (d.countKey==='manager') ? (e.manager||'') : (d.countKey==='mashgiach') ? (e.mashgiach||'') : (e[d.namesKey]||'');
-            const t1 = e[d.t1]||'';
-            const t2 = d.t2 ? (e[d.t2]||'') : '';
-            if(!count && !isEditing) return ''; // show all rows when editing
-            return `<tr style="border-bottom:0.5px solid var(--border)">
-              <td style="padding:9px 12px"><span class="role-tag ${d.rc}">${d.label}</span></td>
-              <td style="padding:9px 12px;font-weight:500;color:var(--text)">
-                ${isEditing && d.countKey!=='manager' && d.countKey!=='mashgiach'
-                  ? `<input type="number" id="se-${e.id}-${d.countKey}" value="${count}" min="0" style="${inpStyle};width:50px">`
-                  : (count||'—')}
-              </td>
-              <td style="padding:9px 12px;color:var(--text2)">
-                ${isEditing
-                  ? `<input type="text" id="se-${e.id}-${d.namesKey}" value="${names}" placeholder="Names..." style="${inpStyle}">`
-                  : (names||'—')}
-              </td>
-              <td style="padding:9px 12px">
-                ${isEditing
-                  ? `<input type="text" id="se-${e.id}-ct1-${d.key}" value="${t1}" placeholder="e.g. 9:00am" style="${inpStyle}">`
-                  : (t1 ? `<span class="time-badge">${t1}</span>` : '—')}
-              </td>
-              <td style="padding:9px 12px">
-                ${isEditing && d.t2
-                  ? `<input type="text" id="se-${e.id}-ct2-${d.key}" value="${t2}" placeholder="e.g. 11:00am" style="${inpStyle}">`
-                  : (t2 ? `<span class="time-badge">${t2}</span>` : (d.t2?'—':''))}
-              </td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-      </div>
-    </div>`;
-  });
+    const meals = e.meals || [];
+    const hasMeals = meals.length > 0;
+
+    let block = '<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:1rem;overflow:hidden">'
+      + '<div style="display:flex;align-items:center;gap:10px;padding:.75rem 1.25rem;background:var(--bg2);border-bottom:0.5px solid var(--border);flex-wrap:wrap">'
+      + '<input type="checkbox" '+(e.noStaffing?'checked':'')+' onchange="toggleNoStaffing(\''+e.id+'\',this.checked)" style="width:16px;height:16px;accent-color:var(--blue-mid);cursor:pointer" title="No staffing needed">'
+      + '<span class="job-pill">'+displayJob(e.job)+'</span>'
+      + '<span style="font-size:15px;font-weight:500;color:var(--text)">'+e.name+'</span>'
+      + '<span style="font-size:12px;color:var(--text2)">'+e.dayLabel+' · '+e.typeLabel+'</span>'
+      + '<div style="margin-left:auto;display:flex;gap:4px">';
+
+    if(isEditing){
+      block += '<button class="btn-save" style="padding:4px 12px;font-size:12px" onclick="saveSchedEdit(\''+e.id+'\')">Save</button>'
+             + '<button class="btn-cancel" style="padding:4px 10px;font-size:12px;margin-left:4px" onclick="cancelSchedEdit()">Cancel</button>';
+    } else {
+      block += '<button onclick="addMealSection(\''+e.id+'\')" style="padding:4px 10px;font-size:12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-plus" style="font-size:12px"></i>Add meal</button>'
+             + '<button class="icon-btn" onclick="startSchedEdit(\''+e.id+'\')" title="Edit staff"><i class="ti ti-edit"></i></button>'
+             + '<button class="icon-btn" onclick="printEventSchedule(\''+e.id+'\')" title="Print"><i class="ti ti-printer"></i></button>'
+             + '<button class="icon-btn" onclick="downloadEventSchedule(\''+e.id+'\')" title="Download"><i class="ti ti-download"></i></button>';
+    }
+    block += '</div></div>';
+
+    // Meal label field if editing and has meals
+    if(isEditing && hasMeals){
+      block += '<div style="padding:.5rem 1.25rem;background:var(--amber-bg);font-size:12px;color:var(--amber-text)">Editing main meal section. Use "Add meal" for additional sections.</div>';
+    }
+
+    // Main staff table
+    block += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+      + '<thead><tr style="background:var(--bg2)">'
+      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;min-width:100px">Dept.</th>'
+      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);width:50px">#</th>'
+      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);min-width:160px">Names</th>'
+      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;width:110px">Call time #1</th>'
+      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;width:110px">Call time #2</th>'
+      + '</tr></thead><tbody>';
+
+    depts.forEach(function(d){
+      var count = parseInt(e[d.countKey]||0)||0;
+      var names = d.key==='manager' ? (e.manager||'') : (e[d.namesKey]||'');
+      var t1 = e[d.t1]||'';
+      var t2 = d.t2 ? (e[d.t2]||'') : '';
+      if(!count && !isEditing) return;
+      block += '<tr style="border-bottom:0.5px solid var(--border)">'
+        + '<td style="padding:9px 12px"><span class="role-tag '+d.rc+'">'+d.label+'</span></td>'
+        + '<td style="padding:9px 12px;font-weight:500;color:var(--text)">'
+          + (isEditing ? '<input type="number" id="se-'+e.id+'-'+d.countKey+'" value="'+count+'" min="0" style="'+inpStyle+';width:50px">' : (count||'—'))
+        + '</td>'
+        + '<td style="padding:9px 12px;color:var(--text2)">'
+          + (isEditing ? '<input type="text" id="se-'+e.id+'-'+d.namesKey+'" value="'+names.replace(/"/g,'&quot;')+'" placeholder="Names..." style="'+inpStyle+'">' : (names||'—'))
+        + '</td>'
+        + '<td style="padding:9px 12px">'
+          + (isEditing ? '<input type="text" id="se-'+e.id+'-ct1-'+d.key+'" value="'+t1+'" placeholder="e.g. 9:00am" style="'+inpStyle+'">' : (t1 ? '<span class="time-badge">'+t1+'</span>' : '—'))
+        + '</td>'
+        + '<td style="padding:9px 12px">'
+          + (isEditing && d.t2 ? '<input type="text" id="se-'+e.id+'-ct2-'+d.key+'" value="'+t2+'" placeholder="e.g. 11:00am" style="'+inpStyle+'">' : (t2 ? '<span class="time-badge">'+t2+'</span>' : (d.t2?'—':'')))
+        + '</td>'
+        + '</tr>';
+    });
+
+    block += '</tbody></table></div>';
+
+    // Additional meal sections
+    meals.forEach(function(meal, mi){
+      block += '<div style="border-top:2px dashed var(--border2);padding:.75rem 1.25rem;background:var(--bg2)">'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:.5rem">'
+        + '<span style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Additional meal</span>'
+        + '<input type="text" value="'+(meal.label||'')+'" placeholder="e.g. Shmorg, Dinner, Dessert..." onchange="updateMealLabel(\''+e.id+'\','+mi+',this.value)" style="flex:1;background:var(--bg);border:0.5px solid var(--border2);border-radius:5px;padding:4px 8px;font-size:13px;color:var(--text);font-family:inherit">'
+        + '<button onclick="removeMealSection(\''+e.id+'\','+mi+')" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:14px;padding:2px"><i class="ti ti-trash"></i></button>'
+        + '</div>'
+        + '<table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>';
+
+      depts.forEach(function(d){
+        var mc = parseInt((meal[d.countKey])||0)||0;
+        var mn = d.key==='manager' ? (meal.manager||'') : (meal[d.namesKey]||'');
+        var mt1 = meal[d.t1]||'';
+        block += '<tr style="border-bottom:0.5px solid var(--border)">'
+          + '<td style="padding:7px 12px"><span class="role-tag '+d.rc+'">'+d.label+'</span></td>'
+          + '<td style="padding:7px 12px"><input type="number" value="'+mc+'" min="0" onchange="updateMealDept(\''+e.id+'\','+mi+',\''+d.countKey+'\',this.value)" style="'+inpStyle+';width:50px"></td>'
+          + '<td style="padding:7px 12px"><input type="text" value="'+mn.replace(/"/g,'&quot;')+'" placeholder="Names..." onchange="updateMealDept(\''+e.id+'\','+mi+',\''+d.namesKey+'\',this.value)" style="'+inpStyle+'"></td>'
+          + '<td style="padding:7px 12px"><input type="text" value="'+mt1+'" placeholder="Call time" onchange="updateMealDept(\''+e.id+'\','+mi+',\''+d.t1+'\',this.value)" style="'+inpStyle+'"></td>'
+          + '</tr>';
+      });
+
+      block += '</tbody></table></div>';
+    });
+
+    block += '</div>';
+    return block;
+  }
+
+  // Render staffed events
+  staffEvents.forEach(function(e){ h += renderEventBlock(e); });
+
+  // Render no-staffing events at bottom
+  if(noStaffEvents.length){
+    h += '<div style="margin-top:1.5rem;border-top:2px dashed var(--border2);padding-top:1rem">'
+      + '<div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem">No staffing needed</div>';
+    noStaffEvents.forEach(function(e){
+      h += '<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:6px">'
+        + '<input type="checkbox" checked onchange="toggleNoStaffing(\''+e.id+'\',this.checked)" style="width:16px;height:16px;accent-color:var(--blue-mid);cursor:pointer">'
+        + '<span class="job-pill">'+displayJob(e.job)+'</span>'
+        + '<span style="font-size:14px;font-weight:500;color:var(--text)">'+e.name+'</span>'
+        + '<span style="font-size:12px;color:var(--text2)">'+e.dayLabel+' · '+e.typeLabel+'</span>'
+        + '<span style="margin-left:auto;font-size:16px;font-weight:800;color:var(--text3);letter-spacing:.05em">NO STAFFING NEEDED</span>'
+        + '</div>';
+    });
+    h += '</div>';
+  }
+
   return h;
 }
 
+
+
+
+async function toggleNoStaffing(id, val){
+  const e = events.find(x=>x.id===id);
+  if(!e) return;
+  e.noStaffing = val;
+  await _saveEvent(e);
+  render();
+}
+
+function addMealSection(id){
+  const e = events.find(x=>x.id===id);
+  if(!e) return;
+  if(!e.meals) e.meals = [];
+  e.meals.push({label:'', waiters:0, waiterNames:'', waiterTime:'', bartenders:0, bartenderNames:'', bartenderTime:'', chefs:0, chefNames:'', chefTime:'', porters:0, porterNames:'', porterTime:'', mashgiachCount:0, mashgiachNames:'', managerCount:0, manager:''});
+  _saveEvent(e);
+  render();
+}
+
+function removeMealSection(id, idx){
+  const e = events.find(x=>x.id===id);
+  if(!e||!e.meals) return;
+  e.meals.splice(idx,1);
+  _saveEvent(e);
+  render();
+}
+
+function updateMealLabel(id, idx, val){
+  const e = events.find(x=>x.id===id);
+  if(!e||!e.meals||!e.meals[idx]) return;
+  e.meals[idx].label = val;
+}
+
+function updateMealDept(id, idx, field, val){
+  const e = events.find(x=>x.id===id);
+  if(!e||!e.meals||!e.meals[idx]) return;
+  e.meals[idx][field] = isNaN(parseFloat(val)) ? val : (parseFloat(val)||0);
+  _saveEvent(e);
+}
 function startSchedEdit(id){ window._schedEditId=id; render(); setTimeout(()=>document.querySelector(`[data-schedid="${id}"]`)?.scrollIntoView({behavior:'smooth'}),50); }
 function cancelSchedEdit(){ window._schedEditId=null; render(); }
 
 function saveSchedEdit(id){
   const e = events.find(x=>x.id===id); if(!e) return;
   const depts = [
-    {countKey:'waiters',    namesKey:'waiterNames',    key:'waiters',    t1:'waiterTime',    t2:'waiterTime2'},
-    {countKey:'bartenders', namesKey:'bartenderNames', key:'bartenders', t1:'bartenderTime', t2:'bartenderTime2'},
-    {countKey:'chefs',      namesKey:'chefNames',      key:'chefs',      t1:'chefTime',      t2:'chefTime2'},
-    {countKey:'porters',    namesKey:'porterNames',    key:'porters',    t1:'porterTime',    t2:'porterTime2'},
-    {countKey:'mashgiach',  namesKey:'mashgiachNames', key:'mashgiach',  t1:'waiterTime',    t2:''},
-    {countKey:'manager',    namesKey:'manager',        key:'manager',    t1:'chefTime',      t2:''},
+    {countKey:'waiters',       namesKey:'waiterNames',    key:'waiters',    t1:'waiterTime',    t2:'waiterTime2'},
+    {countKey:'bartenders',    namesKey:'bartenderNames', key:'bartenders', t1:'bartenderTime', t2:'bartenderTime2'},
+    {countKey:'chefs',         namesKey:'chefNames',      key:'chefs',      t1:'chefTime',      t2:'chefTime2'},
+    {countKey:'porters',       namesKey:'porterNames',    key:'porters',    t1:'porterTime',    t2:'porterTime2'},
+    {countKey:'mashgiachCount',namesKey:'mashgiachNames', key:'mashgiach',  t1:'waiterTime',    t2:''},
+    {countKey:'managerCount',  namesKey:'manager',        key:'manager',    t1:'chefTime',      t2:''},
   ];
   depts.forEach(d=>{
     const cEl = document.getElementById(`se-${id}-${d.countKey}`);
@@ -3807,6 +3834,11 @@ window.setDay = setDay;
 window.setRole = setRole;
 window.showView = showView;
 window.startSchedEdit = startSchedEdit;
+window.toggleNoStaffing = toggleNoStaffing;
+window.addMealSection = addMealSection;
+window.removeMealSection = removeMealSection;
+window.updateMealLabel = updateMealLabel;
+window.updateMealDept = updateMealDept;
 window.cancelSchedEdit = cancelSchedEdit;
 window.saveSchedEdit = saveSchedEdit;
 window.driveImgUrl = driveImgUrl;
@@ -3925,6 +3957,5 @@ function initNow(){
 }
 initNow();
 </script>
-
-
-</body></html>
+</body>
+</html>
