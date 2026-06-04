@@ -262,6 +262,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="nav-item" id="nav-grocery" onclick="showView('grocery')"><i class="ti ti-shopping-cart"></i>Grocery</button>
     <button class="nav-item" id="nav-equipment" onclick="showView('equipment')"><i class="ti ti-tool"></i>Equipment</button>
     <button class="nav-item" id="nav-venues" onclick="showView('venues')"><i class="ti ti-building"></i>Venues</button>
+    <button class="nav-item" id="nav-email" onclick="showView('email')"><i class="ti ti-mail"></i>Email<span class="nav-badge" id="emailBadge" style="display:none">0</span></button>
     <div class="sidebar-label">Setup</div>
     <button class="nav-item" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
   </div>
@@ -560,12 +561,16 @@ function render(){
            currentView==='grocery'   ? renderGrocery()   :
            currentView==='equipment' ? renderEquipment() :
            currentView==='venues'    ? renderVenues()    :
+           currentView==='email'     ? '<div id="emailPlaceholder"></div>' :
            currentView==='settings'  ? renderSettings()  : '';
   } catch(err) {
     html = '<div style="padding:2rem;color:red;font-size:13px;font-family:monospace"><strong>Error in '+currentView+':</strong><br>'+err.message+'</div>';
     console.error('Render error in '+currentView+':', err);
   }
   document.getElementById('mainArea').innerHTML = html;
+  if(currentView==='email'){
+    renderEmail().then(eHtml=>{ const el=document.getElementById('emailPlaceholder'); if(el) el.outerHTML=eHtml; }).catch(()=>{});
+  }
   updateBadge();
   // Update global change banner
   const _unacked = changes.filter(c=>{ const _a=c.acks||{}; return changeDepts.some(d=>!_a[d]); });
@@ -2161,6 +2166,7 @@ function renderInvoiceDetail(){
         ${inv.status==='invoice'?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--green-text)" onclick="openPaymentModal('${eid}')">Record payment</button>`:''}
         <button class="icon-btn" onclick="printInvoice('${eid}')" title="Print"><i class="ti ti-printer"></i></button>
         <button class="icon-btn" onclick="downloadInvoice('${eid}')" title="Download as HTML"><i class="ti ti-download"></i></button>
+        <button class="icon-btn" onclick="openSendInvoiceEmail('${eid}')" title="Send by email" style="color:var(--blue-mid)"><i class="ti ti-send"></i></button>
         <button class="icon-btn" onclick="document.getElementById('invoiceDetail').innerHTML=''" title="Close"><i class="ti ti-x"></i></button>
       </div>
     </div>
@@ -3307,6 +3313,26 @@ function renderSettings(){
           </div>
         </div>`}
   </div>
+
+  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
+    <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Gmail Integration</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Connect events@thepremiercaterer.com to send and receive emails in the app.</div>
+    ${isGmailConnected()
+      ? `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="font-size:13px;color:var(--green-text);display:flex;align-items:center;gap:5px"><i class="ti ti-circle-check"></i> Connected as ${gmailUser||'events@thepremiercaterer.com'}</div>
+          <button onclick="gmailToken=null;gmailUser=null;render()" style="padding:4px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer">Disconnect</button>
+        </div>`
+      : `<div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Enter your Google OAuth Client ID:</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <input type="text" id="gmailClientIdInput" placeholder="xxxx.apps.googleusercontent.com" value="${localStorage.getItem('gmailClientId')||''}" style="flex:1;min-width:200px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px 12px;font-size:13px;color:var(--text);font-family:inherit">
+            <button onclick="localStorage.setItem('gmailClientId',document.getElementById('gmailClientIdInput').value.trim());showToast('Client ID saved ✓')" class="btn-save">Save</button>
+          </div>
+          <button onclick="gmailSignIn()" style="padding:9px 18px;border:none;border-radius:var(--radius);background:#4285f4;color:#fff;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:7px"><i class="ti ti-brand-google" style="font-size:15px"></i> Connect Gmail</button>
+          <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.6">To get a Client ID: <strong>console.cloud.google.com → New Project → APIs & Services → Credentials → Create OAuth 2.0 Client ID → Web Application</strong>. Add <strong>${window.location.origin}</strong> as an authorized JavaScript origin.</div>
+        </div>`}
+  </div>
+
   <div class="section-header"><div class="section-title">Google Sheets live sync</div></div>
   ${connected?`<div class="banner green" style="margin-bottom:1rem"><i class="ti ti-circle-check" style="font-size:16px;color:var(--green-text);flex-shrink:0"></i><div class="banner-text"><strong>Connected!</strong> Platform is reading live data from your Google Sheet.</div></div>`:''}
   <div class="settings-card">
@@ -3838,6 +3864,304 @@ function clearGitHubToken(){
   render();
 }
 
+// ── GMAIL INTEGRATION ──
+const GMAIL_CLIENT_ID = localStorage.getItem('gmailClientId') || '';
+const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify';
+let gmailToken = null;
+let gmailUser = null;
+let gmailMessages = []; // cached inbox messages
+
+function isGmailConnected(){ return !!gmailToken; }
+
+async function gmailSignIn(){
+  const clientId = localStorage.getItem('gmailClientId');
+  if(!clientId){ alert('Please enter your Google OAuth Client ID in Settings first.'); showView('settings'); return; }
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: window.location.origin + window.location.pathname,
+    response_type: 'token',
+    scope: GMAIL_SCOPES,
+    prompt: 'select_account',
+    login_hint: 'events@thepremiercaterer.com'
+  });
+  window._gmailAuthPending = true;
+  window.open('https://accounts.google.com/o/oauth2/v2/auth?' + params.toString(), '_blank', 'width=500,height=600');
+}
+
+function handleGmailCallback(){
+  const hash = window.location.hash;
+  if(!hash || !window._gmailAuthPending) return;
+  const params = new URLSearchParams(hash.substring(1));
+  const token = params.get('access_token');
+  if(token){
+    gmailToken = token;
+    window._gmailAuthPending = false;
+    localStorage.setItem('gmailTokenExpiry', Date.now() + (parseInt(params.get('expires_in')||3600)*1000));
+    window.history.replaceState(null,'',window.location.pathname);
+    fetchGmailProfile();
+    showToast('Gmail connected ✓');
+    render();
+  }
+}
+
+async function fetchGmailProfile(){
+  if(!gmailToken) return;
+  try{
+    const r = await fetch('https://www.googleapis.com/gmail/v1/users/me/profile', {headers:{'Authorization':'Bearer '+gmailToken}});
+    const d = await r.json();
+    gmailUser = d.emailAddress;
+  }catch(e){ console.error('Gmail profile error:', e); }
+}
+
+async function fetchInboxMessages(query=''){
+  if(!gmailToken){ showToast('Please connect Gmail first'); return []; }
+  try{
+    const q = encodeURIComponent(query || 'in:inbox');
+    const r = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=50&q='+q, {headers:{'Authorization':'Bearer '+gmailToken}});
+    const d = await r.json();
+    if(!d.messages) return [];
+    // Fetch details for each message
+    const details = await Promise.all(d.messages.slice(0,50).map(async m=>{
+      const mr = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/'+m.id+'?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date', {headers:{'Authorization':'Bearer '+gmailToken}});
+      return mr.json();
+    }));
+    gmailMessages = details.filter(Boolean);
+    return gmailMessages;
+  }catch(e){ console.error('Fetch inbox error:', e); return []; }
+}
+
+async function fetchMessageBody(id){
+  if(!gmailToken) return '';
+  try{
+    const r = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/'+id+'?format=full', {headers:{'Authorization':'Bearer '+gmailToken}});
+    const d = await r.json();
+    // Extract body
+    function getBody(payload){
+      if(!payload) return '';
+      if(payload.body && payload.body.data) return atob(payload.body.data.replace(/-/g,'+').replace(/_/g,'/'));
+      if(payload.parts){
+        for(const p of payload.parts){
+          const b = getBody(p);
+          if(b) return b;
+        }
+      }
+      return '';
+    }
+    return getBody(d.payload);
+  }catch(e){ return ''; }
+}
+
+async function sendGmailEmail(to, subject, body, htmlBody){
+  if(!gmailToken){ alert('Please connect Gmail first.'); gmailSignIn(); return false; }
+  try{
+    const from = gmailUser || 'events@thepremiercaterer.com';
+    const emailLines = [
+      'From: Premier Caterers <'+from+'>',
+      'To: '+to,
+      'Subject: '+subject,
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      htmlBody || body
+    ];
+    const raw = btoa(unescape(encodeURIComponent(emailLines.join('\r\n')))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    const r = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/send', {
+      method:'POST',
+      headers:{'Authorization':'Bearer '+gmailToken,'Content-Type':'application/json'},
+      body: JSON.stringify({raw})
+    });
+    if(!r.ok){ const err=await r.json(); throw new Error(err.error?.message||'Send failed'); }
+    showToast('Email sent ✓');
+    return true;
+  }catch(e){ alert('Email error: '+e.message); return false; }
+}
+
+async function markAsRead(id){
+  if(!gmailToken) return;
+  await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/'+id+'/modify', {
+    method:'POST', headers:{'Authorization':'Bearer '+gmailToken,'Content-Type':'application/json'},
+    body: JSON.stringify({removeLabelIds:['UNREAD']})
+  });
+}
+
+// ── SEND INVOICE EMAIL ──
+function openSendInvoiceEmail(eid){
+  const e = events.find(x=>x.id===eid);
+  const inv = invoices[eid];
+  if(!e||!inv) return;
+  if(!isGmailConnected()){ alert('Please connect Gmail first in Settings.'); showView('settings'); return; }
+  document.getElementById('sendEmailModal')?.remove();
+  const tots = calcInvoiceTotals(inv);
+  const isInvoice = inv.status==='invoice'||inv.status==='paid';
+  const docType = isInvoice ? 'Invoice' : 'Quote';
+  const defaultSubject = docType+' from Premier Caterers — '+e.name;
+  const defaultBody = 'Dear '+e.name+',\n\nPlease find your '+docType.toLowerCase()+' attached below.\n\nEvent: '+getFullEventDate(e)+'\nTotal: $'+tots.grand.toFixed(2)+(tots.balance>0?'\nBalance due: $'+tots.balance.toFixed(2):'\nStatus: Paid in full')+'\n\nThank you for choosing Premier Caterers!\n\nBest regards,\nPremier Caterers\nevents@thepremiercaterer.com\nthepremiercaterer.com';
+  const m = document.createElement('div');
+  m.id = 'sendEmailModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
+  m.innerHTML = '<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:560px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">'
+    +'<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Send '+docType+' by Email</div>'
+    +'<div class="modal-row"><label>To</label><input type="email" id="email-to" value="'+(inv.clientEmail||'')+'" placeholder="client@email.com"></div>'
+    +'<div class="modal-row"><label>Subject</label><input type="text" id="email-subject" value="'+defaultSubject+'"></div>'
+    +'<div class="modal-row"><label>Message</label><textarea id="email-body" style="min-height:180px">'+defaultBody+'</textarea></div>'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem"><input type="checkbox" id="email-attach-invoice" checked style="accent-color:var(--blue-mid)"><label for="email-attach-invoice" style="font-size:13px;color:var(--text2)">Include invoice details in email body</label></div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end">'
+    +'<button class="btn-cancel" onclick="document.getElementById(\'sendEmailModal\').remove()">Cancel</button>'
+    +'<button class="btn-save" onclick="confirmSendInvoiceEmail(\''+eid+'\')"><i class="ti ti-send" style="font-size:13px"></i> Send</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+  setTimeout(()=>document.getElementById('email-to')?.focus(),50);
+}
+
+async function confirmSendInvoiceEmail(eid){
+  const to = document.getElementById('email-to')?.value?.trim();
+  const subject = document.getElementById('email-subject')?.value?.trim();
+  const body = document.getElementById('email-body')?.value?.trim();
+  const attachInvoice = document.getElementById('email-attach-invoice')?.checked;
+  if(!to){ alert('Please enter a recipient email.'); return; }
+  const btn = document.querySelector('#sendEmailModal .btn-save');
+  if(btn){ btn.disabled=true; btn.textContent='Sending...'; }
+  let htmlBody = '<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap">'+body+'</pre>';
+  if(attachInvoice){
+    const invHtml = buildInvoiceHTML(eid);
+    htmlBody = '<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap">'+body+'</pre><br><hr><br>' + invHtml;
+  }
+  const ok = await sendGmailEmail(to, subject, body, htmlBody);
+  if(ok){
+    // Save sent record
+    if(invoices[eid]){ invoices[eid].lastEmailedDate = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+    document.getElementById('sendEmailModal')?.remove();
+    renderInvoiceDetail();
+  } else {
+    if(btn){ btn.disabled=false; btn.textContent='Send'; }
+  }
+}
+
+// ── RENDER EMAIL INBOX ──
+async function renderEmail(){
+  let h = '<div class="section-header"><div class="section-title">Email</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+    +(isGmailConnected()
+      ? '<span style="font-size:12px;color:var(--green-text);display:flex;align-items:center;gap:4px"><i class="ti ti-circle-check"></i>'+gmailUser+'</span>'
+        +'<button onclick="openComposeEmail()" class="add-btn"><i class="ti ti-pencil" style="font-size:13px"></i> Compose</button>'
+        +'<button onclick="refreshInbox()" class="icon-btn" title="Refresh"><i class="ti ti-refresh"></i></button>'
+      : '<button onclick="gmailSignIn()" class="add-btn" style="background:#4285f4;border-color:#4285f4;color:#fff"><i class="ti ti-brand-google" style="font-size:13px"></i> Connect Gmail</button>')
+    +'</div></div>';
+
+  if(!isGmailConnected()){
+    h += '<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:3rem;text-align:center">'
+      +'<i class="ti ti-mail-off" style="font-size:40px;color:var(--text3);display:block;margin-bottom:1rem"></i>'
+      +'<div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:.5rem">Connect your Gmail</div>'
+      +'<div style="font-size:13px;color:var(--text2);margin-bottom:1.5rem">Connect events@thepremiercaterer.com to send and receive emails directly in the app.</div>'
+      +'<button onclick="gmailSignIn()" style="padding:10px 24px;border:none;border-radius:var(--radius);background:#4285f4;color:#fff;font-size:14px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:8px"><i class="ti ti-brand-google"></i> Connect Gmail Account</button>'
+      +'</div>';
+    return h;
+  }
+
+  // Inbox tabs
+  const tab = window._emailTab || 'inbox';
+  const tabs = [{key:'inbox',label:'Inbox'},{key:'sent',label:'Sent'},{key:'compose',label:'Compose'}];
+  h += '<div style="display:flex;gap:4px;margin-bottom:1rem;border-bottom:0.5px solid var(--border);padding-bottom:0">'
+    + tabs.map(t=>'<button onclick="window._emailTab=\''+t.key+'\';render()" style="padding:8px 16px;border:none;background:none;font-size:13px;cursor:pointer;color:'+(tab===t.key?'var(--blue-mid)':'var(--text2)')+';border-bottom:2px solid '+(tab===t.key?'var(--blue-mid)':'transparent')+';font-weight:'+(tab===t.key?'500':'400')+'">'+t.label+'</button>').join('')
+    +'</div>';
+
+  if(tab==='compose'){
+    h += renderComposeForm();
+  } else {
+    h += '<div id="emailList" style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">'
+      +'<div style="padding:2rem;text-align:center;color:var(--text3)"><button onclick="refreshInbox()" style="padding:8px 20px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);cursor:pointer;font-size:13px;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-refresh"></i> Load '+tab+'</button></div>'
+      +'</div>';
+  }
+
+  h += '<div id="emailDetail"></div>';
+  return h;
+}
+
+function renderComposeForm(replyTo, replySubject, replyBody){
+  return '<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem">'
+    +'<div class="modal-row"><label>To</label><input type="email" id="compose-to" value="'+(replyTo||'')+'" placeholder="recipient@email.com"></div>'
+    +'<div class="modal-row"><label>Subject</label><input type="text" id="compose-subject" value="'+(replySubject||'')+'" placeholder="Subject..."></div>'
+    +'<div class="modal-row"><label>Message</label><textarea id="compose-body" style="min-height:200px">'+(replyBody||'')+'</textarea></div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:.75rem">'
+    +'<button onclick="window._emailTab=\'inbox\';render()" class="btn-cancel">Cancel</button>'
+    +'<button onclick="sendComposedEmail()" class="btn-save"><i class="ti ti-send" style="font-size:13px"></i> Send</button>'
+    +'</div></div>';
+}
+
+async function refreshInbox(){
+  const tab = window._emailTab || 'inbox';
+  const query = tab==='sent' ? 'in:sent' : 'in:inbox';
+  const el = document.getElementById('emailList');
+  if(el) el.innerHTML='<div style="padding:2rem;text-align:center;color:var(--text3)"><i class="ti ti-loader" style="font-size:20px"></i> Loading...</div>';
+  const msgs = await fetchInboxMessages(query);
+  if(!el) return;
+  if(!msgs.length){ el.innerHTML='<div style="padding:2rem;text-align:center;color:var(--text3)">No messages found.</div>'; return; }
+  el.innerHTML = msgs.map(function(m){
+    const headers = m.payload?.headers||[];
+    const subject = (headers.find(h=>h.name==='Subject')||{}).value||'(no subject)';
+    const from    = (headers.find(h=>h.name==='From')||{}).value||'';
+    const date    = (headers.find(h=>h.name==='Date')||{}).value||'';
+    const isUnread = (m.labelIds||[]).includes('UNREAD');
+    const d = new Date(date);
+    const dateStr = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    return '<div onclick="openEmailMessage(\''+m.id+'\')" style="display:grid;grid-template-columns:200px 1fr 80px;gap:12px;align-items:center;padding:10px 16px;border-bottom:0.5px solid var(--border);cursor:pointer;transition:background .1s;background:'+(isUnread?'var(--blue-bg)':'var(--bg)')+'" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\''+(isUnread?'var(--blue-bg)':'var(--bg)')+'\'"><span style="font-size:13px;font-weight:'+(isUnread?'600':'400')+';color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+from.replace(/<.*>/,'').trim()+'</span><span style="font-size:13px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+subject+'</span><span style="font-size:11px;color:var(--text3);text-align:right">'+dateStr+'</span></div>';
+  }).join('');
+}
+
+async function openEmailMessage(id){
+  const el = document.getElementById('emailDetail');
+  if(!el) return;
+  el.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text3)">Loading...</div>';
+  await markAsRead(id);
+  const body = await fetchMessageBody(id);
+  const msg = gmailMessages.find(m=>m.id===id);
+  const headers = msg?.payload?.headers||[];
+  const subject = (headers.find(h=>h.name==='Subject')||{}).value||'';
+  const from    = (headers.find(h=>h.name==='From')||{}).value||'';
+  const date    = (headers.find(h=>h.name==='Date')||{}).value||'';
+  const fromEmail = from.match(/<(.+)>/)?.[1] || from;
+  el.innerHTML = '<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem;margin-top:1rem">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem">'
+    +'<div><div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">'+subject+'</div>'
+    +'<div style="font-size:12px;color:var(--text2)">From: '+from+'</div>'
+    +'<div style="font-size:12px;color:var(--text3)">'+new Date(date).toLocaleString()+'</div></div>'
+    +'<button onclick="document.getElementById(\'emailDetail\').innerHTML=\'\'" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:20px">×</button>'
+    +'</div>'
+    +'<div style="border-top:0.5px solid var(--border);padding-top:1rem;font-size:13px;color:var(--text);line-height:1.6;max-height:400px;overflow-y:auto">'+(body.includes('<')?body:'<pre style="white-space:pre-wrap;font-family:inherit">'+body+'</pre>')+'</div>'
+    +'<div style="margin-top:1rem;display:flex;gap:8px">'
+    +'<button onclick="window._replyFrom=this.dataset.f;window._replySubj=this.dataset.s;openReply()" data-f="'+fromEmail.replace(/"/g,'&quot;')+'" data-s="'+subject.replace(/"/g,'&quot;')+'" style="padding:6px 14px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-arrow-back-up"></i> Reply</button>'
+    +'</div></div>';
+}
+
+function openReply(from, subject){
+  from = from || window._replyFrom || '';
+  subject = subject || window._replySubj || '';
+  window._emailTab = 'compose';
+  render();
+  setTimeout(()=>{
+    const toEl = document.getElementById('compose-to');
+    const subEl = document.getElementById('compose-subject');
+    if(toEl) toEl.value = from;
+    if(subEl) subEl.value = subject.startsWith('Re:')?subject:'Re: '+subject;
+  },100);
+}
+
+async function sendComposedEmail(){
+  const to = document.getElementById('compose-to')?.value?.trim();
+  const subject = document.getElementById('compose-subject')?.value?.trim();
+  const body = document.getElementById('compose-body')?.value?.trim();
+  if(!to||!subject){ alert('Please fill in To and Subject fields.'); return; }
+  const btn = document.querySelector('#mainArea .btn-save');
+  if(btn){ btn.disabled=true; btn.textContent='Sending...'; }
+  const html = '<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap">'+body+'</pre>';
+  const ok = await sendGmailEmail(to, subject, body, html);
+  if(ok){ window._emailTab='sent'; render(); setTimeout(refreshInbox, 500); }
+  else if(btn){ btn.disabled=false; btn.textContent='Send'; }
+}
+
+function openComposeEmail(){ window._emailTab='compose'; render(); }
+
+
 function save(){ /* Firebase handles all saves */ }
 function load(){ /* Firebase handles all loads */ }
 
@@ -4099,6 +4423,7 @@ function initNow(){
   }
 }
 initNow();
+if(window.location.hash.includes("access_token")) handleGmailCallback();
 </script>
 </body>
 </html>
