@@ -1133,14 +1133,155 @@ function addInquiryFromForm(data){
 }
 
 function openAddInquiryModal(){
-  // Open the client form in a new window
-  // Form submits back to this platform via addInquiryFromForm()
-  const formUrl = 'premier_caterers_form.html';
-  const w = window.open(formUrl, '_blank', 'width=780,height=900,scrollbars=yes,resizable=yes');
-  if(!w){
-    // Popup blocked — fall back to same tab
-    window.open(formUrl, '_blank');
+  document.getElementById('inquiryFormModal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'inquiryFormModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px';
+
+  const inp = 'width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit';
+  const lbl = 'font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);display:block;margin-bottom:5px';
+  const fld = 'margin-bottom:1rem';
+
+  modal.innerHTML = `
+  <div style="background:var(--bg);border-radius:var(--radius-lg);width:100%;max-width:620px;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden">
+    <div style="background:var(--blue-bg);border-bottom:0.5px solid var(--blue-border);padding:1.25rem 1.5rem;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <img src="${LOGO_DATA}" style="height:32px;object-fit:contain;display:block;margin-bottom:6px">
+        <div style="font-size:15px;font-weight:600;color:var(--blue-text)">New Client Inquiry</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Fill out on behalf of client or share with them directly</div>
+      </div>
+      <button onclick="document.getElementById('inquiryFormModal').remove()" style="border:none;background:none;font-size:20px;color:var(--text2);cursor:pointer;padding:4px">×</button>
+    </div>
+    <div style="padding:1.5rem">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
+        <div style="${fld}"><label style="${lbl}">First name *</label><input id="iq_firstName" style="${inp}" placeholder="First name"></div>
+        <div style="${fld}"><label style="${lbl}">Last name *</label><input id="iq_lastName" style="${inp}" placeholder="Last name"></div>
+        <div style="${fld}"><label style="${lbl}">Email</label><input id="iq_email" type="email" style="${inp}" placeholder="email@example.com"></div>
+        <div style="${fld}"><label style="${lbl}">Phone</label><input id="iq_phone" style="${inp}" placeholder="(555) 555-5555"></div>
+      </div>
+
+      <div style="${fld}"><label style="${lbl}">Event name</label><input id="iq_eventName" style="${inp}" placeholder="e.g. Smith Bar Mitzvah"></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
+        <div style="${fld}">
+          <label style="${lbl}">Event type *</label>
+          <select id="iq_eventType" style="${inp};appearance:none">
+            <option value="">Select type...</option>
+            <option>Bar Mitzvah</option>
+            <option>Bat Mitzvah</option>
+            <option>Wedding</option>
+            <option>Kiddush</option>
+            <option>Bris</option>
+            <option>Sheva Brachos</option>
+            <option>Vort</option>
+            <option>Shloshim</option>
+            <option>Corporate</option>
+            <option>Birthday</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div style="${fld}"><label style="${lbl}">Event date</label><input id="iq_eventDate" type="date" style="${inp}"></div>
+        <div style="${fld}"><label style="${lbl}">Guest count</label><input id="iq_guestCount" type="number" style="${inp}" placeholder="e.g. 150"></div>
+        <div style="${fld}">
+          <label style="${lbl}">Cuisine</label>
+          <select id="iq_cuisine" style="${inp};appearance:none">
+            <option value="">Select...</option>
+            <option>Meat</option>
+            <option>Dairy</option>
+            <option>Both</option>
+            <option>Not sure yet</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="${fld}">
+        <label style="${lbl}">Venue name</label>
+        <input id="iq_venueName" style="${inp}" placeholder="Venue name">
+      </div>
+      <div style="${fld}">
+        <label style="${lbl}">Venue location / address</label>
+        <input id="iq_venueLocation" style="${inp}" placeholder="City, State or full address">
+      </div>
+
+      <div style="${fld}">
+        <label style="${lbl}">How did they hear about us?</label>
+        <select id="iq_howFound" style="${inp};appearance:none">
+          <option value="">Select...</option>
+          <option>Referral from friend/family</option>
+          <option>Attended a Premier Caterers event</option>
+          <option>Google search</option>
+          <option>Social media</option>
+          <option>Party planner / coordinator</option>
+          <option>Venue recommendation</option>
+          <option>Other</option>
+        </select>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
+        <div style="${fld}"><label style="${lbl}">Referred by (name)</label><input id="iq_referredBy" style="${inp}" placeholder="Who referred them?"></div>
+        <div style="${fld}"><label style="${lbl}">Which event did they attend?</label><input id="iq_eventAttended" style="${inp}" placeholder="Event name / date"></div>
+      </div>
+
+      <div style="${fld}">
+        <label style="${lbl}">Party planner / coordinator name</label>
+        <input id="iq_plannerName" style="${inp}" placeholder="Planner name (if applicable)">
+      </div>
+
+      <div style="${fld}">
+        <label style="${lbl}">Questions / comments</label>
+        <textarea id="iq_comments" rows="3" style="${inp};resize:vertical" placeholder="Any additional notes or questions..."></textarea>
+      </div>
+
+      <div id="iq_error" style="display:none;color:#c0392b;font-size:13px;margin-bottom:12px;padding:8px 12px;background:#fdf0f0;border-radius:var(--radius)"></div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="document.getElementById('inquiryFormModal').remove()" style="padding:9px 18px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);font-size:13px;cursor:pointer">Cancel</button>
+        <button onclick="submitInquiryModal()" style="padding:9px 20px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;font-size:13px;font-weight:500;cursor:pointer">Submit inquiry</button>
+      </div>
+    </div>
+  </div>`;
+
+  document.body.appendChild(modal);
+}
+
+function submitInquiryModal(){
+  const firstName = document.getElementById('iq_firstName')?.value.trim();
+  const lastName  = document.getElementById('iq_lastName')?.value.trim();
+  const eventType = document.getElementById('iq_eventType')?.value;
+  const errEl = document.getElementById('iq_error');
+
+  if(!firstName || !lastName){
+    errEl.textContent = 'Please enter first and last name.';
+    errEl.style.display = 'block';
+    return;
   }
+  if(!eventType){
+    errEl.textContent = 'Please select an event type.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  addInquiryFromForm({
+    firstName,
+    lastName,
+    email:         document.getElementById('iq_email')?.value.trim()||'',
+    phone:         document.getElementById('iq_phone')?.value.trim()||'',
+    eventName:     document.getElementById('iq_eventName')?.value.trim()||'',
+    eventType,
+    eventDate:     document.getElementById('iq_eventDate')?.value||'',
+    guestCount:    document.getElementById('iq_guestCount')?.value||'',
+    cuisine:       document.getElementById('iq_cuisine')?.value||'',
+    venueName:     document.getElementById('iq_venueName')?.value.trim()||'',
+    venueLocation: document.getElementById('iq_venueLocation')?.value.trim()||'',
+    howFound:      document.getElementById('iq_howFound')?.value||'',
+    referredBy:    document.getElementById('iq_referredBy')?.value.trim()||'',
+    eventAttended: document.getElementById('iq_eventAttended')?.value.trim()||'',
+    plannerName:   document.getElementById('iq_plannerName')?.value.trim()||'',
+    comments:      document.getElementById('iq_comments')?.value.trim()||''
+  });
+
+  document.getElementById('inquiryFormModal')?.remove();
+  showToast('✓ Inquiry added to Pipeline', 3000);
 }
 
 function renderSchedule(){
@@ -4383,6 +4524,7 @@ window.promoteToEvent = promoteToEvent;
 window.selectInquiry = selectInquiry;
 window.closeInqDetail = closeInqDetail;
 window.openAddInquiryModal = openAddInquiryModal;
+window.submitInquiryModal = submitInquiryModal;
 window.addInquiryFromForm = addInquiryFromForm;
 window.toggleAck = toggleAck;
 window.addChange = addChange;
