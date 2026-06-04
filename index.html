@@ -393,7 +393,21 @@ function startFirebaseListeners(){
   inquiriesCol.onSnapshot( snap=>{ inquiries=snap.docs.map(d=>d.data()); updatePipelineBadge(); if(currentView==='pipeline') render(); });
   checklistCol.onSnapshot( snap=>{ checklists={}; snap.docs.forEach(d=>{ checklists[d.id]=d.data().items||[]; }); if(currentView==='checklists') render(); updateBadge(); });
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
-  invoicesCol.onSnapshot( snap=>{ invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); }); if(currentView==='invoices') render(); });
+  invoicesCol.onSnapshot( snap=>{ 
+    invoices={}; 
+    snap.docs.forEach(d=>{ invoices[d.id]=d.data(); });
+    // Migrate any old invoices that don't have payments array yet
+    snap.docs.forEach(d=>{
+      const inv = invoices[d.id];
+      if(inv && !inv.payments){
+        migrateInvoicePayments(inv);
+        if(inv.payments && inv.payments.length > 0){
+          _saveInvoice(d.id, inv); // save migrated data back to Firebase
+        }
+      }
+    });
+    if(currentView==='invoices') render(); 
+  });
   venuesCol.onSnapshot( snap=>{ venues=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='venues') render(); });
 }
 
