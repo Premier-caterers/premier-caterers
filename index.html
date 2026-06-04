@@ -1351,149 +1351,254 @@ function saveSchedEdit(id){
 }
 
 // ── CHECKLISTS ──
+const clPeople = ['Kenny','Shelley','Josh','Commissary','Client','Other'];
+
 function initChecklist(eid){
   if(!checklists[eid]){
-    // Create in memory only - do NOT save to Firebase here
-    // Firebase listener will populate real data when it arrives
     checklists[eid] = checklistTemplate.map((t,i)=>({
       id:'cl_'+eid+'_'+i,
-      text:t.text, who:t.who,
-      done:false, na:false, assignedTo:'', dueOption:t.dueOption||'', customDue:t.customDue||'', naDefault:t.na
+      text:t.text,
+      na:false,
+      naDefault:t.na,
+      dueOption:t.dueOption||'',
+      customDue:'',
+      assignees:[], // [{person, done, notes, ts, otherName}]
+      addToFuture:false,
+      addToChangeLog:false,
     }));
-    // Only save if this is a genuinely new checklist (no Firebase data loaded yet)
-    // We detect this by checking if Firebase has loaded (events array has data)
     if(events.length > 0 && window._firebaseReady){
       _saveChecklist(eid, checklists[eid]);
     }
   }
 }
 
-let _clSort = 'duedate'; // default sort
-
-function sortItems(items, e){
-  const copy = [...items.map((item,idx)=>({...item,_origIdx:idx}))];
-  const getDueMs = item => {
-    if(item.dueOption==='custom') return item.customDue ? new Date(item.customDue).getTime() : Infinity;
-    if(item.dueOption) { const d=getEventIsoDate(e.day); if(d){const c=new Date(d); c.setDate(c.getDate()-parseInt(item.dueOption)); return c.getTime();} }
-    return Infinity;
-  };
-  if(_clSort==='duedate')       return copy.sort((a,b)=>getDueMs(a)-getDueMs(b));
-  if(_clSort==='done_top')      return copy.sort((a,b)=>(b.done?1:0)-(a.done?1:0));
-  if(_clSort==='undone_top')    return copy.sort((a,b)=>(a.done?1:0)-(b.done?1:0));
-  if(_clSort==='assigned')      return copy.sort((a,b)=>(a.assignedTo||'').localeCompare(b.assignedTo||''));
-  if(_clSort==='na_last')       return copy.sort((a,b)=>(a.na?1:0)-(b.na?1:0));
-  if(_clSort==='alpha')         return copy.sort((a,b)=>a.text.localeCompare(b.text));
-  return copy;
-}
-
-const sortLabels = {
-  duedate:    'Due date',
-  undone_top: 'Not done first',
-  done_top:   'Done first',
-  assigned:   'Assigned to',
-  na_last:    'N/A last',
-  alpha:      'Alphabetical',
-};
-
 function renderChecklists(){
   events.forEach(e=>initChecklist(e.id));
-  // Preserve any pending open from goChecklist, otherwise start collapsed
   const _pendingId = window._pendingChecklistId;
   window._clOpen = {};
   if(_pendingId){ window._clOpen[_pendingId] = true; window._pendingChecklistId = null; }
 
-  const sortBtnStyle = (key) => `padding:5px 11px;border-radius:6px;border:none;font-size:12px;cursor:pointer;transition:all .12s;background:${_clSort===key?'var(--blue-bg)':'var(--bg2)'};color:${_clSort===key?'var(--blue-text)':'var(--text2)'};font-weight:${_clSort===key?'500':'400'}`;
+  let h = '<div class="section-header"><div class="section-title">Event checklists</div>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+    + '<button onclick="expandAllChecklists()" style="border:none;background:none;color:var(--blue-mid);cursor:pointer;font-size:12px">Expand all</button>'
+    + '<button onclick="collapseAllChecklists()" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:12px">Collapse all</button>'
+    + '</div></div>';
 
-  let h=`<div class="section-header"><div class="section-title">Event checklists</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-      <button onclick="expandAllChecklists()" style="border:none;background:none;color:var(--blue-mid);cursor:pointer;font-size:12px">Expand all</button>
-      <button onclick="collapseAllChecklists()" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:12px">Collapse all</button>
-    </div>
-  </div>
-  <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:1rem;align-items:center">
-    <span style="font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-right:2px">Sort:</span>
-    ${Object.entries(sortLabels).map(([key,label])=>`<button onclick="setClSort('${key}')" style="${sortBtnStyle(key)}">${label}</button>`).join('')}
-  </div>`;
-
-  events.forEach(e=>{
-    const eid=e.id;
-    const rawItems=checklists[eid]||[];
-    const sorted=sortItems(rawItems,e);
-    const active=rawItems.filter(i=>!i.na);
-    const done=active.filter(i=>i.done).length;
-    const pct=active.length>0?Math.round(done/active.length*100):0;
+  events.forEach(function(e){
+    const eid = e.id;
+    const rawItems = checklists[eid]||[];
+    const active = rawItems.filter(i=>!i.na);
+    const done = active.filter(i=>i.assignees&&i.assignees.some(a=>a.done)).length;
+    const pct = active.length>0 ? Math.round(done/active.length*100) : 0;
     const isOpen = window._clOpen[eid] === true;
 
-    h+=`<div class="checklist-card" id="cl-${eid}" style="padding:0;overflow:hidden">
-      <div onclick="toggleClCollapse('${eid}')" style="display:flex;align-items:center;gap:10px;padding:.85rem 1.25rem;cursor:pointer;user-select:none;${isOpen?'border-bottom:0.5px solid var(--border)':''}">
-        <i class="ti ti-chevron-${isOpen?'down':'right'}" id="cl-chevron-${eid}" style="font-size:14px;color:var(--text3);flex-shrink:0"></i>
-        <div style="flex:1">
-          <div class="cl-title" style="margin-bottom:0">${e.job} — ${e.name} <span style="font-size:12px;color:var(--text3);font-weight:400">${e.dayLabel} · ${e.typeLabel}</span></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px" onclick="event.stopPropagation()">
-          <div style="font-size:12px;color:${pct===100?'var(--green-text)':'var(--text2)'};font-weight:500">${done}/${active.length} <span style="font-weight:400;color:var(--text3)">done</span></div>
-          <button onclick="addCheckItem('${eid}')" style="border:none;background:none;color:var(--blue-mid);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:3px"><i class="ti ti-plus" style="font-size:13px"></i>Add</button>
-          <button onclick="printChecklist('${eid}')" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:3px"><i class="ti ti-printer" style="font-size:13px"></i>Print</button><button onclick="downloadChecklist('${eid}')" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:3px"><i class="ti ti-download" style="font-size:13px"></i>Download</button>
-        </div>
-      </div>
-      <div id="cl-body-${eid}" style="display:${isOpen?'block':'none'}">
-        <div style="height:3px;background:var(--bg3);overflow:hidden"><div style="height:100%;width:${pct}%;background:${pct===100?'var(--green-text)':'var(--blue-mid)'};transition:width .3s" id="cl-bar-${eid}"></div></div>
-        <div style="padding:.5rem 1.25rem 1rem;overflow-x:auto">
-          <div style="display:grid;grid-template-columns:42px 1fr repeat(6,52px) 130px;gap:6px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;grid-column:1/-1">
-            <span style="font-size:10px;text-align:center">✓ / N/A</span><span style="font-size:12px">Task</span>
-            ${['Kenny','Shelley','Josh','Commissary','Client','Other'].map(a=>`<span style="text-align:center">${a}</span>`).join('')}
-            <span style="text-align:center">Due date</span>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
-          ${sorted.map((item)=>{
-            const idx=item._origIdx;
-            return `
-          <div class="check-item" id="cli-${eid}-${idx}" style="display:grid;grid-template-columns:42px 1fr repeat(6,52px) 130px;gap:6px;align-items:center;${item.na?'opacity:.6':''}">
-            <div style="display:flex;align-items:center;gap:4px">
-              <input type="checkbox" ${item.done&&!item.na?'checked':''} ${item.na?'disabled':''} onchange="toggleCheck('${eid}','${item.id}',this.checked)"
-                style="width:${item.done?'18':'15'}px;height:${item.done?'18':'15'}px;accent-color:var(--blue-mid);flex-shrink:0;cursor:pointer;${item.done?'outline:2px solid var(--blue-mid);border-radius:3px':''}">
-              <button onclick="event.stopPropagation();toggleNA('${eid}',${idx})"
-                style="border:0.5px solid ${item.na?'var(--coral-text)':'var(--border2)'};background:${item.na?'var(--coral-bg)':'none'};color:${item.na?'var(--coral-text)':'var(--text3)'};cursor:pointer;font-size:10px;padding:1px 5px;border-radius:4px;white-space:nowrap;font-weight:${item.na?'600':'400'}">N/A</button>
-            </div>
-            <div>
-              <div class="check-label ${item.na?'na-line':item.done?'done':''}">${item.text}</div>
-            </div>
-            ${['Kenny','Shelley','Josh','Commissary','Client','Other'].map(a=>`
-              <div style="display:flex;justify-content:center">
-                <input type="checkbox" ${(item.assignedTo||'').split(',').map(s=>s.trim()).includes(a)?'checked':''} onchange="toggleAssigned('${eid}',${idx},'${a}',this.checked)" style="width:15px;height:15px;accent-color:var(--blue-mid);cursor:pointer" ${item.na?'disabled':''}>
-              </div>`).join('')}
-            <div style="font-size:11px">
-              ${item.dueOption==='custom'
-                ? `<div style="display:flex;flex-direction:column;gap:3px">
-                    <input type="date" value="${item.customDue||''}" onchange="setCustomDue('${eid}',${idx},this.value)" style="width:120px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:3px 5px;font-size:11px;color:var(--text);font-family:inherit">
-                    <button onclick="setDueOption('${eid}',${idx},'')" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:10px;text-align:left">clear</button>
-                  </div>`
-                : item.dueOption
-                  ? `<div style="display:flex;flex-direction:column;gap:2px">
-                      <span style="color:var(--blue-text);font-weight:600;font-size:12px">${calcDueDate(e.day, parseInt(item.dueOption))}</span>
-                      <button onclick="setDueOption('${eid}',${idx},'')" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:10px;text-align:left;padding:0">change</button>
-                    </div>`
-                  : `<select onchange="setDueOption('${eid}',${idx},this.value)" style="width:120px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:3px 5px;font-size:11px;color:var(--text);font-family:inherit">
-                      <option value="">Set due date...</option>
-                      <option value="30">1 month before</option>
-                      <option value="14">2 weeks before</option>
-                      <option value="7">1 week before</option>
-                      <option value="5">5 days before</option>
-                      <option value="2">48 hours before</option>
-                      <option value="1">24 hours before</option>
-                      <option value="custom">Custom date...</option>
-                    </select>`}
-            </div>
-          </div>`;}).join('')}
-          </div>
-          <div id="add-item-area-${eid}"></div>
-        </div>
-      </div>
-    </div>`;
+    h += '<div class="checklist-card" id="cl-'+eid+'" style="padding:0;overflow:hidden;margin-bottom:10px">'
+      + '<div onclick="toggleClCollapse(\''+eid+'\')" style="display:flex;align-items:center;gap:10px;padding:.85rem 1.25rem;cursor:pointer;user-select:none;'+(isOpen?'border-bottom:0.5px solid var(--border)':'')+'">'
+      + '<i class="ti ti-chevron-'+(isOpen?'down':'right')+'" id="cl-chevron-'+eid+'" style="font-size:14px;color:var(--text3);flex-shrink:0"></i>'
+      + '<div style="flex:1"><div class="cl-title" style="margin-bottom:0">'+e.job+' — '+e.name+' <span style="font-size:12px;color:var(--text3);font-weight:400">'+e.dayLabel+' · '+e.typeLabel+'</span></div></div>'
+      + '<div style="display:flex;align-items:center;gap:10px" onclick="event.stopPropagation()">'
+      + '<div style="font-size:12px;color:'+(pct===100?'var(--green-text)':'var(--text2)')+';font-weight:500">'+done+'/'+active.length+' <span style="font-weight:400;color:var(--text3)">done</span></div>'
+      + '<button onclick="printChecklist(\''+eid+'\')" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:3px"><i class="ti ti-printer" style="font-size:13px"></i>Print</button>'
+      + '<button onclick="downloadChecklist(\''+eid+'\')" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:3px"><i class="ti ti-download" style="font-size:13px"></i>Download</button>'
+      + '</div></div>'
+      + '<div id="cl-body-'+eid+'" style="display:'+(isOpen?'block':'none')+'">'
+      + '<div style="height:3px;background:var(--bg3);overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(pct===100?'var(--green-text)':'var(--blue-mid)')+';transition:width .3s"></div></div>'
+      + '<div style="padding:.75rem 1.25rem 1rem">';
+
+    // Column headers
+    h += '<div style="display:grid;grid-template-columns:28px 1fr 200px 160px 100px 32px;gap:8px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">'
+      + '<span>N/A</span><span>Task</span><span>Assigned to / Status</span><span>Notes</span><span>Due date</span><span>📋</span>'
+      + '</div>';
+
+    rawItems.forEach(function(item, idx){
+      const isDone = item.assignees && item.assignees.some(function(a){ return a.done; });
+      const allDone = item.assignees && item.assignees.length > 0 && item.assignees.every(function(a){ return a.done; });
+
+      h += '<div style="border-bottom:0.5px solid var(--border);padding:8px 0;'+(item.na?'opacity:.5':'')+'">'
+        // Row 1: N/A, task name, assignee selector, due date, change log flag
+        + '<div style="display:grid;grid-template-columns:28px 1fr 200px 160px 100px 32px;gap:8px;align-items:flex-start">'
+        + '<button onclick="toggleNA(\''+eid+'\','+idx+')" style="border:0.5px solid '+(item.na?'var(--coral-text)':'var(--border2)')+';background:'+(item.na?'var(--coral-bg)':'none')+';color:'+(item.na?'var(--coral-text)':'var(--text3)')+';cursor:pointer;font-size:10px;padding:2px 4px;border-radius:4px;font-weight:'+(item.na?'600':'400')+';margin-top:2px">N/A</button>'
+        + '<div style="font-size:13px;font-weight:500;color:'+(item.na?'var(--text3)':allDone?'var(--green-text)':'var(--text)')+';text-decoration:'+(allDone&&!item.na?'none':'none')+'">'
+          + item.text
+          + (item.assignees&&item.assignees.length>0 ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">'+item.assignees.map(function(a){
+              return '<span style="font-size:11px;padding:2px 7px;border-radius:8px;background:'+(a.done?'var(--green-bg)':'var(--amber-bg)')+';color:'+(a.done?'var(--green-text)':'var(--amber-text)')+';display:inline-flex;align-items:center;gap:3px">'
+                + (a.done?'✓ ':'') + (a.person==='Other'?a.otherName||'Other':a.person)
+                + '</span>';
+            }).join('')+'</div>' : '')
+        + '</div>'
+        // Assignee multi-select dropdown
+        + '<div>'
+          + '<select multiple onchange="updateAssignees(\''+eid+'\','+idx+',this)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:4px;font-size:12px;color:var(--text);font-family:inherit;height:auto" '+(item.na?'disabled':'')+'>'
+          + clPeople.map(function(p){
+              const sel = item.assignees && item.assignees.some(function(a){ return a.person===p; });
+              return '<option value="'+p+'" '+(sel?'selected':'')+'>'+p+'</option>';
+            }).join('')
+          + '</select>'
+          + (item.assignees&&item.assignees.some(function(a){return a.person==='Other';}) ?
+              '<input type="text" placeholder="Other name..." value="'+(item.assignees.find(function(a){return a.person==='Other';})||{}).otherName+'" onchange="updateOtherName(\''+eid+'\','+idx+',this.value)" style="margin-top:4px;width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:3px 6px;font-size:12px;color:var(--text);font-family:inherit">'
+            : '')
+        + '</div>'
+        // Notes field
+        + '<div><textarea placeholder="Notes..." onchange="updateClNotes(\''+eid+'\','+idx+',\'main\',this.value)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:4px 6px;font-size:12px;color:var(--text);font-family:inherit;resize:vertical;min-height:40px" '+(item.na?'disabled':'')+'>'+(item.notes||'')+'</textarea></div>'
+        // Due date
+        + '<div style="font-size:11px">'
+          + (item.dueOption==='custom'
+            ? '<input type="date" value="'+(item.customDue||'')+'" onchange="setCustomDue(\''+eid+'\','+idx+',this.value)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:3px 5px;font-size:11px;color:var(--text);font-family:inherit">'
+            : item.dueOption
+              ? '<span style="color:var(--blue-text);font-weight:600;font-size:12px">'+calcDueDate(e.day, parseInt(item.dueOption))+'</span><button onclick="setDueOption(\''+eid+'\','+idx+',\'\')" style="display:block;border:none;background:none;color:var(--text3);cursor:pointer;font-size:10px;padding:0">change</button>'
+              : '<select onchange="setDueOption(\''+eid+'\','+idx+',this.value)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:3px 5px;font-size:11px;color:var(--text);font-family:inherit"><option value="">Set due...</option><option value="30">1 month before</option><option value="14">2 weeks before</option><option value="7">1 week before</option><option value="5">5 days before</option><option value="2">48 hrs before</option><option value="1">24 hrs before</option><option value="custom">Custom...</option></select>')
+        + '</div>'
+        // Change log flag
+        + '<div style="display:flex;justify-content:center;margin-top:4px"><input type="checkbox" '+(item.addToChangeLog?'checked':'')+' title="Add to change log" onchange="toggleChangeLogFlag(\''+eid+'\','+idx+',this.checked)" style="width:15px;height:15px;accent-color:var(--blue-mid);cursor:pointer" '+(item.na?'disabled':'')+'></div>'
+        + '</div>';
+
+      // Per-assignee rows: checkbox, name, notes, timestamp
+      if(item.assignees && item.assignees.length > 0 && !item.na){
+        h += '<div style="margin-top:6px;margin-left:36px;border-left:2px solid var(--border2);padding-left:10px">';
+        item.assignees.forEach(function(a, ai){
+          const displayName = a.person==='Other' ? (a.otherName||'Other') : a.person;
+          h += '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px">'
+            + '<input type="checkbox" '+(a.done?'checked':'')+' onchange="toggleAssigneeDone(\''+eid+'\','+idx+','+ai+',this.checked)" style="width:14px;height:14px;accent-color:var(--blue-mid);cursor:pointer">'
+            + '<span style="width:80px;flex-shrink:0;font-weight:500;color:var(--text2)">'+displayName+'</span>'
+            + '<input type="text" value="'+(a.notes||'')+'" placeholder="Notes..." onchange="updateAssigneeNotes(\''+eid+'\','+idx+','+ai+',this.value)" style="flex:1;background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:3px 6px;font-size:12px;color:var(--text);font-family:inherit">'
+            + (a.ts ? '<span style="font-size:10px;color:var(--text3);white-space:nowrap;flex-shrink:0">'+a.ts+'</span>' : '')
+            + '</div>';
+        });
+        h += '</div>';
+      }
+
+      h += '</div>'; // end item
+    });
+
+    // Add task button
+    h += '<div style="margin-top:.75rem">'
+      + '<button onclick="openAddTaskModal(\''+eid+'\')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;cursor:pointer"><i class="ti ti-plus" style="font-size:13px"></i>Add task</button>'
+      + '</div>';
+
+    h += '</div></div></div>'; // close body, card
   });
+
   return h;
 }
 
+
+
+
+function toggleClCollapse(eid){
+  window._clOpen = window._clOpen||{};
+  window._clOpen[eid] = !window._clOpen[eid];
+  const body = document.getElementById('cl-body-'+eid);
+  const chev = document.getElementById('cl-chevron-'+eid);
+  if(body) body.style.display = window._clOpen[eid]?'block':'none';
+  if(chev){ chev.className = 'ti ti-chevron-'+(window._clOpen[eid]?'down':'right'); }
+}
+function expandAllChecklists(){ events.forEach(e=>{ window._clOpen=window._clOpen||{}; window._clOpen[e.id]=true; }); render(); }
+function collapseAllChecklists(){ window._clOpen={}; render(); }
+
+function updateAssignees(eid, idx, sel){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  const selected = Array.from(sel.selectedOptions).map(o=>o.value);
+  const existing = checklists[eid][idx].assignees||[];
+  checklists[eid][idx].assignees = selected.map(p=>{ const ex=existing.find(a=>a.person===p); return ex||{person:p,done:false,notes:'',ts:'',otherName:''}; });
+  _saveChecklist(eid, checklists[eid]);
+  render();
+}
+
+function toggleAssigneeDone(eid, idx, ai, val){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  checklists[eid][idx].assignees[ai].done = val;
+  const now = new Date();
+  checklists[eid][idx].assignees[ai].ts = (now.getMonth()+1)+'/'+now.getDate()+'/'+String(now.getFullYear()).slice(2)+' '+now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+  _saveChecklist(eid, checklists[eid]);
+  render();
+}
+
+function updateAssigneeNotes(eid, idx, ai, val){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  checklists[eid][idx].assignees[ai].notes = val;
+  const now = new Date();
+  checklists[eid][idx].assignees[ai].ts = (now.getMonth()+1)+'/'+now.getDate()+'/'+String(now.getFullYear()).slice(2)+' '+now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+  _saveChecklist(eid, checklists[eid]);
+}
+
+function updateOtherName(eid, idx, val){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  const a = checklists[eid][idx].assignees.find(x=>x.person==='Other');
+  if(a) a.otherName = val;
+  _saveChecklist(eid, checklists[eid]);
+}
+
+function updateClNotes(eid, idx, type, val){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  checklists[eid][idx].notes = val;
+  _saveChecklist(eid, checklists[eid]);
+}
+
+function toggleNA(eid, idx){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  checklists[eid][idx].na = !checklists[eid][idx].na;
+  _saveChecklist(eid, checklists[eid]);
+  render();
+}
+
+function setDueOption(eid, idx, val){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  checklists[eid][idx].dueOption = val;
+  _saveChecklist(eid, checklists[eid]);
+  render();
+}
+
+function setCustomDue(eid, idx, val){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  checklists[eid][idx].customDue = val;
+  _saveChecklist(eid, checklists[eid]);
+}
+
+function toggleChangeLogFlag(eid, idx, val){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  checklists[eid][idx].addToChangeLog = val;
+  if(val){
+    const e = events.find(x=>x.id===eid);
+    const item = checklists[eid][idx];
+    const now = new Date();
+    const ts = (now.getMonth()+1)+'/'+now.getDate()+' '+now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+    const changeEntry = {id:'cl_change_'+Date.now(), job:e?e.job:'', text:'Checklist item flagged: '+item.text, notifyDepts:changeDepts, acks:{}, ts};
+    changes.unshift(changeEntry);
+    changesCol.doc(changeEntry.id).set(changeEntry);
+    showToast('Added to change log');
+  }
+  _saveChecklist(eid, checklists[eid]);
+}
+
+function openAddTaskModal(eid){
+  document.getElementById('addTaskModal')?.remove();
+  const m = document.createElement('div');
+  m.id='addTaskModal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
+  m.innerHTML='<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:440px;box-shadow:0 8px 40px rgba(0,0,0,.2)">'
+    +'<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Add task</div>'
+    +'<div class="modal-row"><label>Task description</label><input type="text" id="new-task-text" placeholder="e.g. Confirm linen order..."></div>'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-top:.75rem"><input type="checkbox" id="new-task-future" style="width:15px;height:15px;accent-color:var(--blue-mid)"><label for="new-task-future" style="font-size:13px;color:var(--text2);cursor:pointer">Also add to future checklists by default</label></div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem"><button class="btn-cancel" onclick="document.getElementById('addTaskModal').remove()">Cancel</button><button class="btn-save" onclick="saveNewTask(''+eid+'')">Add task</button></div>'
+    +'</div>';
+  document.body.appendChild(m);
+  setTimeout(()=>document.getElementById('new-task-text')?.focus(),50);
+}
+
+function saveNewTask(eid){
+  const text = document.getElementById('new-task-text')?.value?.trim();
+  if(!text){ alert('Please enter a task description.'); return; }
+  const addToFuture = document.getElementById('new-task-future')?.checked;
+  if(!checklists[eid]) checklists[eid]=[];
+  const newItem = {id:'custom_'+Date.now(),text,na:false,dueOption:'',customDue:'',assignees:[],notes:'',addToFuture,addToChangeLog:false,custom:true};
+  checklists[eid].push(newItem);
+  if(addToFuture){ checklistTemplate.push({text,na:false,dueOption:'',custom:true}); }
+  _saveChecklist(eid, checklists[eid]);
+  document.getElementById('addTaskModal')?.remove();
+  window._clOpen = window._clOpen||{};
+  window._clOpen[eid] = true;
+  render();
+}
 function setClSort(key){ _clSort=key; render(); setTimeout(()=>{ document.querySelectorAll('.checklist-card').forEach(c=>{ if(window._clOpen[c.id.replace('cl-','')]===true){ const b=c.querySelector('[id^=cl-body]'); if(b) b.style.display='block'; }}); },30); }
 
 function toggleClCollapse(eid){
@@ -3743,7 +3848,35 @@ window.toggleClCollapse = toggleClCollapse;
 window.expandAllChecklists = expandAllChecklists;
 window.collapseAllChecklists = collapseAllChecklists;
 window.setClSort = setClSort;
+window.toggleClCollapse = toggleClCollapse;
+window.expandAllChecklists = expandAllChecklists;
+window.collapseAllChecklists = collapseAllChecklists;
+window.updateAssignees = updateAssignees;
+window.toggleAssigneeDone = toggleAssigneeDone;
+window.updateAssigneeNotes = updateAssigneeNotes;
+window.updateOtherName = updateOtherName;
+window.updateClNotes = updateClNotes;
+window.toggleNA = toggleNA;
+window.setDueOption = setDueOption;
+window.setCustomDue = setCustomDue;
+window.toggleChangeLogFlag = toggleChangeLogFlag;
+window.openAddTaskModal = openAddTaskModal;
+window.saveNewTask = saveNewTask;
 window.printChecklist = printChecklist;
+window.toggleClCollapse = toggleClCollapse;
+window.expandAllChecklists = expandAllChecklists;
+window.collapseAllChecklists = collapseAllChecklists;
+window.updateAssignees = updateAssignees;
+window.toggleAssigneeDone = toggleAssigneeDone;
+window.updateAssigneeNotes = updateAssigneeNotes;
+window.updateOtherName = updateOtherName;
+window.updateClNotes = updateClNotes;
+window.toggleNA = toggleNA;
+window.setDueOption = setDueOption;
+window.setCustomDue = setCustomDue;
+window.toggleChangeLogFlag = toggleChangeLogFlag;
+window.openAddTaskModal = openAddTaskModal;
+window.saveNewTask = saveNewTask;
 window.downloadChecklist = downloadChecklist;
 window.addCheckItem = addCheckItem;
 window.saveCheckItem = saveCheckItem;
