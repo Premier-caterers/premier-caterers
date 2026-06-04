@@ -1,4 +1,6 @@
-<html lang="en"><head>
+<!DOCTYPE html>
+<html lang="en">
+<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
@@ -218,7 +220,7 @@ a{color:var(--blue-mid);text-decoration:none}
 .saving-toast.show{transform:none;opacity:1;}
 
 </style>
-<link rel="stylesheet" href="chrome-extension://e88c41ce-44eb-4adf-9d28-6552474491bc/app/content-style.css"></head>
+</head>
 <body>
 
 
@@ -228,7 +230,7 @@ a{color:var(--blue-mid);text-decoration:none}
   </div>
   <div style="display:flex;align-items:center;gap:6px">
     <button onclick="changeWeek(-1)" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:18px;padding:2px 6px;border-radius:4px;line-height:1" title="Previous week">‹</button>
-    <span class="we-pill" id="wePill" onclick="showWeekPicker()" style="cursor:pointer" title="Click to jump to a date">W/E Jun 14, 26</span>
+    <span class="we-pill" id="wePill" onclick="showWeekPicker()" style="cursor:pointer" title="Click to jump to a date">W/E Jun 7, 26</span>
     <button onclick="changeWeek(1)" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:18px;padding:2px 6px;border-radius:4px;line-height:1" title="Next week">›</button>
     <input type="date" id="weekJumper" style="display:none;font-size:12px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-family:inherit" onchange="jumpToWeek(this.value)">
   </div>
@@ -240,10 +242,10 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span id="buildTimestamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 4 2026, 4:45 PM ET</span>
-  <button class="sync-btn connected" id="syncBtn" onclick="showView('settings')">
+  <span id="buildTimestamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 04, 2026 09:00 PM ET</span>
+  <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
-    <span id="syncLabel">Live ✓</span>
+    <span id="syncLabel">Connect Sheets</span>
   </button>
 </div>
 
@@ -251,9 +253,9 @@ a{color:var(--blue-mid);text-decoration:none}
   <div class="sidebar">
     <div class="sidebar-label">Views</div>
     <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
-    <button class="nav-item" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
+    <button class="nav-item active" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
     <button class="nav-item" id="nav-schedule" onclick="showView('schedule')"><i class="ti ti-users"></i>Staff schedule</button>
-    <button class="nav-item" id="nav-checklists" onclick="showView('checklists')"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">504</span></button>
+    <button class="nav-item" id="nav-checklists" onclick="showView('checklists')"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">5</span></button>
     <button class="nav-item" id="nav-changes" onclick="showView('changes')"><i class="ti ti-refresh-alert"></i>Changes log<span class="nav-badge">2</span></button>
     <button class="nav-item" id="nav-invoices" onclick="showView('invoices')"><i class="ti ti-file-invoice"></i>Quotes / Invoices</button>
     <button class="nav-item" id="nav-reports" onclick="showView('reports')"><i class="ti ti-chart-bar"></i>Reports</button>
@@ -262,105 +264,15 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="nav-item" id="nav-venues" onclick="showView('venues')"><i class="ti ti-building"></i>Venues</button>
     <button class="nav-item" id="nav-email" onclick="showView('email')"><i class="ti ti-mail"></i>Email<span class="nav-badge" id="emailBadge" style="display:none">0</span></button>
     <div class="sidebar-label">Setup</div>
-    <button class="nav-item active" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
+    <button class="nav-item" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
   </div>
   <div class="main" style="padding:0;display:flex;flex-direction:column">
-  <div id="globalChangeBanner" style="background: var(--amber-bg); border-bottom: 0.5px solid var(--amber-border); padding: 0.6rem 1.25rem; display: flex; align-items: center; gap: 10px; cursor: pointer;" onclick="showView('changes')">
+  <div id="globalChangeBanner" style="display:none;background:var(--amber-bg);border-bottom:0.5px solid var(--amber-border);padding:.6rem 1.25rem;display:none;align-items:center;gap:10px;cursor:pointer" onclick="showView('changes')">
     <i class="ti ti-alert-triangle" style="font-size:15px;color:var(--amber-text);flex-shrink:0"></i>
-    <span id="globalChangeBannerText" style="font-size:13px;color:var(--amber-text);font-weight:500;flex:1">1 unacknowledged change order — 060726-11</span>
+    <span id="globalChangeBannerText" style="font-size:13px;color:var(--amber-text);font-weight:500;flex:1"></span>
     <span style="font-size:12px;color:var(--amber-text);text-decoration:underline">View changes →</span>
   </div>
-  <div id="mainArea" style="padding:1.25rem;flex:1;overflow-x:hidden;min-width:0">
-  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1rem">
-      <div>
-        <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:2px">Push update to GitHub</div>
-        <div style="font-size:12px;color:var(--text3)">Automatically updates the live site in ~60 seconds</div>
-      </div>
-      <button id="githubPushBtn" onclick="pushToGitHub()" style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:none;border-radius:var(--radius);background:#24292e;color:#fff;font-size:14px;font-weight:500;cursor:pointer" disabled=""><i class="ti ti-loader" style="font-size:14px"></i> Pushing...</button>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--green-text)"><i class="ti ti-circle-check"></i> Token saved — ready to push<button onclick="clearGitHubToken()" style="border:none;background:none;color:var(--text3);font-size:12px;cursor:pointer;text-decoration:underline;margin-left:8px">Clear token</button></div>
-  </div>
-
-  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
-    <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Gmail Integration</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Connect events@thepremiercaterer.com to send and receive emails in the app.</div>
-    <div>
-          <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Enter your Google OAuth Client ID:</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-            <input type="text" id="gmailClientIdInput" placeholder="xxxx.apps.googleusercontent.com" value="373121275436-tbblh043e6upd696o3ca2jto3ived2c9.apps.googleusercontent.com" style="flex:1;min-width:200px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px 12px;font-size:13px;color:var(--text);font-family:inherit">
-            <button onclick="localStorage.setItem('gmailClientId',document.getElementById('gmailClientIdInput').value.trim());showToast('Client ID saved ✓')" class="btn-save">Save</button>
-          </div>
-          <button onclick="gmailSignIn()" style="padding:9px 18px;border:none;border-radius:var(--radius);background:#4285f4;color:#fff;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:7px"><i class="ti ti-brand-google" style="font-size:15px"></i> Connect Gmail</button>
-          <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.6">To get a Client ID: <strong>console.cloud.google.com → New Project → APIs &amp; Services → Credentials → Create OAuth 2.0 Client ID → Web Application</strong>. Add <strong>https://premier-caterers.github.io</strong> as an authorized JavaScript origin.</div>
-        </div>
-  </div>
-
-  <div class="section-header"><div class="section-title">Google Sheets live sync</div></div>
-  
-  <div class="settings-card">
-    <h3>How to connect — 3 steps, ~10 minutes</h3>
-    <ul class="step-list">
-      <li>In your Google Sheet, click <strong>Extensions</strong> in the top menu, then <strong>Apps Script</strong></li>
-      <li>Delete any existing code in the editor, then paste the script below</li>
-      <li>Click <strong>Save</strong> (floppy disk icon), then click <strong>Deploy → New deployment</strong></li>
-      <li>Set type to <strong>Web app</strong>, set "Who has access" to <strong>Anyone</strong>, click Deploy</li>
-      <li>Copy the web app URL it gives you and paste it in the box below, then click Save</li>
-    </ul>
-  </div>
-  <div class="settings-card">
-    <h3>Apps Script to paste</h3>
-    <p>This goes inside your Google Sheet. It lets the platform read and write your event data.</p>
-    <div class="script-box" id="scriptBox">// Paste this in your Google Sheet:
-// Extensions → Apps Script → paste → Save → Deploy
-
-function doGet(e) {
-  const sheet = SpreadsheetApp.openById('1azVbq-bgpISGNX3I9c6UBLTDVv4SyRWzCA64ziUG67s')
-                  .getSheetByName('Front cover sheet');
-  const data = sheet.getDataRange().getValues();
-  const headers = data[2]; // Row 3 has headers
-  const rows = data.slice(3).filter(r =&gt; r[0] &amp;&amp; r[1]);
-  const events = rows.map(r =&gt; {
-    const obj = {};
-    headers.forEach((h, i) =&gt; { if(h) obj[h] = r[i]; });
-    return obj;
-  });
-  return ContentService
-    .createTextOutput(JSON.stringify({events}))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  const body = JSON.parse(e.postData.contents);
-  const sheet = SpreadsheetApp.openById('1azVbq-bgpISGNX3I9c6UBLTDVv4SyRWzCA64ziUG67s')
-                  .getSheetByName('Front cover sheet');
-  // Find row by Job # and update
-  const data = sheet.getDataRange().getValues();
-  for (let i = 3; i &lt; data.length; i++) {
-    if (data[i][0] === body.job) {
-      // Update notes column (adjust index to match your sheet)
-      sheet.getRange(i+1, 18).setValue(body.notes);
-      break;
-    }
-  }
-  return ContentService.createTextOutput('OK');
-}</div>
-    <button class="copy-btn" onclick="copyScript()"><i class="ti ti-copy" style="font-size:13px"></i> Copy script</button>
-  </div>
-  <div class="settings-card">
-    <h3>Paste your web app URL here</h3>
-    <p>After deploying the Apps Script, paste the URL it gives you below. This is what connects the platform to your live sheet data.</p>
-    <input id="scriptUrlInput" placeholder="https://script.google.com/macros/s/..." value="">
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn-save" onclick="saveScriptUrl()">Save &amp; connect</button>
-      
-    </div>
-  </div>
-  <div class="settings-card">
-    <h3>Your sheet ID</h3>
-    <p>Already in the script above: <code>1azVbq-bgpISGNX3I9c6UBLTDVv4SyRWzCA64ziUG67s</code><br>This matches the Google Sheet you shared with us.</p>
-  </div>
-  </div>
+  <div id="mainArea" style="padding:1.25rem;flex:1;overflow-x:hidden;min-width:0"></div>
 </div>
 </div>
 
@@ -374,7 +286,8 @@ function doPost(e) {
       </a>
     </div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Paste the Google Drive or Docs URL:</div>
-    <input type="text" id="attachInput" placeholder="https://docs.google.com/..." style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;margin-bottom:6px">
+    <input type="text" id="attachInput" placeholder="https://docs.google.com/..." 
+      style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;margin-bottom:6px">
     <div style="font-size:11px;color:var(--text3);margin-bottom:1rem">In Google Drive: right-click file → Share → Copy link → paste above</div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn-cancel" onclick="closeAttachModal()">Cancel</button>
@@ -405,9 +318,9 @@ function doPost(e) {
 
 
 
-<div class="saving-toast show" id="savingToast">
+<div class="saving-toast" id="savingToast">
   <i class="ti ti-cloud-upload" style="font-size:16px;color:var(--blue-mid)"></i>
-  <span id="toastMsg">Uploading to GitHub...</span>
+  <span id="toastMsg">Saving...</span>
 </div>
 
 <!-- Firebase Compat SDK -->
@@ -477,7 +390,12 @@ async function _saveEquipment(eid,eq){ try{ await db.collection('equipment').doc
 function startFirebaseListeners(){
   eventsCol.onSnapshot( snap=>{ const first=events.length===0; events=snap.docs.map(d=>d.data()); if(first||currentView==='events') render(); });
   changesCol.onSnapshot( snap=>{ changes=snap.docs.map(d=>d.data()).sort((a,b)=>(b.time||'').localeCompare(a.time||'')); if(currentView==='changes') render(); });
-  inquiriesCol.onSnapshot( snap=>{ inquiries=snap.docs.map(d=>d.data()); updatePipelineBadge(); if(currentView==='pipeline') render(); });
+  inquiriesCol.onSnapshot( snap=>{ 
+    inquiries=snap.docs.map(d=>d.data());
+    // Migrate old 'booked' stage to 'revise_menu'
+    inquiries.forEach(i=>{ if(i.stage==='booked'){ i.stage='revise_menu'; _saveInquiry(i); } });
+    updatePipelineBadge(); if(currentView==='pipeline') render(); 
+  });
   checklistCol.onSnapshot( snap=>{ checklists={}; snap.docs.forEach(d=>{ checklists[d.id]=d.data().items||[]; }); if(currentView==='checklists') render(); updateBadge(); });
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
   invoicesCol.onSnapshot( snap=>{ 
@@ -1035,9 +953,9 @@ let selectedInqId = null;
 function renderPipeline(){
   const role = roles[currentRole];
   const stages = [
-    {key:'new',       label:'New Inquiry',  icon:'ti-mail',          cls:'stage-new'},
-    {key:'menu_sent', label:'Menu Sent',    icon:'ti-file-text',     cls:'stage-menu_sent'},
-    {key:'booked',    label:'Booked',       icon:'ti-circle-check',  cls:'stage-booked'},
+    {key:'new',          label:'New Inquiry',         icon:'ti-mail',       cls:'stage-new'},
+    {key:'menu_sent',    label:'Menu Sent',            icon:'ti-file-text',  cls:'stage-menu_sent'},
+    {key:'revise_menu',  label:'Need to Revise Menu',  icon:'ti-edit',       cls:'stage-booked'},
   ];
 
   let h = `
@@ -1066,9 +984,10 @@ function renderPipeline(){
           ${inq.email ? `<span><i class="ti ti-mail" style="font-size:11px"></i>${inq.email}</span>` : ''}
         </div>
         ${role.canEdit ? `<div class="inq-actions">
-          ${s.key!=='menu_sent'&&s.key!=='booked' ? `<button class="stage-btn stage-menu_sent" onclick="event.stopPropagation();moveInquiry('${inq.id}','menu_sent')">Mark menu sent</button>` : ''}
-          ${s.key!=='booked' ? `<button class="stage-btn stage-booked" onclick="event.stopPropagation();moveInquiry('${inq.id}','booked')">Book event</button>` : ''}
-          ${s.key==='booked' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">→ Move to This Week</button>` : ''}
+          ${s.key==='new' ? `<button class="stage-btn stage-menu_sent" onclick="event.stopPropagation();moveInquiry('${inq.id}','menu_sent')">Mark menu sent</button>` : ''}
+          ${s.key==='menu_sent' ? `<button class="stage-btn stage-booked" onclick="event.stopPropagation();moveInquiry('${inq.id}','revise_menu')">Needs revision</button>` : ''}
+          ${s.key==='menu_sent'||s.key==='revise_menu' ? `<button class="stage-btn" style="background:var(--green-bg);color:var(--green-text);border:0.5px solid var(--green-text)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">✓ Book it</button>` : ''}
+          ${s.key==='revise_menu' ? `<button class="stage-btn stage-menu_sent" onclick="event.stopPropagation();moveInquiry('${inq.id}','menu_sent')">Menu revised</button>` : ''}
           <button onclick="event.stopPropagation();deleteInquiry('${inq.id}')" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px;margin-left:auto"><i class="ti ti-trash"></i></button>
         </div>` : ''}
       </div>`).join('')}
@@ -1085,7 +1004,7 @@ function renderPipeline(){
 
 function renderInqDetail(inq, role){
   const rows = (label,val) => val ? `<div class="drow"><span class="dkey">${label}</span><span class="dval">${val}</span></div>` : '';
-  const stageName = {new:'New Inquiry', menu_sent:'Menu Sent', booked:'Booked'}[inq.stage]||inq.stage;
+  const stageName = {new:'New Inquiry', menu_sent:'Menu Sent', revise_menu:'Need to Revise Menu', booked:'Booked'}[inq.stage]||inq.stage;
   return `<div class="inq-detail">
     <div class="detail-header">
       <div class="detail-title">${inq.firstName} ${inq.lastName}${inq.eventName?' — '+inq.eventName:''}</div>
@@ -1161,18 +1080,38 @@ function deleteInquiry(id){
 function promoteToEvent(id){
   const inq = inquiries.find(x=>x.id===id);
   if(!inq) return;
-  // Map inquiry to event format
+
+  // Calculate weekOf (Sunday of the event's week) from eventDate
+  function getWeekSunday(dateStr){
+    if(!dateStr) return getWeekEndDate(currentWeekOffset).toISOString().split('T')[0];
+    const d = new Date(dateStr+'T12:00:00');
+    const day = d.getDay(); // 0=Sun,1=Mon...6=Sat
+    const diff = day === 0 ? 0 : (7 - day); // days until next Sunday
+    const sun = new Date(d);
+    sun.setDate(d.getDate() + diff);
+    return sun.toISOString().split('T')[0];
+  }
+
+  const weekOf = getWeekSunday(inq.eventDate);
+
+  // Map inquiry event type to internal type
   const typeMap2 = {
-    'Wedding':'dinner','Aufruf':'dinner','Bar mitzvah party - not shabbos':'barmitzvah',
+    'Wedding':'dinner','Aufruf':'dinner','Bar Mitzvah':'barmitzvah',
+    'Bat Mitzvah':'barmitzvah','Bar mitzvah party - not shabbos':'barmitzvah',
     'Bas mitzvah party - not shabbos':'barmitzvah','Bar mitzvah over shabbos':'barmitzvah',
     'Engagement party':'engagement','Kiddush':'shalosh','Bris':'shalosh',
+    'Sheva Brachos':'shalosh','Vort':'engagement',
     'Drop off catering':'dropoff','Shabbos shevah brachos':'shalosh',
-    'Shabbos meals':'shalosh','Corporate event':'dinner','Organization event':'dinner','Other':'dinner'
+    'Shabbos meals':'shalosh','Corporate':'dinner','Corporate event':'dinner',
+    'Organization event':'dinner','Birthday':'dinner','Other':'dinner'
   };
+
+  const weekNum = nextJobNumber(weekOf);
   const newEvent = {
     id: 'inq_'+inq.id,
-    job: '#'+( events.length + inquiries.length ),
-    name: inq.lastName || inq.firstName,
+    job: makeJobId(weekOf, weekNum),
+    weekOf: weekOf,
+    name: (inq.lastName||inq.firstName||'New Event'),
     addr: inq.venueLocation||'',
     type: typeMap2[inq.eventType]||'dinner',
     typeLabel: inq.eventType||'Event',
@@ -1183,12 +1122,20 @@ function promoteToEvent(id){
     porters:0, porterNames:'', porterTime:'', porterTime2:'',
     manager:'-', mashgiach:'-', mashgiachNames:'',
     menuLink:'', groceryLink:'', floorplan:'', venueLink:'', pdfMenuLink:'', logoData:'',
-    notes: inq.eventName||''
+    notes: inq.comments||inq.eventName||''
   };
+
   events.push(newEvent);
-  inq.stage='booked';
+
+  // Remove from inquiries pipeline entirely
+  inquiries = inquiries.filter(x=>x.id!==id);
+  db.collection('inquiries').doc(id).delete();
+
   save();
-  alert(`${inq.firstName} ${inq.lastName} has been added to This Week events as ${newEvent.job}.`);
+  updatePipelineBadge();
+
+  const weekLabel = new Date(weekOf+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  alert(`${inq.firstName} ${inq.lastName} has been added to events for the week of ${weekLabel}.`);
   showView('events');
 }
 
@@ -4761,6 +4708,5 @@ function initNow(){
 initNow();
 if(window.location.hash.includes("access_token")) handleGmailCallback();
 </script>
-
-
-</body></html>
+</body>
+</html>
