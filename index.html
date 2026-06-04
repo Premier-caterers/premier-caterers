@@ -3876,16 +3876,30 @@ function isGmailConnected(){ return !!gmailToken; }
 async function gmailSignIn(){
   const clientId = localStorage.getItem('gmailClientId');
   if(!clientId){ alert('Please enter your Google OAuth Client ID in Settings first.'); showView('settings'); return; }
-  const params = new URLSearchParams({
+  // Use Google Identity Services token client (no redirect URI needed)
+  if(!window.google?.accounts?.oauth2){
+    // Load the GIS library first
+    await new Promise((resolve, reject)=>{
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  const client = window.google.accounts.oauth2.initTokenClient({
     client_id: clientId,
-    redirect_uri: window.location.origin + window.location.pathname,
-    response_type: 'token',
     scope: GMAIL_SCOPES,
-    prompt: 'select_account',
-    login_hint: 'events@thepremiercaterer.com'
+    hint: 'events@thepremiercaterer.com',
+    callback: async (resp)=>{
+      if(resp.error){ alert('Gmail sign-in error: '+resp.error); return; }
+      gmailToken = resp.access_token;
+      await fetchGmailProfile();
+      showToast('Gmail connected ✓');
+      render();
+    }
   });
-  window._gmailAuthPending = true;
-  window.open('https://accounts.google.com/o/oauth2/v2/auth?' + params.toString(), '_blank', 'width=500,height=600');
+  client.requestAccessToken();
 }
 
 function handleGmailCallback(){
