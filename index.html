@@ -207,6 +207,7 @@ a{color:var(--blue-mid);text-decoration:none}
 .stage-new{background:var(--amber-bg);color:var(--amber-text)}
 .stage-menu_sent{background:var(--blue-bg);color:var(--blue-text)}
 .stage-booked{background:var(--green-bg);color:var(--green-text)}
+tr.drag-over td{background:var(--blue-bg);}
 .inq-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
 .inq-detail{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-top:1rem}
 @media(max-width:700px){.pipeline-cols{grid-template-columns:1fr}}
@@ -401,13 +402,14 @@ function startFirebaseListeners(){
   invoicesCol.onSnapshot( snap=>{ 
     invoices={}; 
     snap.docs.forEach(d=>{ invoices[d.id]=d.data(); });
-    // Migrate any old invoices that don't have payments array yet
+    // Migrate any old invoices that don't have payments array yet, or have empty array with a deposit
     snap.docs.forEach(d=>{
       const inv = invoices[d.id];
-      if(inv && !inv.payments){
+      const oldDeposit = parseFloat(inv?.deposit||0);
+      if(inv && (!inv.payments || (inv.payments.length===0 && oldDeposit>0))){
         migrateInvoicePayments(inv);
         if(inv.payments && inv.payments.length > 0){
-          _saveInvoice(d.id, inv); // save migrated data back to Firebase
+          _saveInvoice(d.id, inv);
         }
       }
     });
@@ -2457,6 +2459,7 @@ function renderInvoiceDetail(){
   </div>`;
 
   el.scrollIntoView({behavior:'smooth',block:'nearest'});
+  setTimeout(()=>initInvoiceDrag(eid), 50);
 }
 
 function updateInvoiceLine(eid,idx,field,val){
@@ -2487,6 +2490,48 @@ function moveInvoiceLine(eid, idx, dir){
   lines[idx] = lines[newIdx];
   lines[newIdx] = tmp;
   renderInvoiceDetail();
+}
+
+function initInvoiceDrag(eid){
+  const tbody = document.querySelector('#invoiceDetail tbody');
+  if(!tbody) return;
+  let draggingRow = null;
+
+  tbody.querySelectorAll('tr').forEach((row, i)=>{
+    row.setAttribute('draggable','true');
+    row.style.cursor = 'grab';
+    row.dataset.idx = i;
+
+    row.addEventListener('dragstart', e=>{
+      draggingRow = row;
+      row.style.opacity = '0.4';
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', ()=>{
+      row.style.opacity = '';
+      tbody.querySelectorAll('tr').forEach(r=>r.classList.remove('drag-over'));
+      draggingRow = null;
+    });
+    row.addEventListener('dragover', e=>{
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if(draggingRow && row !== draggingRow){
+        tbody.querySelectorAll('tr').forEach(r=>r.classList.remove('drag-over'));
+        row.classList.add('drag-over');
+      }
+    });
+    row.addEventListener('drop', e=>{
+      e.preventDefault();
+      if(!draggingRow || draggingRow === row) return;
+      const fromIdx = parseInt(draggingRow.dataset.idx);
+      const toIdx   = parseInt(row.dataset.idx);
+      if(isNaN(fromIdx)||isNaN(toIdx)) return;
+      const lines = invoices[eid].lines;
+      const moved = lines.splice(fromIdx, 1)[0];
+      lines.splice(toIdx, 0, moved);
+      renderInvoiceDetail();
+    });
+  });
 }
 
 function removeInvoiceLine(eid, idx){
@@ -2647,7 +2692,6 @@ async function approveQuote(eid){
   invoices[eid].status = 'approved';
   await _saveInvoice(eid, invoices[eid]);
   renderInvoiceDetail();
-  render();
 }
 
 async function convertToInvoice(eid){
@@ -2656,7 +2700,6 @@ async function convertToInvoice(eid){
   invoices[eid].invoiceDate = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   await _saveInvoice(eid, invoices[eid]);
   renderInvoiceDetail();
-  render();
 }
 
 function openPaymentModal(eid){
@@ -2749,7 +2792,6 @@ async function confirmPayment(eid){
   await _saveInvoice(eid, invoices[eid]);
   document.getElementById('paymentModal')?.remove();
   renderInvoiceDetail();
-  render();
 }
 
 function buildPaymentsHTML(inv, eid, canEdit){
@@ -2772,10 +2814,10 @@ function buildPaymentsHTML(inv, eid, canEdit){
 
 function migrateInvoicePayments(inv){
   if(!inv) return;
-  if(!inv.payments){
+  const oldDeposit = parseFloat(inv.deposit||0);
+  // Migrate if: no payments array, OR payments array is empty but there's a deposit
+  if(!inv.payments || (inv.payments.length === 0 && oldDeposit > 0)){
     inv.payments = [];
-    // If there's an old deposit with legacy payment info, convert it to a payment record
-    const oldDeposit = parseFloat(inv.deposit||0);
     if(oldDeposit > 0){
       inv.payments.push({
         id: 'legacy_' + Date.now(),
