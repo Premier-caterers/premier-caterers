@@ -1573,16 +1573,22 @@ function toggleChangeLogFlag(eid, idx, val){
 function openAddTaskModal(eid){
   document.getElementById('addTaskModal')?.remove();
   const m = document.createElement('div');
-  m.id='addTaskModal';
+  m.id='addTaskModal'; m.dataset.eid=eid;
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
   m.innerHTML='<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:440px;box-shadow:0 8px 40px rgba(0,0,0,.2)">'
     +'<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Add task</div>'
     +'<div class="modal-row"><label>Task description</label><input type="text" id="new-task-text" placeholder="e.g. Confirm linen order..."></div>'
     +'<div style="display:flex;align-items:center;gap:8px;margin-top:.75rem"><input type="checkbox" id="new-task-future" style="width:15px;height:15px;accent-color:var(--blue-mid)"><label for="new-task-future" style="font-size:13px;color:var(--text2);cursor:pointer">Also add to future checklists by default</label></div>'
-    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem"><button class="btn-cancel" onclick="document.getElementById('addTaskModal').remove()">Cancel</button><button class="btn-save" onclick="saveNewTask(''+eid+'')">Add task</button></div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem"><button class="btn-cancel" onclick="closeAddTaskModal()">Cancel</button><button class="btn-save" onclick="closeAndSaveTask(this)">Add task</button></div>'
     +'</div>';
   document.body.appendChild(m);
   setTimeout(()=>document.getElementById('new-task-text')?.focus(),50);
+}
+
+function closeAddTaskModal(){ document.getElementById('addTaskModal')?.remove(); }
+function closeAndSaveTask(btn){ 
+  const eid = document.getElementById('addTaskModal')?.dataset?.eid;
+  if(eid) saveNewTask(eid);
 }
 
 function saveNewTask(eid){
@@ -3862,6 +3868,8 @@ window.setCustomDue = setCustomDue;
 window.toggleChangeLogFlag = toggleChangeLogFlag;
 window.openAddTaskModal = openAddTaskModal;
 window.saveNewTask = saveNewTask;
+window.closeAddTaskModal = closeAddTaskModal;
+window.closeAndSaveTask = closeAndSaveTask;
 window.printChecklist = printChecklist;
 window.toggleClCollapse = toggleClCollapse;
 window.expandAllChecklists = expandAllChecklists;
@@ -3877,6 +3885,8 @@ window.setCustomDue = setCustomDue;
 window.toggleChangeLogFlag = toggleChangeLogFlag;
 window.openAddTaskModal = openAddTaskModal;
 window.saveNewTask = saveNewTask;
+window.closeAddTaskModal = closeAddTaskModal;
+window.closeAndSaveTask = closeAndSaveTask;
 window.downloadChecklist = downloadChecklist;
 window.addCheckItem = addCheckItem;
 window.saveCheckItem = saveCheckItem;
