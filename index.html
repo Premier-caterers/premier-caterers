@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<!-- saved from url=(0045)file:///C:/Users/premi/Downloads/index_2.html -->
-<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-
+<html lang="en">
+<head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
-<link rel="stylesheet" href="./index_files/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <style>
 
 *{box-sizing:border-box;margin:0;padding:0}
@@ -236,423 +236,43 @@ a{color:var(--blue-mid);text-decoration:none}
   </div>
   <div class="topbar-spacer"></div>
   <div class="role-switcher" id="roleSwitcher">
-    <button class="role-btn active" onclick="setRole(&#39;admin&#39;,this)">Admin</button>
-    <button class="role-btn" onclick="setRole(&#39;shelley&#39;,this)">Shelley</button>
-    <button class="role-btn" onclick="setRole(&#39;kenny&#39;,this)">Kenny</button>
-    <button class="role-btn" onclick="setRole(&#39;josh&#39;,this)">Josh</button>
-    <button class="role-btn" onclick="setRole(&#39;kitchen&#39;,this)">Kitchen</button>
+    <button class="role-btn active" onclick="setRole('admin',this)">Admin</button>
+    <button class="role-btn" onclick="setRole('shelley',this)">Shelley</button>
+    <button class="role-btn" onclick="setRole('kenny',this)">Kenny</button>
+    <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
+    <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
   <span id="buildTimestamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 04, 2026 09:00 PM ET</span>
-  <button class="sync-btn connected" id="syncBtn" onclick="showView(&#39;settings&#39;)">
+  <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
-    <span id="syncLabel">Live ✓</span>
+    <span id="syncLabel">Connect Sheets</span>
   </button>
 </div>
 
 <div class="layout">
   <div class="sidebar">
     <div class="sidebar-label">Views</div>
-    <button class="nav-item" id="nav-pipeline" onclick="showView(&#39;pipeline&#39;)"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
-    <button class="nav-item active" id="nav-events" onclick="showView(&#39;events&#39;)"><i class="ti ti-calendar"></i>This week</button>
-    <button class="nav-item" id="nav-schedule" onclick="showView(&#39;schedule&#39;)"><i class="ti ti-users"></i>Staff schedule</button>
-    <button class="nav-item" id="nav-checklists" onclick="showView(&#39;checklists&#39;)"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">504</span></button>
-    <button class="nav-item" id="nav-changes" onclick="showView(&#39;changes&#39;)"><i class="ti ti-refresh-alert"></i>Changes log<span class="nav-badge">2</span></button>
-    <button class="nav-item" id="nav-invoices" onclick="showView(&#39;invoices&#39;)"><i class="ti ti-file-invoice"></i>Quotes / Invoices</button>
-    <button class="nav-item" id="nav-reports" onclick="showView(&#39;reports&#39;)"><i class="ti ti-chart-bar"></i>Reports</button>
-    <button class="nav-item" id="nav-grocery" onclick="showView(&#39;grocery&#39;)"><i class="ti ti-shopping-cart"></i>Grocery</button>
-    <button class="nav-item" id="nav-equipment" onclick="showView(&#39;equipment&#39;)"><i class="ti ti-tool"></i>Equipment</button>
-    <button class="nav-item" id="nav-venues" onclick="showView(&#39;venues&#39;)"><i class="ti ti-building"></i>Venues</button>
-    <button class="nav-item" id="nav-email" onclick="showView(&#39;email&#39;)"><i class="ti ti-mail"></i>Email<span class="nav-badge" id="emailBadge" style="display:none">0</span></button>
+    <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
+    <button class="nav-item active" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
+    <button class="nav-item" id="nav-schedule" onclick="showView('schedule')"><i class="ti ti-users"></i>Staff schedule</button>
+    <button class="nav-item" id="nav-checklists" onclick="showView('checklists')"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">5</span></button>
+    <button class="nav-item" id="nav-changes" onclick="showView('changes')"><i class="ti ti-refresh-alert"></i>Changes log<span class="nav-badge">2</span></button>
+    <button class="nav-item" id="nav-invoices" onclick="showView('invoices')"><i class="ti ti-file-invoice"></i>Quotes / Invoices</button>
+    <button class="nav-item" id="nav-reports" onclick="showView('reports')"><i class="ti ti-chart-bar"></i>Reports</button>
+    <button class="nav-item" id="nav-grocery" onclick="showView('grocery')"><i class="ti ti-shopping-cart"></i>Grocery</button>
+    <button class="nav-item" id="nav-equipment" onclick="showView('equipment')"><i class="ti ti-tool"></i>Equipment</button>
+    <button class="nav-item" id="nav-venues" onclick="showView('venues')"><i class="ti ti-building"></i>Venues</button>
+    <button class="nav-item" id="nav-email" onclick="showView('email')"><i class="ti ti-mail"></i>Email<span class="nav-badge" id="emailBadge" style="display:none">0</span></button>
     <div class="sidebar-label">Setup</div>
-    <button class="nav-item" id="nav-settings" onclick="showView(&#39;settings&#39;)"><i class="ti ti-settings"></i>Google Sheets</button>
+    <button class="nav-item" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
   </div>
   <div class="main" style="padding:0;display:flex;flex-direction:column">
-  <div id="globalChangeBanner" style="background: var(--amber-bg); border-bottom: 0.5px solid var(--amber-border); padding: 0.6rem 1.25rem; display: flex; align-items: center; gap: 10px; cursor: pointer;" onclick="showView(&#39;changes&#39;)">
+  <div id="globalChangeBanner" style="display:none;background:var(--amber-bg);border-bottom:0.5px solid var(--amber-border);padding:.6rem 1.25rem;display:none;align-items:center;gap:10px;cursor:pointer" onclick="showView('changes')">
     <i class="ti ti-alert-triangle" style="font-size:15px;color:var(--amber-text);flex-shrink:0"></i>
-    <span id="globalChangeBannerText" style="font-size:13px;color:var(--amber-text);font-weight:500;flex:1">2 unacknowledged change orders — #2a, #2b</span>
+    <span id="globalChangeBannerText" style="font-size:13px;color:var(--amber-text);font-weight:500;flex:1"></span>
     <span style="font-size:12px;color:var(--amber-text);text-decoration:underline">View changes →</span>
   </div>
-  <div id="mainArea" style="padding:1.25rem;flex:1;overflow-x:hidden;min-width:0">
-  <div class="banner amber" style="margin-bottom:1rem"><i class="ti ti-alert-triangle" style="font-size:16px;color:var(--amber-text);flex-shrink:0;margin-top:1px"></i><div style="font-size:13px;color:var(--amber-text)"><strong>2 unacknowledged change orders — see Changes log</strong></div></div>
-    <div class="stat-card"><div class="stat-n">15</div><div class="stat-l">events</div></div>
-    <div class="stat-card"><div class="stat-n">4</div><div class="stat-l">catered</div></div>
-    <div class="stat-card"><div class="stat-n">36</div><div class="stat-l">waiters</div></div>
-    <div class="stat-card"><div class="stat-n">5</div><div class="stat-l">chefs</div></div>
-    <div class="stat-card"><div class="stat-n">8</div><div class="stat-l">porters</div></div>
-  
-  <div class="section-header">
-    <div class="section-title">Events — W/E Jun 7, 26</div>
-    <div style="display:flex;gap:6px;align-items:center">
-      <button onclick="eventsViewMode=eventsViewMode===&#39;card&#39;?&#39;list&#39;:&#39;card&#39;;render()" style="padding:5px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px">
-        <i class="ti ti-list" style="font-size:13px"></i>
-        List view
-      </button>
-      <button class="add-btn" onclick="openModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add event</button>
-    </div>
-  </div>
-  <div class="filter-bar">
-    <button class="filter-btn active" onclick="setDay(&#39;all&#39;)">All</button><button class="filter-btn " onclick="setDay(&#39;monday&#39;)">Monday</button><button class="filter-btn " onclick="setDay(&#39;tuesday&#39;)">Tuesday</button><button class="filter-btn " onclick="setDay(&#39;wednesday&#39;)">Wednesday</button><button class="filter-btn " onclick="setDay(&#39;thursday&#39;)">Thursday</button><button class="filter-btn " onclick="setDay(&#39;friday&#39;)">Friday</button><button class="filter-btn " onclick="setDay(&#39;saturday&#39;)">Saturday</button><button class="filter-btn " onclick="setDay(&#39;sunday&#39;)">Sunday</button>
-  </div><div class="day-label">Mon 6/1</div><div class="event-grid"><div class="event-card " onclick="selectEvent(&#39;9&#39;)">
-        <div class="card-top">
-          <span class="job-pill">#9</span>
-          <span class="type-badge t-dropoff">Drop off</span>
-          
-        </div>
-        <div class="client-name">Na'aleh</div>
-        
-        
-        
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Equipment</span>
-          <button onclick="quickPasteMenu(&#39;9&#39;,event)" style="border:none;background:none;padding:0;cursor:pointer"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Menu</span></button>
-          
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Grocery</span>
-          
-          <a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Venue</span></a>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist(&#39;9&#39;)" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          
-          <button onclick="showView(&#39;invoices&#39;);setTimeout(()=&gt;openInvoice(&#39;9&#39;),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2)"><i class="ti ti-file-invoice" style="font-size:12px"></i>No invoice</button>
-          <button onclick="deleteEvent(&#39;9&#39;)" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
-        </div>
-      </div></div><div class="day-label">Tue</div><div class="event-grid"><div class="event-card " onclick="selectEvent(&#39;1780486933406&#39;)">
-        <div class="card-top">
-          <span class="job-pill">#1</span>
-          <span class="type-badge t-dropoff">Drop off</span>
-          
-        </div>
-        <div class="client-name">Frisch school</div>
-        <div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>120 W. Century Rd, Paramus NJ</div>
-        <div class="staff-chips"><span class="staff-chip"><i class="ti ti-users"></i>5 waiters</span></div>
-        
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Equipment</span>
-          <button onclick="quickPasteMenu(&#39;1780486933406&#39;,event)" style="border:none;background:none;padding:0;cursor:pointer"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Menu</span></button>
-          
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Grocery</span>
-          
-          <a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Venue</span></a>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist(&#39;1780486933406&#39;)" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          
-          <button onclick="showView(&#39;invoices&#39;);setTimeout(()=&gt;openInvoice(&#39;1780486933406&#39;),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2)"><i class="ti ti-file-invoice" style="font-size:12px"></i>No invoice</button>
-          <button onclick="deleteEvent(&#39;1780486933406&#39;)" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
-        </div>
-      </div><div class="event-card " onclick="selectEvent(&#39;1780501183403&#39;)">
-        <div class="card-top">
-          <span class="job-pill">#4</span>
-          <span class="type-badge t-dropoff">Drop off</span>
-          
-        </div>
-        <div class="client-name">Ahavas Torah</div>
-        <div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>Englewood, NJ</div>
-        
-        
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Equipment</span>
-          <button onclick="quickPasteMenu(&#39;1780501183403&#39;,event)" style="border:none;background:none;padding:0;cursor:pointer"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Menu</span></button>
-          
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Grocery</span>
-          
-          <a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Venue</span></a>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist(&#39;1780501183403&#39;)" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          
-          <button onclick="showView(&#39;invoices&#39;);setTimeout(()=&gt;openInvoice(&#39;1780501183403&#39;),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2)"><i class="ti ti-file-invoice" style="font-size:12px"></i>No invoice</button>
-          <button onclick="deleteEvent(&#39;1780501183403&#39;)" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
-        </div>
-      </div></div><div class="day-label">Wed</div><div class="event-grid"><div class="event-card " onclick="selectEvent(&#39;1780487280993&#39;)">
-        <div class="card-top">
-          <span class="job-pill">#10</span>
-          <span class="type-badge t-dropoff">Drop off</span>
-          
-        </div>
-        <div class="client-name">Bnai Shalom, West Orange - Mens Club</div>
-        <div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>300 Pleasant Valley Way, West Orange NJ</div>
-        
-        
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Equipment</span>
-          <button onclick="quickPasteMenu(&#39;1780487280993&#39;,event)" style="border:none;background:none;padding:0;cursor:pointer"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Menu</span></button>
-          
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Grocery</span>
-          
-          <a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Venue</span></a>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist(&#39;1780487280993&#39;)" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          
-          <button onclick="showView(&#39;invoices&#39;);setTimeout(()=&gt;openInvoice(&#39;1780487280993&#39;),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2)"><i class="ti ti-file-invoice" style="font-size:12px"></i>No invoice</button>
-          <button onclick="deleteEvent(&#39;1780487280993&#39;)" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
-        </div>
-      </div></div><div class="day-label">Thu</div><div class="event-grid"><div class="event-card " onclick="selectEvent(&#39;1780487172991&#39;)">
-        <div class="card-top">
-          <span class="job-pill">#5</span>
-          <span class="type-badge t-barmitzvah">Bar / Bat Mitzvah</span>
-          
-        </div>
-        <div class="client-name">Swinkin</div>
-        <div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>11 Harold St, Tenafly NJ</div>
-        <div class="staff-chips"><span class="staff-chip"><i class="ti ti-chef-hat"></i>1 chef</span><span class="staff-chip"><i class="ti ti-users"></i>5 waiters</span><span class="staff-chip"><i class="ti ti-package"></i>2 porters</span><span class="staff-chip"><i class="ti ti-user-check"></i>Shelley</span></div>
-        
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Equipment</span>
-          <a href="https://docs.google.com/document/d/1JA_HITABLdge8R5DVKswdLj4KeqEDmmCm4a_ycfyfSg/edit?tab=t.0" target="_blank" onclick="event.stopPropagation()" style="text-decoration:none"></a><a href="https://docs.google.com/document/d/1JA_HITABLdge8R5DVKswdLj4KeqEDmmCm4a_ycfyfSg/edit?tab=t.0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--green-bg);color:var(--green-text)"><i class="ti ti-circle-check" style="font-size:11px"></i>Menu</span></a>
-          <button onclick="event.stopPropagation();createPdfVersion(&#39;1780487172991&#39;)" style="border:none;background:none;padding:0;cursor:pointer" title="Generate PDF"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>PDF menu</span></button>
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Grocery</span>
-          
-          <a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Venue</span></a>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist(&#39;1780487172991&#39;)" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          
-          <button onclick="showView(&#39;invoices&#39;);setTimeout(()=&gt;openInvoice(&#39;1780487172991&#39;),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2)"><i class="ti ti-file-invoice" style="font-size:12px"></i>No invoice</button>
-          <button onclick="deleteEvent(&#39;1780487172991&#39;)" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
-        </div>
-      </div></div><div class="day-label">Fri</div><div class="event-grid"><div class="event-card " onclick="selectEvent(&#39;1780487028561&#39;)">
-        <div class="card-top">
-          <span class="job-pill">#2</span>
-          <span class="type-badge t-dropoff">Drop off</span>
-          
-        </div>
-        <div class="client-name">Schneck</div>
-        <div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>634 Standish Road, Teaneck</div>
-        <div class="staff-chips"><span class="staff-chip"><i class="ti ti-users"></i>3 waiters</span></div>
-        
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Equipment</span>
-          <button onclick="quickPasteMenu(&#39;1780487028561&#39;,event)" style="border:none;background:none;padding:0;cursor:pointer"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Menu</span></button>
-          
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Grocery</span>
-          
-          <a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Venue</span></a>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist(&#39;1780487028561&#39;)" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          
-          <button onclick="showView(&#39;invoices&#39;);setTimeout(()=&gt;openInvoice(&#39;1780487028561&#39;),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2)"><i class="ti ti-file-invoice" style="font-size:12px"></i>No invoice</button>
-          <button onclick="deleteEvent(&#39;1780487028561&#39;)" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
-        </div>
-      </div><div class="event-card " onclick="selectEvent(&#39;1780487112440&#39;)">
-        <div class="card-top">
-          <span class="job-pill">#6ab</span>
-          <span class="type-badge t-barmitzvah">Bar / Bat Mitzvah</span>
-          
-        </div>
-        <div class="client-name">Friedman</div>
-        <div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>641 W. Englewood Ave, Teaneck NJ</div>
-        <div class="staff-chips"><span class="staff-chip"><i class="ti ti-chef-hat"></i>2 chefs</span><span class="staff-chip"><i class="ti ti-users"></i>5 waiters</span><span class="staff-chip"><i class="ti ti-package"></i>2 porters</span><span class="staff-chip"><i class="ti ti-user-check"></i>Kenny</span></div>
-        
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Equipment</span>
-          <button onclick="quickPasteMenu(&#39;1780487112440&#39;,event)" style="border:none;background:none;padding:0;cursor:pointer"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Menu</span></button>
-          
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Grocery</span>
-          
-          <a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Venue</span></a>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist(&#39;1780487112440&#39;)" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          
-          <button onclick="showView(&#39;invoices&#39;);setTimeout(()=&gt;openInvoice(&#39;1780487112440&#39;),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2)"><i class="ti ti-file-invoice" style="font-size:12px"></i>No invoice</button>
-          <button onclick="deleteEvent(&#39;1780487112440&#39;)" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
-        </div>
-      </div><div class="event-card " onclick="selectEvent(&#39;1780487138439&#39;)">
-        <div class="card-top">
-          <span class="job-pill">#6c</span>
-          <span class="type-badge t-dropoff">Drop off</span>
-          
-        </div>
-        <div class="client-name">Bnai Yeshuran</div>
-        <div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>641 W. Englewood Ave, Teaneck NJ</div>
-        
-        
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Equipment</span>
-          <button onclick="quickPasteMenu(&#39;1780487138439&#39;,event)" style="border:none;background:none;padding:0;cursor:pointer"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Menu</span></button>
-          
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Grocery</span>
-          
-          <a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Venue</span></a>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist(&#39;1780487138439&#39;)" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          
-          <button onclick="showView(&#39;invoices&#39;);setTimeout(()=&gt;openInvoice(&#39;1780487138439&#39;),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2)"><i class="ti ti-file-invoice" style="font-size:12px"></i>No invoice</button>
-          <button onclick="deleteEvent(&#39;1780487138439&#39;)" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
-        </div>
-      </div><div class="event-card " onclick="selectEvent(&#39;1780487263522&#39;)">
-        <div class="card-top">
-          <span class="job-pill">#9</span>
-          <span class="type-badge t-dropoff">Drop off</span>
-          
-        </div>
-        <div class="client-name">Bnai Shalom, West Orange</div>
-        <div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>300 Pleasant Valley Way, West Orange NJ</div>
-        
-        
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Equipment</span>
-          <button onclick="quickPasteMenu(&#39;1780487263522&#39;,event)" style="border:none;background:none;padding:0;cursor:pointer"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Menu</span></button>
-          
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Grocery</span>
-          
-          <a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Venue</span></a>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist(&#39;1780487263522&#39;)" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          
-          <button onclick="showView(&#39;invoices&#39;);setTimeout(()=&gt;openInvoice(&#39;1780487263522&#39;),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2)"><i class="ti ti-file-invoice" style="font-size:12px"></i>No invoice</button>
-          <button onclick="deleteEvent(&#39;1780487263522&#39;)" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
-        </div>
-      </div><div class="event-card " onclick="selectEvent(&#39;1780501209299&#39;)">
-        <div class="card-top">
-          <span class="job-pill">#6d</span>
-          <span class="type-badge t-dropoff">Drop off</span>
-          
-        </div>
-        <div class="client-name">Bnai Yeshuran</div>
-        <div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>641 W. Englewood Ave, Teaneck NJ</div>
-        
-        
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Equipment</span>
-          <button onclick="quickPasteMenu(&#39;1780501209299&#39;,event)" style="border:none;background:none;padding:0;cursor:pointer"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Menu</span></button>
-          
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Grocery</span>
-          
-          <a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Venue</span></a>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist(&#39;1780501209299&#39;)" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          
-          <button onclick="showView(&#39;invoices&#39;);setTimeout(()=&gt;openInvoice(&#39;1780501209299&#39;),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2)"><i class="ti ti-file-invoice" style="font-size:12px"></i>No invoice</button>
-          <button onclick="deleteEvent(&#39;1780501209299&#39;)" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
-        </div>
-      </div><div class="event-card " onclick="selectEvent(&#39;1780501279608&#39;)">
-        <div class="card-top">
-          <span class="job-pill">#11</span>
-          <span class="type-badge t-dropoff">Drop off</span>
-          
-        </div>
-        <div class="client-name">Ahavas Torah</div>
-        <div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>Englewood, NJ</div>
-        
-        
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Equipment</span>
-          <a href="https://docs.google.com/document/d/1AAYGrpW-syGzKQtQJHxRYQqz9FLRJhp4kIczcBwhMBk/edit?tab=t.0" target="_blank" onclick="event.stopPropagation()" style="text-decoration:none"></a><a href="https://docs.google.com/document/d/1AAYGrpW-syGzKQtQJHxRYQqz9FLRJhp4kIczcBwhMBk/edit?tab=t.0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--green-bg);color:var(--green-text)"><i class="ti ti-circle-check" style="font-size:11px"></i>Menu</span></a>
-          <button onclick="event.stopPropagation();createPdfVersion(&#39;1780501279608&#39;)" style="border:none;background:none;padding:0;cursor:pointer" title="Generate PDF"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>PDF menu</span></button>
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Grocery</span>
-          
-          <a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Venue</span></a>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist(&#39;1780501279608&#39;)" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          
-          <button onclick="showView(&#39;invoices&#39;);setTimeout(()=&gt;openInvoice(&#39;1780501279608&#39;),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2)"><i class="ti ti-file-invoice" style="font-size:12px"></i>No invoice</button>
-          <button onclick="deleteEvent(&#39;1780501279608&#39;)" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
-        </div>
-      </div></div><div class="day-label">Sat</div><div class="event-grid"><div class="event-card " onclick="selectEvent(&#39;1780487059142&#39;)">
-        <div class="card-top">
-          <span class="job-pill">#3</span>
-          <span class="type-badge t-shalosh">Shalosh seudah</span>
-          
-        </div>
-        <div class="client-name">Schneck</div>
-        <div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>725 Queen Anne Rd, Teaneck</div>
-        <div class="staff-chips"><span class="staff-chip"><i class="ti ti-chef-hat"></i>2 chefs</span><span class="staff-chip"><i class="ti ti-users"></i>9 waiters</span><span class="staff-chip"><i class="ti ti-package"></i>2 porters</span><span class="staff-chip"><i class="ti ti-user-check"></i>Shelley</span></div>
-        
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Equipment</span>
-          <button onclick="quickPasteMenu(&#39;1780487059142&#39;,event)" style="border:none;background:none;padding:0;cursor:pointer"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Menu</span></button>
-          
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Grocery</span>
-          
-          <a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Venue</span></a>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist(&#39;1780487059142&#39;)" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          
-          <button onclick="showView(&#39;invoices&#39;);setTimeout(()=&gt;openInvoice(&#39;1780487059142&#39;),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2)"><i class="ti ti-file-invoice" style="font-size:12px"></i>No invoice</button>
-          <button onclick="deleteEvent(&#39;1780487059142&#39;)" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
-        </div>
-      </div><div class="event-card " onclick="selectEvent(&#39;1780526086896&#39;)">
-        <div class="card-top">
-          <span class="job-pill">#13</span>
-          <span class="type-badge t-dropoff">Drop off</span>
-          
-        </div>
-        <div class="client-name">Saltzman</div>
-        <div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>300 Pleasant Valley Way, West Orange NJ</div>
-        <div class="staff-chips"><span class="staff-chip"><i class="ti ti-users"></i>2 waiters</span></div>
-        
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Equipment</span>
-          <button onclick="quickPasteMenu(&#39;1780526086896&#39;,event)" style="border:none;background:none;padding:0;cursor:pointer"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Menu</span></button>
-          
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Grocery</span>
-          
-          <a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Venue</span></a>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist(&#39;1780526086896&#39;)" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          
-          <button onclick="showView(&#39;invoices&#39;);setTimeout(()=&gt;openInvoice(&#39;1780526086896&#39;),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2)"><i class="ti ti-file-invoice" style="font-size:12px"></i>No invoice</button>
-          <button onclick="deleteEvent(&#39;1780526086896&#39;)" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
-        </div>
-      </div></div><div class="day-label">Sun</div><div class="event-grid"><div class="event-card " onclick="selectEvent(&#39;1780487213707&#39;)">
-        <div class="card-top">
-          <span class="job-pill">#7</span>
-          <span class="type-badge t-dropoff">Drop off</span>
-          
-        </div>
-        <div class="client-name">YBH</div>
-        <div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>270 Passaic Ave, Passaic NJ</div>
-        <div class="staff-chips"><span class="staff-chip"><i class="ti ti-users"></i>3 waiters</span></div>
-        
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Equipment</span>
-          <button onclick="quickPasteMenu(&#39;1780487213707&#39;,event)" style="border:none;background:none;padding:0;cursor:pointer"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Menu</span></button>
-          
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Grocery</span>
-          
-          <a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Venue</span></a>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist(&#39;1780487213707&#39;)" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          
-          <button onclick="showView(&#39;invoices&#39;);setTimeout(()=&gt;openInvoice(&#39;1780487213707&#39;),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2)"><i class="ti ti-file-invoice" style="font-size:12px"></i>No invoice</button>
-          <button onclick="deleteEvent(&#39;1780487213707&#39;)" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
-        </div>
-      </div><div class="event-card " onclick="selectEvent(&#39;1780501304236&#39;)">
-        <div class="card-top">
-          <span class="job-pill">#12</span>
-          <span class="type-badge t-lunch">Lunch</span>
-          
-        </div>
-        <div class="client-name">Respler</div>
-        <div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>641 W. Englewood Ave, Teaneck NJ</div>
-        <div class="staff-chips"><span class="staff-chip"><i class="ti ti-users"></i>4 waiters</span><span class="staff-chip"><i class="ti ti-package"></i>2 porters</span><span class="staff-chip"><i class="ti ti-user-check"></i>Kenny</span></div>
-        
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Equipment</span>
-          <button onclick="quickPasteMenu(&#39;1780501304236&#39;,event)" style="border:none;background:none;padding:0;cursor:pointer"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Menu</span></button>
-          
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Grocery</span>
-          
-          <a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--text3)"><i class="ti ti-circle-x" style="font-size:11px"></i>Venue</span></a>
-        </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist(&#39;1780501304236&#39;)" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          
-          <button onclick="showView(&#39;invoices&#39;);setTimeout(()=&gt;openInvoice(&#39;1780501304236&#39;),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2)"><i class="ti ti-file-invoice" style="font-size:12px"></i>No invoice</button>
-          <button onclick="deleteEvent(&#39;1780501304236&#39;)" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
-        </div>
-      </div></div></div>
+  <div id="mainArea" style="padding:1.25rem;flex:1;overflow-x:hidden;min-width:0"></div>
 </div>
 </div>
 
@@ -661,12 +281,13 @@ a{color:var(--blue-mid);text-decoration:none}
   <div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
     <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1rem" id="attachModalTitle">Attach file</div>
     <div style="margin-bottom:.75rem">
-      <a id="attachDriveSearchBtn" href="file:///C:/Users/premi/Downloads/index_2.html#" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;text-decoration:none;margin-bottom:10px">
+      <a id="attachDriveSearchBtn" href="#" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;text-decoration:none;margin-bottom:10px">
         <i class="ti ti-search" style="font-size:14px"></i>Search Drive
       </a>
     </div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Paste the Google Drive or Docs URL:</div>
-    <input type="text" id="attachInput" placeholder="https://docs.google.com/..." style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;margin-bottom:6px">
+    <input type="text" id="attachInput" placeholder="https://docs.google.com/..." 
+      style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;margin-bottom:6px">
     <div style="font-size:11px;color:var(--text3);margin-bottom:1rem">In Google Drive: right-click file → Share → Copy link → paste above</div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn-cancel" onclick="closeAttachModal()">Cancel</button>
@@ -703,8 +324,8 @@ a{color:var(--blue-mid);text-decoration:none}
 </div>
 
 <!-- Firebase Compat SDK -->
-<script src="./index_files/firebase-app-compat.js.download"></script>
-<script src="./index_files/firebase-firestore-compat.js.download"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <script>
 
@@ -2622,22 +2243,7 @@ function renderInvoiceDetail(){
           <span>Grand total</span>
           <span>$${tots.grand.toFixed(2)}</span>
         </div>
-        ${(()=>{
-          migrateInvoicePayments(inv);
-          if(!inv.payments||inv.payments.length===0) return `
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px;color:var(--text2)">
-          <span>Payments received</span><span>$0.00</span>
-        </div>`;
-          return inv.payments.map(p=>`
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px">
-          <span style="color:var(--text2);flex:1">
-            <span style="color:var(--green-text);font-weight:500">✓</span>
-            ${p.date} — ${p.method}${p.checkNumber?' #'+p.checkNumber:''}
-          </span>
-          <span style="font-weight:500;margin-left:8px">$${parseFloat(p.amount||0).toFixed(2)}</span>
-          ${canEdit?`<button onclick="deletePayment('${eid}','${p.id}')" title="Remove payment" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:13px;padding:0 0 0 8px;line-height:1"><i class="ti ti-trash"></i></button>`:''}
-        </div>`).join('');
-        })()}
+        ${buildPaymentsHTML(inv, eid, canEdit)}
         <div style="display:flex;justify-content:space-between;padding:10px 0;font-size:15px;font-weight:600;color:${tots.balance<=0?'var(--green-text)':'var(--crimson,#8B1A1A)'}">
           <span>Balance due</span>
           <span>$${tots.balance.toFixed(2)}</span>
@@ -2955,6 +2561,24 @@ async function confirmPayment(eid){
   document.getElementById('paymentModal')?.remove();
   renderInvoiceDetail();
   render();
+}
+
+function buildPaymentsHTML(inv, eid, canEdit){
+  migrateInvoicePayments(inv);
+  if(!inv.payments||inv.payments.length===0){
+    return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px;color:var(--text2)"><span>Payments received</span><span>$0.00</span></div>';
+  }
+  return inv.payments.map(function(p){
+    var deleteBtn = canEdit
+      ? '<button onclick="deletePayment(\''+eid+'\',\''+p.id+'\')" title="Remove payment" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:13px;padding:0 0 0 8px;line-height:1"><i class="ti ti-trash"></i></button>'
+      : '';
+    var checkStr = p.checkNumber ? ' #'+p.checkNumber : '';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px">'
+      + '<span style="color:var(--text2);flex:1"><span style="color:var(--green-text);font-weight:500">✓</span> '+p.date+' — '+p.method+checkStr+'</span>'
+      + '<span style="font-weight:500;margin-left:8px">$'+parseFloat(p.amount||0).toFixed(2)+'</span>'
+      + deleteBtn
+      + '</div>';
+  }).join('');
 }
 
 function migrateInvoicePayments(inv){
@@ -4708,6 +4332,7 @@ window.openPaymentModal = openPaymentModal;
 window.confirmPayment = confirmPayment;
 window.deletePayment = deletePayment;
 window.migrateInvoicePayments = migrateInvoicePayments;
+window.buildPaymentsHTML = buildPaymentsHTML;
 window.toggleCheckNum = toggleCheckNum;
 window.printInvoice = printInvoice;
 window.downloadInvoice = downloadInvoice;
@@ -4893,6 +4518,5 @@ function initNow(){
 initNow();
 if(window.location.hash.includes("access_token")) handleGmailCallback();
 </script>
-
-
-</body></html>
+</body>
+</html>
