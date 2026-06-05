@@ -64,10 +64,11 @@ a{color:var(--blue-mid);text-decoration:none}
 .banner.amber .banner-text{color:var(--amber-text)}
 .banner.green .banner-text{color:var(--green-text)}
 
-.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-bottom:1rem}
-.stat-card{background:var(--bg2);border-radius:var(--radius);padding:.75rem 1rem}
-.stat-n{font-size:22px;font-weight:500;color:var(--text)}
-.stat-l{font-size:11px;color:var(--text2);margin-top:2px}
+.stats-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1rem}
+.stat-card{background:var(--bg2);border-radius:var(--radius);padding:.5rem 1rem;display:flex;align-items:center;gap:8px;border:0.5px solid var(--border);transition:background .15s}
+.stat-card:hover{background:var(--bg3)}
+.stat-n{font-size:20px;font-weight:600;color:var(--text)}
+.stat-l{font-size:11px;color:var(--text2)}
 
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
 .section-title{font-size:16px;font-weight:500;color:var(--text)}
@@ -778,11 +779,11 @@ function renderEvents(){
     const _msg = _n + " unacknowledged change order" + (_n>1?"s":"") + " — see Changes log";
     return `<div class="banner amber" style="margin-bottom:1rem"><i class="ti ti-alert-triangle" style="font-size:16px;color:var(--amber-text);flex-shrink:0;margin-top:1px"></i><div style="font-size:13px;color:var(--amber-text)"><strong>${_msg}</strong></div></div>`;
     })()}
-    <div class="stat-card"><div class="stat-n">${weekEvents.filter(e=>e.name).length}</div><div class="stat-l">events</div></div>
-    <div class="stat-card"><div class="stat-n">${weekEvents.filter(e=>e.type!=='dropoff').length}</div><div class="stat-l">catered</div></div>
-    <div class="stat-card"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.waiters||0),0)}</div><div class="stat-l">waiters</div></div>
-    <div class="stat-card"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.chefs||0),0)}</div><div class="stat-l">chefs</div></div>
-    <div class="stat-card"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.porters||0),0)}</div><div class="stat-l">porters</div></div>
+    <div class="stat-card" onclick="showView('events')" style="cursor:pointer" title="Go to events"><div class="stat-n">${weekEvents.filter(e=>e.name).length}</div><div class="stat-l">events</div></div>
+    <div class="stat-card" onclick="showView('events')" style="cursor:pointer" title="Catered events"><div class="stat-n">${weekEvents.filter(e=>e.type!=='dropoff').length}</div><div class="stat-l">catered</div></div>
+    <div class="stat-card" onclick="showView('schedule')" style="cursor:pointer" title="Go to schedule"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.waiters||0),0)}</div><div class="stat-l">waiters</div></div>
+    <div class="stat-card" onclick="showView('schedule')" style="cursor:pointer" title="Go to schedule"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.chefs||0),0)}</div><div class="stat-l">chefs</div></div>
+    <div class="stat-card" onclick="showView('schedule')" style="cursor:pointer" title="Go to schedule"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.porters||0),0)}</div><div class="stat-l">porters</div></div>
   </div>
   <div class="section-header">
     <div class="section-title">Events — ${weekLabel}</div>
@@ -874,30 +875,46 @@ function renderEvents(){
 
   // ── LIST VIEW ──
   if(eventsViewMode==='list'){
-    h = h.replace(/<div class="event-grid">[\s\S]*?<\/div>\s*(?=<div class="event-grid">|$)/g, '') // clear card grids
-    // Rebuild as list
-    let listH = '';
+    let listH = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
+    let allRows = [];
     dayOrder.forEach(d=>{
       if(!byDay[d]) return;
-      listH += `<div class="day-label">${byDay[d][0].dayLabel}</div>
-      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:8px">`;
       byDay[d].forEach((e,i)=>{
         const inv = invoices[e.id];
         const invStatus = inv?.status;
+        const invBg = !invStatus||invStatus==='none' ? 'var(--bg2)' : invStatus==='paid' ? 'var(--green-bg)' : invStatus==='invoice' ? '#f5f3ff' : 'var(--amber-bg)';
         const invColor = !invStatus||invStatus==='none' ? 'var(--text3)' : invStatus==='paid' ? 'var(--green-text)' : invStatus==='invoice' ? '#7c3aed' : 'var(--amber-text)';
+        const invBorder = !invStatus||invStatus==='none' ? 'var(--border2)' : invStatus==='paid' ? 'var(--green-border)' : invStatus==='invoice' ? '#c4b5fd' : 'var(--amber-border)';
+        const invLabel = !invStatus||invStatus==='none'?'Invoice':invStatus==='quote'?'Quote':invStatus==='approved'?'Approved':invStatus==='invoice'?'Invoice open':'Paid ✓';
         const hasChange = changes.some(c=>c.job===e.job && changeDepts.some(d=>!(c.acks||{})[d]));
-        listH += `<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:${i<byDay[d].length-1?'0.5px solid var(--border)':'none'};transition:background .1s;flex-wrap:wrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
-          <span class="job-pill" style="flex-shrink:0;cursor:pointer" onclick="selectEvent('${e.id}')">${displayJob(e.job)}</span>
-          <span style="font-size:14px;font-weight:500;color:var(--text);flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="selectEvent('${e.id}')">${e.name}</span>
-          <span class="type-badge t-${e.type}" style="flex-shrink:0">${e.typeLabel}</span>
-          <span style="font-size:12px;color:var(--text3);flex-shrink:0">${e.dayLabel}</span>
-          ${e.menuLink ? `<a href="${e.menuLink}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:2px 9px;border:0.5px solid var(--green-border);border-radius:8px;background:var(--green-bg);color:var(--green-text);text-decoration:none;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-file-text" style="font-size:11px"></i>Menu</a>` : `<span style="font-size:11px;padding:2px 9px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text3);flex-shrink:0">No menu</span>`}
-          ${role.canViewInvoices ? `<button onclick="event.stopPropagation();showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:2px 9px;border:0.5px solid ${!invStatus||invStatus==='none'?'var(--border2)':invStatus==='paid'?'var(--green-border)':invStatus==='invoice'?'#c4b5fd':'var(--amber-border)'};border-radius:8px;background:${!invStatus||invStatus==='none'?'var(--bg2)':invStatus==='paid'?'var(--green-bg)':invStatus==='invoice'?'#f5f3ff':'var(--amber-bg)'};color:${invColor};cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-file-invoice" style="font-size:11px"></i>${!invStatus||invStatus==='none'?'No invoice':invStatus==='quote'?'Quote':invStatus==='approved'?'Approved':invStatus==='invoice'?'Invoice open':'Paid ✓'}</button>` : ''}
-        </div>`;
+        const eq = eventEquipment[e.id];
+        const eqLabel = eq?.stage==='complete'?'Equipment ✓':eq?'Equipment…':'Equipment';
+        const eqBg = eq?.stage==='complete'?'var(--green-bg)':eq?'var(--amber-bg)':'var(--bg2)';
+        const eqColor = eq?.stage==='complete'?'var(--green-text)':eq?'var(--amber-text)':'var(--text3)';
+
+        allRows.push(`<div style="background:var(--bg);border:0.5px solid ${hasChange?'var(--amber-border)':'var(--border)'};border-radius:var(--radius-lg);padding:12px 14px;cursor:pointer" onclick="selectEvent('${e.id}')">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+            <span class="job-pill" style="flex-shrink:0">${displayJob(e.job)}</span>
+            <span style="font-size:14px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.name}</span>
+            ${hasChange?'<i class="ti ti-alert-triangle" style="font-size:13px;color:var(--amber-text);flex-shrink:0" title="Unacknowledged changes"></i>':''}
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+            <span class="type-badge t-${e.type}">${e.typeLabel}</span>
+            <span style="font-size:12px;color:var(--text2)">${e.dayLabel}</span>
+            ${e.addr?`<span style="font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"><i class="ti ti-map-pin" style="font-size:11px"></i> ${e.addr}</span>`:''}
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px" onclick="event.stopPropagation()">
+            ${e.menuLink?`<a href="${e.menuLink}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--green-border);border-radius:6px;background:var(--green-bg);color:var(--green-text);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-file-text" style="font-size:11px"></i>Menu</a>`:`<span style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;color:var(--text3)">No menu</span>`}
+            ${role.canViewInvoices?`<button onclick="showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:3px 8px;border:0.5px solid ${invBorder};border-radius:6px;background:${invBg};color:${invColor};cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-file-invoice" style="font-size:11px"></i>${invLabel}</button>`:''}
+            <button onclick="showView('equipment');setTimeout(()=>openEquipEvent('${e.id}'),300)" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:${eqBg};color:${eqColor};cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-tools" style="font-size:11px"></i>${eqLabel}</button>
+            <button onclick="goChecklist('${e.id}')" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-checklist" style="font-size:11px"></i>Checklist</button>
+            <button onclick="showView('schedule')" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-users" style="font-size:11px"></i>Schedule</button>
+            ${e.groceryLink?`<a href="${e.groceryLink}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-shopping-cart" style="font-size:11px"></i>Grocery</a>`:''}
+          </div>
+        </div>`);
       });
-      listH += '</div>';
     });
-    // Replace all event-grid sections with list
+    listH += allRows.join('') + '</div>';
     const gridStart = h.indexOf('<div class="day-label">');
     if(gridStart > -1) h = h.substring(0, gridStart) + listH;
     else h += listH;
@@ -1589,12 +1606,12 @@ function renderSchedule(){
 
     // Main staff table
     block += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-      + '<thead><tr style="background:var(--bg2)">'
-      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;min-width:100px">Dept.</th>'
-      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);width:50px">#</th>'
-      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);min-width:160px">Names</th>'
-      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;width:110px">Call time #1</th>'
-      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;width:110px">Call time #2</th>'
+      + '<thead><tr style="background:var(--bg3)">'
+      + '<th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border);min-width:110px">Department</th>'
+      + '<th style="padding:10px 8px;text-align:center;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border);width:55px">#</th>'
+      + '<th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border)">Names</th>'
+      + '<th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border);white-space:nowrap;width:120px">Call time 1</th>'
+      + '<th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border);white-space:nowrap;width:120px">Call time 2</th>'
       + '</tr></thead><tbody>';
 
     depts.forEach(function(d){
@@ -1603,19 +1620,20 @@ function renderSchedule(){
       var t1 = e[d.t1]||'';
       var t2 = d.t2 ? (e[d.t2]||'') : '';
       if(!count && !isEditing) return;
-      block += '<tr style="border-bottom:0.5px solid var(--border)">'
-        + '<td style="padding:9px 12px"><span class="role-tag '+d.rc+'">'+d.label+'</span></td>'
-        + '<td style="padding:9px 12px;font-weight:500;color:var(--text)">'
-          + (isEditing ? '<input type="number" id="se-'+e.id+'-'+d.countKey+'" value="'+count+'" min="0" style="'+inpStyle+';width:50px">' : (count||'—'))
+      var rowBg = d.key==='waiters'?'':'';
+      block += '<tr style="border-bottom:0.5px solid var(--border);transition:background .1s" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
+        + '<td style="padding:11px 14px"><span class="role-tag '+d.rc+'" style="font-size:12px;font-weight:600">'+d.label+'</span></td>'
+        + '<td style="padding:11px 8px;text-align:center;font-weight:600;font-size:15px;color:var(--text)">'
+          + (isEditing ? '<input type="number" id="se-'+e.id+'-'+d.countKey+'" value="'+count+'" min="0" style="'+inpStyle+';width:55px;text-align:center;font-size:14px;font-weight:600">' : (count||'—'))
         + '</td>'
-        + '<td style="padding:9px 12px;color:var(--text2)">'
-          + (isEditing ? '<input type="text" id="se-'+e.id+'-'+d.namesKey+'" value="'+names.replace(/"/g,'&quot;')+'" placeholder="Names..." style="'+inpStyle+'">' : (names||'—'))
+        + '<td style="padding:11px 14px;color:var(--text)">'
+          + (isEditing ? '<input type="text" id="se-'+e.id+'-'+d.namesKey+'" value="'+names.replace(/"/g,'&quot;')+'" placeholder="Enter names..." style="'+inpStyle+'">' : (names||'<span style="color:var(--text3);font-style:italic">—</span>'))
         + '</td>'
-        + '<td style="padding:9px 12px">'
-          + (isEditing ? '<input type="text" id="se-'+e.id+'-ct1-'+d.key+'" value="'+t1+'" placeholder="e.g. 9:00am" style="'+inpStyle+'">' : (t1 ? '<span class="time-badge">'+t1+'</span>' : '—'))
+        + '<td style="padding:11px 14px">'
+          + (isEditing ? '<input type="text" id="se-'+e.id+'-ct1-'+d.key+'" value="'+t1+'" placeholder="e.g. 9:00am" style="'+inpStyle+'">' : (t1 ? '<span class="time-badge" style="font-size:12px;font-weight:600">'+t1+'</span>' : '<span style="color:var(--text3)">—</span>'))
         + '</td>'
-        + '<td style="padding:9px 12px">'
-          + (isEditing && d.t2 ? '<input type="text" id="se-'+e.id+'-ct2-'+d.key+'" value="'+t2+'" placeholder="e.g. 11:00am" style="'+inpStyle+'">' : (t2 ? '<span class="time-badge">'+t2+'</span>' : (d.t2?'—':'')))
+        + '<td style="padding:11px 14px">'
+          + (isEditing && d.t2 ? '<input type="text" id="se-'+e.id+'-ct2-'+d.key+'" value="'+t2+'" placeholder="e.g. 11:00am" style="'+inpStyle+'">' : (t2 ? '<span class="time-badge" style="font-size:12px;font-weight:600">'+t2+'</span>' : (d.t2?'<span style="color:var(--text3)">—</span>':'')))
         + '</td>'
         + '</tr>';
     });
@@ -2117,7 +2135,13 @@ const changeDepts = [
 
 function renderChanges(){
   return `
-  <div class="section-header"><div class="section-title">Changes & updates log</div></div>
+  <div class="section-header">
+    <div class="section-title">Changes & updates log</div>
+    <div style="display:flex;gap:6px">
+      <button onclick="checkAllChanges()" style="padding:5px 12px;border:0.5px solid var(--green-border);border-radius:var(--radius);background:var(--green-bg);color:var(--green-text);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-circle-check" style="font-size:13px"></i>Check all</button>
+      <button onclick="sendChangesToCommissary()" style="padding:5px 12px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-send" style="font-size:13px"></i>Send to commissary</button>
+    </div>
+  </div>
   <div class="new-change-form">
     <div style="font-size:13px;font-weight:500;margin-bottom:10px;color:var(--text)">Log a new change</div>
     <div class="form-row">
@@ -2143,17 +2167,25 @@ function renderChanges(){
     const ackedCount = Object.values(acks).filter(Boolean).length;
     const total = changeDepts.length;
     const pct = Math.round(ackedCount/total*100);
+    const ev = events.find(e=>e.job===c.job);
+    const evName = ev ? ev.name : '';
+    const evDate = ev ? ev.dayLabel : '';
     return `<div class="change-entry">
-      <div class="change-top">
-        <span class="change-time"><i class="ti ti-clock" style="font-size:13px;vertical-align:-1px"></i> ${c.time}</span>
-        <span class="change-job-badge">${c.job}</span>
-        <span style="font-size:11px;color:var(--text3);margin-left:auto">${ackedCount}/${total} acknowledged</span>
+      <div style="background:var(--amber-bg);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;border-left:3px solid var(--amber-text)">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:16px;font-weight:700;color:var(--text)">${c.job}</span>
+          ${evName?`<span style="font-size:15px;font-weight:600;color:var(--text)">${evName}</span>`:''}
+          ${evDate?`<span style="font-size:13px;color:var(--text2)">${evDate}</span>`:''}
+          <span style="font-size:12px;font-weight:700;color:var(--amber-text);background:var(--amber-bg);border:1px solid var(--amber-border);padding:2px 10px;border-radius:6px;letter-spacing:.05em">MENU UPDATE</span>
+          <span style="font-size:11px;color:var(--text3);margin-left:auto">${c.time}</span>
+        </div>
       </div>
       <div class="change-desc" style="margin-bottom:12px">${c.desc}</div>
       <div style="height:3px;background:var(--bg3);border-radius:2px;margin-bottom:10px;overflow:hidden">
         <div style="height:100%;width:${pct}%;background:${pct===100?'var(--green-text)':'var(--blue-mid)'};border-radius:2px;transition:width .3s"></div>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        <span style="font-size:11px;color:var(--text3)">${ackedCount}/${total} acknowledged</span>
         ${changeDepts.map(dept=>{
           const done = acks[dept];
           return `<button onclick="toggleAck('${c.id}','${dept}')" style="
@@ -2194,6 +2226,87 @@ function addChange(){
 
 function selectAllDepts(){ document.querySelectorAll('input[name=notifyDept]').forEach(cb=>cb.checked=true); }
 function clearAllDepts(){ document.querySelectorAll('input[name=notifyDept]').forEach(cb=>cb.checked=false); }
+
+function checkAllChanges(){
+  if(!confirm('Mark ALL changes as acknowledged by all departments?')) return;
+  changes.forEach(c=>{
+    if(!c.acks) c.acks={};
+    changeDepts.forEach(d=>{ c.acks[d]=true; });
+    _saveChange(c);
+  });
+  render();
+  showToast('All changes acknowledged ✓');
+}
+
+async function sendChangesToCommissary(){
+  if(!gmailToken){ alert('Please connect Gmail in Settings first.'); return; }
+  const menuScriptUrl = localStorage.getItem('menuScriptUrl');
+  if(!menuScriptUrl){ alert('Please configure menu automation script URL in Settings first.'); return; }
+
+  // Filter to current week's unacknowledged or recent changes
+  const currentWeekStr = getWeekEndDate(currentWeekOffset).toISOString().split('T')[0];
+  const weekLabel = document.getElementById('wePill')?.textContent || '';
+
+  // Build the changes content for the email
+  const changesList = changes.filter(c=>{
+    const ev = events.find(e=>e.job===c.job);
+    return !ev || (ev.weekOf||'2026-05-31')===currentWeekStr;
+  });
+
+  if(changesList.length===0){ showToast('No changes to send for this week'); return; }
+
+  // Build HTML for the PDF-like email body
+  let bodyLines = ['PREMIER CATERERS — MENU & ORDER UPDATES', 'Week of: ' + weekLabel, '', ''];
+  changesList.forEach(c=>{
+    const ev = events.find(e=>e.job===c.job);
+    const evName = ev ? ev.name : '';
+    const evDate = ev ? ev.dayLabel : '';
+    bodyLines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    bodyLines.push('JOB: ' + c.job + '  |  CLIENT: ' + evName + '  |  DATE: ' + evDate);
+    bodyLines.push('MENU UPDATE');
+    bodyLines.push('');
+    bodyLines.push(c.desc);
+    bodyLines.push('Logged: ' + c.time);
+    bodyLines.push('');
+  });
+
+  const subject = 'MENU UPDATES — Premier Caterers ' + weekLabel;
+  const body = bodyLines.join('\n');
+
+  // Send via Apps Script
+  const sendUrl = menuScriptUrl
+    + '?action=sendCommissaryEmail'
+    + '&to=' + encodeURIComponent('commissary@thepremiercaterer.com')
+    + '&subject=' + encodeURIComponent(subject)
+    + '&body=' + encodeURIComponent(body)
+    + '&weekLabel=' + encodeURIComponent(weekLabel);
+
+  try {
+    const resp = await fetch(sendUrl, { method:'GET', redirect:'follow' });
+    const data = await resp.json();
+    if(data.success) showToast('✓ Changes sent to commissary', 4000);
+    else throw new Error(data.error||'Send failed');
+  } catch(err){
+    // Fallback: use Gmail directly
+    try {
+      const raw = btoa(unescape(encodeURIComponent(
+        'MIME-Version: 1.0\r\nTo: commissary@thepremiercaterer.com\r\nFrom: events@thepremiercaterer.com\r\nSubject: ' + subject + '\r\nContent-Type: text/plain; charset="UTF-8"\r\n\r\n' + body
+      ))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+      const gmailResp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{
+        method:'POST',
+        headers:{'Authorization':'Bearer '+gmailToken,'Content-Type':'application/json'},
+        body:JSON.stringify({raw})
+      });
+      if(gmailResp.ok) showToast('✓ Changes sent to commissary', 4000);
+      else throw new Error('Gmail send failed');
+    } catch(e2){
+      alert('Error sending: '+e2.message);
+    }
+  }
+}
+
+window.checkAllChanges = checkAllChanges;
+window.sendChangesToCommissary = sendChangesToCommissary;
 
 // ── SETTINGS ──
 const appsScript=`// Paste this in your Google Sheet:
@@ -3371,10 +3484,13 @@ async function saveQuickMenu(eid){
   render();
 }
 function renderEquipment() {
-  const all = events;
+  // Filter to current week only
+  const currentWeekStr = getWeekEndDate(currentWeekOffset).toISOString().split('T')[0];
+  const all = events.filter(e => (e.weekOf||'2026-05-31') === currentWeekStr);
+  const weekLabel = document.getElementById('wePill')?.textContent || '';
   let h = `
   <div class="section-header">
-    <div class="section-title">Equipment — W/E Jun 7</div>
+    <div class="section-title">Equipment — ${weekLabel}</div>
   </div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-bottom:1.25rem">
     ${all.map(e => {
