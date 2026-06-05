@@ -2411,6 +2411,7 @@ function renderInvoiceDetail(){
         ${inv.status==='quote'?`<button class="btn-save" style="font-size:12px;padding:5px 12px" onclick="approveQuote('${eid}')">Approve quote</button>`:''}
         ${inv.status==='approved'?`<button class="btn-save" style="font-size:12px;padding:5px 12px" onclick="convertToInvoice('${eid}')">Convert to invoice</button>`:''}
         ${inv.status==='invoice'?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--green-text)" onclick="openPaymentModal('${eid}')">Record payment</button>`:''}
+        <button class="icon-btn" onclick="openEditInvoiceModal('${eid}')" title="Edit client info"><i class="ti ti-edit"></i></button>
         <button class="icon-btn" onclick="printInvoice('${eid}')" title="Print"><i class="ti ti-printer"></i></button>
         <button class="icon-btn" onclick="downloadInvoice('${eid}')" title="Download as HTML"><i class="ti ti-download"></i></button>
         <button class="icon-btn" onclick="openSendInvoiceEmail('${eid}')" title="Send by email" style="color:var(--blue-mid)"><i class="ti ti-send"></i></button>
@@ -3947,6 +3948,61 @@ async function saveEditedInquiry(id){
 window.openEditInquiryModal = openEditInquiryModal;
 window.saveEditedInquiry = saveEditedInquiry;
 
+function openEditInvoiceModal(eid){
+  const e = events.find(x=>x.id===eid);
+  const inv = invoices[eid];
+  if(!e||!inv) return;
+  document.getElementById('editInvoiceModal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'editInvoiceModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px';
+  const inp = 'width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;box-sizing:border-box';
+  const fld = 'margin-bottom:.85rem';
+  const lbl = 'font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);display:block;margin-bottom:5px';
+  modal.innerHTML = `
+  <div style="background:var(--bg);border-radius:var(--radius-lg);width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden">
+    <div style="background:var(--blue-bg);border-bottom:0.5px solid var(--blue-border);padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:15px;font-weight:600;color:var(--blue-text)"><i class="ti ti-edit"></i> Edit Invoice Client Info</div>
+      <button onclick="document.getElementById('editInvoiceModal').remove()" style="border:none;background:none;font-size:20px;color:var(--text2);cursor:pointer">×</button>
+    </div>
+    <div style="padding:1.25rem">
+      <div style="${fld}"><label style="${lbl}">Client name (appears on invoice)</label><input id="eiv_clientName" style="${inp}" value="${inv.clientName||e.name||''}"></div>
+      <div style="${fld}"><label style="${lbl}">Client email</label><input id="eiv_clientEmail" style="${inp}" value="${inv.clientEmail||''}"></div>
+      <div style="${fld}"><label style="${lbl}">Client phone</label><input id="eiv_clientPhone" style="${inp}" value="${inv.clientPhone||''}"></div>
+      <div style="${fld}"><label style="${lbl}">Event / venue name</label><input id="eiv_eventName" style="${inp}" value="${e.name||''}"></div>
+      <div style="${fld}"><label style="${lbl}">Venue address</label><input id="eiv_addr" style="${inp}" value="${e.addr||''}"></div>
+      <div style="${fld}"><label style="${lbl}">Notes</label><textarea id="eiv_notes" rows="3" style="${inp};resize:vertical">${inv.notes||''}</textarea></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="document.getElementById('editInvoiceModal').remove()" style="padding:9px 18px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);font-size:13px;cursor:pointer">Cancel</button>
+        <button onclick="saveEditedInvoice('${eid}')" style="padding:9px 20px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;font-size:13px;font-weight:500;cursor:pointer">Save changes</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function saveEditedInvoice(eid){
+  const e = events.find(x=>x.id===eid);
+  const inv = invoices[eid];
+  if(!e||!inv) return;
+  inv.clientName  = document.getElementById('eiv_clientName')?.value.trim()||'';
+  inv.clientEmail = document.getElementById('eiv_clientEmail')?.value.trim()||'';
+  inv.clientPhone = document.getElementById('eiv_clientPhone')?.value.trim()||'';
+  inv.notes       = document.getElementById('eiv_notes')?.value.trim()||'';
+  const newName   = document.getElementById('eiv_eventName')?.value.trim();
+  const newAddr   = document.getElementById('eiv_addr')?.value.trim();
+  if(newName) e.name = newName;
+  if(newAddr !== undefined) e.addr = newAddr;
+  await _saveEvent(e);
+  await _saveInvoice(eid, inv);
+  document.getElementById('editInvoiceModal')?.remove();
+  showToast('Invoice updated ✓');
+  renderInvoiceDetail();
+}
+
+window.openEditInvoiceModal = openEditInvoiceModal;
+window.saveEditedInvoice = saveEditedInvoice;
+
 
 
 
@@ -4571,6 +4627,35 @@ let gmailMessages = []; // cached inbox messages
 
 function isGmailConnected(){ return !!gmailToken; }
 
+// Try to silently restore Gmail token on page load
+async function gmailSilentSignIn(){
+  const clientId = localStorage.getItem('gmailClientId');
+  if(!clientId) return;
+  try {
+    if(!window.google?.accounts?.oauth2){
+      await new Promise((resolve,reject)=>{
+        const s=document.createElement('script');
+        s.src='https://accounts.google.com/gsi/client';
+        s.onload=resolve; s.onerror=reject;
+        document.head.appendChild(s);
+      });
+    }
+    const client = window.google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: GMAIL_SCOPES,
+      hint: 'events@thepremiercaterer.com',
+      prompt: '', // empty prompt = silent if already authorized
+      callback: async (resp)=>{
+        if(resp.error) return; // silent fail - user will manually connect if needed
+        gmailToken = resp.access_token;
+        await fetchGmailProfile();
+        render();
+      }
+    });
+    client.requestAccessToken({ prompt:'' });
+  } catch(e){ console.log('Silent Gmail sign-in failed:', e); }
+}
+
 async function gmailSignIn(){
   const clientId = localStorage.getItem('gmailClientId');
   if(!clientId){ alert('Please enter your Google OAuth Client ID in Settings first.'); showView('settings'); return; }
@@ -5092,6 +5177,9 @@ function _startApp() {
 
 // ── SAFETY NET: force render if page looks blank ──
 document.addEventListener('DOMContentLoaded', ()=>{
+  // Try to silently restore Gmail connection on page load
+  setTimeout(gmailSilentSignIn, 2000);
+
   // Update timestamp to show when page was last deployed (keep the baked value)
   // The baked value in #buildTimestamp is the correct push time — no override needed.
 
