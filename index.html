@@ -669,7 +669,7 @@ window.showRoleLogin = showRoleLogin;
 window.attemptLogin = attemptLogin;
 window.signOut = signOut;
 
-let currentView='events', currentRole='admin', selectedId=null, editingId=null, activeDay='all', eventsViewMode='card';
+let currentView='events', currentRole='admin', selectedId=null, editingId=null, activeDay='all', eventsViewMode='card', scheduleSort='by-event';
 
 function setRole(r,btn){
   // Role switching within session (no password needed if already logged in)
@@ -836,19 +836,33 @@ function renderEvents(){
           ${e.menuLink
             ? `<a href="${e.menuLink}" target="_blank" onclick="event.stopPropagation()" style="text-decoration:none">${statusBadge('Menu','attached',e.menuLink)}</a>`
             : `<button onclick="quickPasteMenu('${e.id}',event)" style="border:none;background:none;padding:0;cursor:pointer">${statusBadge('Menu','missing','')}</button>`}
-          ${e.menuLink && e.pdfMenuLink
-            ? `<a href="${e.pdfMenuLink}" target="_blank" onclick="event.stopPropagation()" style="text-decoration:none">${statusBadge('PDF menu','attached',e.pdfMenuLink)}</a>`
-            : e.menuLink
-              ? `<button onclick="event.stopPropagation();createPdfVersion('${e.id}')" style="border:none;background:none;padding:0;cursor:pointer" title="Generate PDF">${statusBadge('PDF menu','missing','')}</button>`
-              : ''}
           ${e.groceryLink ? statusBadge('Grocery','attached',e.groceryLink) : statusBadge('Grocery','missing','')}
           ${e.floorplan ? statusBadge('Floorplan','attached',e.floorplan) : ''}
+          ${e.finalsLink ? statusBadge('Finals','attached',e.finalsLink) : ''}
           ${e.venueLink||true ? statusBadge('Venue', (e.venueLink?'attached':'missing'), e.venueLink||'https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0') : ''}
+          ${e.processionLink ? statusBadge('Procession','attached',e.processionLink) : ''}
         </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist('${e.id}')" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          ${(()=>{ const _v=venues.find(v=>v.addr===e.addr||v.name===e.name); return _v ? `<button onclick="showVenuePopup('${e.id}')" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--teal-text);border-radius:6px;background:var(--teal-bg);color:var(--teal-text);cursor:pointer;display:inline-flex;align-items:center;gap:4px" title="View venue info"><i class="ti ti-building" style="font-size:12px"></i>Venue</button>` : ''; })()}
-          ${role.canViewInvoices ? `<button onclick="showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid ${
+        ${(()=>{
+          const _s=[];
+          if(e.chefs>0) _s.push('C'+e.chefs);
+          if(e.porters>0) _s.push('P'+e.porters);
+          if(e.waiters>0) _s.push('W'+e.waiters);
+          if(e.bartenders>0) _s.push('B'+e.bartenders);
+          return _s.length ? '<div style="margin-top:5px;font-size:12px;font-weight:600;color:var(--text2);letter-spacing:.04em">'+_s.join(' · ')+'</div>' : '';
+        })()}
+        ${e.notes ? `<div style="margin-top:5px;font-size:11px;color:var(--text3);line-height:1.4;max-height:40px;overflow:hidden;text-overflow:ellipsis" title="${e.notes.replace(/"/g,'&quot;')}">${e.notes}</div>` : ''}
+        <div style="margin-top:8px;display:flex;align-items:center;gap:5px;flex-wrap:wrap" onclick="event.stopPropagation()">
+          <button onclick="goChecklist('${e.id}')" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-checklist" style="font-size:11px"></i>Checklist</button>
+          <button onclick="showView('schedule')" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-users" style="font-size:11px"></i>Schedule</button>
+          <button onclick="showView('equipment');setTimeout(()=>openEquipEvent('${e.id}'),300)" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:${(()=>{const _eq=eventEquipment[e.id];return _eq?.stage==='complete'?'var(--green-bg)':_eq?'var(--amber-bg)':'var(--bg2)'})()};color:${(()=>{const _eq=eventEquipment[e.id];return _eq?.stage==='complete'?'var(--green-text)':_eq?'var(--amber-text)':'var(--text2)'})()};cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-tools" style="font-size:11px"></i>${(()=>{const _eq=eventEquipment[e.id];return _eq?.stage==='complete'?'Equipment ✓':_eq?'Equipment…':'Equipment'})()}</button>
+          ${e.groceryLink ? `<a href="${e.groceryLink}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--green-border);border-radius:6px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:3px;text-decoration:none"><i class="ti ti-shopping-cart" style="font-size:11px"></i>Grocery</a>` : ''}
+          ${e.logoData ? `<a href="${e.logoData}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px;text-decoration:none"><i class="ti ti-photo" style="font-size:11px"></i>Logo</a>` : ''}
+          ${e.finalsLink ? `<a href="${e.finalsLink}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px;text-decoration:none"><i class="ti ti-file-check" style="font-size:11px"></i>Finals</a>` : ''}
+          ${e.venueLink ? `<a href="${e.venueLink}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--teal-text);border-radius:6px;background:var(--teal-bg);color:var(--teal-text);cursor:pointer;display:inline-flex;align-items:center;gap:3px;text-decoration:none"><i class="ti ti-building" style="font-size:11px"></i>Venue info</a>` : ''}
+          ${e.floorplan ? `<a href="${e.floorplan}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px;text-decoration:none"><i class="ti ti-layout" style="font-size:11px"></i>Floorplan</a>` : ''}
+          ${e.processionLink ? `<a href="${e.processionLink}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px;text-decoration:none"><i class="ti ti-arrow-right" style="font-size:11px"></i>Procession</a>` : ''}
+          ${(()=>{ const _v=venues.find(v=>v.addr===e.addr||v.name===e.name); return _v ? `<button onclick="showVenuePopup('${e.id}')" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--teal-text);border-radius:6px;background:var(--teal-bg);color:var(--teal-text);cursor:pointer;display:inline-flex;align-items:center;gap:3px" title="View venue info"><i class="ti ti-building" style="font-size:11px"></i>Venue</button>` : ''; })()}
+          ${role.canViewInvoices ? `<button onclick="showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:3px 8px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;border:0.5px solid ${
             !invoices[e.id]||invoices[e.id].status==='none' ? 'var(--border2)' :
             invoices[e.id].status==='paid' ? 'var(--green-text)' :
             invoices[e.id].status==='invoice' ? '#7c3aed' :
@@ -860,13 +874,13 @@ function renderEvents(){
             !invoices[e.id]||invoices[e.id].status==='none' ? 'var(--text2)' :
             invoices[e.id].status==='paid' ? 'var(--green-text)' :
             invoices[e.id].status==='invoice' ? '#7c3aed' :
-            'var(--amber-text)'}"><i class="ti ti-file-invoice" style="font-size:12px"></i>${
+            'var(--amber-text)'}"><i class="ti ti-file-invoice" style="font-size:11px"></i>${
             !invoices[e.id]||invoices[e.id].status==='none' ? 'No invoice' :
             invoices[e.id].status==='quote' ? 'Quote sent' :
             invoices[e.id].status==='approved' ? 'Quote approved' :
             invoices[e.id].status==='invoice' ? 'Invoice open' :
             'Paid ✓'}</button>` : ''}
-          <button onclick="deleteEvent('${e.id}')" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
+          <button onclick="deleteEvent('${e.id}')" title="Delete event" style="font-size:11px;padding:3px 7px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:11px"></i>Delete</button>
         </div>
       </div>`;
     });
@@ -892,24 +906,32 @@ function renderEvents(){
         const eqBg = eq?.stage==='complete'?'var(--green-bg)':eq?'var(--amber-bg)':'var(--bg2)';
         const eqColor = eq?.stage==='complete'?'var(--green-text)':eq?'var(--amber-text)':'var(--text3)';
 
+        const staffRef = [e.chefs>0?'C'+e.chefs:'',e.porters>0?'P'+e.porters:'',e.waiters>0?'W'+e.waiters:'',e.bartenders>0?'B'+e.bartenders:''].filter(Boolean).join(' · ');
         allRows.push(`<div style="background:var(--bg);border:0.5px solid ${hasChange?'var(--amber-border)':'var(--border)'};border-radius:var(--radius-lg);padding:12px 14px;cursor:pointer" onclick="selectEvent('${e.id}')">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
             <span class="job-pill" style="flex-shrink:0">${displayJob(e.job)}</span>
             <span style="font-size:14px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.name}</span>
+            ${staffRef?`<span style="font-size:12px;font-weight:600;color:var(--text2);white-space:nowrap">${staffRef}</span>`:''}
             ${hasChange?'<i class="ti ti-alert-triangle" style="font-size:13px;color:var(--amber-text);flex-shrink:0" title="Unacknowledged changes"></i>':''}
           </div>
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
             <span class="type-badge t-${e.type}">${e.typeLabel}</span>
             <span style="font-size:12px;color:var(--text2)">${e.dayLabel}</span>
             ${e.addr?`<span style="font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"><i class="ti ti-map-pin" style="font-size:11px"></i> ${e.addr}</span>`:''}
           </div>
+          ${e.notes?`<div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.4;max-height:32px;overflow:hidden">${e.notes}</div>`:''}
           <div style="display:flex;flex-wrap:wrap;gap:5px" onclick="event.stopPropagation()">
             ${e.menuLink?`<a href="${e.menuLink}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--green-border);border-radius:6px;background:var(--green-bg);color:var(--green-text);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-file-text" style="font-size:11px"></i>Menu</a>`:`<span style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;color:var(--text3)">No menu</span>`}
+            ${e.groceryLink?`<a href="${e.groceryLink}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--green-border);border-radius:6px;background:var(--green-bg);color:var(--green-text);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-shopping-cart" style="font-size:11px"></i>Grocery</a>`:''}
+            ${e.finalsLink?`<a href="${e.finalsLink}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-file-check" style="font-size:11px"></i>Finals</a>`:''}
+            ${e.logoData?`<a href="${e.logoData}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-photo" style="font-size:11px"></i>Logo</a>`:''}
+            ${e.venueLink?`<a href="${e.venueLink}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--teal-text);border-radius:6px;background:var(--teal-bg);color:var(--teal-text);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-building" style="font-size:11px"></i>Venue info</a>`:''}
+            ${e.floorplan?`<a href="${e.floorplan}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-layout" style="font-size:11px"></i>Floorplan</a>`:''}
+            ${e.processionLink?`<a href="${e.processionLink}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-arrow-right" style="font-size:11px"></i>Procession</a>`:''}
             ${role.canViewInvoices?`<button onclick="showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:3px 8px;border:0.5px solid ${invBorder};border-radius:6px;background:${invBg};color:${invColor};cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-file-invoice" style="font-size:11px"></i>${invLabel}</button>`:''}
             <button onclick="showView('equipment');setTimeout(()=>openEquipEvent('${e.id}'),300)" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:${eqBg};color:${eqColor};cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-tools" style="font-size:11px"></i>${eqLabel}</button>
             <button onclick="goChecklist('${e.id}')" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-checklist" style="font-size:11px"></i>Checklist</button>
             <button onclick="showView('schedule')" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-users" style="font-size:11px"></i>Schedule</button>
-            ${e.groceryLink?`<a href="${e.groceryLink}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-shopping-cart" style="font-size:11px"></i>Grocery</a>`:''}
           </div>
         </div>`);
       });
@@ -997,12 +1019,26 @@ function renderDetail(e,role){
             </span>
           </div>
           <div class="drow">
+            <span class="dkey">Finals sheet</span>
+            <span class="dval">${ed&&role.canEdit
+              ? `<input type="text" id="f-finalsLink" value="${e.finalsLink||''}" placeholder="Google Doc/Sheet link">`
+              : (e.finalsLink ? `<a href="${e.finalsLink}" target="_blank" style="font-size:12px;color:var(--blue-mid)">Open <i class="ti ti-external-link" style="font-size:11px"></i></a>` : '—')}
+            </span>
+          </div>
+          <div class="drow">
             <span class="dkey">Floorplan</span>
             <span class="dval">${ed&&role.canEdit
               ? `<input type="text" id="f-floorplan" value="${e.floorplan||''}">`
               : (e.floorplan ? `<a href="${e.floorplan}" target="_blank" style="font-size:12px;color:var(--blue-mid)">Open <i class="ti ti-external-link" style="font-size:11px"></i></a>` : '—')}
             </span>
           </div>
+          ${e.type==='wedding'||e.typeLabel?.toLowerCase().includes('wedding') ? `<div class="drow">
+            <span class="dkey">Procession</span>
+            <span class="dval">${ed&&role.canEdit
+              ? `<input type="text" id="f-processionLink" value="${e.processionLink||''}" placeholder="Procession doc link">`
+              : (e.processionLink ? `<a href="${e.processionLink}" target="_blank" style="font-size:12px;color:var(--blue-mid)">Open <i class="ti ti-external-link" style="font-size:11px"></i></a>` : '—')}
+            </span>
+          </div>` : ''}
           <div class="drow">
             <span class="dkey">Venue info</span>
             <span class="dval">${ed&&role.canEdit
@@ -1087,7 +1123,7 @@ function goChecklist(id){
 
 function saveEdit(id){
   const e=events.find(x=>x.id===id); if(!e) return;
-  ['name','addr','notes','manager','mashgiach','waiterTime','chefTime','menuLink','groceryLink','floorplan','venueLink','logoData'].forEach(k=>{const el=document.getElementById('f-'+k);if(el)e[k]=el.value;});
+  ['name','addr','notes','manager','mashgiach','waiterTime','chefTime','menuLink','groceryLink','floorplan','venueLink','logoData','finalsLink','processionLink'].forEach(k=>{const el=document.getElementById('f-'+k);if(el)e[k]=el.value;});
   ['waiters','chefs','porters'].forEach(k=>{const el=document.getElementById('f-'+k);if(el)e[k]=parseInt(el.value)||0;});
   const te=document.getElementById('f-type'); if(te){e.type=te.value;e.typeLabel=typeMap[te.value]||te.value;}
   const de=document.getElementById('f-day'); if(de)e.day=de.value;
@@ -1561,6 +1597,14 @@ function renderSchedule(){
   const totChefs      = staffEvents.reduce((s,e)=>s+(parseInt(e.chefs)||0),0);
   const totPorters    = staffEvents.reduce((s,e)=>s+(parseInt(e.porters)||0),0);
 
+  const sortOpts = [
+    {key:'by-event',    label:'By event'},
+    {key:'by-day',      label:'By day'},
+    {key:'by-dept',     label:'By department'},
+    {key:'dept-by-day', label:'Dept + day'},
+    {key:'summary',     label:'Summary table'},
+  ];
+
   let h = '<div class="stats-row">'
     + '<div class="stat-card"><div class="stat-n">'+totWaiters+'</div><div class="stat-l">waiters</div></div>'
     + '<div class="stat-card"><div class="stat-n">'+totBartenders+'</div><div class="stat-l">bartenders</div></div>'
@@ -1569,7 +1613,8 @@ function renderSchedule(){
     + '</div>'
     + '<div class="section-header">'
     + '<div class="section-title">Staff schedule — '+schedWeekLabel+'</div>'
-    + '<div style="display:flex;gap:6px">'
+    + '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">'
+    + sortOpts.map(function(s){ return '<button onclick="scheduleSort=\''+s.key+'\';render()" style="padding:5px 11px;border:0.5px solid '+(scheduleSort===s.key?'var(--blue-mid)':'var(--border2)')+';border-radius:var(--radius);background:'+(scheduleSort===s.key?'var(--blue-mid)':'var(--bg2)')+';color:'+(scheduleSort===s.key?'#fff':'var(--text2)')+';font-size:12px;cursor:pointer;font-weight:'+(scheduleSort===s.key?'600':'400')+'">'+s.label+'</button>'; }).join('')
     + '<button onclick="printFullSchedule()" class="icon-btn" title="Print full schedule"><i class="ti ti-printer"></i></button>'
     + '<button onclick="downloadFullSchedule()" class="icon-btn" title="Download full schedule"><i class="ti ti-download"></i></button>'
     + '</div>'
@@ -1669,8 +1714,121 @@ function renderSchedule(){
     return block;
   }
 
-  // Render staffed events
-  staffEvents.forEach(function(e){ h += renderEventBlock(e); });
+  // ── SORT VIEWS ──
+  const dayOrderSched = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+  const dayLabel = {monday:'Monday',tuesday:'Tuesday',wednesday:'Wednesday',thursday:'Thursday',friday:'Friday',saturday:'Saturday',sunday:'Sunday'};
+
+  if(scheduleSort === 'by-event' || !scheduleSort){
+    // Default: each event block with all departments
+    staffEvents.forEach(function(e){ h += renderEventBlock(e); });
+
+  } else if(scheduleSort === 'by-day'){
+    // Group events by day
+    const byDay = {};
+    staffEvents.forEach(function(e){ if(!byDay[e.day]) byDay[e.day]=[]; byDay[e.day].push(e); });
+    dayOrderSched.forEach(function(d){
+      if(!byDay[d]) return;
+      h += '<div style="margin-bottom:.5rem;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);padding:8px 0 4px;border-bottom:2px solid var(--border2)">'+dayLabel[d]+'</div>';
+      byDay[d].forEach(function(e){ h += renderEventBlock(e); });
+    });
+
+  } else if(scheduleSort === 'by-dept'){
+    // One section per department showing all events
+    depts.forEach(function(d){
+      const eventsWithDept = staffEvents.filter(function(e){ return d.key==='manager'?(e.manager&&e.manager!=='-'):(parseInt(e[d.countKey]||0)>0); });
+      if(!eventsWithDept.length) return;
+      const totCount = d.key==='manager' ? eventsWithDept.length : eventsWithDept.reduce(function(s,e){ return s+(parseInt(e[d.countKey]||0)||0); },0);
+      h += '<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:1rem;overflow:hidden">';
+      h += '<div style="display:flex;align-items:center;gap:10px;padding:.75rem 1.25rem;background:var(--bg3);border-bottom:1.5px solid var(--border)">';
+      h += '<span class="role-tag '+d.rc+'" style="font-size:13px;font-weight:700">'+d.label+'</span>';
+      h += '<span style="font-size:13px;color:var(--text2)">'+totCount+' total this week</span>';
+      h += '</div>';
+      h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">';
+      h += '<thead><tr style="background:var(--bg2)"><th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border)">Event</th><th style="padding:10px 14px;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border);text-align:center;width:50px">#</th><th style="padding:10px 14px;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border)">Names</th><th style="padding:10px 14px;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border);white-space:nowrap">Call time 1</th><th style="padding:10px 14px;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border);white-space:nowrap">Call time 2</th></tr></thead><tbody>';
+      eventsWithDept.forEach(function(e){
+        var count = d.key==='manager' ? '' : (parseInt(e[d.countKey]||0)||'—');
+        var names = d.key==='manager' ? (e.manager||'—') : (e[d.namesKey]||'—');
+        var t1 = e[d.t1]||'—';
+        var t2 = d.t2 ? (e[d.t2]||'—') : '';
+        h += '<tr style="border-bottom:0.5px solid var(--border)" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
+          + '<td style="padding:10px 14px"><span class="job-pill" style="margin-right:6px">'+displayJob(e.job)+'</span><span style="font-weight:500">'+e.name+'</span><span style="font-size:11px;color:var(--text3);margin-left:8px">'+e.dayLabel+'</span></td>'
+          + '<td style="padding:10px 14px;text-align:center;font-weight:700;font-size:15px">'+count+'</td>'
+          + '<td style="padding:10px 14px">'+names+'</td>'
+          + '<td style="padding:10px 14px">'+(t1!=='—'?'<span class="time-badge" style="font-size:12px;font-weight:600">'+t1+'</span>':'—')+'</td>'
+          + '<td style="padding:10px 14px">'+(t2&&t2!=='—'?'<span class="time-badge" style="font-size:12px;font-weight:600">'+t2+'</span>':t2===''?'':'—')+'</td>'
+          + '</tr>';
+      });
+      h += '</tbody></table></div></div>';
+    });
+
+  } else if(scheduleSort === 'dept-by-day'){
+    // Each department grouped, within each dept sorted by day
+    depts.forEach(function(d){
+      const eventsWithDept = staffEvents.filter(function(e){ return d.key==='manager'?(e.manager&&e.manager!=='-'):(parseInt(e[d.countKey]||0)>0); });
+      if(!eventsWithDept.length) return;
+      h += '<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:1rem;overflow:hidden">';
+      h += '<div style="display:flex;align-items:center;gap:10px;padding:.75rem 1.25rem;background:var(--bg3);border-bottom:1.5px solid var(--border)">';
+      h += '<span class="role-tag '+d.rc+'" style="font-size:13px;font-weight:700">'+d.label+'</span>';
+      h += '</div>';
+      const byDay2 = {};
+      eventsWithDept.forEach(function(e){ if(!byDay2[e.day]) byDay2[e.day]=[]; byDay2[e.day].push(e); });
+      dayOrderSched.forEach(function(day){
+        if(!byDay2[day]) return;
+        h += '<div style="padding:8px 14px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);background:var(--bg2);border-bottom:0.5px solid var(--border)">'+dayLabel[day]+'</div>';
+        h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>';
+        byDay2[day].forEach(function(e){
+          var count = d.key==='manager' ? '' : (parseInt(e[d.countKey]||0)||'—');
+          var names = d.key==='manager' ? (e.manager||'—') : (e[d.namesKey]||'—');
+          var t1 = e[d.t1]||'—';
+          var t2 = d.t2 ? (e[d.t2]||'') : '';
+          h += '<tr style="border-bottom:0.5px solid var(--border)" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
+            + '<td style="padding:10px 14px"><span class="job-pill" style="margin-right:6px">'+displayJob(e.job)+'</span><span style="font-weight:500">'+e.name+'</span></td>'
+            + '<td style="padding:10px 14px;text-align:center;font-weight:700;font-size:15px;width:50px">'+count+'</td>'
+            + '<td style="padding:10px 14px">'+names+'</td>'
+            + '<td style="padding:10px 14px;white-space:nowrap">'+(t1!=='—'?'<span class="time-badge">'+t1+'</span>':'—')+'</td>'
+            + '<td style="padding:10px 14px;white-space:nowrap">'+(t2?'<span class="time-badge">'+t2+'</span>':'')+'</td>'
+            + '</tr>';
+        });
+        h += '</tbody></table></div>';
+      });
+      h += '</div>';
+    });
+
+  } else if(scheduleSort === 'summary'){
+    // Quick summary table — all events vs all departments
+    h += '<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1rem">';
+    h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">';
+    h += '<thead><tr style="background:var(--bg3)">';
+    h += '<th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border)">Event</th>';
+    h += '<th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border)">Day</th>';
+    depts.forEach(function(d){
+      h += '<th style="padding:10px 10px;text-align:center;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border)"><span class="role-tag '+d.rc+'" style="font-size:11px">'+d.label+'</span></th>';
+    });
+    h += '</tr></thead><tbody>';
+    staffEvents.forEach(function(e){
+      h += '<tr style="border-bottom:0.5px solid var(--border)" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">';
+      h += '<td style="padding:10px 14px"><span class="job-pill" style="margin-right:6px">'+displayJob(e.job)+'</span><span style="font-weight:500">'+e.name+'</span></td>';
+      h += '<td style="padding:10px 14px;font-size:12px;color:var(--text2)">'+e.dayLabel+'</td>';
+      depts.forEach(function(d){
+        var count = d.key==='manager' ? (e.manager&&e.manager!=='-'?'✓':'') : (parseInt(e[d.countKey]||0)||'');
+        var t1 = e[d.t1]||'';
+        h += '<td style="padding:10px 10px;text-align:center">'
+          + (count?'<div style="font-weight:700;font-size:15px;color:var(--text)">'+count+'</div>':'<div style="color:var(--text3)">—</div>')
+          + (t1&&t1!=='-'?'<div style="font-size:10px;color:var(--text3);margin-top:2px">'+t1+'</div>':'')
+          + '</td>';
+      });
+      h += '</tr>';
+    });
+    // Totals row
+    h += '<tr style="background:var(--bg3);font-weight:600;border-top:2px solid var(--border)">';
+    h += '<td colspan="2" style="padding:10px 14px;font-size:13px">TOTALS</td>';
+    depts.forEach(function(d){
+      var tot = d.key==='manager' ? staffEvents.filter(function(e){return e.manager&&e.manager!=='-';}).length : staffEvents.reduce(function(s,e){return s+(parseInt(e[d.countKey]||0)||0);},0);
+      h += '<td style="padding:10px 10px;text-align:center;font-size:16px;font-weight:700;color:var(--text)">'+(tot||'—')+'</td>';
+    });
+    h += '</tr>';
+    h += '</tbody></table></div></div>';
+  }
 
   // Render no-staffing events at bottom
   if(noStaffEvents.length){
