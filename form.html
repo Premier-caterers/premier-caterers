@@ -213,11 +213,10 @@ const firebaseConfig = {
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-function g(id){ return document.getElementById(id)?.value.trim() || ''; }
+function g(id){ const el = document.getElementById(id); return el && el.value !== undefined ? el.value.trim() : ''; }
 function getShabbos(){ const r = document.querySelector('input[name="shabbos"]:checked'); return r ? r.value : ''; }
 
 async function submitForm(){
-  const errEl = g('errorMsg') || document.getElementById('errorMsg');
   const btn   = document.getElementById('submitBtn');
   const firstName = g('firstName');
   const lastName  = g('lastName');
