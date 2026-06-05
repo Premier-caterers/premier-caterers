@@ -1011,6 +1011,7 @@ function renderInqDetail(inq, role){
     <div class="detail-header">
       <div class="detail-title">${inq.firstName} ${inq.lastName}${inq.eventName?' — '+inq.eventName:''}</div>
       <div class="detail-actions">
+        ${role.canEdit ? `<button class="icon-btn" onclick="openEditInquiryModal('${inq.id}')" title="Edit"><i class="ti ti-edit"></i></button>` : ''}
         <button class="icon-btn" onclick="closeInqDetail()"><i class="ti ti-x"></i></button>
       </div>
     </div>
@@ -1061,6 +1062,8 @@ function renderInqDetail(inq, role){
               <a href="${doc.url.replace('/edit','/export?format=pdf')}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:12px;text-decoration:none"><i class="ti ti-download" style="font-size:11px"></i>Download PDF</a>
               <button onclick="openSendMenuModal('${inq.id}',${di})" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;font-size:12px;cursor:pointer"><i class="ti ti-send" style="font-size:11px"></i>Send to client</button>
               <button onclick="deleteMenuDoc('${inq.id}',${di})" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:0.5px solid #e05c5c;border-radius:var(--radius);background:var(--bg);color:#e05c5c;font-size:12px;cursor:pointer"><i class="ti ti-trash" style="font-size:11px"></i>Delete</button>
+            </div>
+            ${doc.pdfSent ? `<div style="margin-top:6px;font-size:12px;color:var(--green-text);display:flex;align-items:center;gap:6px"><i class="ti ti-circle-check" style="font-size:12px"></i>Sent to ${doc.sentTo} on ${doc.sentAt} — <a href="${doc.pdfUrl}" target="_blank" style="color:var(--blue-mid);text-decoration:none">View PDF</a></div>` : ''}
             </div>
           </div>`).join('')}
         </div>` : ''}
@@ -2419,6 +2422,7 @@ function renderInvoiceDetail(){
       <div><span style="font-size:11px;color:var(--text3);display:block">${isInvoice?'Invoice':'Quote'} #</span>${e.job}</div>
       <div><span style="font-size:11px;color:var(--text3);display:block">Event date</span>${getFullEventDate(e)}</div>
       <div><span style="font-size:11px;color:var(--text3);display:block">Created</span>${inv.createdAt}</div>
+      <div><span style="font-size:11px;color:var(--text3);display:block">Client name</span>${canEdit?`<input type="text" value="${inv.clientName||e.name||''}" onchange="invoices['${eid}'].clientName=this.value" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:(inv.clientName||e.name||'—')}</div>
       <div><span style="font-size:11px;color:var(--text3);display:block">Client phone</span>${canEdit?`<input type="text" value="${inv.clientPhone||''}" onchange="invoices['${eid}'].clientPhone=this.value" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:(inv.clientPhone||'—')}</div>
       <div><span style="font-size:11px;color:var(--text3);display:block">Client email</span>${canEdit?`<input type="text" value="${inv.clientEmail||''}" onchange="invoices['${eid}'].clientEmail=this.value" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:(inv.clientEmail||'—')}</div>
       <div><span style="font-size:11px;color:var(--text3);display:block">Address</span>${e.addr||'—'}</div>
@@ -3777,40 +3781,45 @@ async function sendMenuEmail(inqId, docIdx){
   if(!to){ errEl.textContent='Please enter a recipient email.'; errEl.style.display='block'; return; }
   if(!gmailToken){ errEl.textContent='Gmail not connected. Please connect Gmail in Settings first.'; errEl.style.display='block'; return; }
 
+  const menuScriptUrl = localStorage.getItem('menuScriptUrl');
+  if(!menuScriptUrl){ errEl.textContent='Menu automation script not connected in Settings.'; errEl.style.display='block'; return; }
+
   const sendBtn = document.querySelector('#sendMenuModal button[onclick^="sendMenuEmail"]');
-  if(sendBtn){ sendBtn.disabled=true; sendBtn.textContent='Sending...'; }
+  if(sendBtn){ sendBtn.disabled=true; sendBtn.textContent='Fetching PDF...'; }
 
   try {
-    // Fetch PDF from Google Docs export URL
-    const pdfUrl = doc.url.replace('/edit','').replace(/[?#].*$/,'') + '/export?format=pdf';
-    const pdfResp = await fetch(pdfUrl);
-    if(!pdfResp.ok) throw new Error('Could not download PDF from Google Docs');
-    const pdfBlob = await pdfResp.arrayBuffer();
-    const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(pdfBlob)));
+    // Fetch PDF via Apps Script to avoid CORS restrictions
     const pdfFilename = doc.name + '.pdf';
+    const pdfRequestUrl = menuScriptUrl + '?action=getPdf&docUrl=' + encodeURIComponent(doc.url);
+    const pdfResp = await fetch(pdfRequestUrl, { method:'GET', redirect:'follow' });
+    const pdfData = await pdfResp.json();
+    if(!pdfData.success || !pdfData.pdfBase64) throw new Error(pdfData.error || 'Could not get PDF from Apps Script');
+    const pdfBase64 = pdfData.pdfBase64;
+
+    if(sendBtn) sendBtn.textContent = 'Sending...';
 
     // Build RFC 2822 email with PDF attachment
-    const boundary = 'boundary_'+Date.now();
+    const boundary = 'boundary_' + Date.now();
     const emailLines = [
       'MIME-Version: 1.0',
-      'To: '+to,
+      'To: ' + to,
       'From: events@thepremiercaterer.com',
-      'Subject: '+subject,
-      'Content-Type: multipart/mixed; boundary="'+boundary+'"',
+      'Subject: ' + subject,
+      'Content-Type: multipart/mixed; boundary="' + boundary + '"',
       '',
-      '--'+boundary,
+      '--' + boundary,
       'Content-Type: text/plain; charset="UTF-8"',
       'Content-Transfer-Encoding: 7bit',
       '',
       body,
       '',
-      '--'+boundary,
+      '--' + boundary,
       'Content-Type: application/pdf',
       'Content-Transfer-Encoding: base64',
-      'Content-Disposition: attachment; filename="'+pdfFilename+'"',
+      'Content-Disposition: attachment; filename="' + pdfFilename + '"',
       '',
       pdfBase64,
-      '--'+boundary+'--'
+      '--' + boundary + '--'
     ];
     const raw = btoa(unescape(encodeURIComponent(emailLines.join('\r\n'))))
       .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -3826,17 +3835,24 @@ async function sendMenuEmail(inqId, docIdx){
       throw new Error(err.error?.message||'Gmail send failed');
     }
 
+    // Save PDF link on the menu doc entry
+    const pdfExportUrl = doc.url.replace('/edit','').replace(/[?#].*$/,'') + '/export?format=pdf';
+    inq.menuDocs[docIdx].pdfSent = true;
+    inq.menuDocs[docIdx].pdfUrl = pdfExportUrl;
+    inq.menuDocs[docIdx].sentTo = to;
+    inq.menuDocs[docIdx].sentAt = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+
     // Move inquiry to menu_sent stage
     inq.stage = 'menu_sent';
     await _saveInquiry(inq);
 
     document.getElementById('sendMenuModal')?.remove();
-    showToast('✓ Menu sent to '+to, 4000);
+    showToast('✓ Menu sent to ' + to, 4000);
     updatePipelineBadge();
     render();
 
   } catch(err){
-    errEl.textContent = 'Error: '+err.message;
+    errEl.textContent = 'Error: ' + err.message;
     errEl.style.display = 'block';
     if(sendBtn){ sendBtn.disabled=false; sendBtn.textContent='Send menu'; }
   }
@@ -3845,6 +3861,91 @@ async function sendMenuEmail(inqId, docIdx){
 window.deleteMenuDoc = deleteMenuDoc;
 window.openSendMenuModal = openSendMenuModal;
 window.sendMenuEmail = sendMenuEmail;
+
+function openEditInquiryModal(id){
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq) return;
+  document.getElementById('editInquiryModal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'editInquiryModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px';
+  const inp = 'width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;box-sizing:border-box';
+  const fld = 'margin-bottom:.85rem';
+  const lbl = 'font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);display:block;margin-bottom:5px';
+  modal.innerHTML = `
+  <div style="background:var(--bg);border-radius:var(--radius-lg);width:100%;max-width:620px;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden">
+    <div style="background:var(--blue-bg);border-bottom:0.5px solid var(--blue-border);padding:1.25rem 1.5rem;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:15px;font-weight:600;color:var(--blue-text)"><i class="ti ti-edit"></i> Edit Inquiry — ${inq.firstName} ${inq.lastName}</div>
+      <button onclick="document.getElementById('editInquiryModal').remove()" style="border:none;background:none;font-size:20px;color:var(--text2);cursor:pointer">×</button>
+    </div>
+    <div style="padding:1.5rem">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
+        <div style="${fld}"><label style="${lbl}">First name</label><input id="ei_firstName" style="${inp}" value="${inq.firstName||''}"></div>
+        <div style="${fld}"><label style="${lbl}">Last name</label><input id="ei_lastName" style="${inp}" value="${inq.lastName||''}"></div>
+        <div style="${fld}"><label style="${lbl}">Email</label><input id="ei_email" style="${inp}" value="${inq.email||''}"></div>
+        <div style="${fld}"><label style="${lbl}">Phone</label><input id="ei_phone" style="${inp}" value="${inq.phone||''}"></div>
+      </div>
+      <div style="${fld}"><label style="${lbl}">Event name</label><input id="ei_eventName" style="${inp}" value="${inq.eventName||''}"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
+        <div style="${fld}">
+          <label style="${lbl}">Event type</label>
+          <select id="ei_eventType" style="${inp};appearance:none">
+            ${['Bar Mitzvah','Bat Mitzvah','Wedding','Kiddush','Bris','Sheva Brachos','Vort','Shloshim','Breakfast','Brunch','Corporate','Drop off catering','Other'].map(t=>`<option ${inq.eventType===t?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div style="${fld}"><label style="${lbl}">Event date</label><input id="ei_eventDate" type="date" style="${inp}" value="${inq.eventDate||''}"></div>
+        <div style="${fld}"><label style="${lbl}">Guest count</label><input id="ei_guestCount" type="number" style="${inp}" value="${inq.guestCount||''}"></div>
+        <div style="${fld}">
+          <label style="${lbl}">Shabbos event?</label>
+          <select id="ei_shabbos" style="${inp};appearance:none">
+            <option value="" ${!inq.shabbos?'selected':''}>Select...</option>
+            <option value="Yes" ${inq.shabbos==='Yes'?'selected':''}>Yes — Shabbos</option>
+            <option value="No" ${inq.shabbos==='No'?'selected':''}>No</option>
+            <option value="Both" ${inq.shabbos==='Both'?'selected':''}>Both</option>
+          </select>
+        </div>
+      </div>
+      <div style="${fld}"><label style="${lbl}">Venue name</label><input id="ei_venueName" style="${inp}" value="${inq.venueName||''}"></div>
+      <div style="${fld}"><label style="${lbl}">Venue location</label><input id="ei_venueLocation" style="${inp}" value="${inq.venueLocation||''}"></div>
+      <div style="${fld}"><label style="${lbl}">Party planner name</label><input id="ei_plannerName" style="${inp}" value="${inq.plannerName||''}"></div>
+      <div style="${fld}"><label style="${lbl}">How did they find us?</label><input id="ei_howFound" style="${inp}" value="${inq.howFound||''}"></div>
+      <div style="${fld}"><label style="${lbl}">Referred by</label><input id="ei_referredBy" style="${inp}" value="${inq.referredBy||''}"></div>
+      <div style="${fld}"><label style="${lbl}">Notes / Comments</label><textarea id="ei_comments" rows="3" style="${inp};resize:vertical">${inq.comments||''}</textarea></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="document.getElementById('editInquiryModal').remove()" style="padding:9px 18px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);font-size:13px;cursor:pointer">Cancel</button>
+        <button onclick="saveEditedInquiry('${id}')" style="padding:9px 20px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;font-size:13px;font-weight:500;cursor:pointer">Save changes</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function saveEditedInquiry(id){
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq) return;
+  inq.firstName    = document.getElementById('ei_firstName')?.value.trim()||inq.firstName;
+  inq.lastName     = document.getElementById('ei_lastName')?.value.trim()||inq.lastName;
+  inq.email        = document.getElementById('ei_email')?.value.trim()||'';
+  inq.phone        = document.getElementById('ei_phone')?.value.trim()||'';
+  inq.eventName    = document.getElementById('ei_eventName')?.value.trim()||'';
+  inq.eventType    = document.getElementById('ei_eventType')?.value||inq.eventType;
+  inq.eventDate    = document.getElementById('ei_eventDate')?.value||'';
+  inq.guestCount   = document.getElementById('ei_guestCount')?.value||'';
+  inq.shabbos      = document.getElementById('ei_shabbos')?.value||'';
+  inq.venueName    = document.getElementById('ei_venueName')?.value.trim()||'';
+  inq.venueLocation= document.getElementById('ei_venueLocation')?.value.trim()||'';
+  inq.plannerName  = document.getElementById('ei_plannerName')?.value.trim()||'';
+  inq.howFound     = document.getElementById('ei_howFound')?.value.trim()||'';
+  inq.referredBy   = document.getElementById('ei_referredBy')?.value.trim()||'';
+  inq.comments     = document.getElementById('ei_comments')?.value.trim()||'';
+  await _saveInquiry(inq);
+  document.getElementById('editInquiryModal')?.remove();
+  showToast('Inquiry updated ✓');
+  render();
+}
+
+window.openEditInquiryModal = openEditInquiryModal;
+window.saveEditedInquiry = saveEditedInquiry;
 
 
 
