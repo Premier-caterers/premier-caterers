@@ -3630,11 +3630,10 @@ function triggerMenuAutomation(inquiryData){
     console.log('Menu automation: no script URL configured yet.');
     return;
   }
-  fetch(menuScriptUrl, {
-    method:'POST',
-    body:JSON.stringify(inquiryData),
-    headers:{'Content-Type':'application/json'}
-  })
+  // Use GET with encoded data to avoid CORS preflight issues
+  const encoded = encodeURIComponent(JSON.stringify(inquiryData));
+  const url = menuScriptUrl + '?data=' + encoded;
+  fetch(url, { method:'GET', redirect:'follow' })
   .then(r=>r.json())
   .then(resp=>{
     if(resp.success && resp.result && resp.result.templatesCopied && resp.result.templatesCopied.length>0){
