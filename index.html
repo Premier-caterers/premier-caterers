@@ -1050,6 +1050,20 @@ function renderInqDetail(inq, role){
           <div class="detail-block-title">Notes</div>
           <div style="font-size:13px;color:var(--text2);line-height:1.6">${inq.comments||'—'}</div>
         </div>
+        ${(inq.menuDocs && inq.menuDocs.length > 0) ? `
+        <div class="detail-block">
+          <div class="detail-block-title">Menu Documents</div>
+          ${inq.menuDocs.map((doc, di) => `
+          <div style="border:0.5px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;background:var(--bg2)">
+            <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--text)"><i class="ti ti-file-text" style="font-size:13px;margin-right:5px"></i>${doc.name}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <a href="${doc.url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:12px;text-decoration:none"><i class="ti ti-external-link" style="font-size:11px"></i>Open in Google Docs</a>
+              <a href="${doc.url.replace('/edit','/export?format=pdf')}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:12px;text-decoration:none"><i class="ti ti-download" style="font-size:11px"></i>Download PDF</a>
+              <button onclick="openSendMenuModal('${inq.id}',${di})" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;font-size:12px;cursor:pointer"><i class="ti ti-send" style="font-size:11px"></i>Send to client</button>
+              <button onclick="deleteMenuDoc('${inq.id}',${di})" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:0.5px solid #e05c5c;border-radius:var(--radius);background:var(--bg);color:#e05c5c;font-size:12px;cursor:pointer"><i class="ti ti-trash" style="font-size:11px"></i>Delete</button>
+            </div>
+          </div>`).join('')}
+        </div>` : ''}
       </div>
     </div>
   </div>`;
@@ -3630,7 +3644,6 @@ function triggerMenuAutomation(inquiryData){
     console.log('Menu automation: no script URL configured yet.');
     return;
   }
-  // Use GET with encoded data to avoid CORS preflight issues
   const encoded = encodeURIComponent(JSON.stringify(inquiryData));
   const url = menuScriptUrl + '?data=' + encoded;
   fetch(url, { method:'GET', redirect:'follow' })
@@ -3639,17 +3652,23 @@ function triggerMenuAutomation(inquiryData){
     if(resp.success && resp.result && resp.result.templatesCopied && resp.result.templatesCopied.length>0){
       const copies = resp.result.templatesCopied;
       const clientName = ((inquiryData.firstName||'')+' '+(inquiryData.lastName||'')).trim();
-      const banners = JSON.parse(localStorage.getItem(MENU_AUTOMATION_BANNERS_KEY)||'[]');
-      banners.unshift({
+
+      // Save menu links back to the inquiry in Firebase
+      const inq = inquiries.find(x=>x.id===inquiryData.id);
+      if(inq){
+        inq.menuDocs = copies.map(c=>({ name:c.name, url:c.url, templateNum:c.templateNum }));
+        _saveInquiry(inq);
+      }
+
+      // Show banner
+      const banner = {
         id:Date.now()+'',
         clientName,
         eventType:inquiryData.eventType||'',
         copies,
         ts:new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true})
-      });
-      if(banners.length>20) banners.length=20;
-      localStorage.setItem(MENU_AUTOMATION_BANNERS_KEY,JSON.stringify(banners));
-      showMenuAutomationBanner(banners[0]);
+      };
+      showMenuAutomationBanner(banner);
     }
   })
   .catch(err=>console.log('Menu automation error:',err));
@@ -3672,8 +3691,157 @@ function showMenuAutomationBanner(b){
   setTimeout(()=>div?.remove(),15000);
 }
 
-window.triggerMenuAutomation=triggerMenuAutomation;
-window.showMenuAutomationBanner=showMenuAutomationBanner;
+function deleteMenuDoc(inqId, docIdx){
+  if(!confirm('Remove this menu document from the card?')) return;
+  const inq = inquiries.find(x=>x.id===inqId);
+  if(!inq||!inq.menuDocs) return;
+  inq.menuDocs.splice(docIdx, 1);
+  _saveInquiry(inq);
+  render();
+}
+
+function openSendMenuModal(inqId, docIdx){
+  const inq = inquiries.find(x=>x.id===inqId);
+  if(!inq) return;
+  const doc = inq.menuDocs && inq.menuDocs[docIdx];
+  if(!doc) return;
+
+  const firstName  = inq.firstName||'';
+  const lastName   = inq.lastName||'';
+  const eventType  = inq.eventType||'';
+  const eventDate  = formatDate(inq.eventDate);
+  const eventName  = inq.eventName||(firstName+' '+lastName+' '+eventType);
+  const venueName  = inq.venueName||'';
+  const clientEmail = inq.email||'';
+
+  const subject = eventName+', '+firstName+' '+lastName+', '+eventType+(eventDate?' ('+eventDate+')':'');
+  const body = 'Dear '+firstName+',\n\nThank you for reaching out to Premier Caterers. Please find attached your sample menu for your '+eventType+(eventDate?' on '+eventDate:'')+(venueName?' at '+venueName:'')+'.\n\nWe would love the opportunity to discuss your event further. Please feel free to reach out with any questions or changes.\n\nWarm regards,\nThe Premier Caterers Team';
+
+  document.getElementById('sendMenuModal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'sendMenuModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px';
+  const inp = 'width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;box-sizing:border-box';
+  modal.innerHTML = `
+  <div style="background:var(--bg);border-radius:var(--radius-lg);width:100%;max-width:560px;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden">
+    <div style="background:var(--blue-bg);border-bottom:0.5px solid var(--blue-border);padding:1rem 1.25rem;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:15px;font-weight:600;color:var(--blue-text)"><i class="ti ti-send"></i> Send Menu to Client</div>
+      <button onclick="document.getElementById('sendMenuModal').remove()" style="border:none;background:none;font-size:20px;color:var(--text2);cursor:pointer">×</button>
+    </div>
+    <div style="padding:1.25rem;display:flex;flex-direction:column;gap:12px">
+      <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:12px;color:var(--text2)">
+        <i class="ti ti-file-text" style="font-size:12px"></i> Sending: <strong>${doc.name}</strong>
+        <span style="margin-left:8px;font-size:11px">(<a href="${doc.url.replace('/edit','/export?format=pdf')}" target="_blank" style="color:var(--blue-mid)">Download PDF first to review</a>)</span>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);display:block;margin-bottom:5px">To</label>
+        <input id="smTo" style="${inp}" value="${clientEmail}" placeholder="client@email.com">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);display:block;margin-bottom:5px">Subject</label>
+        <input id="smSubject" style="${inp}" value="${subject.replace(/"/g,'&quot;')}">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);display:block;margin-bottom:5px">Body</label>
+        <textarea id="smBody" rows="8" style="${inp};resize:vertical">${body}</textarea>
+      </div>
+      <div style="background:#fff8e6;border:0.5px solid #f0d060;border-radius:var(--radius);padding:8px 12px;font-size:12px;color:#7a5f00">
+        <i class="ti ti-info-circle"></i> The PDF will be attached automatically from Google Docs. Make sure you've finished editing the doc before sending.
+      </div>
+      <div id="smError" style="display:none;color:#c0392b;font-size:13px;padding:8px 12px;background:#fdf0f0;border-radius:var(--radius)"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button onclick="document.getElementById('sendMenuModal').remove()" style="padding:9px 18px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);font-size:13px;cursor:pointer">Cancel</button>
+        <button onclick="sendMenuEmail('${inqId}',${docIdx})" style="padding:9px 20px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;font-size:13px;font-weight:500;cursor:pointer"><i class="ti ti-send"></i> Send menu</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function sendMenuEmail(inqId, docIdx){
+  const inq = inquiries.find(x=>x.id===inqId);
+  if(!inq) return;
+  const doc = inq.menuDocs && inq.menuDocs[docIdx];
+  if(!doc) return;
+
+  const to      = document.getElementById('smTo')?.value.trim();
+  const subject = document.getElementById('smSubject')?.value.trim();
+  const body    = document.getElementById('smBody')?.value.trim();
+  const errEl   = document.getElementById('smError');
+
+  if(!to){ errEl.textContent='Please enter a recipient email.'; errEl.style.display='block'; return; }
+  if(!gmailToken){ errEl.textContent='Gmail not connected. Please connect Gmail in Settings first.'; errEl.style.display='block'; return; }
+
+  const sendBtn = document.querySelector('#sendMenuModal button[onclick^="sendMenuEmail"]');
+  if(sendBtn){ sendBtn.disabled=true; sendBtn.textContent='Sending...'; }
+
+  try {
+    // Fetch PDF from Google Docs export URL
+    const pdfUrl = doc.url.replace('/edit','').replace(/[?#].*$/,'') + '/export?format=pdf';
+    const pdfResp = await fetch(pdfUrl);
+    if(!pdfResp.ok) throw new Error('Could not download PDF from Google Docs');
+    const pdfBlob = await pdfResp.arrayBuffer();
+    const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(pdfBlob)));
+    const pdfFilename = doc.name + '.pdf';
+
+    // Build RFC 2822 email with PDF attachment
+    const boundary = 'boundary_'+Date.now();
+    const emailLines = [
+      'MIME-Version: 1.0',
+      'To: '+to,
+      'From: events@thepremiercaterer.com',
+      'Subject: '+subject,
+      'Content-Type: multipart/mixed; boundary="'+boundary+'"',
+      '',
+      '--'+boundary,
+      'Content-Type: text/plain; charset="UTF-8"',
+      'Content-Transfer-Encoding: 7bit',
+      '',
+      body,
+      '',
+      '--'+boundary,
+      'Content-Type: application/pdf',
+      'Content-Transfer-Encoding: base64',
+      'Content-Disposition: attachment; filename="'+pdfFilename+'"',
+      '',
+      pdfBase64,
+      '--'+boundary+'--'
+    ];
+    const raw = btoa(unescape(encodeURIComponent(emailLines.join('\r\n'))))
+      .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+
+    const gmailResp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: { 'Authorization':'Bearer '+gmailToken, 'Content-Type':'application/json' },
+      body: JSON.stringify({ raw })
+    });
+
+    if(!gmailResp.ok){
+      const err = await gmailResp.json();
+      throw new Error(err.error?.message||'Gmail send failed');
+    }
+
+    // Move inquiry to menu_sent stage
+    inq.stage = 'menu_sent';
+    await _saveInquiry(inq);
+
+    document.getElementById('sendMenuModal')?.remove();
+    showToast('✓ Menu sent to '+to, 4000);
+    updatePipelineBadge();
+    render();
+
+  } catch(err){
+    errEl.textContent = 'Error: '+err.message;
+    errEl.style.display = 'block';
+    if(sendBtn){ sendBtn.disabled=false; sendBtn.textContent='Send menu'; }
+  }
+}
+
+window.deleteMenuDoc = deleteMenuDoc;
+window.openSendMenuModal = openSendMenuModal;
+window.sendMenuEmail = sendMenuEmail;
+
+
 
 
 // ── SETTINGS ──
