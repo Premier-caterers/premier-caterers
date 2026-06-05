@@ -3646,49 +3646,54 @@ function triggerMenuAutomation(inquiryData){
   }
   const encoded = encodeURIComponent(JSON.stringify(inquiryData));
   const url = menuScriptUrl + '?data=' + encoded;
+  console.log('Menu automation: calling script...');
   fetch(url, { method:'GET', redirect:'follow' })
   .then(r=>r.json())
   .then(resp=>{
+    console.log('Menu automation response:', JSON.stringify(resp));
     if(resp.success && resp.result && resp.result.templatesCopied && resp.result.templatesCopied.length>0){
       const copies = resp.result.templatesCopied;
       const clientName = ((inquiryData.firstName||'')+' '+(inquiryData.lastName||'')).trim();
+      const menuDocs = copies.map(c=>({ name:c.name, url:c.url, templateNum:c.templateNum }));
 
-      // Save menu links back to the inquiry in Firebase
-      const inq = inquiries.find(x=>x.id===inquiryData.id);
-      if(inq){
-        inq.menuDocs = copies.map(c=>({ name:c.name, url:c.url, templateNum:c.templateNum }));
-        _saveInquiry(inq);
+      // Save directly to Firebase by inquiry ID — don't rely on local array
+      if(db && inquiryData.id){
+        db.collection('inquiries').doc(inquiryData.id).update({ menuDocs: menuDocs })
+          .then(()=>console.log('Menu docs saved to Firebase'))
+          .catch(err=>{
+            // update() fails if doc doesn't exist, try set with merge
+            db.collection('inquiries').doc(inquiryData.id).set({ menuDocs: menuDocs }, { merge: true })
+              .then(()=>console.log('Menu docs saved to Firebase (merge)'))
+              .catch(e=>console.error('Failed to save menu docs:', e));
+          });
       }
 
       // Show banner
-      const banner = {
-        id:Date.now()+'',
-        clientName,
-        eventType:inquiryData.eventType||'',
-        copies,
-        ts:new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true})
-      };
-      showMenuAutomationBanner(banner);
+      showMenuAutomationBanner({ clientName, eventType:inquiryData.eventType||'', copies });
+    } else {
+      console.log('Menu automation: no templates copied or error in response');
     }
   })
-  .catch(err=>console.log('Menu automation error:',err));
+  .catch(err=>console.log('Menu automation fetch error:', err));
 }
 
 function showMenuAutomationBanner(b){
   document.getElementById('menuAutoBanner')?.remove();
   const div=document.createElement('div');
   div.id='menuAutoBanner';
-  div.style.cssText='position:fixed;bottom:80px;right:20px;z-index:900;background:var(--bg);border:1.5px solid var(--green-text);border-radius:var(--radius-lg);padding:14px 18px;max-width:340px;box-shadow:0 4px 20px rgba(0,0,0,.15)';
-  const links=b.copies.map(c=>'<div style="font-size:12px;margin-top:5px"><a href="'+c.url+'" target="_blank" style="color:var(--blue-mid);text-decoration:none">↗ '+c.name+'</a></div>').join('');
-  div.innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start">'
-    +'<div style="font-size:13px;font-weight:600;color:var(--green-text)"><i class="ti ti-circle-check"></i> Menu templates ready</div>'
-    +'<button onclick="document.getElementById(\'menuAutoBanner\').remove()" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:16px;padding:0 0 0 8px">×</button>'
+  div.style.cssText='position:fixed;top:20px;right:20px;z-index:9999;background:var(--bg);border:2px solid var(--green-text);border-radius:var(--radius-lg);padding:16px 20px;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,.25);animation:slideInRight .3s ease';
+  const links=b.copies.map(c=>'<div style="font-size:12px;margin-top:6px"><a href="'+c.url+'" target="_blank" style="color:var(--blue-mid);text-decoration:none;display:flex;align-items:center;gap:4px"><i class="ti ti-external-link" style="font-size:11px"></i>'+c.name+'</a></div>').join('');
+  div.innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">'
+    +'<div style="font-size:14px;font-weight:600;color:var(--green-text);display:flex;align-items:center;gap:6px"><i class="ti ti-circle-check" style="font-size:16px"></i> Menu templates ready!</div>'
+    +'<button onclick="document.getElementById(\'menuAutoBanner\').remove()" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:18px;line-height:1;padding:0 0 0 8px">×</button>'
     +'</div>'
-    +'<div style="font-size:13px;color:var(--text);margin-top:6px"><strong>'+b.clientName+'</strong> — '+b.eventType+'</div>'
-    +'<div style="font-size:12px;color:var(--text2);margin-top:2px">'+b.copies.length+' template'+(b.copies.length>1?'s':'')+' copied to Google Drive</div>'
-    +links;
+    +'<div style="font-size:13px;color:var(--text);margin-bottom:4px"><strong>'+b.clientName+'</strong> — '+b.eventType+'</div>'
+    +'<div style="font-size:12px;color:var(--text2);margin-bottom:6px">'+b.copies.length+' template'+(b.copies.length>1?'s':'')+' copied &amp; filled in Google Drive</div>'
+    +links
+    +'<div style="font-size:11px;color:var(--text3);margin-top:8px">Links also saved to the client card in Pipeline</div>';
   document.body.appendChild(div);
-  setTimeout(()=>div?.remove(),15000);
+  // Auto-dismiss after 20 seconds
+  setTimeout(()=>document.getElementById('menuAutoBanner')?.remove(), 20000);
 }
 
 function deleteMenuDoc(inqId, docIdx){
