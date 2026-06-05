@@ -1255,6 +1255,9 @@ function promoteToEvent(id){
   // Menu template mapping: [eventType, shabbos] → template numbers
   // (used by future Google Docs automation)
   const MENU_TEMPLATE_MAP = {
+    'Aufruf:Yes':        [8],
+    'Aufruf:No':         [8],
+    'Aufruf:Both':       [8],
     'Bar Mitzvah:Yes':   [8,10],
     'Bar Mitzvah:No':    [3,4],
     'Bar Mitzvah:Both':  [3,4,8,10],
@@ -1302,6 +1305,9 @@ function promoteToEvent(id){
   // Remove from inquiries pipeline entirely
   inquiries = inquiries.filter(x=>x.id!==id);
   db.collection('inquiries').doc(id).delete();
+
+  // Update calendar event color to blueberry (booked)
+  updateCalendarEventToBooked(inq);
 
   save();
   updatePipelineBadge();
@@ -1377,6 +1383,7 @@ function openAddInquiryModal(){
           <label style="${lbl}">Event type *</label>
           <select id="iq_eventType" style="${inp};appearance:none">
             <option value="">Select type...</option>
+            <option>Aufruf</option>
             <option>Bar Mitzvah</option>
             <option>Bat Mitzvah</option>
             <option>Wedding</option>
@@ -3832,13 +3839,111 @@ function showMenuAutomationBanner(b){
 }
 
 function deleteMenuDoc(inqId, docIdx){
-  if(!confirm('Remove this menu document from the card?')) return;
+  if(!confirm('Remove this menu document from the card and delete it from Google Drive?')) return;
   const inq = inquiries.find(x=>x.id===inqId);
   if(!inq||!inq.menuDocs) return;
+  const doc = inq.menuDocs[docIdx];
+
+  // Delete from Google Drive via Apps Script
+  if(doc && doc.url){
+    const menuScriptUrl = localStorage.getItem('menuScriptUrl');
+    if(menuScriptUrl){
+      const fileIdMatch = doc.url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      if(fileIdMatch){
+        const fileId = fileIdMatch[1];
+        const delUrl = menuScriptUrl + '?action=deleteFile&fileId=' + encodeURIComponent(fileId);
+        fetch(delUrl, { method:'GET', redirect:'follow' })
+          .then(r=>r.json())
+          .then(resp=>{ if(resp.success) console.log('Deleted from Drive:', fileId); })
+          .catch(err=>console.log('Drive delete error:', err));
+      }
+    }
+  }
+
   inq.menuDocs.splice(docIdx, 1);
   _saveInquiry(inq);
   render();
 }
+
+// Google Calendar color IDs: banana=5, blueberry=9
+const CALENDAR_COLOR_BANANA    = '5';
+const CALENDAR_COLOR_BLUEBERRY = '9';
+// Store calendarEventId on inquiry so we can update it when booked
+// Uses the shared "Premier Caterers" calendar — set its ID in Settings or auto-detect
+
+async function getCalendarId(){
+  // Try stored, otherwise find "Premier Caterers" calendar
+  const stored = localStorage.getItem('premierCalendarId');
+  if(stored) return stored;
+  if(!gmailToken) return null;
+  try {
+    const resp = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+      headers:{ 'Authorization':'Bearer '+gmailToken }
+    });
+    const data = await resp.json();
+    const cal = (data.items||[]).find(c=>c.summary&&c.summary.toLowerCase().includes('premier'));
+    if(cal){ localStorage.setItem('premierCalendarId', cal.id); return cal.id; }
+    return 'primary'; // fallback
+  } catch(e){ return 'primary'; }
+}
+
+async function createCalendarEventForInquiry(inq, sentDateLabel){
+  if(!gmailToken) return;
+  try {
+    const calId = await getCalendarId();
+    if(!calId) return;
+
+    const clientName  = ((inq.firstName||'')+' '+(inq.lastName||'')).trim();
+    const venueName   = inq.venueName||'';
+    const eventName   = inq.eventName||(clientName+' '+inq.eventType);
+    const title       = eventName + ' (' + clientName + ')' + (venueName?' '+venueName:'');
+    const dateStr     = inq.eventDate || '';
+    if(!dateStr) return; // no date = can't create calendar event
+
+    const notes = (sentDateLabel||new Date().toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit'})) + ' menu sent via PCA';
+
+    const calEvent = {
+      summary: title,
+      description: notes,
+      start:  { date: dateStr },
+      end:    { date: dateStr },
+      colorId: CALENDAR_COLOR_BANANA,
+      location: venueName + (inq.venueLocation ? ', ' + inq.venueLocation : '')
+    };
+
+    const resp = await fetch('https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(calId) + '/events', {
+      method: 'POST',
+      headers: { 'Authorization':'Bearer '+gmailToken, 'Content-Type':'application/json' },
+      body: JSON.stringify(calEvent)
+    });
+    const created = await resp.json();
+    if(created.id){
+      // Save calendar event ID on inquiry for later color update
+      inq.calendarEventId = created.id;
+      inq.calendarId      = calId;
+      await _saveInquiry(inq);
+      showToast('✓ Added to Premier Caterers calendar', 3000);
+    }
+  } catch(e){ console.log('Calendar create error:', e); }
+}
+
+async function updateCalendarEventToBooked(inq){
+  if(!gmailToken || !inq.calendarEventId || !inq.calendarId) return;
+  try {
+    // Patch the event color to blueberry
+    const url = 'https://www.googleapis.com/calendar/v3/calendars/'
+      + encodeURIComponent(inq.calendarId) + '/events/'
+      + encodeURIComponent(inq.calendarEventId);
+    await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Authorization':'Bearer '+gmailToken, 'Content-Type':'application/json' },
+      body: JSON.stringify({ colorId: CALENDAR_COLOR_BLUEBERRY })
+    });
+  } catch(e){ console.log('Calendar color update error:', e); }
+}
+
+window.createCalendarEventForInquiry = createCalendarEventForInquiry;
+window.updateCalendarEventToBooked   = updateCalendarEventToBooked;
 
 function openSendMenuModal(inqId, docIdx){
   const inq = inquiries.find(x=>x.id===inqId);
@@ -3951,6 +4056,9 @@ async function sendMenuEmail(inqId, docIdx){
     inq.stage = 'menu_sent';
     await _saveInquiry(inq);
 
+    // Create Google Calendar event
+    createCalendarEventForInquiry(inq, inq.menuDocs[docIdx].sentAt);
+
     document.getElementById('sendMenuModal')?.remove();
     showToast('✓ Menu sent to ' + to, 4000);
     updatePipelineBadge();
@@ -3995,7 +4103,7 @@ function openEditInquiryModal(id){
         <div style="${fld}">
           <label style="${lbl}">Event type</label>
           <select id="ei_eventType" style="${inp};appearance:none">
-            ${['Bar Mitzvah','Bat Mitzvah','Wedding','Kiddush','Bris','Sheva Brachos','Vort','Shloshim','Breakfast','Brunch','Corporate','Drop off catering','Other'].map(t=>`<option ${inq.eventType===t?'selected':''}>${t}</option>`).join('')}
+            ${['Aufruf','Bar Mitzvah','Bat Mitzvah','Wedding','Kiddush','Bris','Sheva Brachos','Vort','Shloshim','Breakfast','Brunch','Corporate','Drop off catering','Other'].map(t=>`<option ${inq.eventType===t?'selected':''}>${t}</option>`).join('')}
           </select>
         </div>
         <div style="${fld}"><label style="${lbl}">Event date</label><input id="ei_eventDate" type="date" style="${inp}" value="${inq.eventDate||''}"></div>
