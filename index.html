@@ -1098,14 +1098,35 @@ function promoteToEvent(id){
 
   // Map inquiry event type to internal type
   const typeMap2 = {
-    'Wedding':'dinner','Aufruf':'dinner','Bar Mitzvah':'barmitzvah',
-    'Bat Mitzvah':'barmitzvah','Bar mitzvah party - not shabbos':'barmitzvah',
-    'Bas mitzvah party - not shabbos':'barmitzvah','Bar mitzvah over shabbos':'barmitzvah',
-    'Engagement party':'engagement','Kiddush':'shalosh','Bris':'shalosh',
-    'Sheva Brachos':'shalosh','Vort':'engagement',
-    'Drop off catering':'dropoff','Shabbos shevah brachos':'shalosh',
-    'Shabbos meals':'shalosh','Corporate':'dinner','Corporate event':'dinner',
-    'Organization event':'dinner','Birthday':'dinner','Other':'dinner'
+    'Wedding':'dinner','Bar Mitzvah':'barmitzvah','Bat Mitzvah':'barmitzvah',
+    'Kiddush':'shalosh','Bris':'bris','Sheva Brachos':'shalosh',
+    'Vort':'engagement','Shloshim':'shalosh',
+    'Breakfast':'breakfast','Brunch':'brunch',
+    'Corporate':'dinner','Drop off catering':'dropoff','Other':'dinner'
+  };
+
+  // Menu template mapping: [eventType, shabbos] → template numbers
+  // (used by future Google Docs automation)
+  const MENU_TEMPLATE_MAP = {
+    'Bar Mitzvah:Yes':   [8,10],
+    'Bar Mitzvah:No':    [3,4],
+    'Bar Mitzvah:Both':  [3,4,8,10],
+    'Bat Mitzvah:Yes':   [8,10],
+    'Bat Mitzvah:No':    [3,4],
+    'Bat Mitzvah:Both':  [3,4,8,10],
+    'Wedding:No':        [7],
+    'Kiddush:Yes':       [8],
+    'Bris:Yes':          [8],
+    'Bris:No':           [6],
+    'Sheva Brachos:Yes': [8,10],
+    'Sheva Brachos:No':  [3],
+    'Vort:No':           [9],
+    'Shloshim:No':       [3],
+    'Corporate:No':      [5],
+    'Drop off catering': [1],
+    'Breakfast':         [2],
+    'Brunch':            [4],
+    'Other':             [],
   };
 
   const weekNum = nextJobNumber(weekOf);
@@ -1124,7 +1145,9 @@ function promoteToEvent(id){
     porters:0, porterNames:'', porterTime:'', porterTime2:'',
     manager:'-', mashgiach:'-', mashgiachNames:'',
     menuLink:'', groceryLink:'', floorplan:'', venueLink:'', pdfMenuLink:'', logoData:'',
-    notes: inq.comments||inq.eventName||''
+    notes: inq.comments||inq.eventName||'',
+    shabbos: inq.shabbos||'',
+    menuTemplates: MENU_TEMPLATE_MAP[inq.eventType+':'+(inq.shabbos||'No')] || MENU_TEMPLATE_MAP[inq.eventType] || []
   };
 
   events.push(newEvent);
@@ -1151,10 +1174,11 @@ function updatePipelineBadge(){
 
 // Called when a new inquiry arrives from the client form
 function addInquiryFromForm(data){
-  _saveInquiry({
+  const inquiryData = {
     id: Date.now()+'',
     firstName: data.firstName||'', lastName: data.lastName||'',
     eventName: data.eventName||'', eventType: data.eventType||'',
+    shabbos: data.shabbos||'',
     eventDate: data.eventDate||'', phone: data.phone||'', email: data.email||'',
     venueName: data.venueName||'', venueLocation: data.venueLocation||'',
     guestCount: data.guestCount||'', cuisine: data.cuisine||'',
@@ -1163,9 +1187,12 @@ function addInquiryFromForm(data){
     plannerName: data.plannerName||'', comments: data.comments||'',
     stage:'new',
     submittedAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
-  });
+  };
+  _saveInquiry(inquiryData);
   save(); updatePipelineBadge();
   if(currentView==='pipeline') render();
+  // Trigger menu template automation
+  triggerMenuAutomation(inquiryData);
 }
 
 function openAddInquiryModal(){
@@ -1211,12 +1238,23 @@ function openAddInquiryModal(){
             <option>Sheva Brachos</option>
             <option>Vort</option>
             <option>Shloshim</option>
+            <option>Breakfast</option>
+            <option>Brunch</option>
             <option>Corporate</option>
-            <option>Birthday</option>
+            <option>Drop off catering</option>
             <option>Other</option>
           </select>
         </div>
         <div style="${fld}"><label style="${lbl}">Event date</label><input id="iq_eventDate" type="date" style="${inp}"></div>
+        <div style="${fld}">
+          <label style="${lbl}">Is this a Shabbos event?</label>
+          <select id="iq_shabbos" style="${inp};appearance:none">
+            <option value="">Select...</option>
+            <option value="Yes">Yes — Shabbos</option>
+            <option value="No">No</option>
+            <option value="Both">Both (multi-meal)</option>
+          </select>
+        </div>
         <div style="${fld}"><label style="${lbl}">Guest count</label><input id="iq_guestCount" type="number" style="${inp}" placeholder="e.g. 150"></div>
         <div style="${fld}">
           <label style="${lbl}">Cuisine</label>
@@ -1304,6 +1342,7 @@ function submitInquiryModal(){
     phone:         document.getElementById('iq_phone')?.value.trim()||'',
     eventName:     document.getElementById('iq_eventName')?.value.trim()||'',
     eventType,
+    shabbos:       document.getElementById('iq_shabbos')?.value||'',
     eventDate:     document.getElementById('iq_eventDate')?.value||'',
     guestCount:    document.getElementById('iq_guestCount')?.value||'',
     cuisine:       document.getElementById('iq_cuisine')?.value||'',
@@ -3582,6 +3621,62 @@ function printList(id) {
 }
 
 
+// ── MENU TEMPLATE AUTOMATION ──
+const MENU_AUTOMATION_BANNERS_KEY = 'menuAutomationBanners';
+
+function triggerMenuAutomation(inquiryData){
+  const menuScriptUrl = localStorage.getItem('menuScriptUrl');
+  if(!menuScriptUrl){
+    console.log('Menu automation: no script URL configured yet.');
+    return;
+  }
+  fetch(menuScriptUrl, {
+    method:'POST',
+    body:JSON.stringify(inquiryData),
+    headers:{'Content-Type':'application/json'}
+  })
+  .then(r=>r.json())
+  .then(resp=>{
+    if(resp.success && resp.result && resp.result.templatesCopied && resp.result.templatesCopied.length>0){
+      const copies = resp.result.templatesCopied;
+      const clientName = ((inquiryData.firstName||'')+' '+(inquiryData.lastName||'')).trim();
+      const banners = JSON.parse(localStorage.getItem(MENU_AUTOMATION_BANNERS_KEY)||'[]');
+      banners.unshift({
+        id:Date.now()+'',
+        clientName,
+        eventType:inquiryData.eventType||'',
+        copies,
+        ts:new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true})
+      });
+      if(banners.length>20) banners.length=20;
+      localStorage.setItem(MENU_AUTOMATION_BANNERS_KEY,JSON.stringify(banners));
+      showMenuAutomationBanner(banners[0]);
+    }
+  })
+  .catch(err=>console.log('Menu automation error:',err));
+}
+
+function showMenuAutomationBanner(b){
+  document.getElementById('menuAutoBanner')?.remove();
+  const div=document.createElement('div');
+  div.id='menuAutoBanner';
+  div.style.cssText='position:fixed;bottom:80px;right:20px;z-index:900;background:var(--bg);border:1.5px solid var(--green-text);border-radius:var(--radius-lg);padding:14px 18px;max-width:340px;box-shadow:0 4px 20px rgba(0,0,0,.15)';
+  const links=b.copies.map(c=>'<div style="font-size:12px;margin-top:5px"><a href="'+c.url+'" target="_blank" style="color:var(--blue-mid);text-decoration:none">↗ '+c.name+'</a></div>').join('');
+  div.innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start">'
+    +'<div style="font-size:13px;font-weight:600;color:var(--green-text)"><i class="ti ti-circle-check"></i> Menu templates ready</div>'
+    +'<button onclick="document.getElementById(\'menuAutoBanner\').remove()" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:16px;padding:0 0 0 8px">×</button>'
+    +'</div>'
+    +'<div style="font-size:13px;color:var(--text);margin-top:6px"><strong>'+b.clientName+'</strong> — '+b.eventType+'</div>'
+    +'<div style="font-size:12px;color:var(--text2);margin-top:2px">'+b.copies.length+' template'+(b.copies.length>1?'s':'')+' copied to Google Drive</div>'
+    +links;
+  document.body.appendChild(div);
+  setTimeout(()=>div?.remove(),15000);
+}
+
+window.triggerMenuAutomation=triggerMenuAutomation;
+window.showMenuAutomationBanner=showMenuAutomationBanner;
+
+
 // ── SETTINGS ──
 function renderSettings(){
   const connected=!!localStorage.getItem('scriptUrl');
@@ -3607,6 +3702,23 @@ function renderSettings(){
           </div>
           <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.6">
             To get a token: <strong>github.com → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token</strong>. Select <strong>repo</strong> scope. Copy and paste here.
+          </div>
+        </div>`}
+  </div>
+
+  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
+    <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Menu Template Automation</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">When a new inquiry comes in, automatically copies the right menu templates to Google Drive and emails Kenny & Shelley. Paste the deployed Apps Script URL below.</div>
+    ${localStorage.getItem('menuScriptUrl')
+      ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div style="font-size:13px;color:var(--green-text);display:flex;align-items:center;gap:5px"><i class="ti ti-circle-check"></i> Menu automation connected</div>
+          <button onclick="localStorage.removeItem('menuScriptUrl');render()" style="padding:4px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer">Clear</button>
+        </div>`
+      : `<div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Enter the deployed Apps Script web app URL (from MenuAutomation.gs):</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input type="text" id="menuScriptInput" placeholder="https://script.google.com/macros/s/..." style="flex:1;min-width:200px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px 12px;font-size:13px;color:var(--text);font-family:inherit">
+            <button onclick="saveMenuScriptUrl()" class="btn-save">Save URL</button>
           </div>
         </div>`}
   </div>
@@ -4153,6 +4265,15 @@ async function pushToGitHub(){
     if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-brand-github" style="font-size:14px"></i> Push to GitHub'; }
   }
 }
+
+function saveMenuScriptUrl(){
+  const url = document.getElementById('menuScriptInput')?.value.trim();
+  if(!url){ alert('Please paste the Apps Script URL.'); return; }
+  localStorage.setItem('menuScriptUrl', url);
+  render();
+  showToast('Menu automation URL saved ✓');
+}
+window.saveMenuScriptUrl = saveMenuScriptUrl;
 
 function saveGitHubToken(){
   const token = document.getElementById('githubTokenInput')?.value?.trim();
