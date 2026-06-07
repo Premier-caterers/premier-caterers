@@ -242,7 +242,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 04:25 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 04:45 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -3506,7 +3506,7 @@ function renderSettings(){
     ${isGmailConnected()
       ? `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <div style="font-size:13px;color:var(--green-text);display:flex;align-items:center;gap:5px"><i class="ti ti-circle-check"></i> Connected as ${gmailUser||'events@thepremiercaterer.com'}</div>
-          <button onclick="gmailToken=null;gmailUser=null;render()" style="padding:4px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer">Disconnect</button>
+          <button onclick="gmailToken=null;gmailUser=null;localStorage.removeItem('gmailToken');localStorage.removeItem('gmailTokenExpiry');localStorage.removeItem('gmailUser');render()" style="padding:4px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer">Disconnect</button>
         </div>`
       : `<div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Enter your Google OAuth Client ID:</div>
@@ -4078,6 +4078,26 @@ let gmailToken = null;
 let gmailUser = null;
 let gmailMessages = []; // cached inbox messages
 
+// Restore a previously-saved Gmail session so reloads/code updates don't drop the connection.
+// Google access tokens last ~1 hour; we keep using it until it actually expires.
+function restoreGmailSession(){
+  try{
+    const t = localStorage.getItem('gmailToken');
+    const exp = parseInt(localStorage.getItem('gmailTokenExpiry')||'0', 10);
+    if(t && exp && Date.now() < (exp - 60000)){ // 60s safety margin
+      gmailToken = t;
+      gmailUser = localStorage.getItem('gmailUser') || null;
+      // Re-verify in the background; if the token is stale, clear it quietly
+      fetchGmailProfile().then(()=>{ if(gmailUser){ try{ localStorage.setItem('gmailUser', gmailUser); }catch(e){} } });
+    } else if(t){
+      // Expired — clean up so the UI shows "connect" instead of a broken state
+      localStorage.removeItem('gmailToken');
+      localStorage.removeItem('gmailTokenExpiry');
+    }
+  }catch(e){}
+}
+restoreGmailSession();
+
 function isGmailConnected(){ return !!gmailToken; }
 
 async function gmailSignIn(){
@@ -4101,7 +4121,14 @@ async function gmailSignIn(){
     callback: async (resp)=>{
       if(resp.error){ alert('Gmail sign-in error: '+resp.error); return; }
       gmailToken = resp.access_token;
+      // Persist so a page reload (e.g. after a code update) doesn't drop the connection
+      try{
+        localStorage.setItem('gmailToken', gmailToken);
+        const ttl = parseInt(resp.expires_in||3600, 10);
+        localStorage.setItem('gmailTokenExpiry', String(Date.now() + ttl*1000));
+      }catch(e){}
       await fetchGmailProfile();
+      if(gmailUser){ try{ localStorage.setItem('gmailUser', gmailUser); }catch(e){} }
       showToast('Gmail connected ✓');
       render();
     }
