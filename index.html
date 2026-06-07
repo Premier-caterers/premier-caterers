@@ -243,7 +243,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 07:15 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 07:55 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -650,6 +650,7 @@ function showView(v){
     return;
   }
   currentView=v; selectedId=null; editingId=null;
+  if(v==='invoices') activeInvoiceId=null; // navigating to the section shows the list; editing keeps the invoice open
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const el=document.getElementById('nav-'+v); if(el) el.classList.add('active');
   render();
@@ -678,6 +679,11 @@ function render(){
   document.getElementById('mainArea').innerHTML = html;
   if(currentView==='email'){
     renderEmail().then(eHtml=>{ const el=document.getElementById('emailPlaceholder'); if(el) el.outerHTML=eHtml; }).catch(()=>{});
+  }
+  // Keep the open invoice open across re-renders (e.g. Firebase auto-saves) so editing
+  // a quote/invoice doesn't bounce back to the list.
+  if(currentView==='invoices' && activeInvoiceId && invoices[activeInvoiceId]){
+    renderInvoiceDetail();
   }
   updateBadge();
   // Update global change banner
@@ -2557,6 +2563,11 @@ function openInvoice(eid){
   renderInvoiceDetail();
 }
 
+function closeInvoiceDetail(){
+  activeInvoiceId = null;
+  render(); // returns to the invoice list
+}
+
 function renderInvoiceDetail(){
   const eid = activeInvoiceId;
   const e = events.find(x=>x.id===eid);
@@ -2586,7 +2597,7 @@ function renderInvoiceDetail(){
         <button class="icon-btn" onclick="printInvoice('${eid}')" title="Print"><i class="ti ti-printer"></i></button>
         <button class="icon-btn" onclick="downloadInvoice('${eid}')" title="Download as HTML"><i class="ti ti-download"></i></button>
         <button class="icon-btn" onclick="openSendInvoiceEmail('${eid}')" title="Send by email" style="color:var(--blue-mid)"><i class="ti ti-send"></i></button>
-        <button class="icon-btn" onclick="document.getElementById('invoiceDetail').innerHTML=''" title="Close"><i class="ti ti-x"></i></button>
+        <button class="icon-btn" onclick="closeInvoiceDetail()" title="Back to list"><i class="ti ti-x"></i></button>
       </div>
     </div>
 
@@ -3938,7 +3949,7 @@ function addEvent(){
       eventAttended: document.getElementById('m-eventAttended')?.value?.trim()||'',
       plannerName: document.getElementById('m-plannerName')?.value?.trim()||'',
       comments: document.getElementById('m-notes')?.value?.trim()||'',
-      source: 'manual',
+      source: 'website',
       menuAutomationTriggered: false,
       stage: 'booked',
       _customJob: jobInput ? jobInput.replace('#','') : '',
@@ -4863,6 +4874,7 @@ window.applyTemplate = applyTemplate;
 window.setEquipMDP = setEquipMDP;
 window.addFromOriginalList = addFromOriginalList;
 window.openInvoice = openInvoice;
+window.closeInvoiceDetail = closeInvoiceDetail;
 window.updateInvoiceLine = updateInvoiceLine;
 window.updateDeposit = updateDeposit;
 window.updateInvoiceNotes = updateInvoiceNotes;
