@@ -242,7 +242,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 03, 2026 08:02 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 01:50 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -1018,6 +1018,15 @@ function renderInqDetail(inq, role){
           ${rows('Email', inq.email)}
         </div>
         <div class="detail-block">
+          <div class="detail-block-title">Menu</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+          ${inq.menuLink
+            ? `<a href="${inq.menuLink}" target="_blank" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--green-border);border-radius:7px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px;text-decoration:none"><i class="ti ti-file-text" style="font-size:14px"></i>Open menu</a>
+               <button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-edit" style="font-size:14px"></i>Change</button>`
+            : `<button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-link" style="font-size:14px"></i>Attach menu</button>`}
+          </div>
+        </div>
+        <div class="detail-block">
           <div class="detail-block-title">Referral</div>
           ${rows('How found us', inq.howFound)}
           ${rows('Referred by', inq.referredBy)}
@@ -1046,6 +1055,18 @@ function selectInquiry(id){
 }
 
 function closeInqDetail(){ selectedInqId=null; render(); }
+
+async function attachInqMenu(id){
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq) return;
+  const current = inq.menuLink || '';
+  const url = prompt('Paste the Google Drive / Docs menu link for this inquiry:\n\n(In Google Drive: right-click file → Share → Copy link)', current);
+  if(url===null) return; // cancelled
+  inq.menuLink = url.trim();
+  await _saveInquiry(inq);
+  showToast(inq.menuLink ? 'Menu linked ✓' : 'Menu cleared');
+  render();
+}
 
 function moveInquiry(id, stage){
   const inq = inquiries.find(x=>x.id===id);
@@ -1081,7 +1102,7 @@ function promoteToEvent(id){
     chefs:0, chefNames:'', chefTime:'-', chefTime2:'',
     porters:0, porterNames:'', porterTime:'', porterTime2:'',
     manager:'-', mashgiach:'-', mashgiachNames:'',
-    menuLink:'', groceryLink:'', floorplan:'', venueLink:'', pdfMenuLink:'', logoData:'',
+    menuLink: inq.menuLink||'', groceryLink:'', floorplan:'', venueLink:'', pdfMenuLink:'', logoData:'',
     notes: inq.eventName||''
   };
   events.push(newEvent);
@@ -2863,7 +2884,7 @@ function quickPasteMenu(eid, event){
         style="padding:5px 12px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;font-size:12px;cursor:pointer">Save</button>
     </div>`;
   document.body.appendChild(box);
-  setTimeout(()=>document.getElementById('quick-menu-input-${eid}')?.focus(), 50);
+  setTimeout(()=>document.getElementById('quick-menu-input-'+eid)?.focus(), 50);
   // Close on outside click
   setTimeout(()=>document.addEventListener('click', function handler(e){
     if(!box.contains(e.target)){ box.remove(); document.removeEventListener('click',handler); }
@@ -4402,6 +4423,7 @@ window.deleteInquiry = deleteInquiry;
 window.promoteToEvent = promoteToEvent;
 window.selectInquiry = selectInquiry;
 window.closeInqDetail = closeInqDetail;
+window.attachInqMenu = attachInqMenu;
 window.openAddInquiryModal = openAddInquiryModal;
 window.addInquiryFromForm = addInquiryFromForm;
 window.toggleAck = toggleAck;
