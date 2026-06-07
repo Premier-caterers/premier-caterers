@@ -3337,8 +3337,13 @@ function renderSettings(){
   </div>
 
   <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
-    <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">WhatsApp Notifications</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Automatically sends WhatsApp messages when changes are logged.</div>
+    <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">WhatsApp Notifications (Twilio)</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Credentials stored locally on your device only — never in the app code.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:1rem">
+      <div class="modal-row" style="margin:0"><label style="font-size:11px">Account SID</label><input type="password" id="twilio-sid" placeholder="ACxxxxxxxx" value="${localStorage.getItem('twilioSID')||''}" onchange="localStorage.setItem('twilioSID',this.value)"></div>
+      <div class="modal-row" style="margin:0"><label style="font-size:11px">Auth Token</label><input type="password" id="twilio-token" placeholder="Auth token" value="${localStorage.getItem('twilioToken')||''}" onchange="localStorage.setItem('twilioToken',this.value)"></div>
+      <div class="modal-row" style="margin:0"><label style="font-size:11px">From number</label><input type="text" id="twilio-from" placeholder="+12012509487" value="${localStorage.getItem('twilioFrom')||''}" onchange="localStorage.setItem('twilioFrom',this.value)"></div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
       ${Object.entries(deptContacts).map(([dept,c])=>`
       <div style="background:var(--bg2);border-radius:var(--radius);padding:8px 12px;display:flex;align-items:center;gap:8px">
@@ -4197,9 +4202,10 @@ function openComposeEmail(){ window._emailTab='compose'; render(); }
 
 
 // ── WHATSAPP / TWILIO NOTIFICATIONS ──
-const TWILIO_ACCOUNT_SID = 'ACd1507cc870b0cd469d42d6d63858f990';
-const TWILIO_AUTH_TOKEN   = '5b506fa79304c8910f5ef7bd5e88e43a';
-const TWILIO_WHATSAPP_FROM = 'whatsapp:+12012509487';
+// Twilio credentials stored in localStorage only (never in code)
+function getTwilioSID(){ return localStorage.getItem('twilioSID')||''; }
+function getTwilioToken(){ return localStorage.getItem('twilioToken')||''; }
+function getTwilioFrom(){ return 'whatsapp:'+(localStorage.getItem('twilioFrom')||''); }
 const PRINTER_EMAIL = '47515733707@print.brother.com';
 
 const deptContacts = {
@@ -4214,9 +4220,9 @@ const deptContacts = {
 };
 
 async function sendWhatsAppMessage(to, body){
-  const url = 'https://api.twilio.com/2010-04-01/Accounts/'+TWILIO_ACCOUNT_SID+'/Messages.json';
+  const url = 'https://api.twilio.com/2010-04-01/Accounts/'+getTwilioSID()+'/Messages.json';
   const params = new URLSearchParams({
-    From: TWILIO_WHATSAPP_FROM,
+    From: getTwilioFrom(),
     To:   'whatsapp:'+to,
     Body: body
   });
@@ -4224,15 +4230,21 @@ async function sendWhatsAppMessage(to, body){
     const r = await fetch(url, {
       method: 'POST',
       headers: {
-        'Authorization': 'Basic ' + btoa(TWILIO_ACCOUNT_SID+':'+TWILIO_AUTH_TOKEN),
+        'Authorization': 'Basic ' + btoa(getTwilioSID()+':'+getTwilioToken()),
         'Content-Type': 'application/x-www-form-urlencoded'
       },
       body: params.toString()
     });
     const d = await r.json();
-    if(d.error_code){ console.error('Twilio error:', d.message); return false; }
+    if(d.error_code){ 
+      showToast('WhatsApp error '+d.error_code+': '+d.message, 6000);
+      return false; 
+    }
     return true;
-  }catch(e){ console.error('WhatsApp send error:', e); return false; }
+  }catch(e){ 
+    showToast('WhatsApp failed: '+e.message, 6000);
+    return false; 
+  }
 }
 
 async function sendChangeNotifications(change, notifyDepts){
