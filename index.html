@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <style>
 
 *{box-sizing:border-box;margin:0;padding:0}
@@ -64,11 +64,10 @@ a{color:var(--blue-mid);text-decoration:none}
 .banner.amber .banner-text{color:var(--amber-text)}
 .banner.green .banner-text{color:var(--green-text)}
 
-.stats-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1rem}
-.stat-card{background:var(--bg2);border-radius:var(--radius);padding:.5rem 1rem;display:flex;align-items:center;gap:8px;border:0.5px solid var(--border);transition:background .15s}
-.stat-card:hover{background:var(--bg3)}
-.stat-n{font-size:20px;font-weight:600;color:var(--text)}
-.stat-l{font-size:11px;color:var(--text2)}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-bottom:1rem}
+.stat-card{background:var(--bg2);border-radius:var(--radius);padding:.75rem 1rem}
+.stat-n{font-size:22px;font-weight:500;color:var(--text)}
+.stat-l{font-size:11px;color:var(--text2);margin-top:2px}
 
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
 .section-title{font-size:16px;font-weight:500;color:var(--text)}
@@ -208,7 +207,6 @@ a{color:var(--blue-mid);text-decoration:none}
 .stage-new{background:var(--amber-bg);color:var(--amber-text)}
 .stage-menu_sent{background:var(--blue-bg);color:var(--blue-text)}
 .stage-booked{background:var(--green-bg);color:var(--green-text)}
-tr.drag-over td{background:var(--blue-bg);}
 .inq-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
 .inq-detail{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-top:1rem}
 @media(max-width:700px){.pipeline-cols{grid-template-columns:1fr}}
@@ -225,8 +223,6 @@ tr.drag-over td{background:var(--blue-bg);}
 </head>
 <body>
 
-
-<div id="appWrapper">
 
 <div class="topbar">
   <div class="brand">
@@ -245,9 +241,8 @@ tr.drag-over td{background:var(--blue-bg);}
     <button class="role-btn" onclick="setRole('kenny',this)">Kenny</button>
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
-    <button onclick="signOut()" title="Sign out" style="border:none;background:none;cursor:pointer;color:var(--text3);font-size:11px;padding:4px 8px;margin-left:4px"><i class="ti ti-logout" style="font-size:14px"></i></button>
   </div>
-  <span id="buildTimestamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 04, 2026 09:00 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 03, 2026 08:02 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -329,10 +324,9 @@ tr.drag-over td{background:var(--blue-bg);}
 </div>
 
 <!-- Firebase Compat SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-</div><!-- end appWrapper -->
 <script>
 
 
@@ -396,30 +390,10 @@ async function _saveEquipment(eid,eq){ try{ await db.collection('equipment').doc
 function startFirebaseListeners(){
   eventsCol.onSnapshot( snap=>{ const first=events.length===0; events=snap.docs.map(d=>d.data()); if(first||currentView==='events') render(); });
   changesCol.onSnapshot( snap=>{ changes=snap.docs.map(d=>d.data()).sort((a,b)=>(b.time||'').localeCompare(a.time||'')); if(currentView==='changes') render(); });
-  inquiriesCol.onSnapshot( snap=>{ 
-    inquiries=snap.docs.map(d=>d.data());
-    // Migrate old 'booked' stage to 'revise_menu'
-    inquiries.forEach(i=>{ if(i.stage==='booked'){ i.stage='revise_menu'; _saveInquiry(i); } });
-    updatePipelineBadge(); if(currentView==='pipeline') render(); 
-  });
+  inquiriesCol.onSnapshot( snap=>{ inquiries=snap.docs.map(d=>d.data()); updatePipelineBadge(); if(currentView==='pipeline') render(); });
   checklistCol.onSnapshot( snap=>{ checklists={}; snap.docs.forEach(d=>{ checklists[d.id]=d.data().items||[]; }); if(currentView==='checklists') render(); updateBadge(); });
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
-  invoicesCol.onSnapshot( snap=>{ 
-    invoices={}; 
-    snap.docs.forEach(d=>{ invoices[d.id]=d.data(); });
-    // Migrate any old invoices that don't have payments array yet, or have empty array with a deposit
-    snap.docs.forEach(d=>{
-      const inv = invoices[d.id];
-      const oldDeposit = parseFloat(inv?.deposit||0);
-      if(inv && (!inv.payments || (inv.payments.length===0 && oldDeposit>0))){
-        migrateInvoicePayments(inv);
-        if(inv.payments && inv.payments.length > 0){
-          _saveInvoice(d.id, inv);
-        }
-      }
-    });
-    if(currentView==='invoices') render(); 
-  });
+  invoicesCol.onSnapshot( snap=>{ invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); }); if(currentView==='invoices') render(); });
   venuesCol.onSnapshot( snap=>{ venues=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='venues') render(); });
 }
 
@@ -547,134 +521,9 @@ const roles = {
   kitchen: {canEdit:false, showStaff:false, showLinks:false, canViewInvoices:false, canViewReports:false},
 };
 
-// ── PASSWORD AUTH ──
-// Passwords are hashed with SHA-256 before storing
-// Default passwords (change immediately in Settings after first login):
-// admin: premier2026  kenny: premier2026  shelley: shelley2026  josh: josh2026  kitchen: kitchen2026
-
-async function hashPassword(pwd){
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pwd));
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-
-function getStoredHash(role){ return localStorage.getItem('pwd_'+role)||''; }
-function getSessionRole(){ return sessionStorage.getItem('authedRole')||''; }
-function setSessionRole(role){ sessionStorage.setItem('authedRole', role); }
-function clearSession(){ sessionStorage.removeItem('authedRole'); }
-
-// Set default hashed passwords on first run
-async function initDefaultPasswords(){
-  const defaults = {
-    admin:'premier2026', kenny:'premier2026',
-    shelley:'shelley2026', josh:'josh2026', kitchen:'kitchen2026'
-  };
-  for(const [role, pwd] of Object.entries(defaults)){
-    if(!localStorage.getItem('pwd_'+role)){
-      localStorage.setItem('pwd_'+role, await hashPassword(pwd));
-    }
-  }
-}
-
-function showLoginScreen(targetRole){
-  // If already authenticated this session, skip login
-  const sess = getSessionRole();
-  if(sess && roles[sess]){
-    currentRole = sess;
-    document.getElementById('loginScreen')?.remove();
-    document.getElementById('appWrapper').style.display = '';
-    updateRoleBtns();
-    render();
-    return;
-  }
-
-  document.getElementById('appWrapper').style.display = 'none';
-  let existing = document.getElementById('loginScreen');
-  if(existing) existing.remove();
-
-  const div = document.createElement('div');
-  div.id = 'loginScreen';
-  div.style.cssText = 'position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px';
-
-  const roleList = Object.keys(roles).map(r=>
-    `<button onclick="showRoleLogin('${r}')" style="width:100%;padding:12px 16px;margin-bottom:8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-size:14px;font-weight:500;cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px">
-      <i class="ti ti-user" style="font-size:16px;color:var(--text3)"></i>${r.charAt(0).toUpperCase()+r.slice(1)}
-    </button>`
-  ).join('');
-
-  div.innerHTML = `
-  <div style="width:100%;max-width:380px">
-    <div style="text-align:center;margin-bottom:2rem">
-      <img src="${LOGO_DATA}" style="height:48px;object-fit:contain;margin-bottom:1rem;display:block;margin-left:auto;margin-right:auto">
-      <div style="font-size:22px;font-weight:600;color:var(--text)">Premier Caterers</div>
-      <div style="font-size:13px;color:var(--text2);margin-top:4px">Select your profile to continue</div>
-    </div>
-    <div id="roleListDiv">${roleList}</div>
-    <div id="loginFormDiv" style="display:none"></div>
-  </div>`;
-  document.body.appendChild(div);
-}
-
-function showRoleLogin(role){
-  document.getElementById('roleListDiv').style.display = 'none';
-  const fd = document.getElementById('loginFormDiv');
-  fd.style.display = 'block';
-  fd.innerHTML = `
-  <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:1rem;display:flex;align-items:center;gap:8px">
-    <button onclick="document.getElementById('roleListDiv').style.display='block';document.getElementById('loginFormDiv').style.display='none'" style="border:none;background:none;cursor:pointer;color:var(--text3);font-size:18px;padding:0">←</button>
-    Sign in as ${role.charAt(0).toUpperCase()+role.slice(1)}
-  </div>
-  <input id="loginPwd" type="password" placeholder="Enter password" autofocus
-    style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:12px;font-size:14px;color:var(--text);font-family:inherit;box-sizing:border-box;margin-bottom:10px"
-    onkeydown="if(event.key==='Enter') attemptLogin('${role}')">
-  <div id="loginError" style="display:none;color:#c0392b;font-size:13px;margin-bottom:10px;padding:8px 12px;background:#fdf0f0;border-radius:var(--radius)"></div>
-  <button onclick="attemptLogin('${role}')" style="width:100%;padding:12px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Sign in</button>`;
-  setTimeout(()=>document.getElementById('loginPwd')?.focus(), 50);
-}
-
-async function attemptLogin(role){
-  const pwd = document.getElementById('loginPwd')?.value||'';
-  const errEl = document.getElementById('loginError');
-  if(!pwd){ errEl.textContent='Please enter your password.'; errEl.style.display='block'; return; }
-  const hash = await hashPassword(pwd);
-  const stored = getStoredHash(role);
-  if(hash !== stored){
-    errEl.textContent = 'Incorrect password. Please try again.';
-    errEl.style.display = 'block';
-    document.getElementById('loginPwd').value = '';
-    return;
-  }
-  // Success
-  setSessionRole(role);
-  currentRole = role;
-  document.getElementById('loginScreen')?.remove();
-  document.getElementById('appWrapper').style.display = '';
-  updateRoleBtns();
-  render();
-}
-
-function updateRoleBtns(){
-  document.querySelectorAll('.role-btn').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.role-btn').forEach(b=>{
-    if(b.getAttribute('onclick')?.includes("'"+currentRole+"'")) b.classList.add('active');
-  });
-}
-
-function signOut(){
-  clearSession();
-  currentRole = 'admin';
-  showLoginScreen();
-}
-
-window.showRoleLogin = showRoleLogin;
-window.attemptLogin = attemptLogin;
-window.signOut = signOut;
-
-let currentView='events', currentRole='admin', selectedId=null, editingId=null, activeDay='all', eventsViewMode='card', scheduleSort='by-event';
+let currentView='events', currentRole='admin', selectedId=null, editingId=null, activeDay='all', eventsViewMode='card';
 
 function setRole(r,btn){
-  // Role switching within session (no password needed if already logged in)
-  const sess = getSessionRole();
-  if(!sess){ showLoginScreen(); return; }
   currentRole=r;
   document.querySelectorAll('.role-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
@@ -779,11 +628,11 @@ function renderEvents(){
     const _msg = _n + " unacknowledged change order" + (_n>1?"s":"") + " — see Changes log";
     return `<div class="banner amber" style="margin-bottom:1rem"><i class="ti ti-alert-triangle" style="font-size:16px;color:var(--amber-text);flex-shrink:0;margin-top:1px"></i><div style="font-size:13px;color:var(--amber-text)"><strong>${_msg}</strong></div></div>`;
     })()}
-    <div class="stat-card" onclick="showView('events')" style="cursor:pointer" title="Go to events"><div class="stat-n">${weekEvents.filter(e=>e.name).length}</div><div class="stat-l">events</div></div>
-    <div class="stat-card" onclick="showView('events')" style="cursor:pointer" title="Catered events"><div class="stat-n">${weekEvents.filter(e=>e.type!=='dropoff').length}</div><div class="stat-l">catered</div></div>
-    <div class="stat-card" onclick="showView('schedule')" style="cursor:pointer" title="Go to schedule"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.waiters||0),0)}</div><div class="stat-l">waiters</div></div>
-    <div class="stat-card" onclick="showView('schedule')" style="cursor:pointer" title="Go to schedule"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.chefs||0),0)}</div><div class="stat-l">chefs</div></div>
-    <div class="stat-card" onclick="showView('schedule')" style="cursor:pointer" title="Go to schedule"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.porters||0),0)}</div><div class="stat-l">porters</div></div>
+    <div class="stat-card"><div class="stat-n">${weekEvents.filter(e=>e.name).length}</div><div class="stat-l">events</div></div>
+    <div class="stat-card"><div class="stat-n">${weekEvents.filter(e=>e.type!=='dropoff').length}</div><div class="stat-l">catered</div></div>
+    <div class="stat-card"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.waiters||0),0)}</div><div class="stat-l">waiters</div></div>
+    <div class="stat-card"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.chefs||0),0)}</div><div class="stat-l">chefs</div></div>
+    <div class="stat-card"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.porters||0),0)}</div><div class="stat-l">porters</div></div>
   </div>
   <div class="section-header">
     <div class="section-title">Events — ${weekLabel}</div>
@@ -836,33 +685,19 @@ function renderEvents(){
           ${e.menuLink
             ? `<a href="${e.menuLink}" target="_blank" onclick="event.stopPropagation()" style="text-decoration:none">${statusBadge('Menu','attached',e.menuLink)}</a>`
             : `<button onclick="quickPasteMenu('${e.id}',event)" style="border:none;background:none;padding:0;cursor:pointer">${statusBadge('Menu','missing','')}</button>`}
+          ${e.menuLink && e.pdfMenuLink
+            ? `<a href="${e.pdfMenuLink}" target="_blank" onclick="event.stopPropagation()" style="text-decoration:none">${statusBadge('PDF menu','attached',e.pdfMenuLink)}</a>`
+            : e.menuLink
+              ? `<button onclick="event.stopPropagation();createPdfVersion('${e.id}')" style="border:none;background:none;padding:0;cursor:pointer" title="Generate PDF">${statusBadge('PDF menu','missing','')}</button>`
+              : ''}
           ${e.groceryLink ? statusBadge('Grocery','attached',e.groceryLink) : statusBadge('Grocery','missing','')}
           ${e.floorplan ? statusBadge('Floorplan','attached',e.floorplan) : ''}
-          ${e.finalsLink ? statusBadge('Finals','attached',e.finalsLink) : ''}
           ${e.venueLink||true ? statusBadge('Venue', (e.venueLink?'attached':'missing'), e.venueLink||'https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0') : ''}
-          ${e.processionLink ? statusBadge('Procession','attached',e.processionLink) : ''}
         </div>
-        ${(()=>{
-          const _s=[];
-          if(e.chefs>0) _s.push('C'+e.chefs);
-          if(e.porters>0) _s.push('P'+e.porters);
-          if(e.waiters>0) _s.push('W'+e.waiters);
-          if(e.bartenders>0) _s.push('B'+e.bartenders);
-          return _s.length ? '<div style="margin-top:5px;font-size:12px;font-weight:600;color:var(--text2);letter-spacing:.04em">'+_s.join(' · ')+'</div>' : '';
-        })()}
-        ${e.notes ? `<div style="margin-top:5px;font-size:11px;color:var(--text3);line-height:1.4;max-height:40px;overflow:hidden;text-overflow:ellipsis" title="${e.notes.replace(/"/g,'&quot;')}">${e.notes}</div>` : ''}
-        <div style="margin-top:8px;display:flex;align-items:center;gap:5px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist('${e.id}')" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-checklist" style="font-size:11px"></i>Checklist</button>
-          <button onclick="showView('schedule')" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-users" style="font-size:11px"></i>Schedule</button>
-          <button onclick="showView('equipment');setTimeout(()=>openEquipEvent('${e.id}'),300)" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:${(()=>{const _eq=eventEquipment[e.id];return _eq?.stage==='complete'?'var(--green-bg)':_eq?'var(--amber-bg)':'var(--bg2)'})()};color:${(()=>{const _eq=eventEquipment[e.id];return _eq?.stage==='complete'?'var(--green-text)':_eq?'var(--amber-text)':'var(--text2)'})()};cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-tools" style="font-size:11px"></i>${(()=>{const _eq=eventEquipment[e.id];return _eq?.stage==='complete'?'Equipment ✓':_eq?'Equipment…':'Equipment'})()}</button>
-          ${e.groceryLink ? `<a href="${e.groceryLink}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--green-border);border-radius:6px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:3px;text-decoration:none"><i class="ti ti-shopping-cart" style="font-size:11px"></i>Grocery</a>` : ''}
-          ${e.logoData ? `<a href="${e.logoData}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px;text-decoration:none"><i class="ti ti-photo" style="font-size:11px"></i>Logo</a>` : ''}
-          ${e.finalsLink ? `<a href="${e.finalsLink}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px;text-decoration:none"><i class="ti ti-file-check" style="font-size:11px"></i>Finals</a>` : ''}
-          ${e.venueLink ? `<a href="${e.venueLink}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--teal-text);border-radius:6px;background:var(--teal-bg);color:var(--teal-text);cursor:pointer;display:inline-flex;align-items:center;gap:3px;text-decoration:none"><i class="ti ti-building" style="font-size:11px"></i>Venue info</a>` : ''}
-          ${e.floorplan ? `<a href="${e.floorplan}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px;text-decoration:none"><i class="ti ti-layout" style="font-size:11px"></i>Floorplan</a>` : ''}
-          ${e.processionLink ? `<a href="${e.processionLink}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px;text-decoration:none"><i class="ti ti-arrow-right" style="font-size:11px"></i>Procession</a>` : ''}
-          ${(()=>{ const _v=venues.find(v=>v.addr===e.addr||v.name===e.name); return _v ? `<button onclick="showVenuePopup('${e.id}')" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--teal-text);border-radius:6px;background:var(--teal-bg);color:var(--teal-text);cursor:pointer;display:inline-flex;align-items:center;gap:3px" title="View venue info"><i class="ti ti-building" style="font-size:11px"></i>Venue</button>` : ''; })()}
-          ${role.canViewInvoices ? `<button onclick="showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:3px 8px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;border:0.5px solid ${
+        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
+          <button onclick="goChecklist('${e.id}')" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
+          ${(()=>{ const _v=venues.find(v=>v.addr===e.addr||v.name===e.name); return _v ? `<button onclick="showVenuePopup('${e.id}')" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--teal-text);border-radius:6px;background:var(--teal-bg);color:var(--teal-text);cursor:pointer;display:inline-flex;align-items:center;gap:4px" title="View venue info"><i class="ti ti-building" style="font-size:12px"></i>Venue</button>` : ''; })()}
+          ${role.canViewInvoices ? `<button onclick="showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid ${
             !invoices[e.id]||invoices[e.id].status==='none' ? 'var(--border2)' :
             invoices[e.id].status==='paid' ? 'var(--green-text)' :
             invoices[e.id].status==='invoice' ? '#7c3aed' :
@@ -874,13 +709,13 @@ function renderEvents(){
             !invoices[e.id]||invoices[e.id].status==='none' ? 'var(--text2)' :
             invoices[e.id].status==='paid' ? 'var(--green-text)' :
             invoices[e.id].status==='invoice' ? '#7c3aed' :
-            'var(--amber-text)'}"><i class="ti ti-file-invoice" style="font-size:11px"></i>${
+            'var(--amber-text)'}"><i class="ti ti-file-invoice" style="font-size:12px"></i>${
             !invoices[e.id]||invoices[e.id].status==='none' ? 'No invoice' :
             invoices[e.id].status==='quote' ? 'Quote sent' :
             invoices[e.id].status==='approved' ? 'Quote approved' :
             invoices[e.id].status==='invoice' ? 'Invoice open' :
             'Paid ✓'}</button>` : ''}
-          <button onclick="deleteEvent('${e.id}')" title="Delete event" style="font-size:11px;padding:3px 7px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:11px"></i>Delete</button>
+          <button onclick="deleteEvent('${e.id}')" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
         </div>
       </div>`;
     });
@@ -889,54 +724,30 @@ function renderEvents(){
 
   // ── LIST VIEW ──
   if(eventsViewMode==='list'){
-    let listH = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
-    let allRows = [];
+    h = h.replace(/<div class="event-grid">[\s\S]*?<\/div>\s*(?=<div class="event-grid">|$)/g, '') // clear card grids
+    // Rebuild as list
+    let listH = '';
     dayOrder.forEach(d=>{
       if(!byDay[d]) return;
+      listH += `<div class="day-label">${byDay[d][0].dayLabel}</div>
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:8px">`;
       byDay[d].forEach((e,i)=>{
         const inv = invoices[e.id];
         const invStatus = inv?.status;
-        const invBg = !invStatus||invStatus==='none' ? 'var(--bg2)' : invStatus==='paid' ? 'var(--green-bg)' : invStatus==='invoice' ? '#f5f3ff' : 'var(--amber-bg)';
         const invColor = !invStatus||invStatus==='none' ? 'var(--text3)' : invStatus==='paid' ? 'var(--green-text)' : invStatus==='invoice' ? '#7c3aed' : 'var(--amber-text)';
-        const invBorder = !invStatus||invStatus==='none' ? 'var(--border2)' : invStatus==='paid' ? 'var(--green-border)' : invStatus==='invoice' ? '#c4b5fd' : 'var(--amber-border)';
-        const invLabel = !invStatus||invStatus==='none'?'Invoice':invStatus==='quote'?'Quote':invStatus==='approved'?'Approved':invStatus==='invoice'?'Invoice open':'Paid ✓';
         const hasChange = changes.some(c=>c.job===e.job && changeDepts.some(d=>!(c.acks||{})[d]));
-        const eq = eventEquipment[e.id];
-        const eqLabel = eq?.stage==='complete'?'Equipment ✓':eq?'Equipment…':'Equipment';
-        const eqBg = eq?.stage==='complete'?'var(--green-bg)':eq?'var(--amber-bg)':'var(--bg2)';
-        const eqColor = eq?.stage==='complete'?'var(--green-text)':eq?'var(--amber-text)':'var(--text3)';
-
-        const staffRef = [e.chefs>0?'C'+e.chefs:'',e.porters>0?'P'+e.porters:'',e.waiters>0?'W'+e.waiters:'',e.bartenders>0?'B'+e.bartenders:''].filter(Boolean).join(' · ');
-        allRows.push(`<div style="background:var(--bg);border:0.5px solid ${hasChange?'var(--amber-border)':'var(--border)'};border-radius:var(--radius-lg);padding:12px 14px;cursor:pointer" onclick="selectEvent('${e.id}')">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <span class="job-pill" style="flex-shrink:0">${displayJob(e.job)}</span>
-            <span style="font-size:14px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.name}</span>
-            ${staffRef?`<span style="font-size:12px;font-weight:600;color:var(--text2);white-space:nowrap">${staffRef}</span>`:''}
-            ${hasChange?'<i class="ti ti-alert-triangle" style="font-size:13px;color:var(--amber-text);flex-shrink:0" title="Unacknowledged changes"></i>':''}
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-            <span class="type-badge t-${e.type}">${e.typeLabel}</span>
-            <span style="font-size:12px;color:var(--text2)">${e.dayLabel}</span>
-            ${e.addr?`<span style="font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"><i class="ti ti-map-pin" style="font-size:11px"></i> ${e.addr}</span>`:''}
-          </div>
-          ${e.notes?`<div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.4;max-height:32px;overflow:hidden">${e.notes}</div>`:''}
-          <div style="display:flex;flex-wrap:wrap;gap:5px" onclick="event.stopPropagation()">
-            ${e.menuLink?`<a href="${e.menuLink}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--green-border);border-radius:6px;background:var(--green-bg);color:var(--green-text);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-file-text" style="font-size:11px"></i>Menu</a>`:`<span style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;color:var(--text3)">No menu</span>`}
-            ${e.groceryLink?`<a href="${e.groceryLink}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--green-border);border-radius:6px;background:var(--green-bg);color:var(--green-text);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-shopping-cart" style="font-size:11px"></i>Grocery</a>`:''}
-            ${e.finalsLink?`<a href="${e.finalsLink}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-file-check" style="font-size:11px"></i>Finals</a>`:''}
-            ${e.logoData?`<a href="${e.logoData}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-photo" style="font-size:11px"></i>Logo</a>`:''}
-            ${e.venueLink?`<a href="${e.venueLink}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--teal-text);border-radius:6px;background:var(--teal-bg);color:var(--teal-text);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-building" style="font-size:11px"></i>Venue info</a>`:''}
-            ${e.floorplan?`<a href="${e.floorplan}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-layout" style="font-size:11px"></i>Floorplan</a>`:''}
-            ${e.processionLink?`<a href="${e.processionLink}" target="_blank" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-arrow-right" style="font-size:11px"></i>Procession</a>`:''}
-            ${role.canViewInvoices?`<button onclick="showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:3px 8px;border:0.5px solid ${invBorder};border-radius:6px;background:${invBg};color:${invColor};cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-file-invoice" style="font-size:11px"></i>${invLabel}</button>`:''}
-            <button onclick="showView('equipment');setTimeout(()=>openEquipEvent('${e.id}'),300)" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:${eqBg};color:${eqColor};cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-tools" style="font-size:11px"></i>${eqLabel}</button>
-            <button onclick="goChecklist('${e.id}')" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-checklist" style="font-size:11px"></i>Checklist</button>
-            <button onclick="showView('schedule')" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-users" style="font-size:11px"></i>Schedule</button>
-          </div>
-        </div>`);
+        listH += `<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:${i<byDay[d].length-1?'0.5px solid var(--border)':'none'};transition:background .1s;flex-wrap:wrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+          <span class="job-pill" style="flex-shrink:0;cursor:pointer" onclick="selectEvent('${e.id}')">${displayJob(e.job)}</span>
+          <span style="font-size:14px;font-weight:500;color:var(--text);flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="selectEvent('${e.id}')">${e.name}</span>
+          <span class="type-badge t-${e.type}" style="flex-shrink:0">${e.typeLabel}</span>
+          <span style="font-size:12px;color:var(--text3);flex-shrink:0">${e.dayLabel}</span>
+          ${e.menuLink ? `<a href="${e.menuLink}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:2px 9px;border:0.5px solid var(--green-border);border-radius:8px;background:var(--green-bg);color:var(--green-text);text-decoration:none;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-file-text" style="font-size:11px"></i>Menu</a>` : `<span style="font-size:11px;padding:2px 9px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text3);flex-shrink:0">No menu</span>`}
+          ${role.canViewInvoices ? `<button onclick="event.stopPropagation();showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:2px 9px;border:0.5px solid ${!invStatus||invStatus==='none'?'var(--border2)':invStatus==='paid'?'var(--green-border)':invStatus==='invoice'?'#c4b5fd':'var(--amber-border)'};border-radius:8px;background:${!invStatus||invStatus==='none'?'var(--bg2)':invStatus==='paid'?'var(--green-bg)':invStatus==='invoice'?'#f5f3ff':'var(--amber-bg)'};color:${invColor};cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-file-invoice" style="font-size:11px"></i>${!invStatus||invStatus==='none'?'No invoice':invStatus==='quote'?'Quote':invStatus==='approved'?'Approved':invStatus==='invoice'?'Invoice open':'Paid ✓'}</button>` : ''}
+        </div>`;
       });
+      listH += '</div>';
     });
-    listH += allRows.join('') + '</div>';
+    // Replace all event-grid sections with list
     const gridStart = h.indexOf('<div class="day-label">');
     if(gridStart > -1) h = h.substring(0, gridStart) + listH;
     else h += listH;
@@ -974,7 +785,6 @@ function renderDetail(e,role){
       <div>
         <div class="detail-block">
           <div class="detail-block-title">Event info</div>
-          ${f('name','Client name',e.name)}
           ${fsel('type','Type',e.typeLabel,typeOpts)}
           ${fsel('day','Day',e.day,dayOpts)}
           ${f('addr','Address',e.addr)}
@@ -1019,26 +829,12 @@ function renderDetail(e,role){
             </span>
           </div>
           <div class="drow">
-            <span class="dkey">Finals sheet</span>
-            <span class="dval">${ed&&role.canEdit
-              ? `<input type="text" id="f-finalsLink" value="${e.finalsLink||''}" placeholder="Google Doc/Sheet link">`
-              : (e.finalsLink ? `<a href="${e.finalsLink}" target="_blank" style="font-size:12px;color:var(--blue-mid)">Open <i class="ti ti-external-link" style="font-size:11px"></i></a>` : '—')}
-            </span>
-          </div>
-          <div class="drow">
             <span class="dkey">Floorplan</span>
             <span class="dval">${ed&&role.canEdit
               ? `<input type="text" id="f-floorplan" value="${e.floorplan||''}">`
               : (e.floorplan ? `<a href="${e.floorplan}" target="_blank" style="font-size:12px;color:var(--blue-mid)">Open <i class="ti ti-external-link" style="font-size:11px"></i></a>` : '—')}
             </span>
           </div>
-          ${e.type==='wedding'||e.typeLabel?.toLowerCase().includes('wedding') ? `<div class="drow">
-            <span class="dkey">Procession</span>
-            <span class="dval">${ed&&role.canEdit
-              ? `<input type="text" id="f-processionLink" value="${e.processionLink||''}" placeholder="Procession doc link">`
-              : (e.processionLink ? `<a href="${e.processionLink}" target="_blank" style="font-size:12px;color:var(--blue-mid)">Open <i class="ti ti-external-link" style="font-size:11px"></i></a>` : '—')}
-            </span>
-          </div>` : ''}
           <div class="drow">
             <span class="dkey">Venue info</span>
             <span class="dval">${ed&&role.canEdit
@@ -1123,7 +919,7 @@ function goChecklist(id){
 
 function saveEdit(id){
   const e=events.find(x=>x.id===id); if(!e) return;
-  ['name','addr','notes','manager','mashgiach','waiterTime','chefTime','menuLink','groceryLink','floorplan','venueLink','logoData','finalsLink','processionLink'].forEach(k=>{const el=document.getElementById('f-'+k);if(el)e[k]=el.value;});
+  ['addr','notes','manager','mashgiach','waiterTime','chefTime','menuLink','groceryLink','floorplan','venueLink','logoData'].forEach(k=>{const el=document.getElementById('f-'+k);if(el)e[k]=el.value;});
   ['waiters','chefs','porters'].forEach(k=>{const el=document.getElementById('f-'+k);if(el)e[k]=parseInt(el.value)||0;});
   const te=document.getElementById('f-type'); if(te){e.type=te.value;e.typeLabel=typeMap[te.value]||te.value;}
   const de=document.getElementById('f-day'); if(de)e.day=de.value;
@@ -1138,9 +934,9 @@ let selectedInqId = null;
 function renderPipeline(){
   const role = roles[currentRole];
   const stages = [
-    {key:'new',          label:'New Inquiry',         icon:'ti-mail',       cls:'stage-new'},
-    {key:'menu_sent',    label:'Menu Sent',            icon:'ti-file-text',  cls:'stage-menu_sent'},
-    {key:'revise_menu',  label:'Need to Revise Menu',  icon:'ti-edit',       cls:'stage-booked'},
+    {key:'new',       label:'New Inquiry',  icon:'ti-mail',          cls:'stage-new'},
+    {key:'menu_sent', label:'Menu Sent',    icon:'ti-file-text',     cls:'stage-menu_sent'},
+    {key:'booked',    label:'Booked',       icon:'ti-circle-check',  cls:'stage-booked'},
   ];
 
   let h = `
@@ -1169,10 +965,9 @@ function renderPipeline(){
           ${inq.email ? `<span><i class="ti ti-mail" style="font-size:11px"></i>${inq.email}</span>` : ''}
         </div>
         ${role.canEdit ? `<div class="inq-actions">
-          ${s.key==='new' ? `<button class="stage-btn stage-menu_sent" onclick="event.stopPropagation();moveInquiry('${inq.id}','menu_sent')">Mark menu sent</button>` : ''}
-          ${s.key==='menu_sent' ? `<button class="stage-btn stage-booked" onclick="event.stopPropagation();moveInquiry('${inq.id}','revise_menu')">Needs revision</button>` : ''}
-          ${s.key==='menu_sent'||s.key==='revise_menu' ? `<button class="stage-btn" style="background:var(--green-bg);color:var(--green-text);border:0.5px solid var(--green-text)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">✓ Book it</button>` : ''}
-          ${s.key==='revise_menu' ? `<button class="stage-btn stage-menu_sent" onclick="event.stopPropagation();moveInquiry('${inq.id}','menu_sent')">Menu revised</button>` : ''}
+          ${s.key!=='menu_sent'&&s.key!=='booked' ? `<button class="stage-btn stage-menu_sent" onclick="event.stopPropagation();moveInquiry('${inq.id}','menu_sent')">Mark menu sent</button>` : ''}
+          ${s.key!=='booked' ? `<button class="stage-btn stage-booked" onclick="event.stopPropagation();moveInquiry('${inq.id}','booked')">Book event</button>` : ''}
+          ${s.key==='booked' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">→ Move to This Week</button>` : ''}
           <button onclick="event.stopPropagation();deleteInquiry('${inq.id}')" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px;margin-left:auto"><i class="ti ti-trash"></i></button>
         </div>` : ''}
       </div>`).join('')}
@@ -1189,12 +984,11 @@ function renderPipeline(){
 
 function renderInqDetail(inq, role){
   const rows = (label,val) => val ? `<div class="drow"><span class="dkey">${label}</span><span class="dval">${val}</span></div>` : '';
-  const stageName = {new:'New Inquiry', menu_sent:'Menu Sent', revise_menu:'Need to Revise Menu', booked:'Booked'}[inq.stage]||inq.stage;
+  const stageName = {new:'New Inquiry', menu_sent:'Menu Sent', booked:'Booked'}[inq.stage]||inq.stage;
   return `<div class="inq-detail">
     <div class="detail-header">
       <div class="detail-title">${inq.firstName} ${inq.lastName}${inq.eventName?' — '+inq.eventName:''}</div>
       <div class="detail-actions">
-        ${role.canEdit ? `<button class="icon-btn" onclick="openEditInquiryModal('${inq.id}')" title="Edit"><i class="ti ti-edit"></i></button>` : ''}
         <button class="icon-btn" onclick="closeInqDetail()"><i class="ti ti-x"></i></button>
       </div>
     </div>
@@ -1234,22 +1028,6 @@ function renderInqDetail(inq, role){
           <div class="detail-block-title">Notes</div>
           <div style="font-size:13px;color:var(--text2);line-height:1.6">${inq.comments||'—'}</div>
         </div>
-        ${(inq.menuDocs && inq.menuDocs.length > 0) ? `
-        <div class="detail-block">
-          <div class="detail-block-title">Menu Documents</div>
-          ${inq.menuDocs.map((doc, di) => `
-          <div style="border:0.5px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;background:var(--bg2)">
-            <div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--text)"><i class="ti ti-file-text" style="font-size:13px;margin-right:5px"></i>${doc.name}</div>
-            <div style="display:flex;flex-wrap:wrap;gap:6px">
-              <a href="${doc.url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:12px;text-decoration:none"><i class="ti ti-external-link" style="font-size:11px"></i>Open in Google Docs</a>
-              <a href="${doc.url.replace('/edit','/export?format=pdf')}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:12px;text-decoration:none"><i class="ti ti-download" style="font-size:11px"></i>Download PDF</a>
-              <button onclick="openSendMenuModal('${inq.id}',${di})" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;font-size:12px;cursor:pointer"><i class="ti ti-send" style="font-size:11px"></i>Send to client</button>
-              <button onclick="deleteMenuDoc('${inq.id}',${di})" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:0.5px solid #e05c5c;border-radius:var(--radius);background:var(--bg);color:#e05c5c;font-size:12px;cursor:pointer"><i class="ti ti-trash" style="font-size:11px"></i>Delete</button>
-            </div>
-            ${doc.pdfSent ? `<div style="margin-top:6px;font-size:12px;color:var(--green-text);display:flex;align-items:center;gap:6px"><i class="ti ti-circle-check" style="font-size:12px"></i>Sent to ${doc.sentTo} on ${doc.sentAt} — <a href="${doc.pdfUrl}" target="_blank" style="color:var(--blue-mid);text-decoration:none">View PDF</a></div>` : ''}
-            </div>
-          </div>`).join('')}
-        </div>` : ''}
       </div>
     </div>
   </div>`;
@@ -1282,62 +1060,18 @@ function deleteInquiry(id){
 function promoteToEvent(id){
   const inq = inquiries.find(x=>x.id===id);
   if(!inq) return;
-
-  // Calculate weekOf (Sunday of the event's week) from eventDate
-  function getWeekSunday(dateStr){
-    if(!dateStr) return getWeekEndDate(currentWeekOffset).toISOString().split('T')[0];
-    const d = new Date(dateStr+'T12:00:00');
-    const day = d.getDay(); // 0=Sun,1=Mon...6=Sat
-    const diff = day === 0 ? 0 : (7 - day); // days until next Sunday
-    const sun = new Date(d);
-    sun.setDate(d.getDate() + diff);
-    return sun.toISOString().split('T')[0];
-  }
-
-  const weekOf = getWeekSunday(inq.eventDate);
-
-  // Map inquiry event type to internal type
+  // Map inquiry to event format
   const typeMap2 = {
-    'Wedding':'dinner','Bar Mitzvah':'barmitzvah','Bat Mitzvah':'barmitzvah',
-    'Kiddush':'shalosh','Bris':'bris','Sheva Brachos':'shalosh',
-    'Vort':'engagement','Shloshim':'shalosh',
-    'Breakfast':'breakfast','Brunch':'brunch',
-    'Corporate':'dinner','Drop off catering':'dropoff','Other':'dinner'
+    'Wedding':'dinner','Aufruf':'dinner','Bar mitzvah party - not shabbos':'barmitzvah',
+    'Bas mitzvah party - not shabbos':'barmitzvah','Bar mitzvah over shabbos':'barmitzvah',
+    'Engagement party':'engagement','Kiddush':'shalosh','Bris':'shalosh',
+    'Drop off catering':'dropoff','Shabbos shevah brachos':'shalosh',
+    'Shabbos meals':'shalosh','Corporate event':'dinner','Organization event':'dinner','Other':'dinner'
   };
-
-  // Menu template mapping: [eventType, shabbos] → template numbers
-  // (used by future Google Docs automation)
-  const MENU_TEMPLATE_MAP = {
-    'Aufruf:Yes':        [8],
-    'Aufruf:No':         [8],
-    'Aufruf:Both':       [8],
-    'Bar Mitzvah:Yes':   [8,10],
-    'Bar Mitzvah:No':    [3,4],
-    'Bar Mitzvah:Both':  [3,4,8,10],
-    'Bat Mitzvah:Yes':   [8,10],
-    'Bat Mitzvah:No':    [3,4],
-    'Bat Mitzvah:Both':  [3,4,8,10],
-    'Wedding:No':        [7],
-    'Kiddush:Yes':       [8],
-    'Bris:Yes':          [8],
-    'Bris:No':           [6],
-    'Sheva Brachos:Yes': [8,10],
-    'Sheva Brachos:No':  [3],
-    'Vort:No':           [9],
-    'Shloshim:No':       [3],
-    'Corporate:No':      [5],
-    'Drop off catering': [1],
-    'Breakfast':         [2],
-    'Brunch':            [4],
-    'Other':             [],
-  };
-
-  const weekNum = nextJobNumber(weekOf);
   const newEvent = {
     id: 'inq_'+inq.id,
-    job: makeJobId(weekOf, weekNum),
-    weekOf: weekOf,
-    name: (inq.lastName||inq.firstName||'New Event'),
+    job: '#'+( events.length + inquiries.length ),
+    name: inq.lastName || inq.firstName,
     addr: inq.venueLocation||'',
     type: typeMap2[inq.eventType]||'dinner',
     typeLabel: inq.eventType||'Event',
@@ -1348,25 +1082,12 @@ function promoteToEvent(id){
     porters:0, porterNames:'', porterTime:'', porterTime2:'',
     manager:'-', mashgiach:'-', mashgiachNames:'',
     menuLink:'', groceryLink:'', floorplan:'', venueLink:'', pdfMenuLink:'', logoData:'',
-    notes: inq.comments||inq.eventName||'',
-    shabbos: inq.shabbos||'',
-    menuTemplates: MENU_TEMPLATE_MAP[inq.eventType+':'+(inq.shabbos||'No')] || MENU_TEMPLATE_MAP[inq.eventType] || []
+    notes: inq.eventName||''
   };
-
   events.push(newEvent);
-
-  // Remove from inquiries pipeline entirely
-  inquiries = inquiries.filter(x=>x.id!==id);
-  db.collection('inquiries').doc(id).delete();
-
-  // Update calendar event color to blueberry (booked)
-  updateCalendarEventToBooked(inq);
-
+  inq.stage='booked';
   save();
-  updatePipelineBadge();
-
-  const weekLabel = new Date(weekOf+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-  alert(`${inq.firstName} ${inq.lastName} has been added to events for the week of ${weekLabel}.`);
+  alert(`${inq.firstName} ${inq.lastName} has been added to This Week events as ${newEvent.job}.`);
   showView('events');
 }
 
@@ -1380,11 +1101,10 @@ function updatePipelineBadge(){
 
 // Called when a new inquiry arrives from the client form
 function addInquiryFromForm(data){
-  const inquiryData = {
+  _saveInquiry({
     id: Date.now()+'',
     firstName: data.firstName||'', lastName: data.lastName||'',
     eventName: data.eventName||'', eventType: data.eventType||'',
-    shabbos: data.shabbos||'',
     eventDate: data.eventDate||'', phone: data.phone||'', email: data.email||'',
     venueName: data.venueName||'', venueLocation: data.venueLocation||'',
     guestCount: data.guestCount||'', cuisine: data.cuisine||'',
@@ -1393,177 +1113,20 @@ function addInquiryFromForm(data){
     plannerName: data.plannerName||'', comments: data.comments||'',
     stage:'new',
     submittedAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
-  };
-  _saveInquiry(inquiryData);
+  });
   save(); updatePipelineBadge();
   if(currentView==='pipeline') render();
-  // Trigger menu template automation
-  triggerMenuAutomation(inquiryData);
 }
 
 function openAddInquiryModal(){
-  document.getElementById('inquiryFormModal')?.remove();
-  const modal = document.createElement('div');
-  modal.id = 'inquiryFormModal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px';
-
-  const inp = 'width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit';
-  const lbl = 'font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);display:block;margin-bottom:5px';
-  const fld = 'margin-bottom:1rem';
-
-  modal.innerHTML = `
-  <div style="background:var(--bg);border-radius:var(--radius-lg);width:100%;max-width:620px;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden">
-    <div style="background:var(--blue-bg);border-bottom:0.5px solid var(--blue-border);padding:1.25rem 1.5rem;display:flex;align-items:center;justify-content:space-between">
-      <div>
-        <img src="${LOGO_DATA}" style="height:32px;object-fit:contain;display:block;margin-bottom:6px">
-        <div style="font-size:15px;font-weight:600;color:var(--blue-text)">New Client Inquiry</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:2px">Fill out on behalf of client or share with them directly</div>
-      </div>
-      <button onclick="document.getElementById('inquiryFormModal').remove()" style="border:none;background:none;font-size:20px;color:var(--text2);cursor:pointer;padding:4px">×</button>
-    </div>
-    <div style="padding:1.5rem">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
-        <div style="${fld}"><label style="${lbl}">First name *</label><input id="iq_firstName" style="${inp}" placeholder="First name"></div>
-        <div style="${fld}"><label style="${lbl}">Last name *</label><input id="iq_lastName" style="${inp}" placeholder="Last name"></div>
-        <div style="${fld}"><label style="${lbl}">Email</label><input id="iq_email" type="email" style="${inp}" placeholder="email@example.com"></div>
-        <div style="${fld}"><label style="${lbl}">Phone</label><input id="iq_phone" style="${inp}" placeholder="(555) 555-5555"></div>
-      </div>
-
-      <div style="${fld}"><label style="${lbl}">Event name</label><input id="iq_eventName" style="${inp}" placeholder="e.g. Smith Bar Mitzvah"></div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
-        <div style="${fld}">
-          <label style="${lbl}">Event type *</label>
-          <select id="iq_eventType" style="${inp};appearance:none">
-            <option value="">Select type...</option>
-            <option>Aufruf</option>
-            <option>Bar Mitzvah</option>
-            <option>Bat Mitzvah</option>
-            <option>Wedding</option>
-            <option>Kiddush</option>
-            <option>Bris</option>
-            <option>Sheva Brachos</option>
-            <option>Vort</option>
-            <option>Shloshim</option>
-            <option>Breakfast</option>
-            <option>Brunch</option>
-            <option>Corporate</option>
-            <option>Drop off catering</option>
-            <option>Other</option>
-          </select>
-        </div>
-        <div style="${fld}"><label style="${lbl}">Event date</label><input id="iq_eventDate" type="date" style="${inp}"></div>
-        <div style="${fld}">
-          <label style="${lbl}">Is this a Shabbos event?</label>
-          <select id="iq_shabbos" style="${inp};appearance:none">
-            <option value="">Select...</option>
-            <option value="Yes">Yes — Shabbos</option>
-            <option value="No">No</option>
-            <option value="Both">Both (multi-meal)</option>
-          </select>
-        </div>
-        <div style="${fld}"><label style="${lbl}">Guest count</label><input id="iq_guestCount" type="number" style="${inp}" placeholder="e.g. 150"></div>
-        <div style="${fld}">
-          <label style="${lbl}">Cuisine</label>
-          <select id="iq_cuisine" style="${inp};appearance:none">
-            <option value="">Select...</option>
-            <option>Meat</option>
-            <option>Dairy</option>
-            <option>Both</option>
-            <option>Not sure yet</option>
-          </select>
-        </div>
-      </div>
-
-      <div style="${fld}">
-        <label style="${lbl}">Venue name</label>
-        <input id="iq_venueName" style="${inp}" placeholder="Venue name">
-      </div>
-      <div style="${fld}">
-        <label style="${lbl}">Venue location / address</label>
-        <input id="iq_venueLocation" style="${inp}" placeholder="City, State or full address">
-      </div>
-
-      <div style="${fld}">
-        <label style="${lbl}">How did they hear about us?</label>
-        <select id="iq_howFound" style="${inp};appearance:none">
-          <option value="">Select...</option>
-          <option>Referral from friend/family</option>
-          <option>Attended a Premier Caterers event</option>
-          <option>Google search</option>
-          <option>Social media</option>
-          <option>Party planner / coordinator</option>
-          <option>Venue recommendation</option>
-          <option>Other</option>
-        </select>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
-        <div style="${fld}"><label style="${lbl}">Referred by (name)</label><input id="iq_referredBy" style="${inp}" placeholder="Who referred them?"></div>
-        <div style="${fld}"><label style="${lbl}">Which event did they attend?</label><input id="iq_eventAttended" style="${inp}" placeholder="Event name / date"></div>
-      </div>
-
-      <div style="${fld}">
-        <label style="${lbl}">Party planner / coordinator name</label>
-        <input id="iq_plannerName" style="${inp}" placeholder="Planner name (if applicable)">
-      </div>
-
-      <div style="${fld}">
-        <label style="${lbl}">Questions / comments</label>
-        <textarea id="iq_comments" rows="3" style="${inp};resize:vertical" placeholder="Any additional notes or questions..."></textarea>
-      </div>
-
-      <div id="iq_error" style="display:none;color:#c0392b;font-size:13px;margin-bottom:12px;padding:8px 12px;background:#fdf0f0;border-radius:var(--radius)"></div>
-
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button onclick="document.getElementById('inquiryFormModal').remove()" style="padding:9px 18px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);font-size:13px;cursor:pointer">Cancel</button>
-        <button onclick="submitInquiryModal()" style="padding:9px 20px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;font-size:13px;font-weight:500;cursor:pointer">Submit inquiry</button>
-      </div>
-    </div>
-  </div>`;
-
-  document.body.appendChild(modal);
-}
-
-function submitInquiryModal(){
-  const firstName = document.getElementById('iq_firstName')?.value.trim();
-  const lastName  = document.getElementById('iq_lastName')?.value.trim();
-  const eventType = document.getElementById('iq_eventType')?.value;
-  const errEl = document.getElementById('iq_error');
-
-  if(!firstName || !lastName){
-    errEl.textContent = 'Please enter first and last name.';
-    errEl.style.display = 'block';
-    return;
+  // Open the client form in a new window
+  // Form submits back to this platform via addInquiryFromForm()
+  const formUrl = 'premier_caterers_form.html';
+  const w = window.open(formUrl, '_blank', 'width=780,height=900,scrollbars=yes,resizable=yes');
+  if(!w){
+    // Popup blocked — fall back to same tab
+    window.open(formUrl, '_blank');
   }
-  if(!eventType){
-    errEl.textContent = 'Please select an event type.';
-    errEl.style.display = 'block';
-    return;
-  }
-
-  addInquiryFromForm({
-    firstName,
-    lastName,
-    email:         document.getElementById('iq_email')?.value.trim()||'',
-    phone:         document.getElementById('iq_phone')?.value.trim()||'',
-    eventName:     document.getElementById('iq_eventName')?.value.trim()||'',
-    eventType,
-    shabbos:       document.getElementById('iq_shabbos')?.value||'',
-    eventDate:     document.getElementById('iq_eventDate')?.value||'',
-    guestCount:    document.getElementById('iq_guestCount')?.value||'',
-    cuisine:       document.getElementById('iq_cuisine')?.value||'',
-    venueName:     document.getElementById('iq_venueName')?.value.trim()||'',
-    venueLocation: document.getElementById('iq_venueLocation')?.value.trim()||'',
-    howFound:      document.getElementById('iq_howFound')?.value||'',
-    referredBy:    document.getElementById('iq_referredBy')?.value.trim()||'',
-    eventAttended: document.getElementById('iq_eventAttended')?.value.trim()||'',
-    plannerName:   document.getElementById('iq_plannerName')?.value.trim()||'',
-    comments:      document.getElementById('iq_comments')?.value.trim()||''
-  });
-
-  document.getElementById('inquiryFormModal')?.remove();
-  showToast('✓ Inquiry added to Pipeline', 3000);
 }
 
 function renderSchedule(){
@@ -1597,14 +1160,6 @@ function renderSchedule(){
   const totChefs      = staffEvents.reduce((s,e)=>s+(parseInt(e.chefs)||0),0);
   const totPorters    = staffEvents.reduce((s,e)=>s+(parseInt(e.porters)||0),0);
 
-  const sortOpts = [
-    {key:'by-event',    label:'By event'},
-    {key:'by-day',      label:'By day'},
-    {key:'by-dept',     label:'By department'},
-    {key:'dept-by-day', label:'Dept + day'},
-    {key:'summary',     label:'Summary table'},
-  ];
-
   let h = '<div class="stats-row">'
     + '<div class="stat-card"><div class="stat-n">'+totWaiters+'</div><div class="stat-l">waiters</div></div>'
     + '<div class="stat-card"><div class="stat-n">'+totBartenders+'</div><div class="stat-l">bartenders</div></div>'
@@ -1613,8 +1168,7 @@ function renderSchedule(){
     + '</div>'
     + '<div class="section-header">'
     + '<div class="section-title">Staff schedule — '+schedWeekLabel+'</div>'
-    + '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">'
-    + sortOpts.map(function(s){ return '<button onclick="scheduleSort=\''+s.key+'\';render()" style="padding:5px 11px;border:0.5px solid '+(scheduleSort===s.key?'var(--blue-mid)':'var(--border2)')+';border-radius:var(--radius);background:'+(scheduleSort===s.key?'var(--blue-mid)':'var(--bg2)')+';color:'+(scheduleSort===s.key?'#fff':'var(--text2)')+';font-size:12px;cursor:pointer;font-weight:'+(scheduleSort===s.key?'600':'400')+'">'+s.label+'</button>'; }).join('')
+    + '<div style="display:flex;gap:6px">'
     + '<button onclick="printFullSchedule()" class="icon-btn" title="Print full schedule"><i class="ti ti-printer"></i></button>'
     + '<button onclick="downloadFullSchedule()" class="icon-btn" title="Download full schedule"><i class="ti ti-download"></i></button>'
     + '</div>'
@@ -1651,12 +1205,12 @@ function renderSchedule(){
 
     // Main staff table
     block += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-      + '<thead><tr style="background:var(--bg3)">'
-      + '<th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border);min-width:110px">Department</th>'
-      + '<th style="padding:10px 8px;text-align:center;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border);width:55px">#</th>'
-      + '<th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border)">Names</th>'
-      + '<th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border);white-space:nowrap;width:120px">Call time 1</th>'
-      + '<th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border);white-space:nowrap;width:120px">Call time 2</th>'
+      + '<thead><tr style="background:var(--bg2)">'
+      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;min-width:100px">Dept.</th>'
+      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);width:50px">#</th>'
+      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);min-width:160px">Names</th>'
+      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;width:110px">Call time #1</th>'
+      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;width:110px">Call time #2</th>'
       + '</tr></thead><tbody>';
 
     depts.forEach(function(d){
@@ -1665,20 +1219,19 @@ function renderSchedule(){
       var t1 = e[d.t1]||'';
       var t2 = d.t2 ? (e[d.t2]||'') : '';
       if(!count && !isEditing) return;
-      var rowBg = d.key==='waiters'?'':'';
-      block += '<tr style="border-bottom:0.5px solid var(--border);transition:background .1s" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
-        + '<td style="padding:11px 14px"><span class="role-tag '+d.rc+'" style="font-size:12px;font-weight:600">'+d.label+'</span></td>'
-        + '<td style="padding:11px 8px;text-align:center;font-weight:600;font-size:15px;color:var(--text)">'
-          + (isEditing ? '<input type="number" id="se-'+e.id+'-'+d.countKey+'" value="'+count+'" min="0" style="'+inpStyle+';width:55px;text-align:center;font-size:14px;font-weight:600">' : (count||'—'))
+      block += '<tr style="border-bottom:0.5px solid var(--border)">'
+        + '<td style="padding:9px 12px"><span class="role-tag '+d.rc+'">'+d.label+'</span></td>'
+        + '<td style="padding:9px 12px;font-weight:500;color:var(--text)">'
+          + (isEditing ? '<input type="number" id="se-'+e.id+'-'+d.countKey+'" value="'+count+'" min="0" style="'+inpStyle+';width:50px">' : (count||'—'))
         + '</td>'
-        + '<td style="padding:11px 14px;color:var(--text)">'
-          + (isEditing ? '<input type="text" id="se-'+e.id+'-'+d.namesKey+'" value="'+names.replace(/"/g,'&quot;')+'" placeholder="Enter names..." style="'+inpStyle+'">' : (names||'<span style="color:var(--text3);font-style:italic">—</span>'))
+        + '<td style="padding:9px 12px;color:var(--text2)">'
+          + (isEditing ? '<input type="text" id="se-'+e.id+'-'+d.namesKey+'" value="'+names.replace(/"/g,'&quot;')+'" placeholder="Names..." style="'+inpStyle+'">' : (names||'—'))
         + '</td>'
-        + '<td style="padding:11px 14px">'
-          + (isEditing ? '<input type="text" id="se-'+e.id+'-ct1-'+d.key+'" value="'+t1+'" placeholder="e.g. 9:00am" style="'+inpStyle+'">' : (t1 ? '<span class="time-badge" style="font-size:12px;font-weight:600">'+t1+'</span>' : '<span style="color:var(--text3)">—</span>'))
+        + '<td style="padding:9px 12px">'
+          + (isEditing ? '<input type="text" id="se-'+e.id+'-ct1-'+d.key+'" value="'+t1+'" placeholder="e.g. 9:00am" style="'+inpStyle+'">' : (t1 ? '<span class="time-badge">'+t1+'</span>' : '—'))
         + '</td>'
-        + '<td style="padding:11px 14px">'
-          + (isEditing && d.t2 ? '<input type="text" id="se-'+e.id+'-ct2-'+d.key+'" value="'+t2+'" placeholder="e.g. 11:00am" style="'+inpStyle+'">' : (t2 ? '<span class="time-badge" style="font-size:12px;font-weight:600">'+t2+'</span>' : (d.t2?'<span style="color:var(--text3)">—</span>':'')))
+        + '<td style="padding:9px 12px">'
+          + (isEditing && d.t2 ? '<input type="text" id="se-'+e.id+'-ct2-'+d.key+'" value="'+t2+'" placeholder="e.g. 11:00am" style="'+inpStyle+'">' : (t2 ? '<span class="time-badge">'+t2+'</span>' : (d.t2?'—':'')))
         + '</td>'
         + '</tr>';
     });
@@ -1714,121 +1267,8 @@ function renderSchedule(){
     return block;
   }
 
-  // ── SORT VIEWS ──
-  const dayOrderSched = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
-  const dayLabel = {monday:'Monday',tuesday:'Tuesday',wednesday:'Wednesday',thursday:'Thursday',friday:'Friday',saturday:'Saturday',sunday:'Sunday'};
-
-  if(scheduleSort === 'by-event' || !scheduleSort){
-    // Default: each event block with all departments
-    staffEvents.forEach(function(e){ h += renderEventBlock(e); });
-
-  } else if(scheduleSort === 'by-day'){
-    // Group events by day
-    const byDay = {};
-    staffEvents.forEach(function(e){ if(!byDay[e.day]) byDay[e.day]=[]; byDay[e.day].push(e); });
-    dayOrderSched.forEach(function(d){
-      if(!byDay[d]) return;
-      h += '<div style="margin-bottom:.5rem;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);padding:8px 0 4px;border-bottom:2px solid var(--border2)">'+dayLabel[d]+'</div>';
-      byDay[d].forEach(function(e){ h += renderEventBlock(e); });
-    });
-
-  } else if(scheduleSort === 'by-dept'){
-    // One section per department showing all events
-    depts.forEach(function(d){
-      const eventsWithDept = staffEvents.filter(function(e){ return d.key==='manager'?(e.manager&&e.manager!=='-'):(parseInt(e[d.countKey]||0)>0); });
-      if(!eventsWithDept.length) return;
-      const totCount = d.key==='manager' ? eventsWithDept.length : eventsWithDept.reduce(function(s,e){ return s+(parseInt(e[d.countKey]||0)||0); },0);
-      h += '<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:1rem;overflow:hidden">';
-      h += '<div style="display:flex;align-items:center;gap:10px;padding:.75rem 1.25rem;background:var(--bg3);border-bottom:1.5px solid var(--border)">';
-      h += '<span class="role-tag '+d.rc+'" style="font-size:13px;font-weight:700">'+d.label+'</span>';
-      h += '<span style="font-size:13px;color:var(--text2)">'+totCount+' total this week</span>';
-      h += '</div>';
-      h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">';
-      h += '<thead><tr style="background:var(--bg2)"><th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border)">Event</th><th style="padding:10px 14px;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border);text-align:center;width:50px">#</th><th style="padding:10px 14px;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border)">Names</th><th style="padding:10px 14px;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border);white-space:nowrap">Call time 1</th><th style="padding:10px 14px;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border);white-space:nowrap">Call time 2</th></tr></thead><tbody>';
-      eventsWithDept.forEach(function(e){
-        var count = d.key==='manager' ? '' : (parseInt(e[d.countKey]||0)||'—');
-        var names = d.key==='manager' ? (e.manager||'—') : (e[d.namesKey]||'—');
-        var t1 = e[d.t1]||'—';
-        var t2 = d.t2 ? (e[d.t2]||'—') : '';
-        h += '<tr style="border-bottom:0.5px solid var(--border)" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
-          + '<td style="padding:10px 14px"><span class="job-pill" style="margin-right:6px">'+displayJob(e.job)+'</span><span style="font-weight:500">'+e.name+'</span><span style="font-size:11px;color:var(--text3);margin-left:8px">'+e.dayLabel+'</span></td>'
-          + '<td style="padding:10px 14px;text-align:center;font-weight:700;font-size:15px">'+count+'</td>'
-          + '<td style="padding:10px 14px">'+names+'</td>'
-          + '<td style="padding:10px 14px">'+(t1!=='—'?'<span class="time-badge" style="font-size:12px;font-weight:600">'+t1+'</span>':'—')+'</td>'
-          + '<td style="padding:10px 14px">'+(t2&&t2!=='—'?'<span class="time-badge" style="font-size:12px;font-weight:600">'+t2+'</span>':t2===''?'':'—')+'</td>'
-          + '</tr>';
-      });
-      h += '</tbody></table></div></div>';
-    });
-
-  } else if(scheduleSort === 'dept-by-day'){
-    // Each department grouped, within each dept sorted by day
-    depts.forEach(function(d){
-      const eventsWithDept = staffEvents.filter(function(e){ return d.key==='manager'?(e.manager&&e.manager!=='-'):(parseInt(e[d.countKey]||0)>0); });
-      if(!eventsWithDept.length) return;
-      h += '<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:1rem;overflow:hidden">';
-      h += '<div style="display:flex;align-items:center;gap:10px;padding:.75rem 1.25rem;background:var(--bg3);border-bottom:1.5px solid var(--border)">';
-      h += '<span class="role-tag '+d.rc+'" style="font-size:13px;font-weight:700">'+d.label+'</span>';
-      h += '</div>';
-      const byDay2 = {};
-      eventsWithDept.forEach(function(e){ if(!byDay2[e.day]) byDay2[e.day]=[]; byDay2[e.day].push(e); });
-      dayOrderSched.forEach(function(day){
-        if(!byDay2[day]) return;
-        h += '<div style="padding:8px 14px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);background:var(--bg2);border-bottom:0.5px solid var(--border)">'+dayLabel[day]+'</div>';
-        h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>';
-        byDay2[day].forEach(function(e){
-          var count = d.key==='manager' ? '' : (parseInt(e[d.countKey]||0)||'—');
-          var names = d.key==='manager' ? (e.manager||'—') : (e[d.namesKey]||'—');
-          var t1 = e[d.t1]||'—';
-          var t2 = d.t2 ? (e[d.t2]||'') : '';
-          h += '<tr style="border-bottom:0.5px solid var(--border)" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
-            + '<td style="padding:10px 14px"><span class="job-pill" style="margin-right:6px">'+displayJob(e.job)+'</span><span style="font-weight:500">'+e.name+'</span></td>'
-            + '<td style="padding:10px 14px;text-align:center;font-weight:700;font-size:15px;width:50px">'+count+'</td>'
-            + '<td style="padding:10px 14px">'+names+'</td>'
-            + '<td style="padding:10px 14px;white-space:nowrap">'+(t1!=='—'?'<span class="time-badge">'+t1+'</span>':'—')+'</td>'
-            + '<td style="padding:10px 14px;white-space:nowrap">'+(t2?'<span class="time-badge">'+t2+'</span>':'')+'</td>'
-            + '</tr>';
-        });
-        h += '</tbody></table></div>';
-      });
-      h += '</div>';
-    });
-
-  } else if(scheduleSort === 'summary'){
-    // Quick summary table — all events vs all departments
-    h += '<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1rem">';
-    h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">';
-    h += '<thead><tr style="background:var(--bg3)">';
-    h += '<th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border)">Event</th>';
-    h += '<th style="padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border)">Day</th>';
-    depts.forEach(function(d){
-      h += '<th style="padding:10px 10px;text-align:center;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1.5px solid var(--border)"><span class="role-tag '+d.rc+'" style="font-size:11px">'+d.label+'</span></th>';
-    });
-    h += '</tr></thead><tbody>';
-    staffEvents.forEach(function(e){
-      h += '<tr style="border-bottom:0.5px solid var(--border)" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">';
-      h += '<td style="padding:10px 14px"><span class="job-pill" style="margin-right:6px">'+displayJob(e.job)+'</span><span style="font-weight:500">'+e.name+'</span></td>';
-      h += '<td style="padding:10px 14px;font-size:12px;color:var(--text2)">'+e.dayLabel+'</td>';
-      depts.forEach(function(d){
-        var count = d.key==='manager' ? (e.manager&&e.manager!=='-'?'✓':'') : (parseInt(e[d.countKey]||0)||'');
-        var t1 = e[d.t1]||'';
-        h += '<td style="padding:10px 10px;text-align:center">'
-          + (count?'<div style="font-weight:700;font-size:15px;color:var(--text)">'+count+'</div>':'<div style="color:var(--text3)">—</div>')
-          + (t1&&t1!=='-'?'<div style="font-size:10px;color:var(--text3);margin-top:2px">'+t1+'</div>':'')
-          + '</td>';
-      });
-      h += '</tr>';
-    });
-    // Totals row
-    h += '<tr style="background:var(--bg3);font-weight:600;border-top:2px solid var(--border)">';
-    h += '<td colspan="2" style="padding:10px 14px;font-size:13px">TOTALS</td>';
-    depts.forEach(function(d){
-      var tot = d.key==='manager' ? staffEvents.filter(function(e){return e.manager&&e.manager!=='-';}).length : staffEvents.reduce(function(s,e){return s+(parseInt(e[d.countKey]||0)||0);},0);
-      h += '<td style="padding:10px 10px;text-align:center;font-size:16px;font-weight:700;color:var(--text)">'+(tot||'—')+'</td>';
-    });
-    h += '</tr>';
-    h += '</tbody></table></div></div>';
-  }
+  // Render staffed events
+  staffEvents.forEach(function(e){ h += renderEventBlock(e); });
 
   // Render no-staffing events at bottom
   if(noStaffEvents.length){
@@ -2293,13 +1733,7 @@ const changeDepts = [
 
 function renderChanges(){
   return `
-  <div class="section-header">
-    <div class="section-title">Changes & updates log</div>
-    <div style="display:flex;gap:6px">
-      <button onclick="checkAllChanges()" style="padding:5px 12px;border:0.5px solid var(--green-border);border-radius:var(--radius);background:var(--green-bg);color:var(--green-text);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-circle-check" style="font-size:13px"></i>Check all</button>
-      <button onclick="sendChangesToCommissary()" style="padding:5px 12px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-send" style="font-size:13px"></i>Send to commissary</button>
-    </div>
-  </div>
+  <div class="section-header"><div class="section-title">Changes & updates log</div></div>
   <div class="new-change-form">
     <div style="font-size:13px;font-weight:500;margin-bottom:10px;color:var(--text)">Log a new change</div>
     <div class="form-row">
@@ -2325,25 +1759,17 @@ function renderChanges(){
     const ackedCount = Object.values(acks).filter(Boolean).length;
     const total = changeDepts.length;
     const pct = Math.round(ackedCount/total*100);
-    const ev = events.find(e=>e.job===c.job);
-    const evName = ev ? ev.name : '';
-    const evDate = ev ? ev.dayLabel : '';
     return `<div class="change-entry">
-      <div style="background:var(--amber-bg);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;border-left:3px solid var(--amber-text)">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:16px;font-weight:700;color:var(--text)">${c.job}</span>
-          ${evName?`<span style="font-size:15px;font-weight:600;color:var(--text)">${evName}</span>`:''}
-          ${evDate?`<span style="font-size:13px;color:var(--text2)">${evDate}</span>`:''}
-          <span style="font-size:12px;font-weight:700;color:var(--amber-text);background:var(--amber-bg);border:1px solid var(--amber-border);padding:2px 10px;border-radius:6px;letter-spacing:.05em">MENU UPDATE</span>
-          <span style="font-size:11px;color:var(--text3);margin-left:auto">${c.time}</span>
-        </div>
+      <div class="change-top">
+        <span class="change-time"><i class="ti ti-clock" style="font-size:13px;vertical-align:-1px"></i> ${c.time}</span>
+        <span class="change-job-badge">${c.job}</span>
+        <span style="font-size:11px;color:var(--text3);margin-left:auto">${ackedCount}/${total} acknowledged</span>
       </div>
       <div class="change-desc" style="margin-bottom:12px">${c.desc}</div>
       <div style="height:3px;background:var(--bg3);border-radius:2px;margin-bottom:10px;overflow:hidden">
         <div style="height:100%;width:${pct}%;background:${pct===100?'var(--green-text)':'var(--blue-mid)'};border-radius:2px;transition:width .3s"></div>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-        <span style="font-size:11px;color:var(--text3)">${ackedCount}/${total} acknowledged</span>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
         ${changeDepts.map(dept=>{
           const done = acks[dept];
           return `<button onclick="toggleAck('${c.id}','${dept}')" style="
@@ -2379,92 +1805,14 @@ function addChange(){
   const acks={}; checked.forEach(d=>{acks[d]=false;});
   const _c={id:'ch'+Date.now(),time,job,desc,acks,notifyDepts:checked};
   document.getElementById('newDesc').value='';
-  changes.unshift(_c); _saveChange(_c); render();
+  changes.unshift(_c); _saveChange(_c);
+  // Send WhatsApp + printer email notifications
+  sendChangeNotifications(_c, _c.notifyDepts||[]).catch(console.error);
+  render();
 }
 
 function selectAllDepts(){ document.querySelectorAll('input[name=notifyDept]').forEach(cb=>cb.checked=true); }
 function clearAllDepts(){ document.querySelectorAll('input[name=notifyDept]').forEach(cb=>cb.checked=false); }
-
-function checkAllChanges(){
-  if(!confirm('Mark ALL changes as acknowledged by all departments?')) return;
-  changes.forEach(c=>{
-    if(!c.acks) c.acks={};
-    changeDepts.forEach(d=>{ c.acks[d]=true; });
-    _saveChange(c);
-  });
-  render();
-  showToast('All changes acknowledged ✓');
-}
-
-async function sendChangesToCommissary(){
-  if(!gmailToken){ alert('Please connect Gmail in Settings first.'); return; }
-  const menuScriptUrl = localStorage.getItem('menuScriptUrl');
-  if(!menuScriptUrl){ alert('Please configure menu automation script URL in Settings first.'); return; }
-
-  // Filter to current week's unacknowledged or recent changes
-  const currentWeekStr = getWeekEndDate(currentWeekOffset).toISOString().split('T')[0];
-  const weekLabel = document.getElementById('wePill')?.textContent || '';
-
-  // Build the changes content for the email
-  const changesList = changes.filter(c=>{
-    const ev = events.find(e=>e.job===c.job);
-    return !ev || (ev.weekOf||'2026-05-31')===currentWeekStr;
-  });
-
-  if(changesList.length===0){ showToast('No changes to send for this week'); return; }
-
-  // Build HTML for the PDF-like email body
-  let bodyLines = ['PREMIER CATERERS — MENU & ORDER UPDATES', 'Week of: ' + weekLabel, '', ''];
-  changesList.forEach(c=>{
-    const ev = events.find(e=>e.job===c.job);
-    const evName = ev ? ev.name : '';
-    const evDate = ev ? ev.dayLabel : '';
-    bodyLines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    bodyLines.push('JOB: ' + c.job + '  |  CLIENT: ' + evName + '  |  DATE: ' + evDate);
-    bodyLines.push('MENU UPDATE');
-    bodyLines.push('');
-    bodyLines.push(c.desc);
-    bodyLines.push('Logged: ' + c.time);
-    bodyLines.push('');
-  });
-
-  const subject = 'MENU UPDATES — Premier Caterers ' + weekLabel;
-  const body = bodyLines.join('\n');
-
-  // Send via Apps Script
-  const sendUrl = menuScriptUrl
-    + '?action=sendCommissaryEmail'
-    + '&to=' + encodeURIComponent('commissary@thepremiercaterer.com')
-    + '&subject=' + encodeURIComponent(subject)
-    + '&body=' + encodeURIComponent(body)
-    + '&weekLabel=' + encodeURIComponent(weekLabel);
-
-  try {
-    const resp = await fetch(sendUrl, { method:'GET', redirect:'follow' });
-    const data = await resp.json();
-    if(data.success) showToast('✓ Changes sent to commissary', 4000);
-    else throw new Error(data.error||'Send failed');
-  } catch(err){
-    // Fallback: use Gmail directly
-    try {
-      const raw = btoa(unescape(encodeURIComponent(
-        'MIME-Version: 1.0\r\nTo: commissary@thepremiercaterer.com\r\nFrom: events@thepremiercaterer.com\r\nSubject: ' + subject + '\r\nContent-Type: text/plain; charset="UTF-8"\r\n\r\n' + body
-      ))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-      const gmailResp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{
-        method:'POST',
-        headers:{'Authorization':'Bearer '+gmailToken,'Content-Type':'application/json'},
-        body:JSON.stringify({raw})
-      });
-      if(gmailResp.ok) showToast('✓ Changes sent to commissary', 4000);
-      else throw new Error('Gmail send failed');
-    } catch(e2){
-      alert('Error sending: '+e2.message);
-    }
-  }
-}
-
-window.checkAllChanges = checkAllChanges;
-window.sendChangesToCommissary = sendChangesToCommissary;
 
 // ── SETTINGS ──
 const appsScript=`// Paste this in your Google Sheet:
@@ -2819,7 +2167,6 @@ function renderInvoiceDetail(){
         ${inv.status==='quote'?`<button class="btn-save" style="font-size:12px;padding:5px 12px" onclick="approveQuote('${eid}')">Approve quote</button>`:''}
         ${inv.status==='approved'?`<button class="btn-save" style="font-size:12px;padding:5px 12px" onclick="convertToInvoice('${eid}')">Convert to invoice</button>`:''}
         ${inv.status==='invoice'?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--green-text)" onclick="openPaymentModal('${eid}')">Record payment</button>`:''}
-        <button class="icon-btn" onclick="openEditInvoiceModal('${eid}')" title="Edit client info"><i class="ti ti-edit"></i></button>
         <button class="icon-btn" onclick="printInvoice('${eid}')" title="Print"><i class="ti ti-printer"></i></button>
         <button class="icon-btn" onclick="downloadInvoice('${eid}')" title="Download as HTML"><i class="ti ti-download"></i></button>
         <button class="icon-btn" onclick="openSendInvoiceEmail('${eid}')" title="Send by email" style="color:var(--blue-mid)"><i class="ti ti-send"></i></button>
@@ -2831,7 +2178,6 @@ function renderInvoiceDetail(){
       <div><span style="font-size:11px;color:var(--text3);display:block">${isInvoice?'Invoice':'Quote'} #</span>${e.job}</div>
       <div><span style="font-size:11px;color:var(--text3);display:block">Event date</span>${getFullEventDate(e)}</div>
       <div><span style="font-size:11px;color:var(--text3);display:block">Created</span>${inv.createdAt}</div>
-      <div><span style="font-size:11px;color:var(--text3);display:block">Client name</span>${canEdit?`<input type="text" value="${inv.clientName||e.name||''}" onchange="invoices['${eid}'].clientName=this.value" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:(inv.clientName||e.name||'—')}</div>
       <div><span style="font-size:11px;color:var(--text3);display:block">Client phone</span>${canEdit?`<input type="text" value="${inv.clientPhone||''}" onchange="invoices['${eid}'].clientPhone=this.value" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:(inv.clientPhone||'—')}</div>
       <div><span style="font-size:11px;color:var(--text3);display:block">Client email</span>${canEdit?`<input type="text" value="${inv.clientEmail||''}" onchange="invoices['${eid}'].clientEmail=this.value" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:(inv.clientEmail||'—')}</div>
       <div><span style="font-size:11px;color:var(--text3);display:block">Address</span>${e.addr||'—'}</div>
@@ -2900,7 +2246,10 @@ function renderInvoiceDetail(){
           <span>Grand total</span>
           <span>$${tots.grand.toFixed(2)}</span>
         </div>
-        ${buildPaymentsHTML(inv, eid, canEdit)}
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+          <span style="color:var(--text2)">Deposit paid</span>
+          ${canEdit?`<input type="number" value="${inv.deposit||0}" min="0" step="0.01" onchange="updateDeposit('${eid}',this.value)" style="${inpStyle};width:120px">`:('$'+parseFloat(inv.deposit||0).toFixed(2))}
+        </div>
         <div style="display:flex;justify-content:space-between;padding:10px 0;font-size:15px;font-weight:600;color:${tots.balance<=0?'var(--green-text)':'var(--crimson,#8B1A1A)'}">
           <span>Balance due</span>
           <span>$${tots.balance.toFixed(2)}</span>
@@ -2925,7 +2274,6 @@ function renderInvoiceDetail(){
   </div>`;
 
   el.scrollIntoView({behavior:'smooth',block:'nearest'});
-  setTimeout(()=>initInvoiceDrag(eid), 50);
 }
 
 function updateInvoiceLine(eid,idx,field,val){
@@ -2956,48 +2304,6 @@ function moveInvoiceLine(eid, idx, dir){
   lines[idx] = lines[newIdx];
   lines[newIdx] = tmp;
   renderInvoiceDetail();
-}
-
-function initInvoiceDrag(eid){
-  const tbody = document.querySelector('#invoiceDetail tbody');
-  if(!tbody) return;
-  let draggingRow = null;
-
-  tbody.querySelectorAll('tr').forEach((row, i)=>{
-    row.setAttribute('draggable','true');
-    row.style.cursor = 'grab';
-    row.dataset.idx = i;
-
-    row.addEventListener('dragstart', e=>{
-      draggingRow = row;
-      row.style.opacity = '0.4';
-      e.dataTransfer.effectAllowed = 'move';
-    });
-    row.addEventListener('dragend', ()=>{
-      row.style.opacity = '';
-      tbody.querySelectorAll('tr').forEach(r=>r.classList.remove('drag-over'));
-      draggingRow = null;
-    });
-    row.addEventListener('dragover', e=>{
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      if(draggingRow && row !== draggingRow){
-        tbody.querySelectorAll('tr').forEach(r=>r.classList.remove('drag-over'));
-        row.classList.add('drag-over');
-      }
-    });
-    row.addEventListener('drop', e=>{
-      e.preventDefault();
-      if(!draggingRow || draggingRow === row) return;
-      const fromIdx = parseInt(draggingRow.dataset.idx);
-      const toIdx   = parseInt(row.dataset.idx);
-      if(isNaN(fromIdx)||isNaN(toIdx)) return;
-      const lines = invoices[eid].lines;
-      const moved = lines.splice(fromIdx, 1)[0];
-      lines.splice(toIdx, 0, moved);
-      renderInvoiceDetail();
-    });
-  });
 }
 
 function removeInvoiceLine(eid, idx){
@@ -3158,6 +2464,7 @@ async function approveQuote(eid){
   invoices[eid].status = 'approved';
   await _saveInvoice(eid, invoices[eid]);
   renderInvoiceDetail();
+  render();
 }
 
 async function convertToInvoice(eid){
@@ -3166,6 +2473,7 @@ async function convertToInvoice(eid){
   invoices[eid].invoiceDate = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   await _saveInvoice(eid, invoices[eid]);
   renderInvoiceDetail();
+  render();
 }
 
 function openPaymentModal(eid){
@@ -3228,84 +2536,20 @@ async function confirmPayment(eid){
   const amount = parseFloat(document.getElementById('pmtAmount')?.value||0);
   if(!amount){ alert('Please enter an amount.'); return; }
   const d = new Date(date+'T12:00:00');
-  const dateLabel = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-
-  // Migrate legacy data: if deposit exists but no payments array yet, seed it
-  migrateInvoicePayments(invoices[eid]);
-
-  // Add new payment to array
-  const newPayment = {
-    id: Date.now().toString(),
-    amount: amount,
-    date: dateLabel,
-    method: method,
-    checkNumber: method==='Check' ? (checkNum||'') : ''
-  };
-  invoices[eid].payments.push(newPayment);
-
-  // Recompute deposit as sum of all payments
-  invoices[eid].deposit = invoices[eid].payments.reduce((s,p)=>s+parseFloat(p.amount||0),0);
-
-  // Mark as paid only if fully paid
   const tots = calcInvoiceTotals(invoices[eid]);
+  // Add to deposit (cumulative payments)
+  const prevDeposit = parseFloat(invoices[eid].deposit||0);
+  invoices[eid].deposit = prevDeposit + amount;
+  // Mark as paid only if fully paid
   const newBalance = tots.grand - invoices[eid].deposit;
   invoices[eid].status = newBalance <= 0.01 ? 'paid' : 'invoice';
-  invoices[eid].paidDate = newBalance <= 0.01 ? dateLabel : (invoices[eid].paidDate||'');
-  // Keep legacy fields for backward compat
+  invoices[eid].paidDate = newBalance <= 0.01 ? d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : (invoices[eid].paidDate||'');
+  invoices[eid].lastPaymentDate = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  invoices[eid].lastPaymentAmount = amount;
   invoices[eid].paymentMethod = method;
-  invoices[eid].checkNumber = method==='Check' ? (checkNum||'') : '';
-
+  invoices[eid].checkNumber = method==='Check' ? checkNum : '';
   await _saveInvoice(eid, invoices[eid]);
   document.getElementById('paymentModal')?.remove();
-  renderInvoiceDetail();
-}
-
-function buildPaymentsHTML(inv, eid, canEdit){
-  migrateInvoicePayments(inv);
-  if(!inv.payments||inv.payments.length===0){
-    return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px;color:var(--text2)"><span>Payments received</span><span>$0.00</span></div>';
-  }
-  return inv.payments.map(function(p){
-    var deleteBtn = canEdit
-      ? '<button onclick="deletePayment(\''+eid+'\',\''+p.id+'\')" title="Remove payment" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:13px;padding:0 0 0 8px;line-height:1"><i class="ti ti-trash"></i></button>'
-      : '';
-    var checkStr = p.checkNumber ? ' #'+p.checkNumber : '';
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px">'
-      + '<span style="color:var(--text2);flex:1"><span style="color:var(--green-text);font-weight:500">✓</span> '+p.date+' — '+p.method+checkStr+'</span>'
-      + '<span style="font-weight:500;margin-left:8px">$'+parseFloat(p.amount||0).toFixed(2)+'</span>'
-      + deleteBtn
-      + '</div>';
-  }).join('');
-}
-
-function migrateInvoicePayments(inv){
-  if(!inv) return;
-  const oldDeposit = parseFloat(inv.deposit||0);
-  // Migrate if: no payments array, OR payments array is empty but there's a deposit
-  if(!inv.payments || (inv.payments.length === 0 && oldDeposit > 0)){
-    inv.payments = [];
-    if(oldDeposit > 0){
-      inv.payments.push({
-        id: 'legacy_' + Date.now(),
-        amount: oldDeposit,
-        date: inv.lastPaymentDate || inv.paidDate || 'Prior payment',
-        method: inv.paymentMethod || 'Payment',
-        checkNumber: inv.checkNumber || ''
-      });
-    }
-  }
-}
-
-async function deletePayment(eid, pid){
-  if(!confirm('Remove this payment record?')) return;
-  if(!invoices[eid]||!invoices[eid].payments) return;
-  invoices[eid].payments = invoices[eid].payments.filter(p=>p.id!==pid);
-  // Recompute deposit
-  invoices[eid].deposit = invoices[eid].payments.reduce((s,p)=>s+parseFloat(p.amount||0),0);
-  const tots = calcInvoiceTotals(invoices[eid]);
-  const bal = tots.grand - invoices[eid].deposit;
-  if(invoices[eid].status==='paid' && bal > 0.01) invoices[eid].status = 'invoice';
-  await _saveInvoice(eid, invoices[eid]);
   renderInvoiceDetail();
   render();
 }
@@ -3396,11 +2640,7 @@ function buildInvoiceHTML(eid){
       '<div class="tot-row"><span>Logistics fee ('+( tots.logRate*100).toFixed(2)+'%)</span><span>$'+tots.logistics.toFixed(2)+'</span></div>'+
       '<div class="tot-row"><span>Sales tax (6.625%)</span><span>$'+tots.tax.toFixed(2)+'</span></div>'+
       '<div class="tot-row grand"><span>Grand total</span><span>$'+tots.grand.toFixed(2)+'</span></div>'+
-      (()=>{
-        migrateInvoicePayments(inv);
-        if(!inv.payments||inv.payments.length===0) return '<div class="tot-row"><span>Payments received</span><span>$0.00</span></div>';
-        return inv.payments.map(p=>'<div class="tot-row"><span style="color:#27500A">✓ '+p.date+' — '+p.method+(p.checkNumber?' #'+p.checkNumber:'')+'</span><span>$'+parseFloat(p.amount||0).toFixed(2)+'</span></div>').join('');
-      })()+
+      '<div class="tot-row"><span>Deposit paid</span><span>$'+parseFloat(inv.deposit||0).toFixed(2)+'</span></div>'+
       '<div class="tot-row balance"><span>Balance due</span><span>$'+tots.balance.toFixed(2)+'</span></div>'+
     '</div></div>'+
     (inv.notes?'<div class="notes"><strong>Notes:</strong> '+inv.notes+'</div>':'')+
@@ -3642,13 +2882,10 @@ async function saveQuickMenu(eid){
   render();
 }
 function renderEquipment() {
-  // Filter to current week only
-  const currentWeekStr = getWeekEndDate(currentWeekOffset).toISOString().split('T')[0];
-  const all = events.filter(e => (e.weekOf||'2026-05-31') === currentWeekStr);
-  const weekLabel = document.getElementById('wePill')?.textContent || '';
+  const all = events;
   let h = `
   <div class="section-header">
-    <div class="section-title">Equipment — ${weekLabel}</div>
+    <div class="section-title">Equipment — W/E Jun 7</div>
   </div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-bottom:1.25rem">
     ${all.map(e => {
@@ -4051,447 +3288,6 @@ function printList(id) {
 }
 
 
-// ── MENU TEMPLATE AUTOMATION ──
-const MENU_AUTOMATION_BANNERS_KEY = 'menuAutomationBanners';
-
-function triggerMenuAutomation(inquiryData){
-  const menuScriptUrl = localStorage.getItem('menuScriptUrl');
-  if(!menuScriptUrl){
-    console.log('Menu automation: no script URL configured yet.');
-    return;
-  }
-  const encoded = encodeURIComponent(JSON.stringify(inquiryData));
-  const url = menuScriptUrl + '?data=' + encoded;
-  console.log('Menu automation: calling script...');
-  fetch(url, { method:'GET', redirect:'follow' })
-  .then(r=>r.json())
-  .then(resp=>{
-    console.log('Menu automation response:', JSON.stringify(resp));
-    if(resp.success && resp.result && resp.result.templatesCopied && resp.result.templatesCopied.length>0){
-      const copies = resp.result.templatesCopied;
-      const clientName = ((inquiryData.firstName||'')+' '+(inquiryData.lastName||'')).trim();
-      const menuDocs = copies.map(c=>({ name:c.name, url:c.url, templateNum:c.templateNum }));
-
-      // Save directly to Firebase by inquiry ID — don't rely on local array
-      if(db && inquiryData.id){
-        db.collection('inquiries').doc(inquiryData.id).update({ menuDocs: menuDocs })
-          .then(()=>console.log('Menu docs saved to Firebase'))
-          .catch(err=>{
-            // update() fails if doc doesn't exist, try set with merge
-            db.collection('inquiries').doc(inquiryData.id).set({ menuDocs: menuDocs }, { merge: true })
-              .then(()=>console.log('Menu docs saved to Firebase (merge)'))
-              .catch(e=>console.error('Failed to save menu docs:', e));
-          });
-      }
-
-      // Show banner
-      showMenuAutomationBanner({ clientName, eventType:inquiryData.eventType||'', copies });
-    } else {
-      console.log('Menu automation: no templates copied or error in response');
-    }
-  })
-  .catch(err=>console.log('Menu automation fetch error:', err));
-}
-
-function showMenuAutomationBanner(b){
-  document.getElementById('menuAutoBanner')?.remove();
-  const div=document.createElement('div');
-  div.id='menuAutoBanner';
-  div.style.cssText='position:fixed;top:20px;right:20px;z-index:9999;background:var(--bg);border:2px solid var(--green-text);border-radius:var(--radius-lg);padding:16px 20px;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,.25);animation:slideInRight .3s ease';
-  const links=b.copies.map(c=>'<div style="font-size:12px;margin-top:6px"><a href="'+c.url+'" target="_blank" style="color:var(--blue-mid);text-decoration:none;display:flex;align-items:center;gap:4px"><i class="ti ti-external-link" style="font-size:11px"></i>'+c.name+'</a></div>').join('');
-  div.innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">'
-    +'<div style="font-size:14px;font-weight:600;color:var(--green-text);display:flex;align-items:center;gap:6px"><i class="ti ti-circle-check" style="font-size:16px"></i> Menu templates ready!</div>'
-    +'<button onclick="document.getElementById(\'menuAutoBanner\').remove()" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:18px;line-height:1;padding:0 0 0 8px">×</button>'
-    +'</div>'
-    +'<div style="font-size:13px;color:var(--text);margin-bottom:4px"><strong>'+b.clientName+'</strong> — '+b.eventType+'</div>'
-    +'<div style="font-size:12px;color:var(--text2);margin-bottom:6px">'+b.copies.length+' template'+(b.copies.length>1?'s':'')+' copied &amp; filled in Google Drive</div>'
-    +links
-    +'<div style="font-size:11px;color:var(--text3);margin-top:8px">Links also saved to the client card in Pipeline</div>';
-  document.body.appendChild(div);
-  // Auto-dismiss after 20 seconds
-  setTimeout(()=>document.getElementById('menuAutoBanner')?.remove(), 20000);
-}
-
-function deleteMenuDoc(inqId, docIdx){
-  if(!confirm('Remove this menu document from the card and delete it from Google Drive?')) return;
-  const inq = inquiries.find(x=>x.id===inqId);
-  if(!inq||!inq.menuDocs) return;
-  const doc = inq.menuDocs[docIdx];
-
-  // Delete from Google Drive via Apps Script
-  if(doc && doc.url){
-    const menuScriptUrl = localStorage.getItem('menuScriptUrl');
-    if(menuScriptUrl){
-      const fileIdMatch = doc.url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-      if(fileIdMatch){
-        const fileId = fileIdMatch[1];
-        const delUrl = menuScriptUrl + '?action=deleteFile&fileId=' + encodeURIComponent(fileId);
-        fetch(delUrl, { method:'GET', redirect:'follow' })
-          .then(r=>r.json())
-          .then(resp=>{ if(resp.success) console.log('Deleted from Drive:', fileId); })
-          .catch(err=>console.log('Drive delete error:', err));
-      }
-    }
-  }
-
-  inq.menuDocs.splice(docIdx, 1);
-  _saveInquiry(inq);
-  render();
-}
-
-// Google Calendar color IDs: banana=5, blueberry=9
-const CALENDAR_COLOR_BANANA    = '5';
-const CALENDAR_COLOR_BLUEBERRY = '9';
-// Store calendarEventId on inquiry so we can update it when booked
-// Uses the shared "Premier Caterers" calendar — set its ID in Settings or auto-detect
-
-async function getCalendarId(){
-  // Try stored, otherwise find "Premier Caterers" calendar
-  const stored = localStorage.getItem('premierCalendarId');
-  if(stored) return stored;
-  if(!gmailToken) return null;
-  try {
-    const resp = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
-      headers:{ 'Authorization':'Bearer '+gmailToken }
-    });
-    const data = await resp.json();
-    const cal = (data.items||[]).find(c=>c.summary&&c.summary.toLowerCase().includes('premier'));
-    if(cal){ localStorage.setItem('premierCalendarId', cal.id); return cal.id; }
-    return 'primary'; // fallback
-  } catch(e){ return 'primary'; }
-}
-
-async function createCalendarEventForInquiry(inq, sentDateLabel){
-  if(!gmailToken) return;
-  try {
-    const calId = await getCalendarId();
-    if(!calId) return;
-
-    const clientName  = ((inq.firstName||'')+' '+(inq.lastName||'')).trim();
-    const venueName   = inq.venueName||'';
-    const eventName   = inq.eventName||(clientName+' '+inq.eventType);
-    const title       = eventName + ' (' + clientName + ')' + (venueName?' '+venueName:'');
-    const dateStr     = inq.eventDate || '';
-    if(!dateStr) return; // no date = can't create calendar event
-
-    const notes = (sentDateLabel||new Date().toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit'})) + ' menu sent via PCA';
-
-    const calEvent = {
-      summary: title,
-      description: notes,
-      start:  { date: dateStr },
-      end:    { date: dateStr },
-      colorId: CALENDAR_COLOR_BANANA,
-      location: venueName + (inq.venueLocation ? ', ' + inq.venueLocation : '')
-    };
-
-    const resp = await fetch('https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(calId) + '/events', {
-      method: 'POST',
-      headers: { 'Authorization':'Bearer '+gmailToken, 'Content-Type':'application/json' },
-      body: JSON.stringify(calEvent)
-    });
-    const created = await resp.json();
-    if(created.id){
-      // Save calendar event ID on inquiry for later color update
-      inq.calendarEventId = created.id;
-      inq.calendarId      = calId;
-      await _saveInquiry(inq);
-      showToast('✓ Added to Premier Caterers calendar', 3000);
-    }
-  } catch(e){ console.log('Calendar create error:', e); }
-}
-
-async function updateCalendarEventToBooked(inq){
-  if(!gmailToken || !inq.calendarEventId || !inq.calendarId) return;
-  try {
-    // Patch the event color to blueberry
-    const url = 'https://www.googleapis.com/calendar/v3/calendars/'
-      + encodeURIComponent(inq.calendarId) + '/events/'
-      + encodeURIComponent(inq.calendarEventId);
-    await fetch(url, {
-      method: 'PATCH',
-      headers: { 'Authorization':'Bearer '+gmailToken, 'Content-Type':'application/json' },
-      body: JSON.stringify({ colorId: CALENDAR_COLOR_BLUEBERRY })
-    });
-  } catch(e){ console.log('Calendar color update error:', e); }
-}
-
-window.createCalendarEventForInquiry = createCalendarEventForInquiry;
-window.updateCalendarEventToBooked   = updateCalendarEventToBooked;
-
-function openSendMenuModal(inqId, docIdx){
-  const inq = inquiries.find(x=>x.id===inqId);
-  if(!inq) return;
-  const doc = inq.menuDocs && inq.menuDocs[docIdx];
-  if(!doc) return;
-
-  const firstName  = inq.firstName||'';
-  const lastName   = inq.lastName||'';
-  const eventType  = inq.eventType||'';
-  const eventDate  = formatDate(inq.eventDate);
-  const eventName  = inq.eventName||(firstName+' '+lastName+' '+eventType);
-  const venueName  = inq.venueName||'';
-  const clientEmail = inq.email||'';
-
-  const subject = eventName+', '+firstName+' '+lastName+', '+eventType+(eventDate?' ('+eventDate+')':'');
-  const body = 'Dear '+firstName+',\n\nThank you for reaching out to Premier Caterers. Please find attached your sample menu for your '+eventType+(eventDate?' on '+eventDate:'')+(venueName?' at '+venueName:'')+'.\n\nWe would love the opportunity to discuss your event further. Please feel free to reach out with any questions or changes.\n\nWarm regards,\nThe Premier Caterers Team';
-
-  document.getElementById('sendMenuModal')?.remove();
-  const modal = document.createElement('div');
-  modal.id = 'sendMenuModal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px';
-  const inp = 'width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;box-sizing:border-box';
-  modal.innerHTML = `
-  <div style="background:var(--bg);border-radius:var(--radius-lg);width:100%;max-width:560px;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden">
-    <div style="background:var(--blue-bg);border-bottom:0.5px solid var(--blue-border);padding:1rem 1.25rem;display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:15px;font-weight:600;color:var(--blue-text)"><i class="ti ti-send"></i> Send Menu to Client</div>
-      <button onclick="document.getElementById('sendMenuModal').remove()" style="border:none;background:none;font-size:20px;color:var(--text2);cursor:pointer">×</button>
-    </div>
-    <div style="padding:1.25rem;display:flex;flex-direction:column;gap:12px">
-      <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:12px;color:var(--text2)">
-        <i class="ti ti-file-text" style="font-size:12px"></i> Sending: <strong>${doc.name}</strong>
-        <span style="margin-left:8px;font-size:11px">(<a href="${doc.url.replace('/edit','/export?format=pdf')}" target="_blank" style="color:var(--blue-mid)">Download PDF first to review</a>)</span>
-      </div>
-      <div>
-        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);display:block;margin-bottom:5px">To</label>
-        <input id="smTo" style="${inp}" value="${clientEmail}" placeholder="client@email.com">
-      </div>
-      <div>
-        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);display:block;margin-bottom:5px">Subject</label>
-        <input id="smSubject" style="${inp}" value="${subject.replace(/"/g,'&quot;')}">
-      </div>
-      <div>
-        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);display:block;margin-bottom:5px">Body</label>
-        <textarea id="smBody" rows="8" style="${inp};resize:vertical">${body}</textarea>
-      </div>
-      <div style="background:#fff8e6;border:0.5px solid #f0d060;border-radius:var(--radius);padding:8px 12px;font-size:12px;color:#7a5f00">
-        <i class="ti ti-info-circle"></i> The PDF will be attached automatically from Google Docs. Make sure you've finished editing the doc before sending.
-      </div>
-      <div id="smError" style="display:none;color:#c0392b;font-size:13px;padding:8px 12px;background:#fdf0f0;border-radius:var(--radius)"></div>
-      <div style="display:flex;justify-content:flex-end;gap:8px">
-        <button onclick="document.getElementById('sendMenuModal').remove()" style="padding:9px 18px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);font-size:13px;cursor:pointer">Cancel</button>
-        <button onclick="sendMenuEmail('${inqId}',${docIdx})" style="padding:9px 20px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;font-size:13px;font-weight:500;cursor:pointer"><i class="ti ti-send"></i> Send menu</button>
-      </div>
-    </div>
-  </div>`;
-  document.body.appendChild(modal);
-}
-
-async function sendMenuEmail(inqId, docIdx){
-  const inq = inquiries.find(x=>x.id===inqId);
-  if(!inq) return;
-  const doc = inq.menuDocs && inq.menuDocs[docIdx];
-  if(!doc) return;
-
-  const to      = document.getElementById('smTo')?.value.trim();
-  const subject = document.getElementById('smSubject')?.value.trim();
-  const body    = document.getElementById('smBody')?.value.trim();
-  const errEl   = document.getElementById('smError');
-
-  if(!to){ errEl.textContent='Please enter a recipient email.'; errEl.style.display='block'; return; }
-  if(!gmailToken){ errEl.textContent='Gmail not connected. Please connect Gmail in Settings first.'; errEl.style.display='block'; return; }
-
-  const menuScriptUrl = localStorage.getItem('menuScriptUrl');
-  if(!menuScriptUrl){ errEl.textContent='Menu automation script not connected in Settings.'; errEl.style.display='block'; return; }
-
-  const sendBtn = document.querySelector('#sendMenuModal button[onclick^="sendMenuEmail"]');
-  if(sendBtn){ sendBtn.disabled=true; sendBtn.textContent='Fetching PDF...'; }
-
-  try {
-    if(sendBtn) sendBtn.textContent = 'Sending...';
-
-    // Extract file ID from Google Doc URL
-    const fileIdMatch = doc.url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if(!fileIdMatch) throw new Error('Could not extract file ID from doc URL');
-    const fileId = fileIdMatch[1];
-
-    // Have Apps Script send the email with PDF directly
-    // This avoids CORS issues of transferring large PDF to browser
-    const sendUrl = menuScriptUrl
-      + '?action=sendMenuEmail'
-      + '&fileId=' + encodeURIComponent(fileId)
-      + '&to=' + encodeURIComponent(to)
-      + '&subject=' + encodeURIComponent(subject)
-      + '&body=' + encodeURIComponent(body)
-      + '&fileName=' + encodeURIComponent(doc.name);
-
-    const sendResp = await fetch(sendUrl, { method:'GET', redirect:'follow' });
-    const sendData = await sendResp.json();
-    if(!sendData.success) throw new Error(sendData.error || 'Failed to send — check Apps Script logs');
-
-    // Save PDF link on the menu doc entry
-    const pdfExportUrl = doc.url.replace('/edit','').replace(/[?#].*$/,'') + '/export?format=pdf';
-    inq.menuDocs[docIdx].pdfSent = true;
-    inq.menuDocs[docIdx].pdfUrl = pdfExportUrl;
-    inq.menuDocs[docIdx].sentTo = to;
-    inq.menuDocs[docIdx].sentAt = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-
-    // Move inquiry to menu_sent stage
-    inq.stage = 'menu_sent';
-    await _saveInquiry(inq);
-
-    // Create Google Calendar event
-    createCalendarEventForInquiry(inq, inq.menuDocs[docIdx].sentAt);
-
-    document.getElementById('sendMenuModal')?.remove();
-    showToast('✓ Menu sent to ' + to, 4000);
-    updatePipelineBadge();
-    render();
-
-  } catch(err){
-    errEl.textContent = 'Error: ' + err.message;
-    errEl.style.display = 'block';
-    if(sendBtn){ sendBtn.disabled=false; sendBtn.textContent='Send menu'; }
-  }
-}
-
-window.deleteMenuDoc = deleteMenuDoc;
-window.openSendMenuModal = openSendMenuModal;
-window.sendMenuEmail = sendMenuEmail;
-
-function openEditInquiryModal(id){
-  const inq = inquiries.find(x=>x.id===id);
-  if(!inq) return;
-  document.getElementById('editInquiryModal')?.remove();
-  const modal = document.createElement('div');
-  modal.id = 'editInquiryModal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px';
-  const inp = 'width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;box-sizing:border-box';
-  const fld = 'margin-bottom:.85rem';
-  const lbl = 'font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);display:block;margin-bottom:5px';
-  modal.innerHTML = `
-  <div style="background:var(--bg);border-radius:var(--radius-lg);width:100%;max-width:620px;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden">
-    <div style="background:var(--blue-bg);border-bottom:0.5px solid var(--blue-border);padding:1.25rem 1.5rem;display:flex;align-items:center;justify-content:space-between">
-      <div style="font-size:15px;font-weight:600;color:var(--blue-text)"><i class="ti ti-edit"></i> Edit Inquiry — ${inq.firstName} ${inq.lastName}</div>
-      <button onclick="document.getElementById('editInquiryModal').remove()" style="border:none;background:none;font-size:20px;color:var(--text2);cursor:pointer">×</button>
-    </div>
-    <div style="padding:1.5rem">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
-        <div style="${fld}"><label style="${lbl}">First name</label><input id="ei_firstName" style="${inp}" value="${inq.firstName||''}"></div>
-        <div style="${fld}"><label style="${lbl}">Last name</label><input id="ei_lastName" style="${inp}" value="${inq.lastName||''}"></div>
-        <div style="${fld}"><label style="${lbl}">Email</label><input id="ei_email" style="${inp}" value="${inq.email||''}"></div>
-        <div style="${fld}"><label style="${lbl}">Phone</label><input id="ei_phone" style="${inp}" value="${inq.phone||''}"></div>
-      </div>
-      <div style="${fld}"><label style="${lbl}">Event name</label><input id="ei_eventName" style="${inp}" value="${inq.eventName||''}"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
-        <div style="${fld}">
-          <label style="${lbl}">Event type</label>
-          <select id="ei_eventType" style="${inp};appearance:none">
-            ${['Aufruf','Bar Mitzvah','Bat Mitzvah','Wedding','Kiddush','Bris','Sheva Brachos','Vort','Shloshim','Breakfast','Brunch','Corporate','Drop off catering','Other'].map(t=>`<option ${inq.eventType===t?'selected':''}>${t}</option>`).join('')}
-          </select>
-        </div>
-        <div style="${fld}"><label style="${lbl}">Event date</label><input id="ei_eventDate" type="date" style="${inp}" value="${inq.eventDate||''}"></div>
-        <div style="${fld}"><label style="${lbl}">Guest count</label><input id="ei_guestCount" type="number" style="${inp}" value="${inq.guestCount||''}"></div>
-        <div style="${fld}">
-          <label style="${lbl}">Shabbos event?</label>
-          <select id="ei_shabbos" style="${inp};appearance:none">
-            <option value="" ${!inq.shabbos?'selected':''}>Select...</option>
-            <option value="Yes" ${inq.shabbos==='Yes'?'selected':''}>Yes — Shabbos</option>
-            <option value="No" ${inq.shabbos==='No'?'selected':''}>No</option>
-            <option value="Both" ${inq.shabbos==='Both'?'selected':''}>Both</option>
-          </select>
-        </div>
-      </div>
-      <div style="${fld}"><label style="${lbl}">Venue name</label><input id="ei_venueName" style="${inp}" value="${inq.venueName||''}"></div>
-      <div style="${fld}"><label style="${lbl}">Venue location</label><input id="ei_venueLocation" style="${inp}" value="${inq.venueLocation||''}"></div>
-      <div style="${fld}"><label style="${lbl}">Party planner name</label><input id="ei_plannerName" style="${inp}" value="${inq.plannerName||''}"></div>
-      <div style="${fld}"><label style="${lbl}">How did they find us?</label><input id="ei_howFound" style="${inp}" value="${inq.howFound||''}"></div>
-      <div style="${fld}"><label style="${lbl}">Referred by</label><input id="ei_referredBy" style="${inp}" value="${inq.referredBy||''}"></div>
-      <div style="${fld}"><label style="${lbl}">Notes / Comments</label><textarea id="ei_comments" rows="3" style="${inp};resize:vertical">${inq.comments||''}</textarea></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button onclick="document.getElementById('editInquiryModal').remove()" style="padding:9px 18px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);font-size:13px;cursor:pointer">Cancel</button>
-        <button onclick="saveEditedInquiry('${id}')" style="padding:9px 20px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;font-size:13px;font-weight:500;cursor:pointer">Save changes</button>
-      </div>
-    </div>
-  </div>`;
-  document.body.appendChild(modal);
-}
-
-async function saveEditedInquiry(id){
-  const inq = inquiries.find(x=>x.id===id);
-  if(!inq) return;
-  inq.firstName    = document.getElementById('ei_firstName')?.value.trim()||inq.firstName;
-  inq.lastName     = document.getElementById('ei_lastName')?.value.trim()||inq.lastName;
-  inq.email        = document.getElementById('ei_email')?.value.trim()||'';
-  inq.phone        = document.getElementById('ei_phone')?.value.trim()||'';
-  inq.eventName    = document.getElementById('ei_eventName')?.value.trim()||'';
-  inq.eventType    = document.getElementById('ei_eventType')?.value||inq.eventType;
-  inq.eventDate    = document.getElementById('ei_eventDate')?.value||'';
-  inq.guestCount   = document.getElementById('ei_guestCount')?.value||'';
-  inq.shabbos      = document.getElementById('ei_shabbos')?.value||'';
-  inq.venueName    = document.getElementById('ei_venueName')?.value.trim()||'';
-  inq.venueLocation= document.getElementById('ei_venueLocation')?.value.trim()||'';
-  inq.plannerName  = document.getElementById('ei_plannerName')?.value.trim()||'';
-  inq.howFound     = document.getElementById('ei_howFound')?.value.trim()||'';
-  inq.referredBy   = document.getElementById('ei_referredBy')?.value.trim()||'';
-  inq.comments     = document.getElementById('ei_comments')?.value.trim()||'';
-  await _saveInquiry(inq);
-  document.getElementById('editInquiryModal')?.remove();
-  showToast('Inquiry updated ✓');
-  render();
-}
-
-window.openEditInquiryModal = openEditInquiryModal;
-window.saveEditedInquiry = saveEditedInquiry;
-
-function openEditInvoiceModal(eid){
-  const e = events.find(x=>x.id===eid);
-  const inv = invoices[eid];
-  if(!e||!inv) return;
-  document.getElementById('editInvoiceModal')?.remove();
-  const modal = document.createElement('div');
-  modal.id = 'editInvoiceModal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px';
-  const inp = 'width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;box-sizing:border-box';
-  const fld = 'margin-bottom:.85rem';
-  const lbl = 'font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);display:block;margin-bottom:5px';
-  modal.innerHTML = `
-  <div style="background:var(--bg);border-radius:var(--radius-lg);width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden">
-    <div style="background:var(--blue-bg);border-bottom:0.5px solid var(--blue-border);padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between">
-      <div style="font-size:15px;font-weight:600;color:var(--blue-text)"><i class="ti ti-edit"></i> Edit Invoice Client Info</div>
-      <button onclick="document.getElementById('editInvoiceModal').remove()" style="border:none;background:none;font-size:20px;color:var(--text2);cursor:pointer">×</button>
-    </div>
-    <div style="padding:1.25rem">
-      <div style="${fld}"><label style="${lbl}">Client name (appears on invoice)</label><input id="eiv_clientName" style="${inp}" value="${inv.clientName||e.name||''}"></div>
-      <div style="${fld}"><label style="${lbl}">Client email</label><input id="eiv_clientEmail" style="${inp}" value="${inv.clientEmail||''}"></div>
-      <div style="${fld}"><label style="${lbl}">Client phone</label><input id="eiv_clientPhone" style="${inp}" value="${inv.clientPhone||''}"></div>
-      <div style="${fld}"><label style="${lbl}">Event / venue name</label><input id="eiv_eventName" style="${inp}" value="${e.name||''}"></div>
-      <div style="${fld}"><label style="${lbl}">Venue address</label><input id="eiv_addr" style="${inp}" value="${e.addr||''}"></div>
-      <div style="${fld}"><label style="${lbl}">Notes</label><textarea id="eiv_notes" rows="3" style="${inp};resize:vertical">${inv.notes||''}</textarea></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button onclick="document.getElementById('editInvoiceModal').remove()" style="padding:9px 18px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);font-size:13px;cursor:pointer">Cancel</button>
-        <button onclick="saveEditedInvoice('${eid}')" style="padding:9px 20px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;font-size:13px;font-weight:500;cursor:pointer">Save changes</button>
-      </div>
-    </div>
-  </div>`;
-  document.body.appendChild(modal);
-}
-
-async function saveEditedInvoice(eid){
-  const e = events.find(x=>x.id===eid);
-  const inv = invoices[eid];
-  if(!e||!inv) return;
-  inv.clientName  = document.getElementById('eiv_clientName')?.value.trim()||'';
-  inv.clientEmail = document.getElementById('eiv_clientEmail')?.value.trim()||'';
-  inv.clientPhone = document.getElementById('eiv_clientPhone')?.value.trim()||'';
-  inv.notes       = document.getElementById('eiv_notes')?.value.trim()||'';
-  const newName   = document.getElementById('eiv_eventName')?.value.trim();
-  const newAddr   = document.getElementById('eiv_addr')?.value.trim();
-  if(newName) e.name = newName;
-  if(newAddr !== undefined) e.addr = newAddr;
-  await _saveEvent(e);
-  await _saveInvoice(eid, inv);
-  document.getElementById('editInvoiceModal')?.remove();
-  showToast('Invoice updated ✓');
-  renderInvoiceDetail();
-}
-
-window.openEditInvoiceModal = openEditInvoiceModal;
-window.saveEditedInvoice = saveEditedInvoice;
-
-
-
-
 // ── SETTINGS ──
 function renderSettings(){
   const connected=!!localStorage.getItem('scriptUrl');
@@ -4522,23 +3318,6 @@ function renderSettings(){
   </div>
 
   <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
-    <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Menu Template Automation</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">When a new inquiry comes in, automatically copies the right menu templates to Google Drive and emails Kenny & Shelley. Paste the deployed Apps Script URL below.</div>
-    ${localStorage.getItem('menuScriptUrl')
-      ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <div style="font-size:13px;color:var(--green-text);display:flex;align-items:center;gap:5px"><i class="ti ti-circle-check"></i> Menu automation connected</div>
-          <button onclick="localStorage.removeItem('menuScriptUrl');render()" style="padding:4px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer">Clear</button>
-        </div>`
-      : `<div>
-          <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Enter the deployed Apps Script web app URL (from MenuAutomation.gs):</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <input type="text" id="menuScriptInput" placeholder="https://script.google.com/macros/s/..." style="flex:1;min-width:200px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px 12px;font-size:13px;color:var(--text);font-family:inherit">
-            <button onclick="saveMenuScriptUrl()" class="btn-save">Save URL</button>
-          </div>
-        </div>`}
-  </div>
-
-  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
     <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Gmail Integration</div>
     <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Connect events@thepremiercaterer.com to send and receive emails in the app.</div>
     ${isGmailConnected()
@@ -4557,20 +3336,21 @@ function renderSettings(){
         </div>`}
   </div>
 
-  ${currentRole==='admin'||currentRole==='kenny'?`
   <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
-    <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Role Passwords</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Set a password for each role. Users must enter this to sign in.</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      ${['admin','kenny','shelley','josh','kitchen'].map(r=>`
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:13px;font-weight:500;color:var(--text);width:70px;text-transform:capitalize">${r}</span>
-        <input type="password" id="pwd_input_${r}" placeholder="New password" style="flex:1;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:7px 10px;font-size:13px;color:var(--text);font-family:inherit">
-        <button onclick="changeRolePassword('${r}')" style="padding:7px 12px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;font-size:12px;cursor:pointer">Set</button>
+    <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">WhatsApp Notifications</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Automatically sends WhatsApp messages when changes are logged.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+      ${Object.entries(deptContacts).map(([dept,c])=>`
+      <div style="background:var(--bg2);border-radius:var(--radius);padding:8px 12px;display:flex;align-items:center;gap:8px">
+        <i class="ti ti-brand-whatsapp" style="font-size:14px;color:#25D366"></i>
+        <span style="font-weight:500;color:var(--text)">${dept}</span>
+        <span style="color:var(--text3);margin-left:auto">${c.whatsapp}</span>
       </div>`).join('')}
     </div>
-    <div style="font-size:11px;color:var(--text3);margin-top:10px">Default passwords: admin/kenny = premier2026 · shelley = shelley2026 · josh = josh2026 · kitchen = kitchen2026</div>
-  </div>`:''}
+    <div style="margin-top:.75rem;font-size:12px;color:var(--text3)">
+      <i class="ti ti-printer" style="font-size:12px"></i> Change notices also print to: <strong>${PRINTER_EMAIL}</strong>
+    </div>
+  </div>
 
   <div class="section-header"><div class="section-title">Google Sheets live sync</div></div>
   ${connected?`<div class="banner green" style="margin-bottom:1rem"><i class="ti ti-circle-check" style="font-size:16px;color:var(--green-text);flex-shrink:0"></i><div class="banner-text"><strong>Connected!</strong> Platform is reading live data from your Google Sheet.</div></div>`:''}
@@ -5055,18 +3835,11 @@ async function pushToGitHub(){
     const fileData = await getResp.json();
     const sha = fileData.sha;
 
-    // Step 2: Stamp current timestamp before pushing
-    const now = new Date();
-    const etOptions = { timeZone:'America/New_York', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true };
-    const etStr = now.toLocaleString('en-US', etOptions).replace(',','') + ' ET';
-    const tsEl = document.getElementById('buildTimestamp');
-    if(tsEl) tsEl.textContent = 'Updated ' + etStr;
-
-    // Step 3: Get the current page HTML (now with fresh timestamp)
+    // Step 2: Get the current page HTML
     const html = document.documentElement.outerHTML;
     const encoded = btoa(unescape(encodeURIComponent(html)));
 
-    // Step 4: Push update
+    // Step 3: Push update
     const pushResp = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
       method: 'PUT',
       headers: {
@@ -5096,26 +3869,6 @@ async function pushToGitHub(){
   }
 }
 
-async function changeRolePassword(role){
-  const input = document.getElementById('pwd_input_'+role);
-  const pwd = input?.value.trim();
-  if(!pwd){ showToast('Please enter a password'); return; }
-  if(pwd.length < 4){ showToast('Password must be at least 4 characters'); return; }
-  const hash = await hashPassword(pwd);
-  localStorage.setItem('pwd_'+role, hash);
-  input.value = '';
-  showToast(role.charAt(0).toUpperCase()+role.slice(1)+' password updated ✓');
-}
-window.changeRolePassword = changeRolePassword;
-
-function saveMenuScriptUrl(){  const url = document.getElementById('menuScriptInput')?.value.trim();
-  if(!url){ alert('Please paste the Apps Script URL.'); return; }
-  localStorage.setItem('menuScriptUrl', url);
-  render();
-  showToast('Menu automation URL saved ✓');
-}
-window.saveMenuScriptUrl = saveMenuScriptUrl;
-
 function saveGitHubToken(){
   const token = document.getElementById('githubTokenInput')?.value?.trim();
   if(!token){ alert('Please enter your token.'); return; }
@@ -5132,41 +3885,12 @@ function clearGitHubToken(){
 
 // ── GMAIL INTEGRATION ──
 const GMAIL_CLIENT_ID = localStorage.getItem('gmailClientId') || '';
-const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar';
+const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify';
 let gmailToken = null;
 let gmailUser = null;
 let gmailMessages = []; // cached inbox messages
 
 function isGmailConnected(){ return !!gmailToken; }
-
-// Try to silently restore Gmail token on page load
-async function gmailSilentSignIn(){
-  const clientId = localStorage.getItem('gmailClientId');
-  if(!clientId) return;
-  try {
-    if(!window.google?.accounts?.oauth2){
-      await new Promise((resolve,reject)=>{
-        const s=document.createElement('script');
-        s.src='https://accounts.google.com/gsi/client';
-        s.onload=resolve; s.onerror=reject;
-        document.head.appendChild(s);
-      });
-    }
-    const client = window.google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: GMAIL_SCOPES,
-      hint: 'events@thepremiercaterer.com',
-      prompt: '', // empty prompt = silent if already authorized
-      callback: async (resp)=>{
-        if(resp.error) return; // silent fail - user will manually connect if needed
-        gmailToken = resp.access_token;
-        await fetchGmailProfile();
-        render();
-      }
-    });
-    client.requestAccessToken({ prompt:'' });
-  } catch(e){ console.log('Silent Gmail sign-in failed:', e); }
-}
 
 async function gmailSignIn(){
   const clientId = localStorage.getItem('gmailClientId');
@@ -5471,6 +4195,85 @@ async function sendComposedEmail(){
 function openComposeEmail(){ window._emailTab='compose'; render(); }
 
 
+
+// ── WHATSAPP / TWILIO NOTIFICATIONS ──
+const TWILIO_ACCOUNT_SID = 'ACd1507cc870b0cd469d42d6d63858f990';
+const TWILIO_AUTH_TOKEN   = '5b506fa79304c8910f5ef7bd5e88e43a';
+const TWILIO_WHATSAPP_FROM = 'whatsapp:+12012509487';
+const PRINTER_EMAIL = '47515733707@print.brother.com';
+
+const deptContacts = {
+  'Kenny':     { whatsapp: '+12012509487' },
+  'Shelley':   { whatsapp: '+15162985137' },
+  'Josh':      { whatsapp: '+12018002132' },
+  'Kitchen':   { whatsapp: '+17185097637' },  // Mat/Bing
+  'Parve':     { whatsapp: '+15514048903' },  // Edgar
+  'Equipment': { whatsapp: '+12019608304' },  // Louis Z
+  'Grocery':   { whatsapp: '+12016816464' },  // Adrian
+  'Barry':     { whatsapp: '+12018053672' },
+};
+
+async function sendWhatsAppMessage(to, body){
+  const url = 'https://api.twilio.com/2010-04-01/Accounts/'+TWILIO_ACCOUNT_SID+'/Messages.json';
+  const params = new URLSearchParams({
+    From: TWILIO_WHATSAPP_FROM,
+    To:   'whatsapp:'+to,
+    Body: body
+  });
+  try{
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa(TWILIO_ACCOUNT_SID+':'+TWILIO_AUTH_TOKEN),
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: params.toString()
+    });
+    const d = await r.json();
+    if(d.error_code){ console.error('Twilio error:', d.message); return false; }
+    return true;
+  }catch(e){ console.error('WhatsApp send error:', e); return false; }
+}
+
+async function sendChangeNotifications(change, notifyDepts){
+  // Build the WhatsApp message
+  const e = events.find(x=>x.job===change.job);
+  const eventName = e ? e.name : change.job;
+  const eventDay  = e ? getFullEventDate(e) : '';
+  const jobNum    = e ? displayJob(e.job) : change.job;
+
+  const msg = 
+    'PREMIER CATERERS — Change Notification\n\n' +
+    'Job: ' + jobNum + '\n' +
+    'Client: ' + eventName + '\n' +
+    (eventDay ? 'Date: ' + eventDay + '\n' : '') +
+    '\nChange/Update:\n' + change.text + '\n\n' +
+    'Please confirm that you received this update by replying CONFIRMED.';
+
+  // Send to each selected dept that has a WhatsApp number
+  const results = [];
+  for(const dept of (notifyDepts||[])){
+    const contact = deptContacts[dept];
+    if(contact?.whatsapp){
+      const ok = await sendWhatsAppMessage(contact.whatsapp, msg);
+      results.push({dept, ok});
+    }
+  }
+
+  // Send email to printer
+  if(isGmailConnected()){
+    const subject = 'Change Notice — '+jobNum+' '+eventName;
+    const body = msg.replace(/\n/g, '<br>');
+    await sendGmailEmail(PRINTER_EMAIL, subject, msg, '<pre style="font-family:Arial,sans-serif;font-size:14px">'+msg+'</pre>');
+  }
+
+  const sent = results.filter(r=>r.ok).map(r=>r.dept).join(', ');
+  const failed = results.filter(r=>!r.ok).map(r=>r.dept).join(', ');
+  if(sent) showToast('WhatsApp sent to: '+sent, 4000);
+  if(failed) showToast('Failed: '+failed, 4000);
+  return results;
+}
+
 function save(){ /* Firebase handles all saves */ }
 function load(){ /* Firebase handles all loads */ }
 
@@ -5552,9 +4355,6 @@ window.convertToInvoice = convertToInvoice;
 window.markPaid = markPaid;
 window.openPaymentModal = openPaymentModal;
 window.confirmPayment = confirmPayment;
-window.deletePayment = deletePayment;
-window.migrateInvoicePayments = migrateInvoicePayments;
-window.buildPaymentsHTML = buildPaymentsHTML;
 window.toggleCheckNum = toggleCheckNum;
 window.printInvoice = printInvoice;
 window.downloadInvoice = downloadInvoice;
@@ -5591,7 +4391,6 @@ window.promoteToEvent = promoteToEvent;
 window.selectInquiry = selectInquiry;
 window.closeInqDetail = closeInqDetail;
 window.openAddInquiryModal = openAddInquiryModal;
-window.submitInquiryModal = submitInquiryModal;
 window.addInquiryFromForm = addInquiryFromForm;
 window.toggleAck = toggleAck;
 window.addChange = addChange;
@@ -5689,12 +4488,6 @@ function _startApp() {
 
 // ── SAFETY NET: force render if page looks blank ──
 document.addEventListener('DOMContentLoaded', ()=>{
-  // Try to silently restore Gmail connection on page load
-  setTimeout(gmailSilentSignIn, 2000);
-
-  // Update timestamp to show when page was last deployed (keep the baked value)
-  // The baked value in #buildTimestamp is the correct push time — no override needed.
-
   setTimeout(()=>{
     const main = document.getElementById('mainArea');
     if(main && !main.innerHTML.trim()){
@@ -5726,7 +4519,6 @@ function initNow(){
     invoicesCol  = db.collection('invoices');
   venuesCol    = db.collection('venues');
     console.log('Firebase initialized! db=', !!db);
-    initDefaultPasswords().then(()=>showLoginScreen());
     render();
     seedIfEmpty().then(function(){
       startFirebaseListeners();
@@ -5747,4 +4539,3 @@ if(window.location.hash.includes("access_token")) handleGmailCallback();
 </script>
 </body>
 </html>
-
