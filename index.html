@@ -242,7 +242,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 04:45 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 05:05 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -4469,7 +4469,7 @@ async function sendChangeNotifications(change, notifyDepts){
     'Job: ' + jobNum + '\n' +
     'Client: ' + eventName + '\n' +
     (eventDay ? 'Date: ' + eventDay + '\n' : '') +
-    '\nChange/Update:\n' + change.text + '\n\n' +
+    '\nChange/Update:\n' + (change.desc || change.text || '') + '\n\n' +
     'Please confirm that you received this update by replying CONFIRMED.';
 
   // Send to each selected dept that has a WhatsApp number
