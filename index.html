@@ -242,7 +242,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 01:50 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 02:05 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -1019,11 +1019,15 @@ function renderInqDetail(inq, role){
         </div>
         <div class="detail-block">
           <div class="detail-block-title">Menu</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-          ${inq.menuLink
-            ? `<a href="${inq.menuLink}" target="_blank" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--green-border);border-radius:7px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px;text-decoration:none"><i class="ti ti-file-text" style="font-size:14px"></i>Open menu</a>
-               <button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-edit" style="font-size:14px"></i>Change</button>`
-            : `<button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-link" style="font-size:14px"></i>Attach menu</button>`}
+          <div style="display:flex;flex-direction:column;gap:6px">
+          ${(Array.isArray(inq.menus) && inq.menus.length)
+            ? inq.menus.map(m=>`<a href="${m.url}" target="_blank" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--green-border);border-radius:7px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none"><i class="ti ti-file-text" style="font-size:14px"></i>${m.name||'Open menu'}</a>`).join('')
+            : inq.menuLink
+              ? `<a href="${inq.menuLink}" target="_blank" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--green-border);border-radius:7px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none"><i class="ti ti-file-text" style="font-size:14px"></i>Open menu</a>`
+              : `<div style="font-size:12px;color:var(--text3)">No menu generated yet</div>`}
+          <div style="margin-top:2px">
+            <button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-link" style="font-size:14px"></i>${(Array.isArray(inq.menus)&&inq.menus.length)||inq.menuLink?'Add / change link':'Attach menu manually'}</button>
+          </div>
           </div>
         </div>
         <div class="detail-block">
@@ -1102,7 +1106,7 @@ function promoteToEvent(id){
     chefs:0, chefNames:'', chefTime:'-', chefTime2:'',
     porters:0, porterNames:'', porterTime:'', porterTime2:'',
     manager:'-', mashgiach:'-', mashgiachNames:'',
-    menuLink: inq.menuLink||'', groceryLink:'', floorplan:'', venueLink:'', pdfMenuLink:'', logoData:'',
+    menuLink: inq.menuLink || (Array.isArray(inq.menus)&&inq.menus[0]?inq.menus[0].url:'') , groceryLink:'', floorplan:'', venueLink:'', pdfMenuLink:'', logoData:'',
     notes: inq.eventName||''
   };
   events.push(newEvent);
@@ -1132,6 +1136,9 @@ function addInquiryFromForm(data){
     meatDairy: data.meatDairy||'', howFound: data.howFound||'',
     referredBy: data.referredBy||'', eventAttended: data.eventAttended||'',
     plannerName: data.plannerName||'', comments: data.comments||'',
+    shabbos: data.shabbos||'No',
+    source: 'website',
+    menuAutomationTriggered: false,
     stage:'new',
     submittedAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
   });
