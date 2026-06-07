@@ -242,7 +242,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 02:35 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 03:20 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -1019,14 +1019,30 @@ function renderInqDetail(inq, role){
         </div>
         <div class="detail-block">
           <div class="detail-block-title">Menu</div>
-          <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;flex-direction:column;gap:10px">
           ${(Array.isArray(inq.menus) && inq.menus.length)
-            ? inq.menus.map(m=>`<a href="${m.url}" target="_blank" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--green-border);border-radius:7px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none"><i class="ti ti-file-text" style="font-size:14px"></i>${m.name||'Open menu'}</a>`).join('')
+            ? inq.menus.map((m,mi)=>`
+              <div style="border:0.5px solid var(--border2);border-radius:8px;padding:8px 10px;background:var(--bg2)">
+                <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:6px">${m.name||'Menu'}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:5px">
+                  <a href="${m.url}" target="_blank" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--blue-border);border-radius:6px;background:var(--blue-bg);color:var(--blue-text);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-file-text" style="font-size:13px"></i>Open doc</a>
+                  <a href="${menuPdfUrl(m.url)}" target="_blank" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-file-type-pdf" style="font-size:13px"></i>PDF</a>
+                  <button onclick="downloadMenuPdf('${inq.id}',${mi})" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-download" style="font-size:13px"></i>Download PDF</button>
+                  <button onclick="emailMenuPdf('${inq.id}',${mi})" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--green-border);border-radius:6px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-mail" style="font-size:13px"></i>Email PDF</button>
+                  <button onclick="deleteInqMenu('${inq.id}',${mi})" title="Remove this menu" style="font-size:11px;padding:4px 9px;border:0.5px solid #e05c5c;border-radius:6px;background:var(--bg);color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-trash" style="font-size:13px"></i>Delete</button>
+                </div>
+              </div>`).join('')
             : inq.menuLink
-              ? `<a href="${inq.menuLink}" target="_blank" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--green-border);border-radius:7px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none"><i class="ti ti-file-text" style="font-size:14px"></i>Open menu</a>`
+              ? `<div style="border:0.5px solid var(--border2);border-radius:8px;padding:8px 10px;background:var(--bg2)">
+                  <div style="display:flex;flex-wrap:wrap;gap:5px">
+                    <a href="${inq.menuLink}" target="_blank" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--blue-border);border-radius:6px;background:var(--blue-bg);color:var(--blue-text);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-file-text" style="font-size:13px"></i>Open doc</a>
+                    <a href="${menuPdfUrl(inq.menuLink)}" target="_blank" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-file-type-pdf" style="font-size:13px"></i>PDF</a>
+                    <button onclick="emailMenuLink('${inq.id}')" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--green-border);border-radius:6px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-mail" style="font-size:13px"></i>Email PDF</button>
+                  </div>
+                </div>`
               : `<div style="font-size:12px;color:var(--text3)">No menu generated yet</div>`}
           <div style="margin-top:2px">
-            <button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-link" style="font-size:14px"></i>${(Array.isArray(inq.menus)&&inq.menus.length)||inq.menuLink?'Add / change link':'Attach menu manually'}</button>
+            <button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-link" style="font-size:14px"></i>${(Array.isArray(inq.menus)&&inq.menus.length)||inq.menuLink?'Add another link':'Attach menu manually'}</button>
           </div>
           </div>
         </div>
@@ -1063,13 +1079,135 @@ function closeInqDetail(){ selectedInqId=null; render(); }
 async function attachInqMenu(id){
   const inq = inquiries.find(x=>x.id===id);
   if(!inq) return;
-  const current = inq.menuLink || '';
-  const url = prompt('Paste the Google Drive / Docs menu link for this inquiry:\n\n(In Google Drive: right-click file → Share → Copy link)', current);
+  const url = prompt('Paste the Google Drive / Docs menu link to add for this inquiry:\n\n(In Google Drive: right-click file → Share → Copy link)', '');
   if(url===null) return; // cancelled
-  inq.menuLink = url.trim();
+  const trimmed = url.trim();
+  if(!trimmed){ return; }
+  if(!Array.isArray(inq.menus)) inq.menus = [];
+  // If there was an old single menuLink and no menus yet, fold it in first
+  if(inq.menus.length===0 && inq.menuLink){
+    inq.menus.push({ name:'Menu', url:inq.menuLink, fileId:(inq.menuLink.match(/[-\w]{25,}/)||[''])[0] });
+  }
+  inq.menus.push({ name:'Menu (added manually)', url:trimmed, fileId:(trimmed.match(/[-\w]{25,}/)||[''])[0] });
+  inq.menuLink = inq.menus[0].url;
   await _saveInquiry(inq);
-  showToast(inq.menuLink ? 'Menu linked ✓' : 'Menu cleared');
+  showToast('Menu added ✓');
   render();
+}
+
+// Convert a Google Docs/Sheets/Drive link into a PDF export URL (always latest version)
+function menuPdfUrl(link){
+  if(!link) return '#';
+  const doc = link.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
+  const sheet = link.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  const file = link.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if(doc)   return `https://docs.google.com/document/d/${doc[1]}/export?format=pdf`;
+  if(sheet) return `https://docs.google.com/spreadsheets/d/${sheet[1]}/export?format=pdf`;
+  if(file)  return `https://drive.google.com/uc?export=download&id=${file[1]}`;
+  return link;
+}
+
+// Download the PDF version of a given menu to the local computer
+function downloadMenuPdf(id, idx){
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq || !Array.isArray(inq.menus) || !inq.menus[idx]) return;
+  const m = inq.menus[idx];
+  const pdf = menuPdfUrl(m.url);
+  // Open the export URL — browser will download/save the PDF
+  const a = document.createElement('a');
+  a.href = pdf;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast('Opening PDF — use your browser to save it');
+}
+
+// Remove a menu from the inquiry card (does NOT delete the Drive file unless confirmed)
+async function deleteInqMenu(id, idx){
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq || !Array.isArray(inq.menus) || !inq.menus[idx]) return;
+  const m = inq.menus[idx];
+  if(!confirm(`Remove "${m.name||'this menu'}" from this client card?\n\n(This only removes it from the card. The Google Doc stays in your Drive.)`)) return;
+  inq.menus.splice(idx,1);
+  inq.menuLink = inq.menus.length ? inq.menus[0].url : '';
+  await _saveInquiry(inq);
+  showToast('Menu removed from card');
+  render();
+}
+
+// Build the standard email subject/body and open a REVIEW modal for a given menu
+function emailMenuPdf(id, idx){
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq) return;
+  const m = (Array.isArray(inq.menus) && inq.menus[idx]) ? inq.menus[idx] : null;
+  const link = m ? m.url : inq.menuLink;
+  openMenuEmail(inq, link);
+}
+function emailMenuLink(id){
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq) return;
+  openMenuEmail(inq, inq.menuLink);
+}
+function openMenuEmail(inq, link){
+  if(!isGmailConnected()){ alert('Please connect Gmail first in Settings.'); showView('settings'); return; }
+  document.getElementById('sendEmailModal')?.remove();
+  const to = inq.email || '';
+  const clientName = ((inq.firstName||'') + ' ' + (inq.lastName||'')).trim();
+  const eventName = inq.eventName || (inq.eventType||'Event');
+  const dateStr = inq.eventDate ? formatDate(inq.eventDate) : '';
+  // Subject: "client name" - "event name" (date of event) Premier Caterers
+  const subject = `${clientName} - ${eventName}${dateStr?' ('+dateStr+')':''} Premier Caterers`;
+  const pdf = menuPdfUrl(link);
+  const body =
+`Dear ${inq.firstName || clientName || 'Valued Client'},
+
+Thank you for considering Premier Caterers for your ${eventName}${dateStr?' on '+dateStr:''}.
+
+Please find your proposed menu at the link below:
+${pdf}
+
+We would be delighted to review it with you, make any adjustments to suit your taste and guest count, and answer any questions you may have.
+
+Looking forward to working with you.
+
+Warm regards,
+Premier Caterers
+events@thepremiercaterer.com
+thepremiercaterer.com`;
+
+  const m = document.createElement('div');
+  m.id = 'sendEmailModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
+  m.innerHTML = '<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:560px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">'
+    +'<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Send Menu by Email</div>'
+    +'<div class="modal-row"><label>To</label><input type="email" id="menu-email-to" value="'+to.replace(/"/g,'&quot;')+'" placeholder="client@email.com"></div>'
+    +'<div class="modal-row"><label>Subject</label><input type="text" id="menu-email-subject" value="'+subject.replace(/"/g,'&quot;')+'"></div>'
+    +'<div class="modal-row"><label>Message</label><textarea id="menu-email-body" style="min-height:220px">'+body+'</textarea></div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-bottom:1rem">The menu PDF link is included in the message. The link always shows the latest version of the document.</div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end">'
+    +'<button class="btn-cancel" onclick="document.getElementById(\'sendEmailModal\').remove()">Cancel</button>'
+    +'<button class="btn-save" id="menu-email-send" onclick="confirmSendMenuEmail()"><i class="ti ti-send" style="font-size:13px"></i> Send</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+  setTimeout(()=>document.getElementById('menu-email-to')?.focus(),50);
+}
+
+async function confirmSendMenuEmail(){
+  const to = document.getElementById('menu-email-to')?.value?.trim();
+  const subject = document.getElementById('menu-email-subject')?.value?.trim();
+  const body = document.getElementById('menu-email-body')?.value?.trim();
+  if(!to){ alert('Please enter a recipient email.'); return; }
+  const btn = document.getElementById('menu-email-send');
+  if(btn){ btn.disabled=true; btn.textContent='Sending...'; }
+  const htmlBody = '<div style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap;line-height:1.6">'+body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1">$1</a>')+'</div>';
+  const ok = await sendGmailEmail(to, subject, body, htmlBody);
+  if(ok){
+    document.getElementById('sendEmailModal')?.remove();
+  } else {
+    if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-send" style="font-size:13px"></i> Send'; }
+  }
 }
 
 function moveInquiry(id, stage){
@@ -4431,6 +4569,13 @@ window.promoteToEvent = promoteToEvent;
 window.selectInquiry = selectInquiry;
 window.closeInqDetail = closeInqDetail;
 window.attachInqMenu = attachInqMenu;
+window.menuPdfUrl = menuPdfUrl;
+window.downloadMenuPdf = downloadMenuPdf;
+window.deleteInqMenu = deleteInqMenu;
+window.emailMenuPdf = emailMenuPdf;
+window.emailMenuLink = emailMenuLink;
+window.openMenuEmail = openMenuEmail;
+window.confirmSendMenuEmail = confirmSendMenuEmail;
 window.openAddInquiryModal = openAddInquiryModal;
 window.addInquiryFromForm = addInquiryFromForm;
 window.toggleAck = toggleAck;
