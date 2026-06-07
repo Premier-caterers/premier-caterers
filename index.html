@@ -191,7 +191,7 @@ a{color:var(--blue-mid);text-decoration:none}
 }
 
 /* ── PIPELINE ── */
-.pipeline-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;align-items:start}
+.pipeline-cols{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;align-items:start}
 .pipeline-col{background:var(--bg2);border-radius:var(--radius-lg);padding:.75rem;min-height:200px}
 .pipeline-col-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;padding:.5rem .5rem .5rem}
 .pipeline-col-title{font-size:13px;font-weight:500;color:var(--text);display:flex;align-items:center;gap:6px}
@@ -207,6 +207,7 @@ a{color:var(--blue-mid);text-decoration:none}
 .stage-new{background:var(--amber-bg);color:var(--amber-text)}
 .stage-menu_sent{background:var(--blue-bg);color:var(--blue-text)}
 .stage-booked{background:var(--green-bg);color:var(--green-text)}
+.stage-lost{background:var(--amber-bg);color:var(--amber-text)}
 .inq-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
 .inq-detail{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-top:1rem}
 @media(max-width:700px){.pipeline-cols{grid-template-columns:1fr}}
@@ -242,7 +243,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 05:05 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 06:30 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -264,6 +265,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="nav-item" id="nav-venues" onclick="showView('venues')"><i class="ti ti-building"></i>Venues</button>
     <button class="nav-item" id="nav-email" onclick="showView('email')"><i class="ti ti-mail"></i>Email<span class="nav-badge" id="emailBadge" style="display:none">0</span></button>
     <div class="sidebar-label">Setup</div>
+    <button class="nav-item" id="nav-trash" onclick="showView('trash')"><i class="ti ti-trash"></i>Trash<span class="nav-badge" id="trashBadge" style="display:none">0</span></button>
     <button class="nav-item" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
   </div>
   <div class="main" style="padding:0;display:flex;flex-direction:column">
@@ -343,7 +345,8 @@ const firebaseConfig = {
   appId: "1:471701398759:web:559a7bee3b645ce545ee42"
 };
 // db and collections initialized in _startApp() after Firebase SDK loads
-let db, eventsCol, changesCol, inquiriesCol, checklistCol, equipCol, invoicesCol, venuesCol;
+let db, eventsCol, changesCol, inquiriesCol, checklistCol, equipCol, invoicesCol, venuesCol, trashCol;
+let trash = [];
 let invoices = {}; // keyed by eventId
 let savedLineItems = JSON.parse(localStorage.getItem('savedLineItems')||'[]');
 let venues = []; // venues database
@@ -386,6 +389,71 @@ async function _saveInvoice(eid,inv){ try{ await invoicesCol.doc(eid).set({...in
 
 async function _saveEquipment(eid,eq){ try{ await db.collection('equipment').doc(eid).set({...eq,ts:Date.now()}); }catch(err){ console.error(err); } }
 
+// ── TRASH (soft delete) ──────────────────────────────────────
+const TRASH_DAYS = 30;
+// Move a record to the Trash collection. kind = 'inquiry' | 'event' | 'invoiceLine'
+async function moveToTrash(kind, label, data, restoreInfo){
+  if(!trashCol) return;
+  const entry = {
+    id: 'trash_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    kind, label,
+    data: JSON.stringify(data||{}),
+    restoreInfo: JSON.stringify(restoreInfo||{}),
+    deletedAt: Date.now(),
+    deletedAtStr: new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})
+  };
+  try{ await trashCol.doc(entry.id).set(entry); }catch(err){ console.error('moveToTrash error', err); }
+}
+// Auto-remove trash entries older than TRASH_DAYS (runs whenever trash loads)
+function purgeOldTrash(){
+  if(!trashCol) return;
+  const cutoff = Date.now() - TRASH_DAYS*24*60*60*1000;
+  (trash||[]).forEach(t=>{ if(t.deletedAt && t.deletedAt < cutoff){ trashCol.doc(t.id).delete().catch(()=>{}); } });
+}
+async function restoreFromTrash(trashId){
+  const t = (trash||[]).find(x=>x.id===trashId);
+  if(!t) return;
+  let data={}, info={};
+  try{ data=JSON.parse(t.data||'{}'); }catch(e){}
+  try{ info=JSON.parse(t.restoreInfo||'{}'); }catch(e){}
+  try{
+    if(t.kind==='inquiry'){
+      await inquiriesCol.doc(data.id).set(data);
+    } else if(t.kind==='event'){
+      await eventsCol.doc(data.id).set(data);
+      // Restore bundled checklist / equipment / invoice if present
+      const b = info.bundle || {};
+      if(b.checklist && b.checklist.items){ try{ await checklistCol.doc(data.id).set({items:b.checklist.items, ts:Date.now()}); }catch(e){} }
+      if(b.equipment){ try{ await equipCol.doc(data.id).set({...b.equipment, ts:Date.now()}); }catch(e){} }
+      if(b.invoice){ try{ await invoicesCol.doc(data.id).set({...b.invoice, ts:Date.now()}); }catch(e){} }
+    } else if(t.kind==='invoiceLine'){
+      const eid = info.eid;
+      if(!eid || !invoices[eid]){ alert('Cannot restore this line item — its invoice no longer exists.'); return; }
+      if(!Array.isArray(invoices[eid].lines)) invoices[eid].lines = [];
+      const at = (typeof info.idx==='number' && info.idx<=invoices[eid].lines.length) ? info.idx : invoices[eid].lines.length;
+      invoices[eid].lines.splice(at, 0, data);
+      await _saveInvoice(eid, invoices[eid]);
+    }
+    await trashCol.doc(trashId).delete();
+    showToast('Restored ✓');
+    render();
+  }catch(err){ console.error('restore error', err); alert('Restore failed: '+err.message); }
+}
+async function deleteFromTrashPermanently(trashId){
+  const t = (trash||[]).find(x=>x.id===trashId);
+  if(!t) return;
+  if(!confirm('Permanently delete "'+(t.label||'this item')+'"? This cannot be undone.')) return;
+  try{ await trashCol.doc(trashId).delete(); showToast('Permanently deleted'); render(); }
+  catch(err){ console.error(err); }
+}
+async function emptyTrash(){
+  if(!(trash||[]).length) return;
+  if(!confirm('Permanently delete ALL '+trash.length+' items in Trash? This cannot be undone.')) return;
+  for(const t of trash){ try{ await trashCol.doc(t.id).delete(); }catch(e){} }
+  showToast('Trash emptied');
+  render();
+}
+
 
 function startFirebaseListeners(){
   eventsCol.onSnapshot( snap=>{ const first=events.length===0; events=snap.docs.map(d=>d.data()); if(first||currentView==='events') render(); });
@@ -395,6 +463,7 @@ function startFirebaseListeners(){
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
   invoicesCol.onSnapshot( snap=>{ invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); }); if(currentView==='invoices') render(); });
   venuesCol.onSnapshot( snap=>{ venues=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='venues') render(); });
+  trashCol.onSnapshot( snap=>{ trash=snap.docs.map(d=>d.data()); purgeOldTrash(); if(currentView==='trash') render(); });
 }
 
 async function seedIfEmpty(){
@@ -561,6 +630,7 @@ function render(){
            currentView==='grocery'   ? renderGrocery()   :
            currentView==='equipment' ? renderEquipment() :
            currentView==='venues'    ? renderVenues()    :
+           currentView==='trash'     ? renderTrash()     :
            currentView==='email'     ? '<div id="emailPlaceholder"></div>' :
            currentView==='settings'  ? renderSettings()  : '';
   } catch(err) {
@@ -670,11 +740,12 @@ function renderEvents(){
         const inner = `<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:${bgs[s]};color:${colors[s]}"><i class="ti ${icons[s]}" style="font-size:11px"></i>${label}</span>`;
         return url ? `<a href="${url}" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()">${inner}</a>` : inner;
       };
-      h+=`<div class="event-card ${selectedId===e.id?'selected':''}" onclick="selectEvent('${e.id}')">
+      h+=`<div class="event-card ${selectedId===e.id?'selected':''}" onclick="selectEvent('${e.id}')" style="${e.lost?'background:var(--amber-bg);border-color:var(--amber-border)':''}">
         <div class="card-top">
           <span class="job-pill">${displayJob(e.job)}</span>
           <span class="type-badge t-${e.type}">${e.typeLabel}</span>
-          ${changes.some(c=>c.job===e.job && changeDepts.some(d=>!(c.acks||{})[d])) ? '<i class="ti ti-alert-triangle" style="font-size:14px;color:var(--amber-text);margin-left:auto" title="Unacknowledged changes"></i>' : ''}
+          ${e.lost ? '<span style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:8px;background:var(--amber-text);color:var(--amber-bg);font-weight:600">LOST</span>' : ''}
+          ${!e.lost && changes.some(c=>c.job===e.job && changeDepts.some(d=>!(c.acks||{})[d])) ? '<i class="ti ti-alert-triangle" style="font-size:14px;color:var(--amber-text);margin-left:auto" title="Unacknowledged changes"></i>' : ''}
         </div>
         <div class="client-name">${e.name}</div>
         ${e.addr?`<div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>${e.addr}</div>`:''}
@@ -934,9 +1005,10 @@ let selectedInqId = null;
 function renderPipeline(){
   const role = roles[currentRole];
   const stages = [
-    {key:'new',       label:'New Inquiry',  icon:'ti-mail',          cls:'stage-new'},
-    {key:'menu_sent', label:'Menu Sent',    icon:'ti-file-text',     cls:'stage-menu_sent'},
-    {key:'booked',    label:'Booked',       icon:'ti-circle-check',  cls:'stage-booked'},
+    {key:'new',       label:'New Inquiry',     icon:'ti-mail',          cls:'stage-new'},
+    {key:'menu_sent', label:'Menu Sent',       icon:'ti-file-text',     cls:'stage-menu_sent'},
+    {key:'booked',    label:'Booked',          icon:'ti-circle-check',  cls:'stage-booked'},
+    {key:'lost',      label:'Lost / Declined', icon:'ti-circle-x',      cls:'stage-lost'},
   ];
 
   let h = `
@@ -965,9 +1037,11 @@ function renderPipeline(){
           ${inq.email ? `<span><i class="ti ti-mail" style="font-size:11px"></i>${inq.email}</span>` : ''}
         </div>
         ${role.canEdit ? `<div class="inq-actions">
-          ${s.key!=='menu_sent'&&s.key!=='booked' ? `<button class="stage-btn stage-menu_sent" onclick="event.stopPropagation();moveInquiry('${inq.id}','menu_sent')">Mark menu sent</button>` : ''}
-          ${s.key!=='booked' ? `<button class="stage-btn stage-booked" onclick="event.stopPropagation();moveInquiry('${inq.id}','booked')">Book event</button>` : ''}
-          ${s.key==='booked' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">→ Move to This Week</button>` : ''}
+          ${s.key==='new' ? `<button class="stage-btn stage-menu_sent" onclick="event.stopPropagation();moveInquiry('${inq.id}','menu_sent')">Mark menu sent</button>` : ''}
+          ${s.key!=='booked'&&s.key!=='lost' ? `<button class="stage-btn stage-booked" onclick="event.stopPropagation();moveInquiry('${inq.id}','booked')">Book event</button>` : ''}
+          ${s.key==='booked' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">→ Go to event week</button>` : ''}
+          ${s.key!=='lost' ? `<button class="stage-btn" style="background:var(--amber-bg);color:var(--amber-text)" onclick="event.stopPropagation();markInquiryLost('${inq.id}')">Mark lost</button>` : ''}
+          ${s.key==='lost' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();reviveInquiry('${inq.id}')"><i class="ti ti-arrow-back-up" style="font-size:12px"></i> Revive</button>` : ''}
           <button onclick="event.stopPropagation();deleteInquiry('${inq.id}')" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px;margin-left:auto"><i class="ti ti-trash"></i></button>
         </div>` : ''}
       </div>`).join('')}
@@ -1229,45 +1303,164 @@ async function confirmSendMenuEmail(){
 
 function moveInquiry(id, stage){
   const inq = inquiries.find(x=>x.id===id);
-  if(inq){ inq.stage=stage; _saveInquiry(inq); render(); updatePipelineBadge(); }
+  if(!inq) return;
+  inq.stage=stage;
+  _saveInquiry(inq);
+  // When marked Booked, automatically create the event on the correct W/E page
+  if(stage==='booked'){
+    // If it was previously lost, un-flag the event's lost color
+    const ev0 = events.find(x=>x.id==='inq_'+inq.id);
+    if(ev0 && ev0.lost){ ev0.lost=false; _saveEvent(ev0); }
+    createEventFromInquiry(inq);
+  }
+  render(); updatePipelineBadge();
 }
 
-function deleteInquiry(id){
-  if(!confirm('Remove this inquiry?')) return;
-  inquiries = inquiries.filter(x=>x.id!==id); if(selectedInqId===id) selectedInqId=null; db.collection('inquiries').doc(id).delete(); render(); updatePipelineBadge();
-}
-
-function promoteToEvent(id){
+// Mark an inquiry as Lost / Declined. Keeps it for reference; if it had a booked
+// event, the event stays on the calendar but turns banana/amber as a visual flag.
+function markInquiryLost(id){
   const inq = inquiries.find(x=>x.id===id);
   if(!inq) return;
-  // Map inquiry to event format
+  const nm = ((inq.firstName||'')+' '+(inq.lastName||'')).trim() || inq.eventName || 'this inquiry';
+  if(!confirm('Mark '+nm+' as Lost / Declined?\n\nIt stays in the pipeline for future reference. If it had a booked event, that event stays on the calendar but turns yellow as a flag.')) return;
+  const wasBooked = inq.stage==='booked';
+  inq.stage='lost';
+  _saveInquiry(inq);
+  // If there's an event for this inquiry, flag it lost (recolor) rather than remove it
+  const ev = events.find(x=>x.id==='inq_'+inq.id);
+  if(ev){ ev.lost=true; _saveEvent(ev); }
+  showToast(wasBooked ? 'Marked lost — event flagged yellow on calendar' : 'Marked lost / declined');
+  render(); updatePipelineBadge();
+}
+
+// Bring a lost inquiry back into the pipeline (returns to New).
+function reviveInquiry(id){
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq) return;
+  inq.stage='new';
+  _saveInquiry(inq);
+  // Un-flag the event color if one exists
+  const ev = events.find(x=>x.id==='inq_'+inq.id);
+  if(ev && ev.lost){ ev.lost=false; _saveEvent(ev); }
+  showToast('Revived — moved back to New');
+  render(); updatePipelineBadge();
+}
+
+// Compute the week-ending Sunday (YYYY-MM-DD) and day-of-week for a given event date
+function weekInfoFromDate(dateStr){
+  if(!dateStr) return null;
+  // Parse as UTC noon to avoid timezone day-shift
+  const d = new Date(dateStr + 'T12:00:00Z');
+  if(isNaN(d)) return null;
+  const dow = d.getUTCDay(); // 0=Sun..6=Sat
+  // Week ends on Sunday: days until the upcoming Sunday (0 if already Sunday)
+  const daysToSun = (7 - dow) % 7;
+  const sun = new Date(d.getTime() + daysToSun*24*60*60*1000);
+  const weekOf = sun.toISOString().split('T')[0];
+  const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+  const dlMap = {sunday:'Sun',monday:'Mon',tuesday:'Tue',wednesday:'Wed',thursday:'Thu',friday:'Fri',saturday:'Sat'};
+  const day = dayNames[dow];
+  return { weekOf, day, dayShort: dlMap[day] };
+}
+
+// Create (or refresh) the This-Week event for a booked inquiry, on the correct week
+function createEventFromInquiry(inq){
+  if(!inq) return;
+  const evId = 'inq_'+inq.id;
+  // If the event already exists (e.g. re-booking), don't duplicate
+  const existing = events.find(x=>x.id===evId);
   const typeMap2 = {
     'Wedding':'dinner','Aufruf':'dinner','Bar mitzvah party - not shabbos':'barmitzvah',
     'Bas mitzvah party - not shabbos':'barmitzvah','Bar mitzvah over shabbos':'barmitzvah',
-    'Engagement party':'engagement','Kiddush':'shalosh','Bris':'shalosh',
-    'Drop off catering':'dropoff','Shabbos shevah brachos':'shalosh',
-    'Shabbos meals':'shalosh','Corporate event':'dinner','Organization event':'dinner','Other':'dinner'
+    'Bar Mitzvah':'barmitzvah','Bat Mitzvah':'barmitzvah',
+    'Engagement party':'engagement','Kiddush':'kiddush','Bris':'bris',
+    'Drop off catering':'dropoff','Drop off':'dropoff','Sheva Brachos':'shalosh','Shabbos shevah brachos':'shalosh',
+    'Shabbos meals':'shalosh','Corporate event':'corporate','Corporate':'corporate','Organization event':'dinner','Other':'other'
   };
+  const wi = weekInfoFromDate(inq.eventDate) || { weekOf:'', day:'friday', dayShort: formatDate(inq.eventDate) };
+  const type = typeMap2[inq.eventType] || 'dinner';
+  const typeLabelMap = {
+    dinner:'Dinner', lunch:'Lunch', engagement:'Engagement', barmitzvah:'Bar / Bat Mitzvah',
+    shalosh:'Shalosh seudah', dropoff:'Drop off', breakfast:'Breakfast', brunch:'Brunch',
+    kiddush:'Kiddush', bris:'Bris', corporate:'Corporate', other:'Other'
+  };
+  // Build a readable dayLabel: e.g. "Mon 6/16" if we have a real day, else the formatted date
+  let dayLabel = wi.dayShort || '';
+  if(inq.eventDate){
+    const d = new Date(inq.eventDate + 'T12:00:00Z');
+    if(!isNaN(d)) dayLabel = (wi.dayShort||'') + ' ' + (d.getUTCMonth()+1) + '/' + d.getUTCDate();
+  }
+  const menuLink = inq.menuLink || (Array.isArray(inq.menus)&&inq.menus[0]?inq.menus[0].url:'');
+
+  if(existing){
+    // Update key fields but keep any staffing/edits already made
+    existing.weekOf = wi.weekOf || existing.weekOf;
+    existing.day = wi.day || existing.day;
+    existing.dayLabel = dayLabel || existing.dayLabel;
+    existing.type = type; existing.typeLabel = inq.eventType || typeLabelMap[type] || 'Event';
+    existing.name = inq.lastName || inq.firstName || existing.name;
+    existing.addr = inq.venueLocation || existing.addr;
+    if(menuLink && !existing.menuLink) existing.menuLink = menuLink;
+    existing.inquiryId = inq.id;
+    _saveEvent(existing);
+    return;
+  }
+
+  const autoJob = wi.weekOf ? nextJobNumber(wi.weekOf) : '#'+(events.length+1);
   const newEvent = {
-    id: 'inq_'+inq.id,
-    job: '#'+( events.length + inquiries.length ),
-    name: inq.lastName || inq.firstName,
+    id: evId,
+    job: autoJob,
+    inquiryId: inq.id,
+    name: inq.lastName || inq.firstName || (inq.eventName||'Event'),
     addr: inq.venueLocation||'',
-    type: typeMap2[inq.eventType]||'dinner',
-    typeLabel: inq.eventType||'Event',
-    day: 'friday', dayLabel: formatDate(inq.eventDate),
+    type, typeLabel: inq.eventType || typeLabelMap[type] || 'Event',
+    day: wi.day || 'friday', dayLabel,
+    weekOf: wi.weekOf || '',
     waiters:0, waiterNames:'', waiterTime:'-', waiterTime2:'',
     bartenders:0, bartenderNames:'', bartenderTime:'', bartenderTime2:'',
     chefs:0, chefNames:'', chefTime:'-', chefTime2:'',
     porters:0, porterNames:'', porterTime:'', porterTime2:'',
     manager:'-', mashgiach:'-', mashgiachNames:'',
-    menuLink: inq.menuLink || (Array.isArray(inq.menus)&&inq.menus[0]?inq.menus[0].url:'') , groceryLink:'', floorplan:'', venueLink:'', pdfMenuLink:'', logoData:'',
+    menuLink, groceryLink:'', floorplan:'', venueLink:'', pdfMenuLink:'', logoData:'',
     notes: inq.eventName||''
   };
   events.push(newEvent);
-  inq.stage='booked';
-  save();
-  alert(`${inq.firstName} ${inq.lastName} has been added to This Week events as ${newEvent.job}.`);
+  _saveEvent(newEvent);
+  if(wi.weekOf){
+    showToast('Booked ✓ Added to W/E '+ new Date(wi.weekOf+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}));
+  } else {
+    showToast('Booked ✓ (set an event date to place it on a week)');
+  }
+}
+
+function deleteInquiry(id){
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq) return;
+  const nm = ((inq.firstName||'')+' '+(inq.lastName||'')).trim() || inq.eventName || 'Inquiry';
+  if(!confirm('Move this inquiry ('+nm+') to Trash?\n\nYou can restore it from the Trash section for 30 days.')) return;
+  moveToTrash('inquiry', nm + (inq.eventType?' — '+inq.eventType:''), inq, {});
+  inquiries = inquiries.filter(x=>x.id!==id); if(selectedInqId===id) selectedInqId=null;
+  db.collection('inquiries').doc(id).delete();
+  showToast('Moved to Trash');
+  render(); updatePipelineBadge();
+}
+
+function promoteToEvent(id){
+  // Booking already auto-creates the event. This now ensures the event exists
+  // and jumps the Events view to the correct week so you can see it.
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq) return;
+  if(!events.find(x=>x.id==='inq_'+inq.id)){
+    createEventFromInquiry(inq);
+  }
+  const ev = events.find(x=>x.id==='inq_'+inq.id);
+  if(ev && ev.weekOf){
+    // Set the Events view to the week containing this event
+    const base = Date.UTC(2026, 5, 7); // Jun 7 2026 = Sunday (week 0 anchor)
+    const parts = ev.weekOf.split('-').map(Number);
+    const evWeekMs = Date.UTC(parts[0], parts[1]-1, parts[2]);
+    currentWeekOffset = Math.round((evWeekMs - base) / (7*24*60*60*1000));
+  }
   showView('events');
 }
 
@@ -1906,6 +2099,7 @@ function updateBadge(){ updatePipelineBadge();
     (checklists[eid]||[]).forEach(i=>{ if(!i.done&&!i.na) n++; });
   });
   const b=document.getElementById('checkBadge'); if(b) b.textContent=n;
+  const tb=document.getElementById('trashBadge'); if(tb){ if(trash&&trash.length){ tb.textContent=trash.length; tb.style.display=''; } else { tb.style.display='none'; } }
 }
 
 // ── CHANGES ──
@@ -2490,8 +2684,15 @@ function moveInvoiceLine(eid, idx, dir){
 }
 
 function removeInvoiceLine(eid, idx){
-  if(!invoices[eid]) return;
+  if(!invoices[eid] || !Array.isArray(invoices[eid].lines) || !invoices[eid].lines[idx]) return;
+  const line = invoices[eid].lines[idx];
+  const e = events.find(x=>x.id===eid);
+  const who = e ? (displayJob(e.job)+' '+e.name) : eid;
+  const label = (line.desc||line.description||line.category||'Line item') + ' — ' + who;
+  moveToTrash('invoiceLine', label, line, {eid, idx});
   invoices[eid].lines.splice(idx, 1);
+  _saveInvoice(eid, invoices[eid]);
+  showToast('Line moved to Trash');
   renderInvoiceDetail();
 }
 
@@ -2843,6 +3044,42 @@ function renderReports(){
   </div>`;
 }
 
+
+function renderTrash(){
+  const kindLabel = {inquiry:'Inquiry', event:'Event', invoiceLine:'Invoice line item'};
+  const kindIcon  = {inquiry:'ti-layout-kanban', event:'ti-calendar', invoiceLine:'ti-file-invoice'};
+  let h = `<div class="section-header">
+    <div class="section-title">Trash</div>
+    ${(trash&&trash.length)?`<button class="add-btn" style="background:var(--bg2);border-color:#e05c5c;color:#e05c5c" onclick="emptyTrash()"><i class="ti ti-trash" style="font-size:14px"></i> Empty trash</button>`:''}
+  </div>
+  <div style="font-size:12px;color:var(--text3);margin:-0.5rem 0 1rem">Deleted items are kept here for ${TRASH_DAYS} days, then removed automatically. Restore puts an item back where it was.</div>`;
+
+  if(!trash || !trash.length){
+    h += `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:3rem;text-align:center">
+      <i class="ti ti-trash-off" style="font-size:40px;color:var(--text3);display:block;margin-bottom:1rem"></i>
+      <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:.4rem">Trash is empty</div>
+      <div style="font-size:13px;color:var(--text2)">Deleted inquiries, events, and invoice line items will appear here.</div>
+    </div>`;
+    return h;
+  }
+
+  const sorted = [...trash].sort((a,b)=>(b.deletedAt||0)-(a.deletedAt||0));
+  h += `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">`;
+  sorted.forEach((t,i)=>{
+    const daysLeft = Math.max(0, TRASH_DAYS - Math.floor((Date.now()-(t.deletedAt||0))/(24*60*60*1000)));
+    h += `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:${i<sorted.length-1?'0.5px solid var(--border)':'none'}">
+      <i class="ti ${kindIcon[t.kind]||'ti-file'}" style="font-size:18px;color:var(--text3);flex-shrink:0"></i>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.label||'(item)'}</div>
+        <div style="font-size:11px;color:var(--text3)">${kindLabel[t.kind]||t.kind} · deleted ${t.deletedAtStr||''} · ${daysLeft} day${daysLeft===1?'':'s'} left</div>
+      </div>
+      <button onclick="restoreFromTrash('${t.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--green-border);border-radius:7px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px;flex-shrink:0"><i class="ti ti-arrow-back-up" style="font-size:14px"></i>Restore</button>
+      <button onclick="deleteFromTrashPermanently('${t.id}')" title="Delete permanently" style="font-size:12px;padding:5px 10px;border:0.5px solid #e05c5c;border-radius:7px;background:var(--bg);color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:4px;flex-shrink:0"><i class="ti ti-trash" style="font-size:14px"></i></button>
+    </div>`;
+  });
+  h += `</div>`;
+  return h;
+}
 
 function renderVenues(){
   let h = `<div class="section-header">
@@ -3978,13 +4215,23 @@ async function migrateWeekOf(){
 }
 
 async function deleteEvent(id){
-  if(!confirm('Delete this event permanently? This cannot be undone.')) return;
+  const e = events.find(x=>x.id===id);
+  const nm = e ? (displayJob(e.job)+' '+e.name) : 'Event';
+  if(!confirm('Move this event ('+nm+') to Trash?\n\nIts checklist, equipment list and invoice are kept with it. You can restore from the Trash section for 30 days.')) return;
+  // Bundle the event and its related records so a restore brings everything back
+  const bundle = {
+    event: e || {id},
+    checklist: (checklists[id] ? {items: checklists[id]} : null),
+    equipment: (eventEquipment[id] || null),
+    invoice: (invoices[id] || null)
+  };
+  await moveToTrash('event', nm, e||{id}, {bundle});
   await db.collection('events').doc(id).delete();
   await db.collection('checklists').doc(id).delete().catch(()=>{});
   await db.collection('equipment').doc(id).delete().catch(()=>{});
   await db.collection('invoices').doc(id).delete().catch(()=>{});
   selectedId = null;
-  showToast('Event deleted');
+  showToast('Moved to Trash');
   render();
 }
 function toggleEquipItem(id, idx, val){ toggleSelect(id, idx, val); }
@@ -4608,8 +4855,12 @@ window.jumpToWeek = jumpToWeek;
 window.selectAllDepts = selectAllDepts;
 window.clearAllDepts = clearAllDepts;
 window.moveInquiry = moveInquiry;
+window.markInquiryLost = markInquiryLost;
+window.reviveInquiry = reviveInquiry;
 window.deleteInquiry = deleteInquiry;
 window.promoteToEvent = promoteToEvent;
+window.createEventFromInquiry = createEventFromInquiry;
+window.weekInfoFromDate = weekInfoFromDate;
 window.selectInquiry = selectInquiry;
 window.closeInqDetail = closeInqDetail;
 window.attachInqMenu = attachInqMenu;
@@ -4657,6 +4908,11 @@ window.saveScriptUrl = ()=>{};
 window.testConnection = ()=>{};
 window.migrateWeekOf = migrateWeekOf;
 window.deleteEvent = deleteEvent;
+window.restoreFromTrash = restoreFromTrash;
+window.deleteFromTrashPermanently = deleteFromTrashPermanently;
+window.emptyTrash = emptyTrash;
+window.renderTrash = renderTrash;
+window.moveToTrash = moveToTrash;
 window.openVenueDetail = openVenueDetail;
 window.openAddVenueModal = openAddVenueModal;
 window.saveNewVenue = saveNewVenue;
@@ -4688,8 +4944,7 @@ function _startApp() {
   equipCol     = db.collection('equipment');
   invoicesCol  = db.collection('invoices');
   venuesCol    = db.collection('venues');
-
-  // Apply initial role visibility
+  trashCol     = db.collection('trash');
   (function(){
     const role = roles[currentRole]||{};
     const invNav = document.getElementById('nav-invoices');
@@ -4748,6 +5003,7 @@ function initNow(){
     equipCol     = db.collection('equipment');
     invoicesCol  = db.collection('invoices');
   venuesCol    = db.collection('venues');
+    trashCol     = db.collection('trash');
     console.log('Firebase initialized! db=', !!db);
     render();
     seedIfEmpty().then(function(){
