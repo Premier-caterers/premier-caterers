@@ -242,7 +242,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 03:20 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 04:25 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -1129,12 +1129,29 @@ async function deleteInqMenu(id, idx){
   const inq = inquiries.find(x=>x.id===id);
   if(!inq || !Array.isArray(inq.menus) || !inq.menus[idx]) return;
   const m = inq.menus[idx];
-  if(!confirm(`Remove "${m.name||'this menu'}" from this client card?\n\n(This only removes it from the card. The Google Doc stays in your Drive.)`)) return;
+  // Resolve the Drive file ID (stored, or extracted from the URL)
+  const fileId = m.fileId || ((m.url||'').match(/[-\w]{25,}/)||[''])[0];
+  if(!confirm(`Delete "${m.name||'this menu'}"?\n\nThis removes it from the card AND moves the Google Doc to your Google Drive Trash (recoverable for 30 days).`)) return;
+
+  // Remove from card first
   inq.menus.splice(idx,1);
   inq.menuLink = inq.menus.length ? inq.menus[0].url : '';
   await _saveInquiry(inq);
-  showToast('Menu removed from card');
   render();
+
+  // Then trash the Drive file via Apps Script
+  const scriptUrl = localStorage.getItem('scriptUrl');
+  if(!fileId){ showToast('Removed from card (no Drive file id found)'); return; }
+  if(!scriptUrl){ showToast('Removed from card. Connect the Apps Script URL in Settings to also delete from Drive.'); return; }
+  try{
+    const u = scriptUrl + (scriptUrl.indexOf('?')>-1?'&':'?') + 'action=deleteFile&fileId=' + encodeURIComponent(fileId);
+    const r = await fetch(u, { method:'GET' });
+    let ok = r.ok;
+    try{ const j = await r.json(); ok = j && j.success; }catch(e){}
+    showToast(ok ? 'Deleted from card and Drive ✓' : 'Removed from card, but Drive delete may have failed');
+  }catch(err){
+    showToast('Removed from card. Drive delete failed: ' + err.message);
+  }
 }
 
 // Build the standard email subject/body and open a REVIEW modal for a given menu
