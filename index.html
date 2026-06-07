@@ -243,7 +243,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 06:30 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 07:15 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -299,21 +299,59 @@ a{color:var(--blue-mid);text-decoration:none}
 </div>
 
 <div class="modal-wrap" id="addModal">
-  <div class="modal">
+  <div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto">
     <h3>Add new event</h3>
-    <div class="modal-row"><label>Job #</label><input id="m-job" placeholder="Auto-generated (or enter custom #)"></div>
-    <div class="modal-row"><label>Client name</label><input id="m-name" placeholder="Smith"></div>
-    <div class="modal-row"><label>Address</label><input id="m-addr" placeholder="123 Main St, Teaneck"></div>
+    <div style="font-size:12px;color:var(--text3);margin:-6px 0 12px">This creates a booked event — it appears in the Booked pipeline column and on its week's events page.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>First name</label><input id="m-firstName" placeholder="David"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Last name</label><input id="m-lastName" placeholder="Smith"></div>
+    </div>
+    <div class="modal-row"><label>Event name</label><input id="m-eventName" placeholder="Smith Bar Mitzvah"></div>
     <div class="modal-row"><label>Event type</label>
-      <select id="m-type"><option value="dinner">Dinner</option><option value="lunch">Lunch</option><option value="engagement">Engagement</option><option value="barmitzvah">Bar / Bat Mitzvah</option><option value="shalosh">Shalosh seudah</option><option value="dropoff">Drop off</option></select>
+      <select id="m-type">
+        <option value="">Select…</option>
+        <option value="Wedding">Wedding</option>
+        <option value="Aufruf">Aufruf</option>
+        <option value="Sheva Brachos">Sheva Brachos</option>
+        <option value="Bar mitzvah party - not shabbos">Bar mitzvah party - not shabbos</option>
+        <option value="Bas mitzvah party - not shabbos">Bas mitzvah party - not shabbos</option>
+        <option value="Bar mitzvah over shabbos">Bar mitzvah over shabbos</option>
+        <option value="Engagement party">Engagement party</option>
+        <option value="Kiddush">Kiddush</option>
+        <option value="Bris">Bris</option>
+        <option value="Shabbos meals">Shabbos meals</option>
+        <option value="Corporate event">Corporate event</option>
+        <option value="Organization event">Organization event</option>
+        <option value="Drop off catering">Drop off catering</option>
+        <option value="Other">Other</option>
+      </select>
     </div>
-    <div class="modal-row"><label>Day</label>
-      <select id="m-day"><option value="thursday">Thursday 5/28</option><option value="friday">Friday 5/29</option><option value="saturday">Saturday 5/30</option><option value="sunday">Sunday 5/31</option><option value="monday">Monday 6/1</option></select>
+    <div class="modal-row"><label>Event date</label><input type="date" id="m-eventDate"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>Phone</label><input id="m-phone" placeholder="201-555-1234"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Email</label><input type="email" id="m-email" placeholder="client@email.com"></div>
     </div>
-    <div class="modal-row"><label>Notes</label><textarea id="m-notes" placeholder="Any details..."></textarea></div>
+    <div class="modal-row"><label>Venue name</label><input id="m-venueName" placeholder="The venue / hall"></div>
+    <div class="modal-row"><label>Venue location / address</label><input id="m-venueLocation" placeholder="123 Main St, Teaneck"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>Guest count</label><input id="m-guestCount" placeholder="150"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Meat / Dairy / Parve</label>
+        <select id="m-meatDairy"><option value="">Select…</option><option value="Meat">Meat</option><option value="Dairy">Dairy</option><option value="Parve">Parve</option></select>
+      </div>
+    </div>
+    <div class="modal-row"><label>Cuisine / style</label><input id="m-cuisine" placeholder="e.g. traditional, Mediterranean…"></div>
+    <div class="modal-row"><label>Is this over Shabbos?</label>
+      <select id="m-shabbos"><option value="No">No</option><option value="Yes">Yes</option></select>
+    </div>
+    <div class="modal-row"><label>How did you find us?</label><input id="m-howFound" placeholder="Referral, website, event…"></div>
+    <div class="modal-row"><label>Referred by</label><input id="m-referredBy" placeholder="Name"></div>
+    <div class="modal-row"><label>Event attended (if referred from one)</label><input id="m-eventAttended" placeholder="Whose event"></div>
+    <div class="modal-row"><label>Party planner</label><input id="m-plannerName" placeholder="Planner name"></div>
+    <div class="modal-row"><label>Job # (optional)</label><input id="m-job" placeholder="Auto-generated (or enter custom #)"></div>
+    <div class="modal-row"><label>Notes / comments</label><textarea id="m-notes" placeholder="Any details..."></textarea></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-      <button class="btn-save" onclick="addEvent()">Add event</button>
+      <button class="btn-save" onclick="addEvent()">Add booked event</button>
     </div>
   </div>
 </div>
@@ -1413,6 +1451,7 @@ function createEventFromInquiry(inq){
     inquiryId: inq.id,
     name: inq.lastName || inq.firstName || (inq.eventName||'Event'),
     addr: inq.venueLocation||'',
+    email: inq.email||'', phone: inq.phone||'',
     type, typeLabel: inq.eventType || typeLabelMap[type] || 'Event',
     day: wi.day || 'friday', dayLabel,
     weekOf: wi.weekOf || '',
@@ -3845,77 +3884,77 @@ function loadFromSheet(url){ return; //
 
 // ── ADD EVENT ──
 function openModal(){
-  // Update day options for current week - show all 7 days
-  const weDate = getWeekEndDate(currentWeekOffset); // This is Monday (week end)
-  const allDays = [
-    {key:'monday',   label:'Monday',    offset:-6},
-    {key:'tuesday',  label:'Tuesday',   offset:-5},
-    {key:'wednesday',label:'Wednesday', offset:-4},
-    {key:'thursday', label:'Thursday',  offset:-3},
-    {key:'friday',   label:'Friday',    offset:-2},
-    {key:'saturday', label:'Saturday',  offset:-1},
-    {key:'sunday',   label:'Sunday',    offset:0},
-  ];
-  const sel = document.getElementById('m-day');
-  if(sel){
-    sel.innerHTML = allDays.map(d=>{
-      // Use UTC to avoid timezone day-shift issues
-      const weDate2 = getWeekEndDate(currentWeekOffset);
-      const ms = Date.UTC(weDate2.getUTCFullYear(), weDate2.getUTCMonth(), weDate2.getUTCDate() + d.offset);
-      const dt = new Date(ms);
-      const label = d.label+' '+(dt.getUTCMonth()+1)+'/'+dt.getUTCDate();
-      return `<option value="${d.key}">${label}</option>`;
-    }).join('');
-    // Default to first available day
-    sel.value = 'thursday';
-  }
+  // Reset all fields
+  ['m-firstName','m-lastName','m-eventName','m-eventDate','m-phone','m-email','m-venueName','m-venueLocation','m-guestCount','m-cuisine','m-howFound','m-referredBy','m-eventAttended','m-plannerName','m-job','m-notes'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  const t=document.getElementById('m-type'); if(t) t.value='';
+  const md=document.getElementById('m-meatDairy'); if(md) md.value='';
+  const sh=document.getElementById('m-shabbos'); if(sh) sh.value='No';
+  // Default the date to the Sunday of the week currently being viewed (handy, still editable)
+  const we = getWeekEndDate(currentWeekOffset);
+  const de = document.getElementById('m-eventDate');
+  if(de) de.value = we.toISOString().split('T')[0];
   document.getElementById('addModal').classList.add('open');
 }
 function closeModal(){ document.getElementById('addModal').classList.remove('open'); }
 function addEvent(){
   try{
     if(!db){ alert('Still connecting — please wait a moment and try again.'); return; }
-    const name=document.getElementById('m-name')?.value?.trim();
-    const type=document.getElementById('m-type')?.value;
-    const day=document.getElementById('m-day')?.value;
-    if(!name){ alert('Please enter a client name.'); return; }
-    const dlMap={tuesday:'Tue',wednesday:'Wed',thursday:'Thu',friday:'Fri',saturday:'Sat',sunday:'Sun',monday:'Mon'};
-    const weDate = getWeekEndDate(currentWeekOffset);
-    const weekOf = weDate.toISOString().split('T')[0];
+    const firstName = document.getElementById('m-firstName')?.value?.trim()||'';
+    const lastName  = document.getElementById('m-lastName')?.value?.trim()||'';
+    const eventType = document.getElementById('m-type')?.value||'';
+    const eventDate = document.getElementById('m-eventDate')?.value||'';
+    if(!firstName && !lastName){ alert('Please enter a client name.'); return; }
+    if(!eventDate){ alert('Please enter the event date so it lands on the correct week.'); return; }
+
+    // Optional custom job number — validate against duplicates for that week
     const jobInput = document.getElementById('m-job')?.value?.trim();
-    // Check for duplicate job number (allow 3a, 3b style suffixes)
-    if(jobInput){
-      const inputNum = jobInput.replace('#','');
-      const fullJob = makeJobId(weekOf, inputNum);
-      const duplicate = events.find(e => e.weekOf === weekOf && e.job === fullJob);
+    const wi = weekInfoFromDate(eventDate);
+    if(jobInput && wi){
+      const fullJob = makeJobId(wi.weekOf, jobInput.replace('#',''));
+      const duplicate = events.find(e => e.weekOf === wi.weekOf && e.job === fullJob);
       if(duplicate){
-        alert('Job #' + inputNum + ' is already used this week for "' + duplicate.name + '". Please use a different number.');
+        alert('Job #' + jobInput.replace('#','') + ' is already used that week for "' + duplicate.name + '". Please use a different number.');
         return;
       }
     }
-    const autoJob = jobInput ? makeJobId(weekOf, jobInput.replace('#','')) : nextJobNumber(weekOf);
-    const typeLabelMap = {
-      dinner:'Dinner', lunch:'Lunch', engagement:'Engagement', barmitzvah:'Bar / Bat Mitzvah',
-      shalosh:'Shalosh seudah', dropoff:'Drop off', breakfast:'Breakfast', brunch:'Brunch',
-      kiddush:'Kiddush', bris:'Bris', corporate:'Corporate', other:'Other'
+
+    // Build a booked inquiry from the form
+    const inq = {
+      id: Date.now()+'',
+      firstName, lastName,
+      eventName: document.getElementById('m-eventName')?.value?.trim()||'',
+      eventType,
+      eventDate,
+      phone: document.getElementById('m-phone')?.value?.trim()||'',
+      email: document.getElementById('m-email')?.value?.trim()||'',
+      venueName: document.getElementById('m-venueName')?.value?.trim()||'',
+      venueLocation: document.getElementById('m-venueLocation')?.value?.trim()||'',
+      guestCount: document.getElementById('m-guestCount')?.value?.trim()||'',
+      cuisine: document.getElementById('m-cuisine')?.value?.trim()||'',
+      meatDairy: document.getElementById('m-meatDairy')?.value||'',
+      shabbos: document.getElementById('m-shabbos')?.value||'No',
+      howFound: document.getElementById('m-howFound')?.value?.trim()||'',
+      referredBy: document.getElementById('m-referredBy')?.value?.trim()||'',
+      eventAttended: document.getElementById('m-eventAttended')?.value?.trim()||'',
+      plannerName: document.getElementById('m-plannerName')?.value?.trim()||'',
+      comments: document.getElementById('m-notes')?.value?.trim()||'',
+      source: 'manual',
+      menuAutomationTriggered: false,
+      stage: 'booked',
+      _customJob: jobInput ? jobInput.replace('#','') : '',
+      submittedAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
     };
-    const newEv={
-      id:Date.now()+'', job:autoJob, name,
-      addr:document.getElementById('m-addr')?.value||'',
-      type, typeLabel:typeLabelMap[type]||type,
-      day, dayLabel:dlMap[day]||day,
-      weekOf,
-      waiters:0,waiterNames:'',waiterTime:'-',waiterTime2:'',
-      bartenders:0,bartenderNames:'',bartenderTime:'',bartenderTime2:'',
-      chefs:0,chefNames:'',chefTime:'-',chefTime2:'',
-      porters:0,porterNames:'',porterTime:'',porterTime2:'',
-      manager:'-',mashgiach:'-',mashgiachNames:'',
-      menuLink:'',groceryLink:'',floorplan:'',venueLink:'',pdfMenuLink:'',logoData:'',
-      notes:document.getElementById('m-notes')?.value||''
-    };
-    _saveEvent(newEv);
+    inquiries.push(inq);
+    _saveInquiry(inq);
+    // Create the event on the correct W/E page (reuses the booking logic)
+    createEventFromInquiry(inq);
+    // If a custom job # was given, apply it to the created event
+    if(jobInput && wi){
+      const ev = events.find(x=>x.id==='inq_'+inq.id);
+      if(ev){ ev.job = makeJobId(wi.weekOf, jobInput.replace('#','')); _saveEvent(ev); }
+    }
     closeModal();
-    render();
+    render(); updatePipelineBadge();
   } catch(err){
     alert('Error saving event: '+err.message);
     console.error(err);
@@ -4486,6 +4525,15 @@ function openSendInvoiceEmail(eid){
   if(!e||!inv) return;
   if(!isGmailConnected()){ alert('Please connect Gmail first in Settings.'); showView('settings'); return; }
   document.getElementById('sendEmailModal')?.remove();
+  // Resolve the client's email: invoice -> event -> originating inquiry
+  let toEmail = inv.clientEmail || e.email || '';
+  if(!toEmail){
+    const inqId = e.inquiryId || (typeof e.id==='string' && e.id.indexOf('inq_')===0 ? e.id.slice(4) : null);
+    const inq = inqId ? inquiries.find(x=>x.id===inqId) : null;
+    if(inq && inq.email) toEmail = inq.email;
+  }
+  // Remember it on the invoice so it's there next time
+  if(toEmail && !inv.clientEmail){ inv.clientEmail = toEmail; }
   const tots = calcInvoiceTotals(inv);
   const isInvoice = inv.status==='invoice'||inv.status==='paid';
   const docType = isInvoice ? 'Invoice' : 'Quote';
@@ -4496,7 +4544,7 @@ function openSendInvoiceEmail(eid){
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
   m.innerHTML = '<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:560px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">'
     +'<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Send '+docType+' by Email</div>'
-    +'<div class="modal-row"><label>To</label><input type="email" id="email-to" value="'+(inv.clientEmail||'')+'" placeholder="client@email.com"></div>'
+    +'<div class="modal-row"><label>To</label><input type="email" id="email-to" value="'+toEmail.replace(/"/g,'&quot;')+'" placeholder="client@email.com"></div>'
     +'<div class="modal-row"><label>Subject</label><input type="text" id="email-subject" value="'+defaultSubject+'"></div>'
     +'<div class="modal-row"><label>Message</label><textarea id="email-body" style="min-height:180px">'+defaultBody+'</textarea></div>'
     +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem"><input type="checkbox" id="email-attach-invoice" checked style="accent-color:var(--blue-mid)"><label for="email-attach-invoice" style="font-size:13px;color:var(--text2)">Include invoice details in email body</label></div>'
