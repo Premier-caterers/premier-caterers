@@ -272,7 +272,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 03:30 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 04:00 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -2699,17 +2699,17 @@ async function generateGroceryFromMenu(eventId){
     ).join('\n\n');
 
     // Step 3: Call Claude API via Apps Script proxy
+    // Pass only fileId and event info - script fetches the doc text itself
     if(!scriptUrl){ alert('Please save your Apps Script URL in Settings first.'); return; }
 
-    const stationContextEncoded = encodeURIComponent(stationContext.slice(0,3000));
-    const menuTextEncoded = encodeURIComponent(menuText.slice(0,4000));
-    const eventNameEncoded = encodeURIComponent(e.name+' ('+e.typeLabel+', '+(e.dayLabel||'')+')');
+    const eventTypeEncoded = encodeURIComponent(e.typeLabel||'');
+    const eventNameEncoded = encodeURIComponent(e.name||'');
 
     const proxyUrl = scriptUrl+(scriptUrl.includes('?')?'&':'?')+
       'action=generateGrocery'+
-      '&menuText='+menuTextEncoded+
-      '&stationContext='+stationContextEncoded+
-      '&eventName='+eventNameEncoded;
+      '&fileId='+encodeURIComponent(fileId)+
+      '&eventName='+eventNameEncoded+
+      '&eventType='+eventTypeEncoded;
 
     const apiResp = await fetch(proxyUrl);
     const proxyData = await apiResp.json().catch(()=>({}));
