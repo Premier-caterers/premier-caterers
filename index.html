@@ -272,7 +272,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 05:15 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 05:30 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -2680,28 +2680,15 @@ async function generateGroceryFromMenu(eventId){
   showToast('Reading menu and generating grocery list...');
 
   try{
-    // Step 1: Fetch menu text via Apps Script
     const scriptUrl = localStorage.getItem('scriptUrl');
-    let menuText = '';
-    if(scriptUrl && fileId){
-      try{
-        const resp = await fetch(scriptUrl+(scriptUrl.includes('?')?'&':'?')+'action=getDocText&fileId='+encodeURIComponent(fileId));
-        const data = await resp.json().catch(()=>({}));
-        menuText = data.text || data.content || '';
-      }catch(fetchErr){
-        console.warn('Apps Script fetch failed, will proceed without menu text', fetchErr);
-      }
-    }
+    if(!scriptUrl){ alert('Please save your Apps Script URL in Settings first.'); return; }
 
-    // Step 2: Build the station database context
+    // Build the station database context to send to script
     const stationContext = groceryStations.slice(0,60).map(st=>`STATION: ${st.label} (${(st.eventTypes||[]).join('/')})\n`+
       (st.items||[]).slice(0,20).map(i=>`  - [${i.code||'X'}] ${i.name} | qty:${i.qty||'?'} | ${i.supplier||'premier'}`).join('\n')
     ).join('\n\n');
 
-    // Step 3: Call Claude API via Apps Script proxy
-    // Pass only fileId and event info - script fetches the doc text itself
-    if(!scriptUrl){ alert('Please save your Apps Script URL in Settings first.'); return; }
-
+    // Call Apps Script proxy — passes fileId, script reads the doc and calls Claude
     const eventTypeEncoded = encodeURIComponent(e.typeLabel||'');
     const eventNameEncoded = encodeURIComponent(e.name||'');
 
@@ -2715,15 +2702,28 @@ async function generateGroceryFromMenu(eventId){
     const proxyData = await apiResp.json().catch(()=>({}));
     if(!proxyData.success){ throw new Error(proxyData.error||'Script returned an error'); }
     const raw = proxyData.text || '';
-    // Find the JSON array by locating the first [ and last ] - works regardless of wrapper format
-    const arrayStart = raw.indexOf('[');
-    const arrayEnd = raw.lastIndexOf(']');
-    const clean = (arrayStart > -1 && arrayEnd > arrayStart) ? raw.slice(arrayStart, arrayEnd+1) : raw.trim();
+
+    // Extract JSON array — track only [ and ] depth, ignore { } inside
+    let clean = '';
+    const start = raw.indexOf('[');
+    if(start > -1){
+      let depth=0, inStr=false, esc=false;
+      for(let i=start;i<raw.length;i++){
+        const c=raw[i];
+        if(esc){esc=false;continue;}
+        if(c==='\\'){esc=true;continue;}
+        if(c==='"'){inStr=!inStr;continue;}
+        if(inStr) continue;
+        if(c==='[') depth++;
+        else if(c===']'){depth--;if(depth===0){clean=raw.slice(start,i+1);break;}}
+      }
+    }
+    if(!clean) clean = raw.trim();
     let items = [];
     try{ items = JSON.parse(clean); }
     catch(parseErr){
-      console.error('Parse error:', parseErr, '\nRaw:', raw, '\nClean:', clean);
-      alert('AI returned an unexpected response. Please try again or add items manually.');
+      console.error('Parse error:', parseErr.message, '\nclean first 200:', clean.slice(0,200), '\nclean last 50:', clean.slice(-50));
+      alert('Parse error. Clean (first 200): ' + clean.slice(0,200));
       if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-sparkles" style="font-size:13px"></i>Generate with AI'; }
       return;
     }
