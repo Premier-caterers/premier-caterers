@@ -272,7 +272,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 04:00 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 04:30 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -2715,7 +2715,14 @@ async function generateGroceryFromMenu(eventId){
     const proxyData = await apiResp.json().catch(()=>({}));
     if(!proxyData.success){ throw new Error(proxyData.error||'Script returned an error'); }
     const raw = proxyData.text || '';
-    const clean = raw.replace(/```json|```/g,'').trim();
+    // Strip markdown code blocks and find the JSON array
+    let clean = raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    // If still not starting with [, try to find the array within the response
+    if(!clean.startsWith('[')){
+      const arrayStart = clean.indexOf('[');
+      const arrayEnd = clean.lastIndexOf(']');
+      if(arrayStart > -1 && arrayEnd > arrayStart) clean = clean.slice(arrayStart, arrayEnd+1);
+    }
     let items = [];
     try{ items = JSON.parse(clean); }
     catch(parseErr){
