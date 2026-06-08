@@ -166,6 +166,18 @@ a{color:var(--blue-mid);text-decoration:none}
 .sched-week-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start}
 @media(max-width:900px){.sched-week-grid{grid-template-columns:1fr}}
 @media(max-width:700px){.sched-dept-row{grid-template-columns:80px 44px 1fr 72px}}
+/* ── Grocery section ── */
+.groc-event-tab{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border:0.5px solid var(--border2);border-radius:20px;font-size:13px;cursor:pointer;background:var(--bg2);color:var(--text2);transition:all .15s}
+.groc-event-tab.active{background:var(--blue-mid);color:#fff;border-color:var(--blue-mid)}
+.groc-item-row{display:grid;grid-template-columns:32px 90px 1fr 100px 110px 36px;gap:0;align-items:center;border-bottom:0.5px solid var(--border);min-height:36px;font-size:13px}
+.groc-item-row:last-child{border-bottom:none}
+.groc-cell{padding:5px 8px}
+.groc-code-badge{font-size:10px;font-weight:800;padding:2px 6px;border-radius:4px;text-align:center}
+.groc-M{background:#fee2e2;color:#991b1b}.groc-P{background:#dcfce7;color:#166534}.groc-X{background:#f1f5f9;color:#475569}.groc-D{background:#dbeafe;color:#1e40af}
+.groc-supplier-badge{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg2);color:var(--text2);border:0.5px solid var(--border2);white-space:nowrap}
+.groc-section-hdr{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);padding:6px 8px 4px;background:var(--bg2);border-bottom:0.5px solid var(--border)}
+.groc-inp{width:100%;background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;outline:none}
+.groc-inp:focus{border-bottom-color:var(--blue-mid)}
 
 .change-entry{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.25rem;margin-bottom:10px}
 .change-top{display:flex;align-items:center;gap:10px;margin-bottom:.5rem;flex-wrap:wrap}
@@ -260,7 +272,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 09:10 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 02:15 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -401,6 +413,9 @@ const firebaseConfig = {
 };
 // db and collections initialized in _startApp() after Firebase SDK loads
 let db, eventsCol, changesCol, inquiriesCol, checklistCol, equipCol, invoicesCol, venuesCol, trashCol;
+let groceryStationsCol, groceryListsCol;
+let groceryStations = []; // [{id, eventTypes:[], stationKey, label, items:[{name,code,qty,supplier,notes}]}]
+let groceryLists = {};    // {eventId: {items:[...], generated, lastModified}}
 let trash = [];
 let invoices = {}; // keyed by eventId
 let savedLineItems = JSON.parse(localStorage.getItem('savedLineItems')||'[]');
@@ -483,7 +498,7 @@ async function restoreFromTrash(trashId){
       if(b.invoice){ try{ await invoicesCol.doc(data.id).set({...b.invoice, ts:Date.now()}); }catch(e){} }
     } else if(t.kind==='invoiceLine'){
       const eid = info.eid;
-      if(!eid || !invoices[eid]){ alert('Cannot restore this line item — its invoice no longer exists.'); return; }
+      if(!eid || !invoices[eid]){ alert('Cannot restore this line item - its invoice no longer exists.'); return; }
       if(!Array.isArray(invoices[eid].lines)) invoices[eid].lines = [];
       const at = (typeof info.idx==='number' && info.idx<=invoices[eid].lines.length) ? info.idx : invoices[eid].lines.length;
       invoices[eid].lines.splice(at, 0, data);
@@ -519,6 +534,8 @@ function startFirebaseListeners(){
   invoicesCol.onSnapshot( snap=>{ invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); }); if(currentView==='invoices') render(); });
   venuesCol.onSnapshot( snap=>{ venues=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='venues') render(); });
   trashCol.onSnapshot( snap=>{ trash=snap.docs.map(d=>d.data()); purgeOldTrash(); if(currentView==='trash') render(); });
+  groceryStationsCol.onSnapshot( snap=>{ groceryStations=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='grocery') render(); });
+  groceryListsCol.onSnapshot( snap=>{ groceryLists={}; snap.docs.forEach(d=>{ groceryLists[d.id]=d.data(); }); if(currentView==='grocery') render(); });
 }
 
 async function seedIfEmpty(){
@@ -875,6 +892,7 @@ function renderEvents(){
           <span style="font-size:12px;color:var(--text3);flex-shrink:0">${e.dayLabel}</span>
           ${e.menuLink ? `<a href="${e.menuLink}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:2px 9px;border:0.5px solid var(--green-border);border-radius:8px;background:var(--green-bg);color:var(--green-text);text-decoration:none;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-file-text" style="font-size:11px"></i>Menu</a>` : `<span style="font-size:11px;padding:2px 9px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text3);flex-shrink:0">No menu</span>`}
           ${role.canViewInvoices ? `<button onclick="event.stopPropagation();showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:2px 9px;border:0.5px solid ${!invStatus||invStatus==='none'?'var(--border2)':invStatus==='paid'?'var(--green-border)':invStatus==='invoice'?'#c4b5fd':'var(--amber-border)'};border-radius:8px;background:${!invStatus||invStatus==='none'?'var(--bg2)':invStatus==='paid'?'var(--green-bg)':invStatus==='invoice'?'#f5f3ff':'var(--amber-bg)'};color:${invColor};cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-file-invoice" style="font-size:11px"></i>${!invStatus||invStatus==='none'?'No invoice':invStatus==='quote'?'Quote':invStatus==='approved'?'Approved':invStatus==='invoice'?'Invoice open':'Paid ✓'}</button>` : ''}
+          <button onclick="event.stopPropagation();openEventGrocery('${e.id}')" style="font-size:11px;padding:2px 9px;border:0.5px solid ${(groceryLists[e.id]&&groceryLists[e.id].items&&groceryLists[e.id].items.length)?'var(--green-border)':'var(--border2)'};border-radius:8px;background:${(groceryLists[e.id]&&groceryLists[e.id].items&&groceryLists[e.id].items.length)?'var(--green-bg)':'var(--bg2)'};color:${(groceryLists[e.id]&&groceryLists[e.id].items&&groceryLists[e.id].items.length)?'var(--green-text)':'var(--text3)'};cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-shopping-cart" style="font-size:11px"></i>${(groceryLists[e.id]&&groceryLists[e.id].items&&groceryLists[e.id].items.length)?'Grocery ('+groceryLists[e.id].items.length+')':'Grocery'}</button>
         </div>`;
       });
       listH += '</div>';
@@ -2365,12 +2383,667 @@ function getEquipItems(templateKey) {
 }
 
 function renderGrocery(){
-  return `<div class="section-header"><div class="section-title">Grocery</div></div>
-  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:2rem;text-align:center;color:var(--text2);font-size:14px">
-    <i class="ti ti-shopping-cart" style="font-size:32px;margin-bottom:1rem;display:block;color:var(--text3)"></i>
-    Grocery section coming soon — details to be added.
+  const schedWeekStr = getWeekEndDate(currentWeekOffset).toISOString().split('T')[0];
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const we = getWeekEndDate(currentWeekOffset);
+  const weekLabel = 'W/E '+months[we.getUTCMonth()]+' '+we.getUTCDate();
+  const weekEvents = events.filter(e=>(e.weekOf||'')===schedWeekStr && !e.noStaffing);
+
+  const activeGrocTab = window._grocTab || 'weekly';
+  const activeDbTab   = window._grocDbTab || 'stations';
+
+  let h = `<div class="section-header">
+    <div class="section-title">Grocery — ${weekLabel}</div>
+    <div style="display:flex;gap:6px">
+      <button onclick="printGroceryList()" class="icon-btn" title="Print grocery list"><i class="ti ti-printer"></i></button>
+      <button onclick="downloadGroceryList()" class="icon-btn" title="Download grocery list"><i class="ti ti-download"></i></button>
+    </div>
+  </div>
+
+  <!-- Event tabs -->
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1.25rem">
+    <button class="groc-event-tab ${activeGrocTab==='weekly'?'active':''}" onclick="setGrocTab('weekly')">
+      <i class="ti ti-list" style="font-size:13px"></i>All events (weekly)
+    </button>
+    ${weekEvents.map(e=>`
+    <button class="groc-event-tab ${activeGrocTab===e.id?'active':''}" onclick="setGrocTab('${e.id}')">
+      <span class="job-pill" style="font-size:11px;padding:1px 6px">${displayJob(e.job)}</span>${e.name}
+      ${groceryLists[e.id]?.items?.length ? `<span style="font-size:10px;background:var(--green-bg);color:var(--green-text);padding:1px 5px;border-radius:8px">${groceryLists[e.id].items.length}</span>` : ''}
+    </button>`).join('')}
+    <button class="groc-event-tab ${activeGrocTab==='db'?'active':''}" onclick="setGrocTab('db')" style="margin-left:auto;border-style:dashed">
+      <i class="ti ti-database" style="font-size:13px"></i>Station database
+    </button>
   </div>`;
+
+  if(activeGrocTab === 'db'){
+    h += renderGroceryDatabase();
+  } else if(activeGrocTab === 'weekly'){
+    h += renderWeeklyGrocery(weekEvents);
+  } else {
+    const ev = events.find(x=>x.id===activeGrocTab);
+    if(ev) h += renderEventGrocery(ev);
+  }
+  return h;
 }
+
+// ── Per-event grocery view ──────────────────────────────────────
+function renderEventGrocery(e){
+  const list = groceryLists[e.id] || {items:[], generated:null};
+  const items = list.items || [];
+  const hasMenu = e.menuLink || (Array.isArray(e.menus) && e.menus.length);
+
+  let h = `<div class="sched-card">
+    <div class="sched-card-header">
+      <span class="job-pill">${displayJob(e.job)}</span>
+      <span style="font-size:15px;font-weight:600;color:var(--text)">${e.name}</span>
+      <span style="font-size:12px;color:var(--text2)">${e.dayLabel||''} · ${e.typeLabel||''}</span>
+      <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+        ${hasMenu ? `<button onclick="generateGroceryFromMenu('${e.id}')" style="padding:5px 12px;font-size:12px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:5px">
+          <i class="ti ti-sparkles" style="font-size:13px"></i>${items.length ? 'Re-generate with AI' : 'Generate with AI'}
+        </button>` : `<span style="font-size:12px;color:var(--amber-text)"><i class="ti ti-alert-triangle" style="font-size:12px"></i> No menu linked - AI cannot generate without a menu</span>`}
+        <button onclick="addGroceryItem('${e.id}')" style="padding:5px 12px;font-size:12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px">
+          <i class="ti ti-plus" style="font-size:13px"></i>Add item
+        </button>
+      </div>
+    </div>`;
+
+  if(list.generated){
+    h += `<div style="padding:6px 14px;font-size:11px;color:var(--text3);background:var(--bg2);border-bottom:0.5px solid var(--border)">
+      AI generated ${new Date(list.generated).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · ${items.length} items · Review and edit as needed
+    </div>`;
+  }
+
+  if(!items.length){
+    h += `<div style="padding:2.5rem;text-align:center;color:var(--text3)">
+      <i class="ti ti-shopping-cart-off" style="font-size:32px;display:block;margin-bottom:.75rem"></i>
+      No grocery items yet.${hasMenu?' Click "Generate with AI" to auto-build from the menu, or add items manually.':' Link a menu to the event card to enable AI generation.'}
+    </div>`;
+  } else {
+    // Group by section
+    const sections = {};
+    items.forEach((item,idx)=>{
+      const sec = item.section || 'other';
+      if(!sections[sec]) sections[sec]=[];
+      sections[sec].push({...item, _idx:idx});
+    });
+    h += `<div style="overflow-x:auto">`;
+    // Column headers
+    h += `<div style="display:grid;grid-template-columns:32px 90px 1fr 100px 110px 36px;background:var(--bg2);border-bottom:0.5px solid var(--border)">
+      <div class="groc-cell" style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3)"></div>
+      <div class="groc-cell" style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3)">Code</div>
+      <div class="groc-cell" style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3)">Item</div>
+      <div class="groc-cell" style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3)">Qty</div>
+      <div class="groc-cell" style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3)">Supplier</div>
+      <div class="groc-cell"></div>
+    </div>`;
+    Object.entries(sections).forEach(([sec, secItems])=>{
+      h += `<div class="groc-section-hdr">${sec.charAt(0).toUpperCase()+sec.slice(1)}</div>`;
+      secItems.forEach(item=>{
+        const code = item.code||'X';
+        h += `<div class="groc-item-row">
+          <div class="groc-cell"></div>
+          <div class="groc-cell"><span class="groc-code-badge groc-${code}">${code}</span></div>
+          <div class="groc-cell"><input class="groc-inp" value="${(item.name||'').replace(/"/g,'&quot;')}" onblur="saveGroceryItemField('${e.id}',${item._idx},'name',this.value)" placeholder="Item name"></div>
+          <div class="groc-cell"><input class="groc-inp" style="text-align:center" value="${item.qty||''}" onblur="saveGroceryItemField('${e.id}',${item._idx},'qty',this.value)" placeholder="qty"></div>
+          <div class="groc-cell"><input class="groc-inp" value="${item.supplier||''}" onblur="saveGroceryItemField('${e.id}',${item._idx},'supplier',this.value)" placeholder="supplier"></div>
+          <div class="groc-cell"><button onclick="removeGroceryItem('${e.id}',${item._idx})" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:14px;padding:2px"><i class="ti ti-trash"></i></button></div>
+        </div>`;
+      });
+    });
+    h += `</div>`;
+  }
+  h += `</div>`;
+  return h;
+}
+
+// ── Weekly combined grocery view ────────────────────────────────
+function renderWeeklyGrocery(weekEvents){
+  // Merge all event grocery lists, group by supplier
+  const allItems = [];
+  weekEvents.forEach(e=>{
+    const items = (groceryLists[e.id]?.items)||[];
+    items.forEach(item=>{ allItems.push({...item, _job:displayJob(e.job), _eventName:e.name}); });
+  });
+
+  if(!allItems.length){
+    return `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:3rem;text-align:center;color:var(--text3)">
+      <i class="ti ti-shopping-cart-off" style="font-size:40px;display:block;margin-bottom:1rem"></i>
+      <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:.5rem">No grocery lists yet this week</div>
+      <div style="font-size:13px">Open each event tab above and generate a grocery list with AI, then they'll appear here combined.</div>
+    </div>`;
+  }
+
+  // Group by supplier
+  const bySupplier = {};
+  allItems.forEach(item=>{
+    const sup = item.supplier || 'unknown';
+    if(!bySupplier[sup]) bySupplier[sup]=[];
+    bySupplier[sup].push(item);
+  });
+
+  const supplierOrder = ['premier','bertram','strauss','rd','chefs','aisle','a1','strauss dir','oh nuts','costco'];
+  const sorted = [...Object.keys(bySupplier)].sort((a,b)=>{
+    const ai = supplierOrder.indexOf(a.toLowerCase()); const bi = supplierOrder.indexOf(b.toLowerCase());
+    if(ai>-1 && bi>-1) return ai-bi; if(ai>-1) return -1; if(bi>-1) return 1; return a.localeCompare(b);
+  });
+
+  let h = `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">`;
+  sorted.forEach(sup=>{
+    const supItems = bySupplier[sup];
+    h += `<div style="padding:8px 14px;background:var(--bg2);border-bottom:0.5px solid var(--border);font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px">
+      <i class="ti ti-truck" style="font-size:14px;color:var(--text3)"></i>${sup.toUpperCase()}
+      <span style="font-size:11px;font-weight:400;color:var(--text3)">${supItems.length} item${supItems.length===1?'':'s'}</span>
+    </div>`;
+    supItems.forEach(item=>{
+      const code = item.code||'X';
+      h += `<div style="display:grid;grid-template-columns:32px 90px 1fr 100px 120px;gap:0;align-items:center;border-bottom:0.5px solid var(--border);min-height:36px;padding:4px 0">
+        <div class="groc-cell"></div>
+        <div class="groc-cell"><span class="groc-code-badge groc-${code}">${code}</span></div>
+        <div class="groc-cell" style="font-size:13px;color:var(--text)">${item.name||''}</div>
+        <div class="groc-cell" style="font-size:13px;color:var(--text2);text-align:center">${item.qty||''}</div>
+        <div class="groc-cell" style="font-size:12px;color:var(--text3)">${item._job} · ${(item.section||'').charAt(0).toUpperCase()+(item.section||'').slice(1)}</div>
+      </div>`;
+    });
+  });
+  h += `</div>`;
+  return h;
+}
+
+// ── Station database admin UI ───────────────────────────────────
+function renderGroceryDatabase(){
+  const eventTypes = ['wedding','shabbos','kiddush','bris','engagement','meat event','shalosh seudah','dairy buffet','drop off'];
+
+  let h = `<div class="sched-card" style="margin-bottom:1rem">
+    <div class="sched-card-header">
+      <span style="font-size:15px;font-weight:600;color:var(--text)">Station Database</span>
+      <span style="font-size:12px;color:var(--text2)">Manage standard stations and items used for AI grocery generation</span>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button onclick="openAddStationModal()" style="padding:5px 12px;font-size:12px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:5px">
+          <i class="ti ti-plus" style="font-size:13px"></i>Add station
+        </button>
+        <button onclick="seedGroceryDatabase()" style="padding:5px 12px;font-size:12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);cursor:pointer" title="Re-seed from master list">
+          <i class="ti ti-refresh" style="font-size:13px"></i>
+        </button>
+      </div>
+    </div>`;
+
+  if(!groceryStations.length){
+    h += `<div style="padding:2.5rem;text-align:center;color:var(--text3)">
+      <i class="ti ti-database-off" style="font-size:32px;display:block;margin-bottom:.75rem"></i>
+      No stations yet. Click "Add station" or the refresh button to seed from the master list.
+    </div>`;
+  } else {
+    // Group by event type tag
+    const byType = {};
+    groceryStations.forEach(st=>{
+      (st.eventTypes||['all']).forEach(et=>{
+        if(!byType[et]) byType[et]=[];
+        byType[et].push(st);
+      });
+    });
+    const activeDbType = window._grocDbType || (Object.keys(byType)[0]||'all');
+    // Type filter tabs
+    h += `<div style="padding:10px 14px;display:flex;flex-wrap:wrap;gap:6px;border-bottom:0.5px solid var(--border)">`;
+    Object.keys(byType).sort().forEach(et=>{
+      h += `<button onclick="window._grocDbType='${et}';render()" style="padding:4px 12px;font-size:12px;border:0.5px solid var(--border2);border-radius:12px;background:${activeDbType===et?'var(--blue-mid)':'var(--bg2)'};color:${activeDbType===et?'#fff':'var(--text2)'};cursor:pointer">${et} (${byType[et].length})</button>`;
+    });
+    h += `</div>`;
+
+    const stationsForType = byType[activeDbType]||[];
+    stationsForType.forEach(st=>{
+      h += `<div style="border-bottom:0.5px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg2)">
+          <span style="font-size:13px;font-weight:600;color:var(--text)">${st.label||st.stationKey}</span>
+          <span style="font-size:11px;color:var(--text3)">${(st.eventTypes||[]).join(', ')}</span>
+          <span style="font-size:11px;color:var(--text3)">${(st.items||[]).length} items</span>
+          <div style="margin-left:auto;display:flex;gap:4px">
+            <button onclick="openEditStationModal('${st.id}')" class="icon-btn" title="Edit station"><i class="ti ti-edit"></i></button>
+            <button onclick="deleteStation('${st.id}')" class="icon-btn" title="Delete station" style="color:#e05c5c"><i class="ti ti-trash"></i></button>
+          </div>
+        </div>
+        <div style="overflow-x:auto">`;
+      (st.items||[]).forEach((item,idx)=>{
+        const code = item.code||'X';
+        h += `<div class="groc-item-row" style="grid-template-columns:32px 90px 1fr 100px 110px 36px">
+          <div class="groc-cell"></div>
+          <div class="groc-cell"><span class="groc-code-badge groc-${code}">${code}</span></div>
+          <div class="groc-cell" style="color:var(--text)">${item.name||''}</div>
+          <div class="groc-cell" style="color:var(--text2);text-align:center">${item.qty||'?'}</div>
+          <div class="groc-cell"><span class="groc-supplier-badge">${item.supplier||''}</span></div>
+          <div class="groc-cell"></div>
+        </div>`;
+      });
+      h += `</div></div>`;
+    });
+  }
+  h += `</div>`;
+  return h;
+}
+
+// ── Grocery action functions ────────────────────────────────────
+function setGrocTab(id){ window._grocTab=id; render(); }
+
+async function saveGroceryList(eventId, items){
+  if(!groceryListsCol) return;
+  const rec = { id:eventId, items, lastModified:Date.now(), lastModifiedStr:new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) };
+  if(!groceryLists[eventId]?.generated) rec.generated = null;
+  else rec.generated = groceryLists[eventId].generated;
+  try{ await groceryListsCol.doc(eventId).set(rec); }catch(e){ console.error(e); }
+}
+
+async function saveGroceryItemField(eventId, idx, field, val){
+  const list = groceryLists[eventId];
+  if(!list || !list.items || !list.items[idx]) return;
+  list.items[idx][field] = val;
+  await saveGroceryList(eventId, list.items);
+}
+
+async function removeGroceryItem(eventId, idx){
+  const list = groceryLists[eventId];
+  if(!list || !list.items) return;
+  if(!confirm('Remove this item from the grocery list?')) return;
+  list.items.splice(idx,1);
+  await saveGroceryList(eventId, list.items);
+  render();
+}
+
+async function addGroceryItem(eventId){
+  const list = groceryLists[eventId] || {items:[]};
+  if(!list.items) list.items = [];
+  list.items.push({name:'',code:'X',qty:'',supplier:'premier',section:'other'});
+  await saveGroceryList(eventId, list.items);
+  render();
+}
+
+// ── AI Grocery Generator ────────────────────────────────────────
+async function generateGroceryFromMenu(eventId){
+  const e = events.find(x=>x.id===eventId);
+  if(!e) return;
+
+  // Find menu URL
+  const menuUrl = e.menuLink || (Array.isArray(e.menus)&&e.menus[0]?e.menus[0].url:'');
+  if(!menuUrl){ alert('No menu linked to this event. Please link a menu first from the event card.'); return; }
+
+  // Extract file ID from URL
+  const fileId = (menuUrl.match(/\/d\/([a-zA-Z0-9_-]+)/)||['',''])[1];
+  if(!fileId){ alert('Could not extract a Google Drive file ID from the menu link.'); return; }
+
+  // Check if existing list — warn before overwriting
+  const existing = groceryLists[eventId];
+  if(existing?.items?.length && existing.generated){
+    if(!confirm(`This event already has ${existing.items.length} items generated on ${new Date(existing.generated).toLocaleDateString()}.\n\nRe-generate will replace the list with a fresh AI draft. Any manual edits will be lost.\n\nContinue?`)) return;
+  }
+
+  // Show loading state
+  const btn = document.querySelector(`button[onclick="generateGroceryFromMenu('${eventId}')"]`);
+  if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader" style="font-size:13px"></i> Reading menu...'; }
+  showToast('Reading menu and generating grocery list...');
+
+  try{
+    // Step 1: Fetch menu text via Apps Script
+    const scriptUrl = localStorage.getItem('scriptUrl');
+    let menuText = '';
+    if(scriptUrl && fileId){
+      try{
+        const resp = await fetch(scriptUrl+(scriptUrl.includes('?')?'&':'?')+'action=getDocText&fileId='+encodeURIComponent(fileId));
+        const data = await resp.json().catch(()=>({}));
+        menuText = data.text || data.content || '';
+      }catch(fetchErr){
+        console.warn('Apps Script fetch failed, will proceed without menu text', fetchErr);
+      }
+    }
+
+    // Step 2: Build the station database context
+    const stationContext = groceryStations.slice(0,60).map(st=>`STATION: ${st.label} (${(st.eventTypes||[]).join('/')})\n`+
+      (st.items||[]).slice(0,20).map(i=>`  - [${i.code||'X'}] ${i.name} | qty:${i.qty||'?'} | ${i.supplier||'premier'}`).join('\n')
+    ).join('\n\n');
+
+    // Step 3: Call Claude API
+    const prompt = menuText
+      ? `You are a grocery list generator for Premier Caterers, a kosher catering company.
+
+Here is the FINAL MENU for ${e.name} (${e.typeLabel}, ${e.dayLabel||''}):
+---
+${menuText.slice(0,4000)}
+---
+
+Here is our standard grocery station database:
+---
+${stationContext.slice(0,3000)}
+---
+
+Generate a grocery list for this event. For each item in the menu:
+1. Match it to the closest station in our database
+2. Use the standard grocery items for that station as a base
+3. ADJUST based on what's actually on the menu (remove items not needed, add items specific to this menu)
+4. Preserve exact quantities from the menu where stated, otherwise use database defaults
+
+Return ONLY a JSON array of grocery items. Each item must have:
+- "section": station/section name (e.g. "persian", "asian", "salads", "entree")
+- "name": item name
+- "code": one of M (meat), P (parve), X (non-food/supplies), D (dairy)
+- "qty": quantity (string, e.g. "yes", "1gall", "2bx", "250")
+- "supplier": supplier name (e.g. "premier", "bertram", "strauss", "rd", "chefs", "aisle", "a1")
+- "notes": any special notes (optional, e.g. "nut allergy - put sign on this")
+- "aiAdded": true if this item was NOT in the standard database (so user can review)
+
+Do not include any text before or after the JSON array.`
+      : `Generate a standard grocery list for a ${e.typeLabel} event called "${e.name}".
+
+Our station database:
+---
+${stationContext.slice(0,3000)}
+---
+
+Return a JSON array with items having: section, name, code (M/P/X/D), qty, supplier, notes, aiAdded.
+No text before or after the JSON.`;
+
+    const apiResp = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:2000,
+        messages:[{role:'user', content:prompt}]
+      })
+    });
+
+    const apiData = await apiResp.json();
+    const raw = (apiData.content||[]).map(c=>c.text||'').join('').trim();
+    const clean = raw.replace(/```json|```/g,'').trim();
+    let items = [];
+    try{ items = JSON.parse(clean); }
+    catch(parseErr){
+      console.error('Parse error:', parseErr, '\nRaw:', raw);
+      alert('AI returned an unexpected response. Please try again or add items manually.');
+      if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-sparkles" style="font-size:13px"></i>Generate with AI'; }
+      return;
+    }
+
+    // Step 4: Save
+    const rec = { id:eventId, items, generated:Date.now(), lastModified:Date.now(),
+      lastModifiedStr:new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) };
+    await groceryListsCol.doc(eventId).set(rec);
+
+    const aiAddedCount = items.filter(i=>i.aiAdded).length;
+    showToast(`Grocery list generated ✓ — ${items.length} items${aiAddedCount?' ('+aiAddedCount+' flagged for review)':''}`);
+    if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-sparkles" style="font-size:13px"></i>Re-generate with AI'; }
+    render();
+
+  }catch(err){
+    console.error('generateGroceryFromMenu error:', err);
+    alert('Error generating grocery list: '+err.message);
+    if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-sparkles" style="font-size:13px"></i>Generate with AI'; }
+  }
+}
+
+// ── Station database management ─────────────────────────────────
+function openAddStationModal(){
+  document.getElementById('grocStationModal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'grocStationModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
+  m.innerHTML = `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:520px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Add new station</div>
+    <div class="modal-row"><label>Station name</label><input id="gs-label" placeholder="e.g. Persian Station"></div>
+    <div class="modal-row"><label>Station key (short, no spaces)</label><input id="gs-key" placeholder="e.g. persian"></div>
+    <div class="modal-row"><label>Event types (comma-separated)</label><input id="gs-types" placeholder="wedding, shabbos, meat event"></div>
+    <div class="modal-row"><label>Items (one per line: CODE | name | qty | supplier)</label>
+      <textarea id="gs-items" style="min-height:180px;font-family:monospace;font-size:12px" placeholder="M | chicken kebobs | yes | premier&#10;M | beef kebobs | yes | premier&#10;X | skewers | yes | premier"></textarea>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:1rem">CODE: M=Meat, P=Parve, X=Non-food/Supplies, D=Dairy</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn-cancel" onclick="document.getElementById('grocStationModal').remove()">Cancel</button>
+      <button class="btn-save" onclick="saveNewStation()">Add station</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  setTimeout(()=>document.getElementById('gs-label')?.focus(),50);
+}
+
+async function saveNewStation(){
+  const label = document.getElementById('gs-label')?.value?.trim();
+  const key   = document.getElementById('gs-key')?.value?.trim().toLowerCase().replace(/\s+/g,'-');
+  const types = (document.getElementById('gs-types')?.value||'').split(',').map(t=>t.trim()).filter(Boolean);
+  const itemsRaw = document.getElementById('gs-items')?.value||'';
+  if(!label||!key){ alert('Please enter a station name and key.'); return; }
+  const items = itemsRaw.split('\n').filter(l=>l.trim()).map(l=>{
+    const parts = l.split('|').map(p=>p.trim());
+    return {code:parts[0]||'X', name:parts[1]||'', qty:parts[2]||'?', supplier:parts[3]||'premier'};
+  }).filter(i=>i.name);
+  const station = {id:'st_'+Date.now(), stationKey:key, label, eventTypes:types.length?types:['all'], items};
+  try{
+    await groceryStationsCol.doc(station.id).set(station);
+    document.getElementById('grocStationModal')?.remove();
+    showToast('Station added ✓');
+    render();
+  }catch(err){ alert('Error saving station: '+err.message); }
+}
+
+async function deleteStation(stationId){
+  if(!confirm('Delete this station from the database? This cannot be undone.')) return;
+  try{ await groceryStationsCol.doc(stationId).delete(); showToast('Station deleted'); render(); }
+  catch(err){ alert('Error: '+err.message); }
+}
+
+function openEditStationModal(stationId){
+  const st = groceryStations.find(x=>x.id===stationId);
+  if(!st) return;
+  document.getElementById('grocStationModal')?.remove();
+  const itemsText = (st.items||[]).map(i=>`${i.code||'X'} | ${i.name} | ${i.qty||'?'} | ${i.supplier||'premier'}`).join('\n');
+  const m = document.createElement('div');
+  m.id = 'grocStationModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
+  m.innerHTML = `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:520px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Edit: ${st.label}</div>
+    <div class="modal-row"><label>Station name</label><input id="gs-label" value="${(st.label||'').replace(/"/g,'&quot;')}"></div>
+    <div class="modal-row"><label>Station key</label><input id="gs-key" value="${st.stationKey||''}"></div>
+    <div class="modal-row"><label>Event types (comma-separated)</label><input id="gs-types" value="${(st.eventTypes||[]).join(', ')}"></div>
+    <div class="modal-row"><label>Items (one per line: CODE | name | qty | supplier)</label>
+      <textarea id="gs-items" style="min-height:200px;font-family:monospace;font-size:12px">${itemsText}</textarea>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:1rem">CODE: M=Meat, P=Parve, X=Non-food/Supplies, D=Dairy</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn-cancel" onclick="document.getElementById('grocStationModal').remove()">Cancel</button>
+      <button class="btn-save" onclick="saveEditStation('${stationId}')">Save changes</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+async function saveEditStation(stationId){
+  const label = document.getElementById('gs-label')?.value?.trim();
+  const key   = document.getElementById('gs-key')?.value?.trim().toLowerCase().replace(/\s+/g,'-');
+  const types = (document.getElementById('gs-types')?.value||'').split(',').map(t=>t.trim()).filter(Boolean);
+  const itemsRaw = document.getElementById('gs-items')?.value||'';
+  if(!label){ alert('Please enter a station name.'); return; }
+  const items = itemsRaw.split('\n').filter(l=>l.trim()).map(l=>{
+    const parts = l.split('|').map(p=>p.trim());
+    return {code:parts[0]||'X', name:parts[1]||'', qty:parts[2]||'?', supplier:parts[3]||'premier'};
+  }).filter(i=>i.name);
+  try{
+    await groceryStationsCol.doc(stationId).set({id:stationId, stationKey:key||stationId, label, eventTypes:types.length?types:['all'], items});
+    document.getElementById('grocStationModal')?.remove();
+    showToast('Station updated ✓');
+    render();
+  }catch(err){ alert('Error saving: '+err.message); }
+}
+
+// ── Seed database from master list ─────────────────────────────
+async function seedGroceryDatabase(){
+  if(groceryStations.length){
+    if(!confirm('This will ADD all standard stations to the database (it won\'t delete any existing ones).\n\nContinue?')) return;
+  }
+  showToast('Seeding station database...');
+  const existing = new Set(groceryStations.map(s=>s.stationKey));
+  const batch = [];
+  GROCERY_MASTER_STATIONS.forEach(st=>{
+    if(!existing.has(st.stationKey)) batch.push(st);
+  });
+  try{
+    for(const st of batch){ await groceryStationsCol.doc(st.id).set(st); }
+    showToast(`Seeded ${batch.length} stations ✓`);
+    render();
+  }catch(err){ alert('Seed error: '+err.message); }
+}
+
+// ── Print / Download grocery list ──────────────────────────────
+function printGroceryList(){
+  const tab = window._grocTab || 'weekly';
+  const schedWeekStr = getWeekEndDate(currentWeekOffset).toISOString().split('T')[0];
+  const weekEvents = events.filter(e=>(e.weekOf||'')===schedWeekStr && !e.noStaffing);
+  let items = [];
+  if(tab==='weekly'){
+    weekEvents.forEach(e=>{ (groceryLists[e.id]?.items||[]).forEach(i=>items.push({...i,_job:displayJob(e.job),_name:e.name})); });
+  } else {
+    items = (groceryLists[tab]?.items||[]).map(i=>{const e=events.find(x=>x.id===tab);return{...i,_job:e?displayJob(e.job):'',_name:e?.name||''};});
+  }
+  const bySupplier = {};
+  items.forEach(i=>{ const s=i.supplier||'unknown'; if(!bySupplier[s]) bySupplier[s]=[]; bySupplier[s].push(i); });
+  const we = getWeekEndDate(currentWeekOffset);
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const wl='W/E '+months[we.getUTCMonth()]+' '+we.getUTCDate()+', '+we.getUTCFullYear();
+  let html=`<html><head><title>Grocery List — ${wl}</title><style>
+    body{font-family:Arial,sans-serif;font-size:13px;margin:24px}
+    h1{font-size:18px;margin-bottom:4px} h2{font-size:14px;font-weight:700;margin:16px 0 4px;border-bottom:1px solid #ccc;padding-bottom:2px}
+    table{width:100%;border-collapse:collapse;margin-bottom:8px} td{padding:3px 6px;border:0.5px solid #e5e7eb;vertical-align:top}
+    .M{background:#fee2e2;color:#991b1b} .P{background:#dcfce7;color:#166534} .X{background:#f1f5f9;color:#475569} .D{background:#dbeafe;color:#1e40af}
+    .code{font-size:10px;font-weight:800;padding:1px 4px;border-radius:3px;display:inline-block}
+    @media print{@page{margin:1cm}}
+  </style></head><body>
+    <h1>Grocery List — ${wl}</h1>
+    <p style="font-size:12px;color:#666">Generated ${new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}</p>`;
+  Object.entries(bySupplier).forEach(([sup,sitems])=>{
+    html+=`<h2>${sup.toUpperCase()} (${sitems.length} items)</h2><table>`;
+    sitems.forEach(i=>{html+=`<tr><td width="40"><span class="code ${i.code||'X'}">${i.code||'X'}</span></td><td>${i.name||''}</td><td width="80" style="text-align:center">${i.qty||''}</td><td width="100" style="color:#666">${i._job||''} · ${i.section||''}</td></tr>`;});
+    html+=`</table>`;
+  });
+  html+=`</body></html>`;
+  const w=window.open('','_blank'); w.document.write(html); w.document.close(); w.print();
+}
+
+function downloadGroceryList(){ printGroceryList(); }
+
+// ── Master station seed data (from your spreadsheet) ───────────
+const GROCERY_MASTER_STATIONS = [
+  {id:'st_bar_wedding', stationKey:'bar', label:'Bar', eventTypes:['wedding','shabbos','kiddush','bris','engagement','meat event','shalosh seudah'], items:[
+    {code:'X',name:'ice',qty:'yes',supplier:'premier'},{code:'X',name:'limes',qty:'50',supplier:'premier'},
+    {code:'X',name:'lemons',qty:'20',supplier:'premier'},{code:'X',name:'OJ',qty:'2',supplier:'rd'},
+    {code:'X',name:'kids mixes',qty:'yes',supplier:'premier'}
+  ]},
+  {id:'st_tisch', stationKey:'tisch', label:'Tisch Room', eventTypes:['wedding'], items:[
+    {code:'X',name:'tisch pastries',qty:'3bx',supplier:'strauss dir'},{code:'M',name:'hot food',qty:'yes',supplier:'premier'},
+    {code:'X',name:'cantaloupe',qty:'3',supplier:'premier'},{code:'X',name:'honeydew',qty:'3',supplier:'premier'},
+    {code:'X',name:'pineapple',qty:'3',supplier:'premier'},{code:'X',name:'watermelon',qty:'1',supplier:'premier'},
+    {code:'X',name:'grapes x2',qty:'2+2',supplier:'premier'},{code:'X',name:'mangos',qty:'4',supplier:'premier'},
+    {code:'X',name:'blueberries',qty:'3',supplier:'premier'},{code:'X',name:'kiwis',qty:'6',supplier:'premier'}
+  ]},
+  {id:'st_passing_wedding', stationKey:'passing', label:"Passing Hors D'oeuvres", eventTypes:['wedding','bris','kiddush','engagement'], items:[
+    {code:'M',name:'satay - beef or chicken?',qty:'yes',supplier:'premier'},{code:'M',name:'mini breaded chicken - dark chicken',qty:'yes',supplier:'premier'},
+    {code:'M',name:'mini waffles',qty:'yes',supplier:'premier'},{code:'X',name:'pancake syrup',qty:'1pt',supplier:'premier'},
+    {code:'M',name:'beef empanadas',qty:'yes',supplier:'chefs'},{code:'M',name:'sauce for empanadas',qty:'1pt',supplier:'premier'},
+    {code:'P',name:'breaded portobello fries',qty:'yes',supplier:'premier'},{code:'P',name:'sauce for above',qty:'1pt',supplier:'premier'},
+    {code:'P',name:'regular mashed potatoes',qty:'yes',supplier:'premier'},{code:'P',name:'sweet mashed potatoes',qty:'yes',supplier:'premier'},
+    {code:'X',name:'mini spoon',qty:'yes',supplier:'premier'},{code:'M',name:'gravy',qty:'1qt',supplier:'premier'},
+    {code:'X',name:'cherry tomatoes',qty:'1cont',supplier:'premier'},{code:'P',name:'sauteed mushrooms',qty:'1pt',supplier:'premier'},
+    {code:'X',name:'crispy onions',qty:'1pkg',supplier:'premier'}
+  ]},
+  {id:'st_salads_wedding', stationKey:'salads', label:'Salads', eventTypes:['wedding','bris','kiddush','engagement','meat event'], items:[
+    {code:'X',name:'deco box',qty:'yes',supplier:'premier'},{code:'P',name:'corn and black bean salad',qty:'yes',supplier:'premier'},
+    {code:'X',name:'romaine',qty:'1cs',supplier:'bertram'},{code:'X',name:'caesar croutons',qty:'yes',supplier:'premier'},
+    {code:'P',name:'caesar dressing',qty:'yes',supplier:'premier'},{code:'P',name:'broccoli cashew salad',qty:'yes',supplier:'bertram'},
+    {code:'X',name:'kale & arugula',qty:'8',supplier:'aisle'},{code:'P',name:'roasted butternut squash',qty:'yes',supplier:'premier'},
+    {code:'X',name:'pomegranate seeds',qty:'yes',supplier:'premier'},{code:'X',name:'alfalfa sprouts',qty:'2',supplier:'premier'},
+    {code:'X',name:'candied nuts',qty:'1qt',supplier:'premier'},{code:'P',name:'pomegranate dressing',qty:'2qt',supplier:'premier'},
+    {code:'P',name:'cranberry quinoa',qty:'yes',supplier:'premier'},{code:'P',name:'waldorf salad and all components',qty:'yes',supplier:'premier'},
+    {code:'P',name:'farro grain',qty:'yes',supplier:'premier'}
+  ]},
+  {id:'st_persian', stationKey:'persian', label:'Persian Station', eventTypes:['wedding','meat event'], items:[
+    {code:'M',name:'ghormeh sabzi',qty:'yes',supplier:'premier'},{code:'M',name:'bamya (okra)',qty:'yes',supplier:'premier'},
+    {code:'M',name:'chicken kebobs',qty:'yes',supplier:'premier'},{code:'M',name:'beef kebobs',qty:'yes',supplier:'premier'},
+    {code:'M',name:'barg (lamb kebobs)',qty:'yes',supplier:'premier'},{code:'M',name:'koujida',qty:'yes',supplier:'premier'},
+    {code:'M',name:'rice, white',qty:'yes',supplier:'premier'},{code:'M',name:'rice, green',qty:'yes',supplier:'premier'},
+    {code:'M',name:'sauces for persian station',qty:'yes',supplier:'premier'}
+  ]},
+  {id:'st_asian', stationKey:'asian', label:'Asian Station', eventTypes:['wedding','meat event'], items:[
+    {code:'M',name:'beef sauteed with mixed vegetable',qty:'yes',supplier:'premier'},{code:'M',name:"General Tso's chicken",qty:'yes',supplier:'premier'},
+    {code:'M',name:"General Tso's sauce",qty:'yes',supplier:'premier'},{code:'M',name:'vegetable lo mein',qty:'yes',supplier:'premier'},
+    {code:'M',name:'mini egg rolls',qty:'yes',supplier:'bertram'},{code:'M',name:'fried rice',qty:'yes',supplier:'premier'},
+    {code:'X',name:'duck sauce',qty:'yes',supplier:'premier'},{code:'X',name:'chinese crispy noodles',qty:'yes',supplier:'premier'},
+    {code:'X',name:'soy sauce',qty:'yes',supplier:'premier'},{code:'X',name:'frozen broccoli',qty:'yes',supplier:'bertram'},
+    {code:'X',name:'asian sauce',qty:'yes',supplier:'premier'}
+  ]},
+  {id:'st_middle_eastern', stationKey:'middle', label:'Middle Eastern Station', eventTypes:['wedding','meat event','bris'], items:[
+    {code:'M',name:'beef shish kebob',qty:'yes',supplier:'premier'},{code:'M',name:'dilled rice',qty:'yes',supplier:'premier'},
+    {code:'M',name:'shwarma',qty:'yes',supplier:'premier'},{code:'X',name:'pita, regular',qty:'2pkg',supplier:'strauss'},
+    {code:'X',name:'pita, whole wheat',qty:'1pkg',supplier:'strauss'},{code:'X',name:'lafa bread',qty:'6pc',supplier:'strauss'},
+    {code:'P',name:'falafel balls',qty:'yes',supplier:'premier'},{code:'P',name:'chummos',qty:'yes',supplier:'premier'},
+    {code:'P',name:'techina',qty:'yes',supplier:'premier'},{code:'P',name:'israeli salad',qty:'yes',supplier:'premier'},
+    {code:'X',name:'israeli pickles',qty:'yes',supplier:'premier'},{code:'X',name:'olives',qty:'yes',supplier:'premier'}
+  ]},
+  {id:'st_carving', stationKey:'carving', label:'Carving Station', eventTypes:['wedding','meat event'], items:[
+    {code:'M',name:'corned beef - carving',qty:'yes',supplier:'premier'},{code:'M',name:'pastrami - carving',qty:'yes',supplier:'premier'},
+    {code:'M',name:'whole turkey - carving',qty:'yes',supplier:'premier'},{code:'M',name:'london broil - carving',qty:'yes',supplier:'premier'},
+    {code:'X',name:'sliced cocktail breads',qty:'3',supplier:'strauss'},{code:'P',name:'cole slaw',qty:'yes',supplier:'bertram'},
+    {code:'P',name:'tri colored potato salad',qty:'yes',supplier:'premier'},{code:'X',name:'pickles - sour',qty:'yes',supplier:'bertram'},
+    {code:'X',name:'pickles - half sour',qty:'yes',supplier:'bertram'},{code:'X',name:'olives',qty:'yes',supplier:'premier'},
+    {code:'X',name:'ketchup',qty:'1gall',supplier:'premier'},{code:'X',name:'mustard',qty:'1gall',supplier:'premier'},
+    {code:'X',name:'russian dressing',qty:'2qt',supplier:'premier'},{code:'X',name:'cranberry sauce',qty:'2sm',supplier:'premier'}
+  ]},
+  {id:'st_pescatarian', stationKey:'pescatarian', label:'Pescatarian Station', eventTypes:['wedding','meat event'], items:[
+    {code:'P',name:'salmon, sriracha',qty:'yes',supplier:'rd'},{code:'P',name:'quinoa',qty:'yes',supplier:'premier'},
+    {code:'P',name:'eggplant spinach rolatini - PARVE',qty:'yes',supplier:'bertram'},
+    {code:'P',name:'vegetarian chili',qty:'yes',supplier:'premier'},{code:'X',name:'soft corn tortillas',qty:'yes',supplier:'rd'},
+    {code:'X',name:'hard tortilla chips',qty:'yes',supplier:'rd'}
+  ]},
+  {id:'st_pre_set_wedding', stationKey:'pre_set', label:'Pre-Set (Ballroom)', eventTypes:['wedding','shabbos','meat event'], items:[
+    {code:'X',name:'assorted dinner rolls',qty:'yes',supplier:'strauss dir'},{code:'X',name:'flatbreads',qty:'yes',supplier:'bertram'},
+    {code:'X',name:'limes',qty:'above',supplier:'premier'}
+  ]},
+  {id:'st_appetizer_sampler', stationKey:'appetizer_sampler', label:'Appetizer — Sampler Plate', eventTypes:['wedding','meat event'], items:[
+    {code:'P',name:'cold peach soup',qty:'4gall',supplier:'rd'},{code:'P',name:'grilled sliced peach',qty:'yes',supplier:'rd'},
+    {code:'P',name:'teriyaki salmon - 2oz piece',qty:'yes',supplier:'rd'},{code:'X',name:'sesame seeds',qty:'1qt',supplier:'premier'},
+    {code:'P',name:'farro grain',qty:'yes',supplier:'premier'},{code:'X',name:'mini plastic timbale',qty:'yes',supplier:'premier'},
+    {code:'P',name:'deco for appetizer',qty:'yes',supplier:'premier'}
+  ]},
+  {id:'st_entree_wedding', stationKey:'entree', label:'Entree', eventTypes:['wedding','shabbos','meat event','bris','engagement'], items:[
+    {code:'M',name:'stuffed chicken roulade w/ pastrami',qty:'yes',supplier:'premier'},
+    {code:'X',name:'russian dressing',qty:'1gall',supplier:'premier'},{code:'M',name:'deco for entree',qty:'yes',supplier:'premier'},
+    {code:'M',name:'sauce for entree',qty:'yes',supplier:'premier'},{code:'P',name:'fish option',qty:'6',supplier:'rd'},
+    {code:'P',name:'vegetarian option',qty:'6',supplier:'premier'},{code:'M',name:'roasted red potatoes',qty:'yes',supplier:'premier'},
+    {code:'M',name:'melange vegetables - tied bundle',qty:'yes',supplier:'premier'}
+  ]},
+  {id:'st_dessert_viennese', stationKey:'dessert', label:'Passing Viennese Dessert', eventTypes:['wedding','bris','engagement'], items:[
+    {code:'X',name:'cantaloupe',qty:'above',supplier:'premier'},{code:'X',name:'honeydew',qty:'above',supplier:'premier'},
+    {code:'X',name:'pineapple',qty:'above',supplier:'premier'},{code:'X',name:'watermelon',qty:'above',supplier:'premier'},
+    {code:'X',name:'grapes x2',qty:'above',supplier:'premier'},{code:'X',name:'kiwis',qty:'above',supplier:'premier'},
+    {code:'X',name:'mangos',qty:'above',supplier:'premier'},{code:'X',name:'blueberries',qty:'above',supplier:'premier'},
+    {code:'X',name:'mini pastries',qty:'7bx',supplier:'strauss'},{code:'X',name:'chocolate covered dried fruit',qty:'yes',supplier:'strauss'},
+    {code:'X',name:'sorbet',qty:'1gall',supplier:'strauss'},{code:'X',name:'mini mug for sorbet',qty:'60',supplier:'premier'},
+    {code:'X',name:'sorbet pops',qty:'2bx',supplier:'strauss'},{code:'X',name:'mini frozen ice cream sandwiches/cones',qty:'4bx',supplier:'strauss'},
+    {code:'X',name:'brownies / blondies',qty:'yes',supplier:'chefs'},{code:'P',name:'apple crisp (beggar)',qty:'yes',supplier:'premier'},
+    {code:'P',name:'baked (raw) cookies',qty:'yes',supplier:'chefs'},{code:'X',name:'non dairy creamer',qty:'3',supplier:'bertram'}
+  ]},
+  {id:'st_linen', stationKey:'linen', label:'Linens', eventTypes:['wedding','shabbos','bris','engagement','kiddush','meat event'], items:[
+    {code:'X',name:'seating linen',qty:'?',supplier:'a1'},{code:'X',name:'cocktail linens',qty:'?',supplier:'a1'},
+    {code:'X',name:'napkins - linen',qty:'?',supplier:'a1'},{code:'X',name:'hiboy linen',qty:'?',supplier:'a1'}
+  ]},
+  {id:'st_shabbos_preset', stationKey:'shabbos_preset', label:'Shabbos Pre-Set', eventTypes:['shabbos','shalosh seudah'], items:[
+    {code:'X',name:'regular challah',qty:'1',supplier:'strauss dir'},{code:'X',name:'two-tone heimish challah rolls',qty:'8dz',supplier:'strauss dir'},
+    {code:'P',name:'assorted dips',qty:'yes',supplier:'premier'},{code:'P',name:'cole slaw',qty:'yes',supplier:'bertram'},
+    {code:'X',name:'pickles',qty:'yes',supplier:'bertram'},{code:'X',name:'olives',qty:'yes',supplier:'premier'}
+  ]},
+  {id:'st_kiddush_buffet', stationKey:'kiddush_buffet', label:'Kiddush Buffet', eventTypes:['kiddush'], items:[
+    {code:'M',name:'cholent',qty:'yes',supplier:'premier'},{code:'M',name:'kishke',qty:'yes',supplier:'premier'},
+    {code:'X',name:'heimish rolls',qty:'yes',supplier:'strauss dir'},{code:'P',name:'herring',qty:'yes',supplier:'chefs'},
+    {code:'P',name:'gefilte fish',qty:'yes',supplier:'ab'},{code:'X',name:'horseradish',qty:'yes',supplier:'chefs'},
+    {code:'M',name:'cholent condiments',qty:'yes',supplier:'premier'}
+  ]},
+  {id:'st_bris_misc', stationKey:'bris_misc', label:'Bris Extras', eventTypes:['bris'], items:[
+    {code:'X',name:'wine for kiddush',qty:'yes',supplier:'premier'},{code:'P',name:'cake for bris',qty:'yes',supplier:'strauss'},
+    {code:'X',name:'juice boxes',qty:'yes',supplier:'premier'}
+  ]}
+];
 
 
 function generateScheduleHTML(eventsToShow){
@@ -5013,7 +5686,7 @@ window.saveSchedEdit = saveSchedEdit;
 window.driveImgUrl = driveImgUrl;
 window.driveSearchUrl = driveSearchUrl;
 window.filterDay = filterDay;
-window.saveScriptUrl = ()=>{};
+window.saveScriptUrl = saveScriptUrl;
 window.testConnection = ()=>{};
 window.migrateWeekOf = migrateWeekOf;
 window.deleteEvent = deleteEvent;
@@ -5021,6 +5694,26 @@ window.restoreFromTrash = restoreFromTrash;
 window.deleteFromTrashPermanently = deleteFromTrashPermanently;
 window.emptyTrash = emptyTrash;
 window.renderTrash = renderTrash;
+
+// ── Grocery window exposures ──
+function openEventGrocery(eventId){
+  window._grocTab = eventId;
+  showView('grocery');
+}
+window.openEventGrocery = openEventGrocery;
+window.setGrocTab = setGrocTab;
+window.generateGroceryFromMenu = generateGroceryFromMenu;
+window.addGroceryItem = addGroceryItem;
+window.removeGroceryItem = removeGroceryItem;
+window.saveGroceryItemField = saveGroceryItemField;
+window.openAddStationModal = openAddStationModal;
+window.openEditStationModal = openEditStationModal;
+window.saveNewStation = saveNewStation;
+window.saveEditStation = saveEditStation;
+window.deleteStation = deleteStation;
+window.seedGroceryDatabase = seedGroceryDatabase;
+window.printGroceryList = printGroceryList;
+window.downloadGroceryList = downloadGroceryList;
 window.moveToTrash = moveToTrash;
 window.openVenueDetail = openVenueDetail;
 window.openAddVenueModal = openAddVenueModal;
@@ -5054,6 +5747,8 @@ function _startApp() {
   invoicesCol  = db.collection('invoices');
   venuesCol    = db.collection('venues');
   trashCol     = db.collection('trash');
+  groceryStationsCol = db.collection('groceryStations');
+  groceryListsCol    = db.collection('groceryLists');
   (function(){
     const role = roles[currentRole]||{};
     const invNav = document.getElementById('nav-invoices');
@@ -5113,6 +5808,8 @@ function initNow(){
     invoicesCol  = db.collection('invoices');
   venuesCol    = db.collection('venues');
     trashCol     = db.collection('trash');
+    groceryStationsCol = db.collection('groceryStations');
+    groceryListsCol    = db.collection('groceryLists');
     console.log('Firebase initialized! db=', !!db);
     render();
     seedIfEmpty().then(function(){
