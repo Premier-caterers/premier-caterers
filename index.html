@@ -272,7 +272,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 02:15 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 03:30 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -2698,58 +2698,23 @@ async function generateGroceryFromMenu(eventId){
       (st.items||[]).slice(0,20).map(i=>`  - [${i.code||'X'}] ${i.name} | qty:${i.qty||'?'} | ${i.supplier||'premier'}`).join('\n')
     ).join('\n\n');
 
-    // Step 3: Call Claude API
-    const prompt = menuText
-      ? `You are a grocery list generator for Premier Caterers, a kosher catering company.
+    // Step 3: Call Claude API via Apps Script proxy
+    if(!scriptUrl){ alert('Please save your Apps Script URL in Settings first.'); return; }
 
-Here is the FINAL MENU for ${e.name} (${e.typeLabel}, ${e.dayLabel||''}):
----
-${menuText.slice(0,4000)}
----
+    const stationContextEncoded = encodeURIComponent(stationContext.slice(0,3000));
+    const menuTextEncoded = encodeURIComponent(menuText.slice(0,4000));
+    const eventNameEncoded = encodeURIComponent(e.name+' ('+e.typeLabel+', '+(e.dayLabel||'')+')');
 
-Here is our standard grocery station database:
----
-${stationContext.slice(0,3000)}
----
+    const proxyUrl = scriptUrl+(scriptUrl.includes('?')?'&':'?')+
+      'action=generateGrocery'+
+      '&menuText='+menuTextEncoded+
+      '&stationContext='+stationContextEncoded+
+      '&eventName='+eventNameEncoded;
 
-Generate a grocery list for this event. For each item in the menu:
-1. Match it to the closest station in our database
-2. Use the standard grocery items for that station as a base
-3. ADJUST based on what's actually on the menu (remove items not needed, add items specific to this menu)
-4. Preserve exact quantities from the menu where stated, otherwise use database defaults
-
-Return ONLY a JSON array of grocery items. Each item must have:
-- "section": station/section name (e.g. "persian", "asian", "salads", "entree")
-- "name": item name
-- "code": one of M (meat), P (parve), X (non-food/supplies), D (dairy)
-- "qty": quantity (string, e.g. "yes", "1gall", "2bx", "250")
-- "supplier": supplier name (e.g. "premier", "bertram", "strauss", "rd", "chefs", "aisle", "a1")
-- "notes": any special notes (optional, e.g. "nut allergy - put sign on this")
-- "aiAdded": true if this item was NOT in the standard database (so user can review)
-
-Do not include any text before or after the JSON array.`
-      : `Generate a standard grocery list for a ${e.typeLabel} event called "${e.name}".
-
-Our station database:
----
-${stationContext.slice(0,3000)}
----
-
-Return a JSON array with items having: section, name, code (M/P/X/D), qty, supplier, notes, aiAdded.
-No text before or after the JSON.`;
-
-    const apiResp = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:2000,
-        messages:[{role:'user', content:prompt}]
-      })
-    });
-
-    const apiData = await apiResp.json();
-    const raw = (apiData.content||[]).map(c=>c.text||'').join('').trim();
+    const apiResp = await fetch(proxyUrl);
+    const proxyData = await apiResp.json().catch(()=>({}));
+    if(!proxyData.success){ throw new Error(proxyData.error||'Script returned an error'); }
+    const raw = proxyData.text || '';
     const clean = raw.replace(/```json|```/g,'').trim();
     let items = [];
     try{ items = JSON.parse(clean); }
