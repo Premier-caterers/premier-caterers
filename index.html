@@ -149,6 +149,20 @@ a{color:var(--blue-mid);text-decoration:none}
 .r-bartender{background:var(--purple-bg);color:var(--purple-text)}
 .r-manager{background:var(--blue-bg);color:var(--blue-text)}
 .time-badge{font-size:12px;font-weight:500;color:var(--text);background:var(--bg2);padding:2px 8px;border-radius:6px;white-space:nowrap}
+/* ── Staff Schedule redesign ── */
+.sched-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:1rem;overflow:hidden}
+.sched-card-header{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--bg2);border-bottom:0.5px solid var(--border);flex-wrap:wrap}
+.sched-dept-row{display:grid;grid-template-columns:110px 56px 1fr 100px 100px;gap:0;align-items:center;border-bottom:0.5px solid var(--border);min-height:40px}
+.sched-dept-row:last-child{border-bottom:none}
+.sched-dept-cell{padding:7px 10px}
+.sched-count-inp{width:48px;text-align:center;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:4px 6px;font-size:14px;font-weight:600;color:var(--text);font-family:inherit}
+.sched-names-inp{width:100%;background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:3px 0;font-size:13px;color:var(--text);font-family:inherit;outline:none}
+.sched-names-inp:focus{border-bottom-color:var(--blue-mid)}
+.sched-time-inp{width:90px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:4px 6px;font-size:12px;color:var(--text);font-family:inherit;text-align:center}
+.sched-meal-header{display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--bg2);border-top:2px solid var(--blue-mid);border-bottom:0.5px solid var(--border)}
+.sched-meal-label{flex:1;background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:3px 0;font-size:13px;font-weight:600;color:var(--text);font-family:inherit;outline:none}
+.sched-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);padding:5px 16px 3px;background:var(--bg2)}
+@media(max-width:700px){.sched-dept-row{grid-template-columns:90px 48px 1fr 80px}}
 
 .change-entry{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.25rem;margin-bottom:10px}
 .change-top{display:flex;align-items:center;gap:10px;margin-bottom:.5rem;flex-wrap:wrap}
@@ -243,7 +257,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 08:20 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 08:50 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -1552,164 +1566,164 @@ function openAddInquiryModal(){
 
 function renderSchedule(){
   const depts = [
-    {key:'waiters',    label:'Waiters',     countKey:'waiters',    namesKey:'waiterNames',     t1:'waiterTime',    t2:'waiterTime2',    rc:'r-waiter',    hasCount:true},
-    {key:'bartenders', label:'Bartenders',  countKey:'bartenders', namesKey:'bartenderNames',  t1:'bartenderTime', t2:'bartenderTime2', rc:'r-bartender', hasCount:true},
-    {key:'chefs',      label:'Chefs',       countKey:'chefs',      namesKey:'chefNames',       t1:'chefTime',      t2:'chefTime2',      rc:'r-chef',      hasCount:true},
-    {key:'porters',    label:'Porters',     countKey:'porters',    namesKey:'porterNames',     t1:'porterTime',    t2:'porterTime2',    rc:'r-porter',    hasCount:true},
-    {key:'mashgiach',  label:'Mashgiach',   countKey:'mashgiachCount', namesKey:'mashgiachNames', t1:'waiterTime', t2:'',              rc:'r-mashgiach', hasCount:true},
-    {key:'manager',    label:'Manager',     countKey:'managerCount',   namesKey:'manager',      t1:'chefTime',   t2:'',              rc:'r-manager',   hasCount:true},
+    {key:'waiters',    label:'Waiters',    countKey:'waiters',       namesKey:'waiterNames',    t1:'waiterTime',    t2:'waiterTime2',    cls:'r-waiter'},
+    {key:'bartenders', label:'Bartenders', countKey:'bartenders',    namesKey:'bartenderNames', t1:'bartenderTime', t2:'bartenderTime2', cls:'r-bartender'},
+    {key:'chefs',      label:'Chefs',      countKey:'chefs',         namesKey:'chefNames',      t1:'chefTime',      t2:'chefTime2',      cls:'r-chef'},
+    {key:'porters',    label:'Porters',    countKey:'porters',       namesKey:'porterNames',    t1:'porterTime',    t2:'porterTime2',    cls:'r-porter'},
+    {key:'mashgiach',  label:'Mashgiach',  countKey:'mashgiachCount',namesKey:'mashgiachNames', t1:'waiterTime',    t2:'',               cls:'r-mashgiach'},
+    {key:'manager',    label:'Manager',    countKey:'managerCount',  namesKey:'manager',        t1:'chefTime',      t2:'',               cls:'r-manager'},
   ];
 
-  const schedEditId = window._schedEditId || null;
-  const inpStyle = 'width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:4px 7px;font-size:12px;color:var(--text);font-family:inherit';
-
-  // Filter to current week
   const schedWeekDate = getWeekEndDate(currentWeekOffset);
-  const schedWeekStr = schedWeekDate.toISOString().split('T')[0];
+  const schedWeekStr  = schedWeekDate.toISOString().split('T')[0];
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const schedWeekLabel = 'W/E '+months[schedWeekDate.getUTCMonth()]+' '+schedWeekDate.getUTCDate()+', '+String(schedWeekDate.getUTCFullYear()).slice(2);
 
-  const weekEvents = events.filter(e=>(e.weekOf||'2026-05-31') === schedWeekStr);
-
-  // Separate: no-staffing events go to bottom
+  const weekEvents  = events.filter(e=>(e.weekOf||'2026-05-31')===schedWeekStr);
   const staffEvents = weekEvents.filter(e=>!e.noStaffing);
   const noStaffEvents = weekEvents.filter(e=>e.noStaffing);
 
-  // Totals from staffEvents only (those needing staffing)
-  const totWaiters    = staffEvents.reduce((s,e)=>s+(parseInt(e.waiters)||0),0);
-  const totBartenders = staffEvents.reduce((s,e)=>s+(parseInt(e.bartenders)||0),0);
-  const totChefs      = staffEvents.reduce((s,e)=>s+(parseInt(e.chefs)||0),0);
-  const totPorters    = staffEvents.reduce((s,e)=>s+(parseInt(e.porters)||0),0);
+  // Week totals
+  const totW = staffEvents.reduce((s,e)=>s+(parseInt(e.waiters)||0),0);
+  const totB = staffEvents.reduce((s,e)=>s+(parseInt(e.bartenders)||0),0);
+  const totC = staffEvents.reduce((s,e)=>s+(parseInt(e.chefs)||0),0);
+  const totP = staffEvents.reduce((s,e)=>s+(parseInt(e.porters)||0),0);
 
-  let h = '<div class="stats-row">'
-    + '<div class="stat-card"><div class="stat-n">'+totWaiters+'</div><div class="stat-l">waiters</div></div>'
-    + '<div class="stat-card"><div class="stat-n">'+totBartenders+'</div><div class="stat-l">bartenders</div></div>'
-    + '<div class="stat-card"><div class="stat-n">'+totChefs+'</div><div class="stat-l">chefs</div></div>'
-    + '<div class="stat-card"><div class="stat-n">'+totPorters+'</div><div class="stat-l">porters</div></div>'
-    + '</div>'
-    + '<div class="section-header">'
-    + '<div class="section-title">Staff schedule — '+schedWeekLabel+'</div>'
-    + '<div style="display:flex;gap:6px">'
-    + '<button onclick="printFullSchedule()" class="icon-btn" title="Print full schedule"><i class="ti ti-printer"></i></button>'
-    + '<button onclick="downloadFullSchedule()" class="icon-btn" title="Download full schedule"><i class="ti ti-download"></i></button>'
-    + '</div>'
-    + '</div>';
+  let h = `<div class="stats-row">
+    <div class="stat-card"><div class="stat-n">${totW}</div><div class="stat-l">Waiters</div></div>
+    <div class="stat-card"><div class="stat-n">${totB}</div><div class="stat-l">Bartenders</div></div>
+    <div class="stat-card"><div class="stat-n">${totC}</div><div class="stat-l">Chefs</div></div>
+    <div class="stat-card"><div class="stat-n">${totP}</div><div class="stat-l">Porters</div></div>
+  </div>
+  <div class="section-header">
+    <div class="section-title">Staff schedule — ${schedWeekLabel}</div>
+    <div style="display:flex;gap:6px">
+      <button onclick="printFullSchedule()" class="icon-btn" title="Print full schedule"><i class="ti ti-printer"></i></button>
+      <button onclick="downloadFullSchedule()" class="icon-btn" title="Download full schedule"><i class="ti ti-download"></i></button>
+    </div>
+  </div>`;
 
-  function renderEventBlock(e){
-    const isEditing = schedEditId === e.id;
-    const meals = e.meals || [];
-    const hasMeals = meals.length > 0;
+  // Column header labels (shown once per card)
+  const colHeaders = `<div style="display:grid;grid-template-columns:110px 56px 1fr 100px 100px;background:var(--bg2);border-bottom:0.5px solid var(--border)">
+    <div style="padding:5px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Dept</div>
+    <div style="padding:5px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">#</div>
+    <div style="padding:5px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Names</div>
+    <div style="padding:5px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Call time 1</div>
+    <div style="padding:5px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Call time 2</div>
+  </div>`;
 
-    let block = '<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:1rem;overflow:hidden">'
-      + '<div style="display:flex;align-items:center;gap:10px;padding:.75rem 1.25rem;background:var(--bg2);border-bottom:0.5px solid var(--border);flex-wrap:wrap">'
-      + '<input type="checkbox" '+(e.noStaffing?'checked':'')+' onchange="toggleNoStaffing(\''+e.id+'\',this.checked)" style="width:16px;height:16px;accent-color:var(--blue-mid);cursor:pointer" title="No staffing needed">'
-      + '<span class="job-pill">'+displayJob(e.job)+'</span>'
-      + '<span style="font-size:15px;font-weight:500;color:var(--text)">'+e.name+'</span>'
-      + '<span style="font-size:12px;color:var(--text2)">'+e.dayLabel+' · '+e.typeLabel+'</span>'
-      + '<div style="margin-left:auto;display:flex;gap:4px">';
+  function deptRows(e, isMain, mealIdx){
+    // isMain = true for the event's main fields, false for a meal section (mealIdx)
+    const src = isMain ? e : (e.meals||[])[mealIdx];
+    if(!src) return '';
+    let rows = '';
+    depts.forEach(d=>{
+      const count = parseInt(src[d.countKey]||0)||0;
+      const names = d.key==='manager' ? (src.manager||'') : (src[d.namesKey]||'');
+      const t1    = src[d.t1]||'';
+      const t2    = d.t2 ? (src[d.t2]||'') : '';
+      // Always show all depts so counts can be filled in on pass 1
+      const onCount = isMain
+        ? `schedSaveField('${e.id}','${d.countKey}',this.value,true)`
+        : `schedSaveMealField('${e.id}',${mealIdx},'${d.countKey}',this.value,true)`;
+      const onNames = isMain
+        ? `schedSaveField('${e.id}','${d.namesKey}',this.value,false)`
+        : `schedSaveMealField('${e.id}',${mealIdx},'${d.namesKey}',this.value,false)`;
+      const onT1 = isMain
+        ? `schedSaveField('${e.id}','${d.t1}',this.value,false)`
+        : `schedSaveMealField('${e.id}',${mealIdx},'${d.t1}',this.value,false)`;
+      const onT2 = (isMain && d.t2)
+        ? `schedSaveField('${e.id}','${d.t2}',this.value,false)`
+        : '';
 
-    if(isEditing){
-      block += '<button class="btn-save" style="padding:4px 12px;font-size:12px" onclick="saveSchedEdit(\''+e.id+'\')">Save</button>'
-             + '<button class="btn-cancel" style="padding:4px 10px;font-size:12px;margin-left:4px" onclick="cancelSchedEdit()">Cancel</button>';
-    } else {
-      block += '<button onclick="addMealSection(\''+e.id+'\')" style="padding:4px 10px;font-size:12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-plus" style="font-size:12px"></i>Add meal</button>'
-             + '<button class="icon-btn" onclick="startSchedEdit(\''+e.id+'\')" title="Edit staff"><i class="ti ti-edit"></i></button>'
-             + '<button class="icon-btn" onclick="printEventSchedule(\''+e.id+'\')" title="Print"><i class="ti ti-printer"></i></button>'
-             + '<button class="icon-btn" onclick="downloadEventSchedule(\''+e.id+'\')" title="Download"><i class="ti ti-download"></i></button>';
-    }
-    block += '</div></div>';
-
-    // Meal label field if editing and has meals
-    if(isEditing && hasMeals){
-      block += '<div style="padding:.5rem 1.25rem;background:var(--amber-bg);font-size:12px;color:var(--amber-text)">Editing main meal section. Use "Add meal" for additional sections.</div>';
-    }
-
-    // Main staff table
-    block += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-      + '<thead><tr style="background:var(--bg2)">'
-      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;min-width:100px">Dept.</th>'
-      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);width:50px">#</th>'
-      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);min-width:160px">Names</th>'
-      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;width:110px">Call time #1</th>'
-      + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border);white-space:nowrap;width:110px">Call time #2</th>'
-      + '</tr></thead><tbody>';
-
-    depts.forEach(function(d){
-      var count = parseInt(e[d.countKey]||0)||0;
-      var names = d.key==='manager' ? (e.manager||'') : (e[d.namesKey]||'');
-      var t1 = e[d.t1]||'';
-      var t2 = d.t2 ? (e[d.t2]||'') : '';
-      if(!count && !isEditing) return;
-      block += '<tr style="border-bottom:0.5px solid var(--border)">'
-        + '<td style="padding:9px 12px"><span class="role-tag '+d.rc+'">'+d.label+'</span></td>'
-        + '<td style="padding:9px 12px;font-weight:500;color:var(--text)">'
-          + (isEditing ? '<input type="number" id="se-'+e.id+'-'+d.countKey+'" value="'+count+'" min="0" style="'+inpStyle+';width:50px">' : (count||'—'))
-        + '</td>'
-        + '<td style="padding:9px 12px;color:var(--text2)">'
-          + (isEditing ? '<input type="text" id="se-'+e.id+'-'+d.namesKey+'" value="'+names.replace(/"/g,'&quot;')+'" placeholder="Names..." style="'+inpStyle+'">' : (names||'—'))
-        + '</td>'
-        + '<td style="padding:9px 12px">'
-          + (isEditing ? '<input type="text" id="se-'+e.id+'-ct1-'+d.key+'" value="'+t1+'" placeholder="e.g. 9:00am" style="'+inpStyle+'">' : (t1 ? '<span class="time-badge">'+t1+'</span>' : '—'))
-        + '</td>'
-        + '<td style="padding:9px 12px">'
-          + (isEditing && d.t2 ? '<input type="text" id="se-'+e.id+'-ct2-'+d.key+'" value="'+t2+'" placeholder="e.g. 11:00am" style="'+inpStyle+'">' : (t2 ? '<span class="time-badge">'+t2+'</span>' : (d.t2?'—':'')))
-        + '</td>'
-        + '</tr>';
+      rows += `<div class="sched-dept-row">
+        <div class="sched-dept-cell"><span class="role-tag ${d.cls}">${d.label}</span></div>
+        <div class="sched-dept-cell"><input type="number" class="sched-count-inp" value="${count}" min="0" onchange="${onCount}" title="Count"></div>
+        <div class="sched-dept-cell"><input type="text" class="sched-names-inp" value="${names.replace(/"/g,'&quot;')}" placeholder="Names…" onblur="${onNames}"></div>
+        <div class="sched-dept-cell"><input type="text" class="sched-time-inp" value="${t1}" placeholder="9:00am" onblur="${onT1}"></div>
+        <div class="sched-dept-cell">${d.t2 ? `<input type="text" class="sched-time-inp" value="${t2}" placeholder="—" onblur="${onT2}">` : ''}</div>
+      </div>`;
     });
-
-    block += '</tbody></table></div>';
-
-    // Additional meal sections
-    meals.forEach(function(meal, mi){
-      block += '<div style="border-top:2px dashed var(--border2);padding:.75rem 1.25rem;background:var(--bg2)">'
-        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:.5rem">'
-        + '<span style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Additional meal</span>'
-        + '<input type="text" value="'+(meal.label||'')+'" placeholder="e.g. Shmorg, Dinner, Dessert..." onchange="updateMealLabel(\''+e.id+'\','+mi+',this.value)" style="flex:1;background:var(--bg);border:0.5px solid var(--border2);border-radius:5px;padding:4px 8px;font-size:13px;color:var(--text);font-family:inherit">'
-        + '<button onclick="removeMealSection(\''+e.id+'\','+mi+')" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:14px;padding:2px"><i class="ti ti-trash"></i></button>'
-        + '</div>'
-        + '<table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>';
-
-      depts.forEach(function(d){
-        var mc = parseInt((meal[d.countKey])||0)||0;
-        var mn = d.key==='manager' ? (meal.manager||'') : (meal[d.namesKey]||'');
-        var mt1 = meal[d.t1]||'';
-        block += '<tr style="border-bottom:0.5px solid var(--border)">'
-          + '<td style="padding:7px 12px"><span class="role-tag '+d.rc+'">'+d.label+'</span></td>'
-          + '<td style="padding:7px 12px"><input type="number" value="'+mc+'" min="0" onchange="updateMealDept(\''+e.id+'\','+mi+',\''+d.countKey+'\',this.value)" style="'+inpStyle+';width:50px"></td>'
-          + '<td style="padding:7px 12px"><input type="text" value="'+mn.replace(/"/g,'&quot;')+'" placeholder="Names..." onchange="updateMealDept(\''+e.id+'\','+mi+',\''+d.namesKey+'\',this.value)" style="'+inpStyle+'"></td>'
-          + '<td style="padding:7px 12px"><input type="text" value="'+mt1+'" placeholder="Call time" onchange="updateMealDept(\''+e.id+'\','+mi+',\''+d.t1+'\',this.value)" style="'+inpStyle+'"></td>'
-          + '</tr>';
-      });
-
-      block += '</tbody></table></div>';
-    });
-
-    block += '</div>';
-    return block;
+    return rows;
   }
 
-  // Render staffed events
-  staffEvents.forEach(function(e){ h += renderEventBlock(e); });
+  function renderEventCard(e){
+    const meals = e.meals || [];
+    let card = `<div class="sched-card">
+      <div class="sched-card-header">
+        <input type="checkbox" ${e.noStaffing?'checked':''} onchange="toggleNoStaffing('${e.id}',this.checked)" style="width:16px;height:16px;accent-color:var(--blue-mid);cursor:pointer" title="No staffing needed">
+        <span class="job-pill">${displayJob(e.job)}</span>
+        <span style="font-size:15px;font-weight:600;color:var(--text)">${e.name}</span>
+        <span style="font-size:12px;color:var(--text2)">${e.dayLabel||''} · ${e.typeLabel||''}</span>
+        <div style="margin-left:auto;display:flex;gap:4px">
+          <button onclick="addMealSection('${e.id}')" style="padding:4px 10px;font-size:12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-plus" style="font-size:12px"></i>Add meal</button>
+          <button class="icon-btn" onclick="printEventSchedule('${e.id}')" title="Print"><i class="ti ti-printer"></i></button>
+          <button class="icon-btn" onclick="downloadEventSchedule('${e.id}')" title="Download"><i class="ti ti-download"></i></button>
+        </div>
+      </div>
+      <div class="sched-section-label">Main</div>
+      ${colHeaders}
+      ${deptRows(e, true, null)}`;
 
-  // Render no-staffing events at bottom
-  if(noStaffEvents.length){
-    h += '<div style="margin-top:1.5rem;border-top:2px dashed var(--border2);padding-top:1rem">'
-      + '<div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem">No staffing needed</div>';
-    noStaffEvents.forEach(function(e){
-      h += '<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:6px">'
-        + '<input type="checkbox" checked onchange="toggleNoStaffing(\''+e.id+'\',this.checked)" style="width:16px;height:16px;accent-color:var(--blue-mid);cursor:pointer">'
-        + '<span class="job-pill">'+displayJob(e.job)+'</span>'
-        + '<span style="font-size:14px;font-weight:500;color:var(--text)">'+e.name+'</span>'
-        + '<span style="font-size:12px;color:var(--text2)">'+e.dayLabel+' · '+e.typeLabel+'</span>'
-        + '<span style="margin-left:auto;font-size:16px;font-weight:800;color:var(--text3);letter-spacing:.05em">NO STAFFING NEEDED</span>'
-        + '</div>';
+    // Additional meal sections
+    meals.forEach((meal, mi)=>{
+      card += `<div class="sched-meal-header">
+        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--blue-mid)">Meal section ${mi+1}</span>
+        <input type="text" class="sched-meal-label" value="${(meal.label||'').replace(/"/g,'&quot;')}" placeholder="e.g. Shmorg, Dinner, Dessert…" onblur="updateMealLabel('${e.id}',${mi},this.value)">
+        <button onclick="removeMealSection('${e.id}',${mi})" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:14px;padding:2px 4px"><i class="ti ti-trash"></i></button>
+      </div>
+      ${colHeaders}
+      ${deptRows(e, false, mi)}`;
     });
-    h += '</div>';
+
+    card += `</div>`;
+    return card;
+  }
+
+  staffEvents.forEach(e=>{ h += renderEventCard(e); });
+
+  // No-staffing events at bottom
+  if(noStaffEvents.length){
+    h += `<div style="margin-top:1.5rem;border-top:2px dashed var(--border2);padding-top:1rem">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem">No staffing needed</div>`;
+    noStaffEvents.forEach(e=>{
+      h += `<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:6px">
+        <input type="checkbox" checked onchange="toggleNoStaffing('${e.id}',this.checked)" style="width:16px;height:16px;accent-color:var(--blue-mid);cursor:pointer">
+        <span class="job-pill">${displayJob(e.job)}</span>
+        <span style="font-size:14px;font-weight:500;color:var(--text)">${e.name}</span>
+        <span style="font-size:12px;color:var(--text2)">${e.dayLabel||''} · ${e.typeLabel||''}</span>
+        <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.05em">NO STAFFING NEEDED</span>
+      </div>`;
+    });
+    h += `</div>`;
+  }
+
+  if(!weekEvents.length){
+    h += `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:3rem;text-align:center;color:var(--text3)">No events this week.</div>`;
   }
 
   return h;
 }
 
+// Inline save helpers — save on blur (not every keystroke)
+function schedSaveField(id, field, val, isNumber){
+  const e = events.find(x=>x.id===id); if(!e) return;
+  e[field] = isNumber ? (parseInt(val)||0) : val;
+  _saveEvent(e);
+  // Update the week totals bar without full render
+  if(isNumber && currentView==='schedule'){
+    const depts2 = [{key:'waiters',c:'waiters'},{key:'bartenders',c:'bartenders'},{key:'chefs',c:'chefs'},{key:'porters',c:'porters'}];
+    const schedWeekStr = getWeekEndDate(currentWeekOffset).toISOString().split('T')[0];
+    const staffEvts = events.filter(ev=>(ev.weekOf||'2026-05-31')===schedWeekStr && !ev.noStaffing);
+    // just re-render to keep totals in sync; it's fast enough
+    render();
+  }
+}
+function schedSaveMealField(id, mealIdx, field, val, isNumber){
+  const e = events.find(x=>x.id===id); if(!e||!e.meals||!e.meals[mealIdx]) return;
+  e.meals[mealIdx][field] = isNumber ? (parseInt(val)||0) : val;
+  _saveEvent(e);
+}
 
 
 
@@ -4987,6 +5001,8 @@ window.addMealSection = addMealSection;
 window.removeMealSection = removeMealSection;
 window.updateMealLabel = updateMealLabel;
 window.updateMealDept = updateMealDept;
+window.schedSaveField = schedSaveField;
+window.schedSaveMealField = schedSaveMealField;
 window.cancelSchedEdit = cancelSchedEdit;
 window.saveSchedEdit = saveSchedEdit;
 window.driveImgUrl = driveImgUrl;
