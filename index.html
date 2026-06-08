@@ -272,7 +272,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 06:15 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 — grocery parser fix</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -2704,56 +2704,68 @@ async function generateGroceryFromMenu(eventId){
     const raw = proxyData.text || '';
     if(!raw){ throw new Error('Script returned empty text'); }
 
-    // Extract JSON array — track only [ and ] depth, ignore { } inside
-    let clean = '';
-    const start = raw.indexOf('[');
-    if(start > -1){
-      let depth=0, inStr=false, esc=false;
-      for(let i=start;i<raw.length;i++){
-        const c=raw[i];
-        if(esc){esc=false;continue;}
-        if(c==='\\'){esc=true;continue;}
-        if(c==='"'){inStr=!inStr;continue;}
-        if(inStr) continue;
-        if(c==='[') depth++;
-        else if(c===']'){depth--;if(depth===0){clean=raw.slice(start,i+1);break;}}
+    // ── Tolerant grocery JSON parser ─────────────────────────────
+    // Handles: clean arrays, {"items":[...]} wrappers, markdown ```json fences,
+    // leading prose, and truncated/cut-off responses (closes the array at the
+    // last complete object).
+    function parseGroceryItems(rawText){
+      let t = String(rawText||'').trim();
+      // strip markdown code fences if present
+      t = t.replace(/^```(?:json)?\s*/i,'').replace(/```\s*$/,'').trim();
+      function tryParse(str){
+        try{
+          const p = JSON.parse(str);
+          if(Array.isArray(p)) return p;
+          if(p && Array.isArray(p.items)) return p.items;
+          return null;
+        }catch(_){ return null; }
       }
+      // 1) whole thing (clean array OR {items:[...]} object)
+      let p = tryParse(t); if(p) return p;
+      // 2) slice from the first '[' to drop any leading prose
+      const a = t.indexOf('[');
+      if(a > -1){
+        const sub = t.slice(a);
+        p = tryParse(sub); if(p) return p;
+        // 3) truncation recovery — find every '}' that sits outside a string,
+        //    then try closing the array right after each, working backwards,
+        //    until one parses.
+        let inStr=false, esc=false; const closes=[];
+        for(let k=0;k<sub.length;k++){
+          const c=sub[k];
+          if(esc){esc=false;continue;}
+          if(c==='\\'){esc=true;continue;}
+          if(c==='"'){inStr=!inStr;continue;}
+          if(!inStr && c==='}') closes.push(k);
+        }
+        for(let n=closes.length-1;n>=0;n--){
+          const cand = sub.slice(0, closes[n]+1).replace(/,\s*$/,'') + ']';
+          const pp = tryParse(cand);
+          if(pp && pp.length) return pp;
+        }
+      }
+      return null;
     }
-    if(!clean) clean = raw.trim();
+
+    const parsed = parseGroceryItems(raw);
     let items = [];
-    try{
-      const parsed = JSON.parse(clean);
-      // Normalize short field names (s/n/c/q/sup) to full names
+    if(parsed){
       items = parsed.map(i=>({
         section: i.section || i.s || 'other',
         name: i.name || i.n || '',
         code: i.code || i.c || 'X',
         qty: i.qty || i.q || 'yes',
         supplier: i.supplier || i.sup || 'premier',
-        notes: i.notes || i.notes || '',
+        notes: i.notes || '',
         aiAdded: true
       })).filter(i=>i.name);
-    } catch(parseErr){
-      // Try to recover truncated JSON
-      try{
-        const recovered = clean.replace(/,?\s*\{[^}]*$/, '') + ']';
-        const parsed = JSON.parse(recovered);
-        items = parsed.map(i=>({
-          section: i.section || i.s || 'other',
-          name: i.name || i.n || '',
-          code: i.code || i.c || 'X',
-          qty: i.qty || i.q || 'yes',
-          supplier: i.supplier || i.sup || 'premier',
-          notes: i.notes || '',
-          aiAdded: true
-        })).filter(i=>i.name);
-        console.log('Recovered truncated JSON with', items.length, 'items');
-      } catch(e2){
-        console.error('Parse failed:', parseErr.message, 'clean:', clean.slice(0,100));
-        alert('AI returned an unexpected response. Please try again or add items manually.');
-        if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-sparkles" style="font-size:13px"></i>Generate with AI'; }
-        return;
-      }
+    }
+    if(!items.length){
+      console.error('Grocery parse failed. Full raw response:', raw);
+      const peek = String(raw).slice(0,600);
+      alert('AI returned an unexpected response.\n\nHere is the start of what came back (send this to Claude to diagnose):\n\n'+peek);
+      if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-sparkles" style="font-size:13px"></i>Generate with AI'; }
+      return;
     }
 
     // Step 4: Save
