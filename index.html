@@ -272,7 +272,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 — grocery parser fix</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 — Gmail auto-reconnect</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -5095,85 +5095,123 @@ function clearGitHubToken(){
 }
 
 // ── GMAIL INTEGRATION ──
-const GMAIL_CLIENT_ID = localStorage.getItem('gmailClientId') || '';
+// Google Identity Services hands out access tokens that expire after ~1 hour and
+// come WITHOUT a refresh token (a hard limit of pure client-side OAuth). To avoid
+// making the user reconnect every hour, we keep one reusable token client and use
+// SILENT refresh (prompt:'') — Google quietly issues a fresh token with no popup,
+// as long as the user already consented once and is still signed into Google.
 const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify';
 let gmailToken = null;
 let gmailUser = null;
-let gmailMessages = []; // cached inbox messages
+let gmailMessages = [];          // cached inbox messages
+let gmailTokenClient = null;     // built once, reused for every refresh
+let _gmailTokenPromise = null;   // de-dupes concurrent refresh attempts
 
-// Restore a previously-saved Gmail session so reloads/code updates don't drop the connection.
-// Google access tokens last ~1 hour; we keep using it until it actually expires.
+function gmailClientId(){ return localStorage.getItem('gmailClientId') || ''; }
+function isGmailConnected(){ return !!gmailToken; }
+
+// Load the GIS library once.
+function loadGisLibrary(){
+  if(window.google?.accounts?.oauth2) return Promise.resolve();
+  if(window._gisLoading) return window._gisLoading;
+  window._gisLoading = new Promise((resolve, reject)=>{
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  return window._gisLoading;
+}
+
+// Build (or reuse) the token client.
+async function getGmailTokenClient(){
+  const clientId = gmailClientId();
+  if(!clientId) throw new Error('NO_CLIENT_ID');
+  await loadGisLibrary();
+  if(!gmailTokenClient){
+    gmailTokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: GMAIL_SCOPES,
+      callback: ()=>{}   // replaced per-request below
+    });
+  }
+  return gmailTokenClient;
+}
+
+function _saveGmailToken(resp){
+  gmailToken = resp.access_token;
+  const ttl = parseInt(resp.expires_in||3600, 10);
+  try{
+    localStorage.setItem('gmailToken', gmailToken);
+    localStorage.setItem('gmailTokenExpiry', String(Date.now() + ttl*1000));
+    localStorage.setItem('gmailEverConnected', '1');
+  }catch(e){}
+}
+
+// Request a token. interactive=true shows the Google consent popup (first connect);
+// interactive=false attempts a SILENT refresh with no popup.
+function requestGmailToken(interactive){
+  return new Promise((resolve, reject)=>{
+    getGmailTokenClient().then(client=>{
+      client.callback = async (resp)=>{
+        if(resp.error){ reject(new Error(resp.error)); return; }
+        _saveGmailToken(resp);
+        await fetchGmailProfile();
+        if(gmailUser){ try{ localStorage.setItem('gmailUser', gmailUser); }catch(e){} }
+        resolve(resp);
+      };
+      try{ client.requestAccessToken({ prompt: interactive ? 'consent' : '' }); }
+      catch(e){ reject(e); }
+    }).catch(reject);
+  });
+}
+
+// Guarantees a valid token before any Gmail API call; refreshes silently if expired.
+async function ensureGmailToken(){
+  const exp = parseInt(localStorage.getItem('gmailTokenExpiry')||'0', 10);
+  if(gmailToken && exp && Date.now() < (exp - 60000)) return gmailToken; // still good
+  if(!gmailClientId()) throw new Error('NO_CLIENT_ID');
+  if(!_gmailTokenPromise){
+    _gmailTokenPromise = requestGmailToken(false).finally(()=>{ _gmailTokenPromise = null; });
+  }
+  await _gmailTokenPromise;
+  return gmailToken;
+}
+
+// "Connect Gmail" button — interactive consent the first time.
+async function gmailSignIn(){
+  if(!gmailClientId()){ alert('Please enter your Google OAuth Client ID in Settings first.'); showView('settings'); return; }
+  try{
+    await requestGmailToken(true);
+    showToast('Gmail connected ✓');
+    render();
+  }catch(e){
+    if(e.message==='NO_CLIENT_ID'){ alert('Please enter your Google OAuth Client ID in Settings first.'); showView('settings'); }
+    else { alert('Gmail sign-in error: '+e.message); }
+  }
+}
+
+// On load: keep a still-valid token, otherwise silently re-acquire one if the user
+// has connected before — so sending email just works without re-clicking Connect.
 function restoreGmailSession(){
   try{
     const t = localStorage.getItem('gmailToken');
     const exp = parseInt(localStorage.getItem('gmailTokenExpiry')||'0', 10);
-    if(t && exp && Date.now() < (exp - 60000)){ // 60s safety margin
+    if(t && exp && Date.now() < (exp - 60000)){
       gmailToken = t;
       gmailUser = localStorage.getItem('gmailUser') || null;
-      // Re-verify in the background; if the token is stale, clear it quietly
-      fetchGmailProfile().then(()=>{ if(gmailUser){ try{ localStorage.setItem('gmailUser', gmailUser); }catch(e){} } });
-    } else if(t){
-      // Expired — clean up so the UI shows "connect" instead of a broken state
+      fetchGmailProfile();
+    } else {
       localStorage.removeItem('gmailToken');
       localStorage.removeItem('gmailTokenExpiry');
+      if(localStorage.getItem('gmailEverConnected') && gmailClientId()){
+        // silent background refresh; updates the UI to "Connected" when it lands
+        ensureGmailToken().then(()=>render()).catch(()=>{});
+      }
     }
   }catch(e){}
 }
 restoreGmailSession();
-
-function isGmailConnected(){ return !!gmailToken; }
-
-async function gmailSignIn(){
-  const clientId = localStorage.getItem('gmailClientId');
-  if(!clientId){ alert('Please enter your Google OAuth Client ID in Settings first.'); showView('settings'); return; }
-  // Use Google Identity Services token client (no redirect URI needed)
-  if(!window.google?.accounts?.oauth2){
-    // Load the GIS library first
-    await new Promise((resolve, reject)=>{
-      const s = document.createElement('script');
-      s.src = 'https://accounts.google.com/gsi/client';
-      s.onload = resolve;
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
-  }
-  const client = window.google.accounts.oauth2.initTokenClient({
-    client_id: clientId,
-    scope: GMAIL_SCOPES,
-    hint: 'events@thepremiercaterer.com',
-    callback: async (resp)=>{
-      if(resp.error){ alert('Gmail sign-in error: '+resp.error); return; }
-      gmailToken = resp.access_token;
-      // Persist so a page reload (e.g. after a code update) doesn't drop the connection
-      try{
-        localStorage.setItem('gmailToken', gmailToken);
-        const ttl = parseInt(resp.expires_in||3600, 10);
-        localStorage.setItem('gmailTokenExpiry', String(Date.now() + ttl*1000));
-      }catch(e){}
-      await fetchGmailProfile();
-      if(gmailUser){ try{ localStorage.setItem('gmailUser', gmailUser); }catch(e){} }
-      showToast('Gmail connected ✓');
-      render();
-    }
-  });
-  client.requestAccessToken();
-}
-
-function handleGmailCallback(){
-  const hash = window.location.hash;
-  if(!hash || !window._gmailAuthPending) return;
-  const params = new URLSearchParams(hash.substring(1));
-  const token = params.get('access_token');
-  if(token){
-    gmailToken = token;
-    window._gmailAuthPending = false;
-    localStorage.setItem('gmailTokenExpiry', Date.now() + (parseInt(params.get('expires_in')||3600)*1000));
-    window.history.replaceState(null,'',window.location.pathname);
-    fetchGmailProfile();
-    showToast('Gmail connected ✓');
-    render();
-  }
-}
 
 async function fetchGmailProfile(){
   if(!gmailToken) return;
@@ -5185,7 +5223,8 @@ async function fetchGmailProfile(){
 }
 
 async function fetchInboxMessages(query=''){
-  if(!gmailToken){ showToast('Please connect Gmail first'); return []; }
+  try{ await ensureGmailToken(); }
+  catch(e){ showToast('Please connect Gmail first'); return []; }
   try{
     const q = encodeURIComponent(query || 'in:inbox');
     const r = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=50&q='+q, {headers:{'Authorization':'Bearer '+gmailToken}});
@@ -5202,7 +5241,7 @@ async function fetchInboxMessages(query=''){
 }
 
 async function fetchMessageBody(id){
-  if(!gmailToken) return '';
+  try{ await ensureGmailToken(); }catch(e){ return ''; }
   try{
     const r = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/'+id+'?format=full', {headers:{'Authorization':'Bearer '+gmailToken}});
     const d = await r.json();
@@ -5223,7 +5262,8 @@ async function fetchMessageBody(id){
 }
 
 async function sendGmailEmail(to, subject, body, htmlBody){
-  if(!gmailToken){ alert('Please connect Gmail first.'); gmailSignIn(); return false; }
+  try{ await ensureGmailToken(); }
+  catch(e){ alert('Please connect Gmail first in Settings.'); gmailSignIn(); return false; }
   try{
     const from = gmailUser || 'events@thepremiercaterer.com';
     const emailLines = [
@@ -5248,7 +5288,7 @@ async function sendGmailEmail(to, subject, body, htmlBody){
 }
 
 async function markAsRead(id){
-  if(!gmailToken) return;
+  try{ await ensureGmailToken(); }catch(e){ return; }
   await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/'+id+'/modify', {
     method:'POST', headers:{'Authorization':'Bearer '+gmailToken,'Content-Type':'application/json'},
     body: JSON.stringify({removeLabelIds:['UNREAD']})
@@ -5835,7 +5875,6 @@ function initNow(){
   }
 }
 initNow();
-if(window.location.hash.includes("access_token")) handleGmailCallback();
 </script>
 </body>
 </html>
