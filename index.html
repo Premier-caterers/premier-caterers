@@ -272,7 +272,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 05:30 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 05:50 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -2702,6 +2702,7 @@ async function generateGroceryFromMenu(eventId){
     const proxyData = await apiResp.json().catch(()=>({}));
     if(!proxyData.success){ throw new Error(proxyData.error||'Script returned an error'); }
     const raw = proxyData.text || '';
+    if(!raw){ throw new Error('Script returned empty text'); }
 
     // Extract JSON array — track only [ and ] depth, ignore { } inside
     let clean = '';
@@ -2722,10 +2723,17 @@ async function generateGroceryFromMenu(eventId){
     let items = [];
     try{ items = JSON.parse(clean); }
     catch(parseErr){
-      console.error('Parse error:', parseErr.message, '\nclean first 200:', clean.slice(0,200), '\nclean last 50:', clean.slice(-50));
-      alert('Parse error. Clean (first 200): ' + clean.slice(0,200));
-      if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-sparkles" style="font-size:13px"></i>Generate with AI'; }
-      return;
+      // Try to recover truncated JSON by closing it
+      try{
+        const recovered = clean.replace(/,?\s*\{[^}]*$/, '') + ']';
+        items = JSON.parse(recovered);
+        console.log('Recovered truncated JSON with', items.length, 'items');
+      } catch(e2){
+        console.error('Parse error:', parseErr.message, '\nclean first 200:', clean.slice(0,200));
+        alert('AI returned an unexpected response. Please try again or add items manually.');
+        if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-sparkles" style="font-size:13px"></i>Generate with AI'; }
+        return;
+      }
     }
 
     // Step 4: Save
