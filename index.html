@@ -243,7 +243,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 07:55 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 08:20 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -2568,6 +2568,25 @@ function closeInvoiceDetail(){
   render(); // returns to the invoice list
 }
 
+// Show a warning then unlock editing on a sent/paid invoice
+function unlockInvoiceEdit(eid){
+  const inv = invoices[eid];
+  if(!inv) return;
+  const statusLabel = inv.status==='paid' ? 'paid in full' : 'already been sent to the client';
+  if(!confirm('This invoice has been '+statusLabel+'.\n\nAre you sure you want to edit it? All changes save immediately.\n\nClick OK to unlock editing.')) return;
+  inv._editOverride = true;
+  renderInvoiceDetail();
+}
+
+// Lock it back (remove override)
+function lockInvoiceEdit(eid){
+  const inv = invoices[eid];
+  if(!inv) return;
+  inv._editOverride = false;
+  _saveInvoice(eid, inv);
+  renderInvoiceDetail();
+}
+
 function renderInvoiceDetail(){
   const eid = activeInvoiceId;
   const e = events.find(x=>x.id===eid);
@@ -2579,7 +2598,10 @@ function renderInvoiceDetail(){
   const tots = calcInvoiceTotals(inv);
   const isQuote = inv.status === 'quote' || inv.status === 'none';
   const isInvoice = inv.status === 'invoice' || inv.status === 'paid';
-  const canEdit = inv.status !== 'paid';
+  // Editing is allowed freely on quotes/approved. For sent invoices and paid invoices,
+  // the user must confirm via the warning button first (sets _editOverride on the invoice).
+  const isLocked = (inv.status === 'paid' || inv.status === 'invoice') && !inv._editOverride;
+  const canEdit = !isLocked;
 
   const inpStyle = 'background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);font-family:inherit;width:100%;text-align:right';
 
@@ -2593,7 +2615,11 @@ function renderInvoiceDetail(){
       <div class="detail-actions">
         ${inv.status==='quote'?`<button class="btn-save" style="font-size:12px;padding:5px 12px" onclick="approveQuote('${eid}')">Approve quote</button>`:''}
         ${inv.status==='approved'?`<button class="btn-save" style="font-size:12px;padding:5px 12px" onclick="convertToInvoice('${eid}')">Convert to invoice</button>`:''}
-        ${inv.status==='invoice'?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--green-text)" onclick="openPaymentModal('${eid}')">Record payment</button>`:''}
+        ${inv.status==='invoice'&&!inv._editOverride?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--amber-text)" onclick="unlockInvoiceEdit('${eid}')"><i class="ti ti-pencil" style="font-size:12px"></i> Edit invoice</button>`:''}
+        ${inv.status==='invoice'&&inv._editOverride?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--green-text)" onclick="openPaymentModal('${eid}')">Record payment</button>`:''}
+        ${inv.status==='invoice'&&!inv._editOverride?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--green-text)" onclick="openPaymentModal('${eid}')">Record payment</button>`:''}
+        ${inv.status==='paid'&&!inv._editOverride?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--amber-text)" onclick="unlockInvoiceEdit('${eid}')"><i class="ti ti-pencil" style="font-size:12px"></i> Edit invoice</button>`:''}
+        ${inv.status==='paid'&&inv._editOverride?`<button style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);cursor:pointer" onclick="lockInvoiceEdit('${eid}')">Lock edits</button>`:''}
         <button class="icon-btn" onclick="printInvoice('${eid}')" title="Print"><i class="ti ti-printer"></i></button>
         <button class="icon-btn" onclick="downloadInvoice('${eid}')" title="Download as HTML"><i class="ti ti-download"></i></button>
         <button class="icon-btn" onclick="openSendInvoiceEmail('${eid}')" title="Send by email" style="color:var(--blue-mid)"><i class="ti ti-send"></i></button>
@@ -4875,6 +4901,8 @@ window.setEquipMDP = setEquipMDP;
 window.addFromOriginalList = addFromOriginalList;
 window.openInvoice = openInvoice;
 window.closeInvoiceDetail = closeInvoiceDetail;
+window.unlockInvoiceEdit = unlockInvoiceEdit;
+window.lockInvoiceEdit = lockInvoiceEdit;
 window.updateInvoiceLine = updateInvoiceLine;
 window.updateDeposit = updateDeposit;
 window.updateInvoiceNotes = updateInvoiceNotes;
