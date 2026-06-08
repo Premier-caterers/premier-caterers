@@ -272,7 +272,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 04:45 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 05:00 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -2715,9 +2715,9 @@ async function generateGroceryFromMenu(eventId){
     const proxyData = await apiResp.json().catch(()=>({}));
     if(!proxyData.success){ throw new Error(proxyData.error||'Script returned an error'); }
     const raw = proxyData.text || '';
-    // Strip markdown code blocks and find the JSON array
-    let clean = raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
-    // If still not starting with [, try to find the array within the response
+    // Strip markdown code fences (```json\n or ``` with newlines)
+    let clean = raw.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    // If still not starting with [, find the array within the response
     if(!clean.startsWith('[')){
       const arrayStart = clean.indexOf('[');
       const arrayEnd = clean.lastIndexOf(']');
@@ -2727,7 +2727,7 @@ async function generateGroceryFromMenu(eventId){
     try{ items = JSON.parse(clean); }
     catch(parseErr){
       console.error('Parse error:', parseErr, '\nRaw:', raw, '\nClean:', clean);
-      alert('Parse error. Raw response (first 300 chars): ' + raw.slice(0,300));
+      alert('AI returned an unexpected response. Please try again or add items manually.');
       if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-sparkles" style="font-size:13px"></i>Generate with AI'; }
       return;
     }
