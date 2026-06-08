@@ -150,19 +150,22 @@ a{color:var(--blue-mid);text-decoration:none}
 .r-manager{background:var(--blue-bg);color:var(--blue-text)}
 .time-badge{font-size:12px;font-weight:500;color:var(--text);background:var(--bg2);padding:2px 8px;border-radius:6px;white-space:nowrap}
 /* ── Staff Schedule redesign ── */
-.sched-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:1rem;overflow:hidden}
+.sched-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
 .sched-card-header{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--bg2);border-bottom:0.5px solid var(--border);flex-wrap:wrap}
-.sched-dept-row{display:grid;grid-template-columns:110px 56px 1fr 100px 100px;gap:0;align-items:center;border-bottom:0.5px solid var(--border);min-height:40px}
+.sched-dept-row{display:grid;grid-template-columns:100px 52px 1fr 90px 90px;gap:0;align-items:center;border-bottom:0.5px solid var(--border);min-height:40px}
 .sched-dept-row:last-child{border-bottom:none}
-.sched-dept-cell{padding:7px 10px}
-.sched-count-inp{width:48px;text-align:center;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:4px 6px;font-size:14px;font-weight:600;color:var(--text);font-family:inherit}
+.sched-dept-cell{padding:6px 8px}
+.sched-count-inp{width:44px;text-align:center;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:4px 4px;font-size:14px;font-weight:600;color:var(--text);font-family:inherit}
 .sched-names-inp{width:100%;background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:3px 0;font-size:13px;color:var(--text);font-family:inherit;outline:none}
 .sched-names-inp:focus{border-bottom-color:var(--blue-mid)}
-.sched-time-inp{width:90px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:4px 6px;font-size:12px;color:var(--text);font-family:inherit;text-align:center}
-.sched-meal-header{display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--bg2);border-top:2px solid var(--blue-mid);border-bottom:0.5px solid var(--border)}
+.sched-time-inp{width:82px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:4px 5px;font-size:12px;color:var(--text);font-family:inherit;text-align:center}
+.sched-meal-header{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg2);border-top:2px solid var(--blue-mid);border-bottom:0.5px solid var(--border)}
 .sched-meal-label{flex:1;background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:3px 0;font-size:13px;font-weight:600;color:var(--text);font-family:inherit;outline:none}
-.sched-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);padding:5px 16px 3px;background:var(--bg2)}
-@media(max-width:700px){.sched-dept-row{grid-template-columns:90px 48px 1fr 80px}}
+.sched-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);padding:5px 14px 3px;background:var(--bg2)}
+/* Two-column event layout */
+.sched-week-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start}
+@media(max-width:900px){.sched-week-grid{grid-template-columns:1fr}}
+@media(max-width:700px){.sched-dept-row{grid-template-columns:80px 44px 1fr 72px}}
 
 .change-entry{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.25rem;margin-bottom:10px}
 .change-top{display:flex;align-items:center;gap:10px;margin-bottom:.5rem;flex-wrap:wrap}
@@ -257,7 +260,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 08:50 PM ET</span>
+  <span style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 07, 2026 09:10 PM ET</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -1604,12 +1607,12 @@ function renderSchedule(){
   </div>`;
 
   // Column header labels (shown once per card)
-  const colHeaders = `<div style="display:grid;grid-template-columns:110px 56px 1fr 100px 100px;background:var(--bg2);border-bottom:0.5px solid var(--border)">
-    <div style="padding:5px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Dept</div>
-    <div style="padding:5px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">#</div>
-    <div style="padding:5px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Names</div>
-    <div style="padding:5px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Call time 1</div>
-    <div style="padding:5px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Call time 2</div>
+  const colHeaders = `<div style="display:grid;grid-template-columns:100px 52px 1fr 90px 90px;background:var(--bg2);border-bottom:0.5px solid var(--border)">
+    <div style="padding:5px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Dept</div>
+    <div style="padding:5px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">#</div>
+    <div style="padding:5px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Names</div>
+    <div style="padding:5px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Time 1</div>
+    <div style="padding:5px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Time 2</div>
   </div>`;
 
   function deptRows(e, isMain, mealIdx){
@@ -1680,7 +1683,9 @@ function renderSchedule(){
     return card;
   }
 
+  h += `<div class="sched-week-grid">`;
   staffEvents.forEach(e=>{ h += renderEventCard(e); });
+  h += `</div>`;
 
   // No-staffing events at bottom
   if(noStaffEvents.length){
