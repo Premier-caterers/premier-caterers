@@ -291,7 +291,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — current week + bigger pill</span>
+  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — weekly cover sheet</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -304,6 +304,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <div class="sidebar-label">Views</div>
     <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
     <button class="nav-item active" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
+    <button class="nav-item" id="nav-coversheet" onclick="showView('coversheet')"><i class="ti ti-layout-rows"></i>Weekly cover sheet</button>
     <a class="nav-item" href="https://calendar.google.com" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-brand-google"></i>Google Calendar<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
     <a class="nav-item" href="https://premier-caterers.github.io/premier-caterers/premier_caterers_form.html" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-clipboard-text"></i>Link to inquiry form<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
     <button class="nav-item" id="nav-schedule" onclick="showView('schedule')"><i class="ti ti-users"></i>Staff schedule</button>
@@ -718,7 +719,7 @@ function nextJobNumber(weekOf){
 const roles = {
   admin:   {canEdit:true, showStaff:true, showLinks:true, canViewInvoices:true,  canViewReports:true},
   kenny:   {canEdit:true, showStaff:true, showLinks:true, canViewInvoices:true,  canViewReports:true},
-  shelley: {canEdit:true, showStaff:true, showLinks:false, canViewInvoices:true, canViewReports:false},
+  shelley: {canEdit:true, showStaff:true, showLinks:true, canViewInvoices:true, canViewReports:true},
   josh:    {canEdit:false, showStaff:true, showLinks:false, canViewInvoices:true, canViewReports:false},
   kitchen: {canEdit:false, showStaff:false, showLinks:false, canViewInvoices:false, canViewReports:false},
 };
@@ -768,6 +769,7 @@ function render(){
   try {
     html = currentView==='pipeline'  ? renderPipeline()  :
            currentView==='events'    ? renderEvents()    :
+           currentView==='coversheet'? renderCoverSheet():
            currentView==='schedule'  ? renderSchedule()  :
            currentView==='checklists'? renderChecklists():
            currentView==='changes'   ? renderChanges()   :
@@ -809,6 +811,151 @@ function render(){
       _banner.style.display='none';
     }
   }
+}
+
+// ── WEEKLY COVER SHEET ──
+function coverJobNum(job){
+  if(!job) return '';
+  if(job.includes('-')) return '#'+job.split('-').pop();
+  return job.startsWith('#') ? job : '#'+job;
+}
+
+function renderCoverSheet(){
+  const weekDate = getWeekEndDate(currentWeekOffset);
+  const weekStr  = weekDate.toISOString().split('T')[0];
+  const months   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const wLabel   = 'W/E '+months[weekDate.getUTCMonth()]+' '+weekDate.getUTCDate()+', \''+String(weekDate.getUTCFullYear()).slice(2);
+
+  // Filter + sort events for this week
+  const weekEvents = events
+    .filter(e => (e.weekOf || '2026-05-31') === weekStr)
+    .sort((a,b)=>{
+      const parse = j => { const s=(j||'').replace('#','').split('-').pop(); const m=s.match(/^(\d+)([a-z]*)$/i); return m?[parseInt(m[1]),m[2].toLowerCase()]:[999,'']; };
+      const [an,al]=parse(a.job), [bn,bl]=parse(b.job);
+      return an!==bn ? an-bn : al<bl?-1:al>bl?1:0;
+    });
+
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  const cols = [
+    {label:'#',            w:'52px'},
+    {label:'NAME',         w:'120px'},
+    {label:'MENU LINK',    w:'110px'},
+    {label:'TYPE',         w:'100px'},
+    {label:'DAY',          w:'90px'},
+    {label:'ADDRESS',      w:'220px'},
+    {label:'# WAITERS',    w:'72px'},
+    {label:'WAITER TIME',  w:'90px'},
+    {label:'# CHEFS',      w:'64px'},
+    {label:'CHEFS TIME',   w:'84px'},
+    {label:'# PORTERS',    w:'72px'},
+    {label:'MASHGIACH',    w:'100px'},
+    {label:'MANAGER',      w:'100px'},
+  ];
+
+  const thStyle = 'padding:7px 8px;border:1px solid #bbb;background:#f0f0f0;font-size:11px;font-weight:700;text-align:left;white-space:nowrap;text-transform:uppercase;letter-spacing:.4px;color:#333';
+  const tdStyle = 'padding:6px 8px;border:1px solid #d0d0d0;font-size:12px;color:#222;vertical-align:middle;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+  const tdAltStyle = tdStyle+';background:#fafafa';
+
+  let rows = '';
+  weekEvents.forEach((e,i)=>{
+    const bg = i%2===1 ? tdAltStyle : tdStyle;
+    const menuHtml = (e.menuLink||e.pdfMenuLink)
+      ? `<a href="${esc(e.menuLink||e.pdfMenuLink)}" target="_blank" style="display:inline-block;background:#1a7340;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;text-decoration:none;font-weight:600">Menu ↗</a>`
+      : '<span style="color:#aaa">—</span>';
+    const cell = v => `<td style="${bg}">${esc(v)||'<span style="color:#bbb">—</span>'}</td>`;
+    const numCell = v => `<td style="${bg};text-align:center">${(v&&v!='0'&&v!=0)?esc(v):'<span style="color:#bbb">—</span>'}</td>`;
+    rows += `<tr>
+      <td style="${bg};font-weight:700">${esc(coverJobNum(e.job))}</td>
+      <td style="${bg};font-weight:600">${esc(e.name)}</td>
+      <td style="${bg}">${menuHtml}</td>
+      ${cell(e.typeLabel||e.type)}
+      ${cell(e.dayLabel||e.day)}
+      <td style="${bg};white-space:normal;word-break:break-word;max-width:220px">${esc(e.addr)||'<span style="color:#bbb">—</span>'}</td>
+      ${numCell(e.waiters)}
+      ${cell(e.waiterTime)}
+      ${numCell(e.chefs)}
+      ${cell(e.chefTime)}
+      ${numCell(e.porters)}
+      ${cell(e.mashgiach)}
+      ${cell(e.manager)}
+    </tr>`;
+  });
+
+  const noEvents = weekEvents.length===0 ? `
+    <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:2.5rem;text-align:center;color:var(--text2)">
+      <i class="ti ti-table-off" style="font-size:32px;margin-bottom:1rem;display:block;color:var(--text3)"></i>
+      <div style="font-size:15px;font-weight:500;margin-bottom:.5rem">No events for ${wLabel}</div>
+      <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" style="padding:8px 16px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;cursor:pointer;margin-top:.5rem">← Back to current week</button>
+    </div>` : '';
+
+  return `
+    <div class="section-header">
+      <div class="section-title">Weekly Cover Sheet</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button onclick="changeWeek(-1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">‹</button>
+        <span style="font-size:13px;font-weight:600;color:var(--text)">${wLabel}</span>
+        <button onclick="changeWeek(1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">›</button>
+        <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" style="padding:5px 12px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:12px;cursor:pointer">Current week</button>
+        <button onclick="printCoverSheet()" style="padding:5px 14px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-printer"></i> Print / Save PDF</button>
+      </div>
+    </div>
+    ${noEvents}
+    ${weekEvents.length>0?`
+    <div style="overflow-x:auto;border-radius:var(--radius-lg);box-shadow:0 1px 4px rgba(0,0,0,.08)">
+      <table style="border-collapse:collapse;width:100%;min-width:900px;background:#fff">
+        <thead>
+          <tr>
+            <th colspan="${cols.length}" style="padding:10px 14px;background:#ffee00;border:1px solid #bbb;font-size:14px;font-weight:800;color:#111;text-align:left;letter-spacing:.3px">
+              W/E &nbsp;<span style="font-size:16px">${weekDate.getUTCMonth()+1}/${weekDate.getUTCDate()}</span>
+            </th>
+          </tr>
+          <tr>${cols.map(c=>`<th style="${thStyle};width:${c.w};min-width:${c.w}">${c.label}</th>`).join('')}</tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>` : ''}`;
+}
+
+function printCoverSheet(){
+  const weekDate = getWeekEndDate(currentWeekOffset);
+  const weekStr  = weekDate.toISOString().split('T')[0];
+  const weekEvents = events
+    .filter(e => (e.weekOf||'2026-05-31')===weekStr)
+    .sort((a,b)=>{
+      const parse = j => { const s=(j||'').replace('#','').split('-').pop(); const m=s.match(/^(\d+)([a-z]*)$/i); return m?[parseInt(m[1]),m[2].toLowerCase()]:[999,'']; };
+      const [an,al]=parse(a.job),[bn,bl]=parse(b.job);
+      return an!==bn?an-bn:al<bl?-1:al>bl?1:0;
+    });
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const cols = ['#','NAME','MENU LINK','TYPE','DAY','ADDRESS','# WAITERS','WAITER TIME','# CHEFS','CHEFS TIME','# PORTERS','MASHGIACH','MANAGER'];
+  const th = s => `<th style="padding:6px 8px;border:1px solid #999;background:#f0f0f0;font-size:10px;font-weight:700;text-align:left;white-space:nowrap">${s}</th>`;
+  const td = (s,bold) => `<td style="padding:5px 8px;border:1px solid #ccc;font-size:11px;${bold?'font-weight:700;':''}">${esc(s)||'—'}</td>`;
+  const ntd = v => `<td style="padding:5px 8px;border:1px solid #ccc;font-size:11px;text-align:center">${(v&&v!='0'&&v!=0)?esc(String(v)):'—'}</td>`;
+  let rows = weekEvents.map((e,i)=>`<tr style="background:${i%2?'#fafafa':'#fff'}">`
+    +td(coverJobNum(e.job),true)
+    +td(e.name,true)
+    +`<td style="padding:5px 8px;border:1px solid #ccc;font-size:11px">${(e.menuLink||e.pdfMenuLink)?`<a href="${esc(e.menuLink||e.pdfMenuLink)}">Menu</a>`:'—'}</td>`
+    +td(e.typeLabel||e.type)
+    +td(e.dayLabel||e.day)
+    +td(e.addr)
+    +ntd(e.waiters)+td(e.waiterTime)
+    +ntd(e.chefs)+td(e.chefTime)
+    +ntd(e.porters)
+    +td(e.mashgiach)+td(e.manager)
+    +'</tr>'
+  ).join('');
+  const html=`<!DOCTYPE html><html><head><title>Cover Sheet W/E ${weekDate.getUTCMonth()+1}/${weekDate.getUTCDate()}</title>
+  <style>body{font-family:Arial,sans-serif;margin:20px}table{border-collapse:collapse;width:100%}@media print{@page{size:landscape}}</style>
+  </head><body>
+  <table><thead>
+    <tr><th colspan="${cols.length}" style="padding:10px;background:#ffee00;border:1px solid #999;font-size:16px;font-weight:800;text-align:left">W/E ${weekDate.getUTCMonth()+1}/${weekDate.getUTCDate()}/${weekDate.getUTCFullYear()}</th></tr>
+    <tr>${cols.map(th).join('')}</tr>
+  </thead><tbody>${rows}</tbody></table>
+  <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`;
+  const w=window.open('','_blank','width=1100,height=700');
+  if(w){w.document.write(html);w.document.close();}
 }
 
 // ── EVENTS ──
