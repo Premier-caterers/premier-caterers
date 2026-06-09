@@ -289,7 +289,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 08, 2026 — drag reorder</span>
+  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — PDF fix</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -5626,29 +5626,44 @@ async function sendGmailEmail(to, subject, body, htmlBody, attachments){
 // as base64 bytes, using the connected Google account's own access. This is what
 // lets us attach a real PDF file so the client never needs Drive permission.
 async function fetchMenuPdfBase64(link){
-  await ensureGmailToken();
   const docM   = link.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
   const sheetM = link.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
   const slideM = link.match(/\/presentation\/d\/([a-zA-Z0-9_-]+)/);
   const fileM  = link.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || link.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  let apiUrl;
-  if(docM)        apiUrl = 'https://www.googleapis.com/drive/v3/files/'+docM[1]+'/export?mimeType=application/pdf';
-  else if(sheetM) apiUrl = 'https://www.googleapis.com/drive/v3/files/'+sheetM[1]+'/export?mimeType=application/pdf';
-  else if(slideM) apiUrl = 'https://www.googleapis.com/drive/v3/files/'+slideM[1]+'/export?mimeType=application/pdf';
-  else if(fileM)  apiUrl = 'https://www.googleapis.com/drive/v3/files/'+fileM[1]+'?alt=media';
-  else throw new Error('Could not read the menu file ID from the link.');
-  const resp = await fetch(apiUrl, { headers:{ Authorization:'Bearer '+gmailToken } });
-  if(!resp.ok){
-    if(resp.status===403 || resp.status===401) throw new Error('Drive access not granted yet — click Connect Gmail in Settings to approve, then try again.');
-    throw new Error('Could not export the menu as PDF ('+resp.status+').');
+  const fileId = (docM&&docM[1]) || (sheetM&&sheetM[1]) || (slideM&&slideM[1]) || (fileM&&fileM[1]);
+  if(!fileId) throw new Error('Could not read the menu file ID from the link.');
+
+  // 1) Preferred: export via your Apps Script. It runs as your Google account,
+  //    which already has Drive access — so no extra Google permission is needed.
+  const scriptUrl = localStorage.getItem('scriptUrl');
+  let scriptErr = '';
+  if(scriptUrl){
+    try{
+      const url = scriptUrl + (scriptUrl.includes('?')?'&':'?') + 'action=getPdf&fileId=' + encodeURIComponent(fileId);
+      const r = await fetch(url);
+      const d = await r.json().catch(()=>({}));
+      const b64 = d && d.success && (d.pdfBase64 || d.base64);
+      if(b64) return b64;
+      scriptErr = (d && d.error) ? d.error : 'Apps Script did not return the PDF.';
+    }catch(e){ scriptErr = e.message; }
+  } else {
+    scriptErr = 'No Apps Script URL saved in Settings.';
   }
-  const blob = await resp.blob();
-  return await new Promise((res,rej)=>{
-    const fr = new FileReader();
-    fr.onload = ()=>res(String(fr.result).split(',')[1]);
-    fr.onerror = rej;
-    fr.readAsDataURL(blob);
-  });
+
+  // 2) Fallback: Drive API with the user's token (needs Drive permission granted).
+  try{
+    await ensureGmailToken();
+    let apiUrl;
+    if(fileM) apiUrl = 'https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media';
+    else      apiUrl = 'https://www.googleapis.com/drive/v3/files/'+fileId+'/export?mimeType=application/pdf';
+    const resp = await fetch(apiUrl, { headers:{ Authorization:'Bearer '+gmailToken } });
+    if(resp.ok){
+      const blob = await resp.blob();
+      return await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(',')[1]); fr.onerror=rej; fr.readAsDataURL(blob); });
+    }
+  }catch(e){ /* ignore, report script error below */ }
+
+  throw new Error('Could not export the menu as a PDF.\n\nFix: add the getPdf function to your Apps Script and redeploy (recommended — needs no Google permission). Details: '+scriptErr);
 }
 
 async function markAsRead(id){
