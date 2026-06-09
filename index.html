@@ -708,7 +708,6 @@ function nextJobNumber(weekOf){
   const mm = String(d.getUTCMonth()+1).padStart(2,'0');
   const dd = String(d.getUTCDate()).padStart(2,'0');
   const prefix = yy+mm+dd+'-';
-  // Find highest base number (strip any letter suffix) for this week
   const nums = events
     .filter(e => e.job && e.job.startsWith(prefix))
     .map(e => { const part = e.job.split('-')[1] || ''; return parseInt(part) || 0; })
@@ -717,47 +716,58 @@ function nextJobNumber(weekOf){
   return prefix + (max + 1);
 }
 
-// Check if a proposed job string is a duplicate in the same week (exact match, different event)
 function jobIsDuplicate(proposedJob, excludeEventId){
   if(!proposedJob || !proposedJob.includes('-')) return false;
-  const prefix = proposedJob.split('-')[0] + '-';
-  return events.some(e => e.job === proposedJob && e.id !== excludeEventId && e.job.startsWith(prefix));
+  return events.some(e => e.job === proposedJob && e.id !== excludeEventId);
 }
 
-// Open inline job-number editor for an event (called from event detail card and cover sheet)
 function editJobNum(eventId){
   const e = events.find(x => x.id === eventId);
   if(!e) return;
   const current = e.job || '';
-  const displayed = displayJob(current);
+  // Extract prefix (YYMMDD-) and short part
+  let prefix = '', shortPart = '';
+  if(current.includes('-')){
+    prefix    = current.split('-')[0] + '-';
+    shortPart = current.split('-')[1] || '';
+  } else {
+    if(e.weekOf){
+      const d = new Date(e.weekOf + 'T12:00:00Z');
+      const yy = String(d.getUTCFullYear()).slice(2);
+      const mm = String(d.getUTCMonth()+1).padStart(2,'0');
+      const dd = String(d.getUTCDate()).padStart(2,'0');
+      prefix = yy+mm+dd+'-';
+    }
+    shortPart = current.replace(/^#/,'');
+  }
   const val = prompt(
     'Edit job # for ' + e.name + '\n\n' +
-    'Format: YYMMDD-N or YYMMDD-Na\n' +
-    'Examples: 260614-1   260614-1a   260614-2b\n\n' +
-    'Current: ' + current,
-    current
+    'Enter the short part only (number + optional letter)\n' +
+    'Examples:  1   2   1a   2b   3c\n\n' +
+    'Week prefix (' + (prefix||'YYMMDD-') + ') is kept automatically.\n' +
+    'Current short part: ' + shortPart,
+    shortPart
   );
-  if(val === null) return; // cancelled
-  const trimmed = val.trim();
+  if(val === null) return;
+  const trimmed = val.trim().replace(/^#/,'');
   if(!trimmed){ alert('Job # cannot be blank.'); return; }
-  if(trimmed === current) return; // no change
-  // Duplicate check
-  if(jobIsDuplicate(trimmed, eventId)){
-    const dup = events.find(x => x.job === trimmed && x.id !== eventId);
+  const newFull = prefix + trimmed;
+  if(newFull === current) return;
+  if(jobIsDuplicate(newFull, eventId)){
+    const dup = events.find(x => x.job === newFull && x.id !== eventId);
     if(!confirm(
-      '⚠️ DUPLICATE WARNING\n\n' +
-      '"' + trimmed + '" is already used by:\n' +
+      '\u26a0\ufe0f DUPLICATE WARNING\n\n' +
+      '"#' + trimmed + '" is already used by:\n' +
       (dup ? dup.name + ' (' + (dup.dayLabel||dup.day||'') + ')' : 'another event') + '\n\n' +
-      'Are you sure you want to assign this same job # to ' + e.name + '?\n' +
-      '(Both events would have the exact same number — only do this if intentional.)'
+      'Assign #' + trimmed + ' to ' + e.name + ' as well?\n' +
+      '(Only do this intentionally — then add letter suffixes to distinguish them.)'
     )) return;
   }
-  e.job = trimmed;
+  e.job = newFull;
   _saveEvent(e);
   render();
-  showToast('Job # updated → ' + trimmed);
+  showToast('Job # updated \u2192 #' + trimmed + '  (stored as ' + newFull + ')');
 }
-
 
 
 const roles = {
@@ -1236,8 +1246,7 @@ function renderDetail(e,role){
 
   return `<div class="detail-panel">
     <div class="detail-header">
-      <div class="detail-title">${e.job} — ${e.name} ${role.canEdit?`<button onclick="editJobNum('${e.id}')" title="Edit job #" style="border:none;background:none;cursor:pointer;padding:2px 5px;color:var(--text3);font-size:13px;vertical-align:middle" onmouseover="this.style.color='#8B1A1A'" onmouseout="this.style.color='var(--text3)'"><i class="ti ti-pencil"></i></button>`:''}
-      </div>
+      <div class="detail-title">${e.job} — ${e.name} ${role.canEdit?`<button onclick="editJobNum('${e.id}')" title="Edit job #" style="border:none;background:none;cursor:pointer;padding:2px 5px;color:var(--text3);font-size:13px;vertical-align:middle" onmouseover="this.style.color='#8B1A1A'" onmouseout="this.style.color='var(--text3)'"><i class="ti ti-pencil"></i></button>`:''}</div>
       <div class="detail-actions">
         ${role.canEdit?(ed
           ?`<button class="icon-btn" onclick="saveEdit('${e.id}')" style="color:var(--blue-mid)" title="Save"><i class="ti ti-check"></i></button>
@@ -1939,9 +1948,8 @@ function moveInquiry(id, stage){
   const inq = inquiries.find(x=>x.id===id);
   if(!inq) return;
   const prevStage = inq.stage;
-  // When booking: warn if no event date (can't compute W/E prefix)
   if(stage==='booked' && !inq.eventDate){
-    if(!confirm('⚠️ No event date set for ' + (inq.firstName||'') + ' ' + (inq.lastName||'') + '.\n\nA job # cannot be auto-generated without an event date. The event will be booked but will need a manual job #.\n\nContinue anyway?')) return;
+    if(!confirm('\u26a0\ufe0f No event date set for ' + ((inq.firstName||'')+' '+(inq.lastName||'')).trim() + '.\n\nA job # cannot be auto-generated without an event date. You can still book and assign the number manually.\n\nContinue?')) return;
   }
   inq.stage=stage;
   _saveInquiry(inq);
