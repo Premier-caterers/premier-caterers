@@ -289,7 +289,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — quote button</span>
+  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — open-card link</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -569,7 +569,21 @@ async function emptyTrash(){
 function startFirebaseListeners(){
   eventsCol.onSnapshot( snap=>{ const first=events.length===0; events=snap.docs.map(d=>d.data()); if(first||currentView==='events') render(); });
   changesCol.onSnapshot( snap=>{ changes=snap.docs.map(d=>d.data()).sort((a,b)=>(b.time||'').localeCompare(a.time||'')); if(currentView==='changes') render(); });
-  inquiriesCol.onSnapshot( snap=>{ inquiries=snap.docs.map(d=>d.data()); updatePipelineBadge(); if(currentView==='pipeline') render(); });
+  inquiriesCol.onSnapshot( snap=>{
+    inquiries=snap.docs.map(d=>d.data());
+    updatePipelineBadge();
+    if(_pendingCardId){
+      const found = inquiries.find(x=>x.id===_pendingCardId);
+      if(found){
+        _pendingCardId=null;
+        selectedInqId=found.id;
+        showView('pipeline');
+        setTimeout(()=>document.querySelector('.inq-detail')?.scrollIntoView({behavior:'smooth',block:'start'}),200);
+        return;
+      }
+    }
+    if(currentView==='pipeline') render();
+  });
   checklistCol.onSnapshot( snap=>{ checklists={}; snap.docs.forEach(d=>{ checklists[d.id]=d.data().items||[]; }); if(currentView==='checklists') render(); updateBadge(); });
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
   invoicesCol.onSnapshot( snap=>{ invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); }); if(currentView==='invoices') render(); });
@@ -626,6 +640,9 @@ let events = [
 ];
 
 let inquiries = [];
+// If the app is opened via a ...?card=<inquiryId> link (e.g. from the new-inquiry
+// email), remember it and open that client card once inquiries have loaded.
+let _pendingCardId = (function(){ try{ return new URLSearchParams(window.location.search).get('card') || null; }catch(e){ return null; } })();
 // Stages: 'new' | 'menu_sent' | 'booked'
 
 let changes = [
