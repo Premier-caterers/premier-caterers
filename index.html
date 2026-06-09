@@ -5231,6 +5231,23 @@ function renderSettings(){
     <h3>Your sheet ID</h3>
     <p>Already in the script above: <code>1azVbq-bgpISGNX3I9c6UBLTDVv4SyRWzCA64ziUG67s</code><br>This matches the Google Sheet you shared with us.</p>
   </div>
+
+  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:.5rem">
+      <div>
+        <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:2px">Reformat existing job numbers</div>
+        <div style="font-size:12px;color:var(--text3)">One-time migration — converts all events to the new YYMMDD-N format</div>
+      </div>
+      <button onclick="migrateJobNumbers()" style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:14px;font-weight:500;cursor:pointer">
+        <i class="ti ti-refresh" style="font-size:15px"></i> Reformat job numbers
+      </button>
+    </div>
+    <div style="font-size:12px;color:var(--text3);line-height:1.6">
+      Reformats all existing event job numbers to <strong>YYMMDD-N</strong> format based on each event's week.<br>
+      Example: old <code>#3</code> on week ending Jun 14 2026 becomes <code>260614-3</code> (displays as <strong>#3</strong>).<br>
+      Letter suffixes are preserved. Safe to run multiple times.
+    </div>
+  </div>
   `;
 }
 
@@ -5239,6 +5256,50 @@ function copyScript(){
     const btn=document.querySelector('.copy-btn');
     if(btn){btn.innerHTML='<i class="ti ti-check" style="font-size:13px"></i> Copied!';setTimeout(()=>{btn.innerHTML='<i class="ti ti-copy" style="font-size:13px"></i> Copy script';},2000);}
   });
+}
+
+async function migrateJobNumbers(){
+  const toMigrate = events.filter(e => e.weekOf);
+  if(!toMigrate.length){ alert('No events with a weekOf date found.'); return; }
+
+  if(!confirm(
+    'Reformat job numbers for ' + toMigrate.length + ' events?\n\n' +
+    'This converts all job numbers to YYMMDD-N format based on each event\'s week.\n' +
+    'Examples:\n' +
+    '  #3  (weekOf 2026-06-14)  →  260614-3\n' +
+    '  060614-2a               →  260614-2a\n' +
+    '  260614-1                →  (already correct, unchanged)\n\n' +
+    'Letter suffixes are preserved. Safe to run multiple times.'
+  )) return;
+
+  let updated = 0, skipped = 0;
+  for(const e of toMigrate){
+    const d = new Date(e.weekOf + 'T12:00:00Z');
+    if(isNaN(d)){ skipped++; continue; }
+    const yy = String(d.getUTCFullYear()).slice(2);
+    const mm = String(d.getUTCMonth()+1).padStart(2,'0');
+    const dd = String(d.getUTCDate()).padStart(2,'0');
+    const correctPrefix = yy+mm+dd+'-';
+
+    const cur = (e.job||'').trim();
+    // Already correct format
+    if(cur.startsWith(correctPrefix)){ skipped++; continue; }
+
+    // Extract the short part (number + optional letter)
+    let shortPart = '';
+    if(cur.includes('-')){
+      shortPart = cur.split('-')[1] || '';      // old MMDDyy-N or any prefix-N
+    } else {
+      shortPart = cur.replace(/^#/,'');          // legacy #N
+    }
+    if(!shortPart){ skipped++; continue; }
+
+    e.job = correctPrefix + shortPart;
+    await _saveEvent(e);
+    updated++;
+  }
+  showToast('Job numbers updated: ' + updated + ' reformatted, ' + skipped + ' already correct or skipped.');
+  render();
 }
 
 function saveScriptUrl(){
