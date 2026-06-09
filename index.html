@@ -289,7 +289,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — PDF fix</span>
+  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — calendar + link</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -302,6 +302,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <div class="sidebar-label">Views</div>
     <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
     <button class="nav-item active" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
+    <a class="nav-item" href="https://calendar.google.com" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-brand-google"></i>Google Calendar<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
     <button class="nav-item" id="nav-schedule" onclick="showView('schedule')"><i class="ti ti-users"></i>Staff schedule</button>
     <button class="nav-item" id="nav-checklists" onclick="showView('checklists')"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">5</span></button>
     <button class="nav-item" id="nav-changes" onclick="showView('changes')"><i class="ti ti-refresh-alert"></i>Changes log<span class="nav-badge">2</span></button>
@@ -1649,16 +1650,58 @@ async function confirmSendMenuEmail(){
 function moveInquiry(id, stage){
   const inq = inquiries.find(x=>x.id===id);
   if(!inq) return;
+  const prevStage = inq.stage;
   inq.stage=stage;
   _saveInquiry(inq);
+  // Google Calendar sync (runs through Apps Script as your account)
+  if(stage==='menu_sent' && prevStage!=='booked'){ gcalMenuSent(inq); }
   // When marked Booked, automatically create the event on the correct W/E page
   if(stage==='booked'){
     // If it was previously lost, un-flag the event's lost color
     const ev0 = events.find(x=>x.id==='inq_'+inq.id);
     if(ev0 && ev0.lost){ ev0.lost=false; _saveEvent(ev0); }
     createEventFromInquiry(inq);
+    gcalBooked(inq);
   }
   render(); updatePipelineBadge();
+}
+
+// ── GOOGLE CALENDAR SYNC ──────────────────────────────────────
+// Calendar writes go through the Apps Script web app, which runs as your Google
+// account and has full Calendar access — so no browser permission is needed.
+// Banana (color 5) = menu sent. Blueberry (color 9) = booked.
+async function _gcalCall(params){
+  const scriptUrl = localStorage.getItem('scriptUrl');
+  if(!scriptUrl) return { success:false, error:'No Apps Script URL saved' };
+  const qs = Object.keys(params).map(k=>k+'='+encodeURIComponent(params[k])).join('&');
+  const url = scriptUrl + (scriptUrl.includes('?')?'&':'?') + qs;
+  try{ const r = await fetch(url); return await r.json(); }
+  catch(e){ return { success:false, error:e.message }; }
+}
+function _gcalTitle(inq){
+  const name = ((inq.firstName||'')+' '+(inq.lastName||'')).trim();
+  return [name, inq.eventType||'', inq.venueName||''].filter(Boolean).join(' ').trim() || 'Event';
+}
+function _gcalToday(){ return new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+
+async function gcalMenuSent(inq){
+  if(!inq || inq.gcalId) return;        // already on the calendar
+  if(!inq.eventDate) return;            // all-day event needs a date
+  const res = await _gcalCall({ action:'calAdd', title:_gcalTitle(inq), date:inq.eventDate, notes:_gcalToday()+' — menu sent via app', color:'5' });
+  if(res && res.success && res.eventId){ inq.gcalId = res.eventId; _saveInquiry(inq); showToast('Added to Google Calendar'); }
+  else if(res && res.error){ console.warn('Calendar add failed: '+res.error); }
+}
+async function gcalBooked(inq){
+  if(!inq || !inq.eventDate) return;
+  if(inq.gcalId){
+    const res = await _gcalCall({ action:'calMark', eventId:inq.gcalId, color:'9', note:_gcalToday()+' — booked' });
+    if(res && res.success) showToast('Calendar updated — booked');
+    else if(res && res.error) console.warn('Calendar update failed: '+res.error);
+  } else {
+    const res = await _gcalCall({ action:'calAdd', title:_gcalTitle(inq), date:inq.eventDate, notes:_gcalToday()+' — booked', color:'9' });
+    if(res && res.success && res.eventId){ inq.gcalId = res.eventId; _saveInquiry(inq); showToast('Added to Google Calendar — booked'); }
+    else if(res && res.error){ console.warn('Calendar add failed: '+res.error); }
+  }
 }
 
 // Mark an inquiry as Lost / Declined. Keeps it for reference; if it had a booked
@@ -4989,6 +5032,8 @@ function addEvent(){
     _saveInquiry(inq);
     // Create the event on the correct W/E page (reuses the booking logic)
     createEventFromInquiry(inq);
+    // Booked from the start → add to Google Calendar as blueberry
+    if(inq.stage==='booked'){ gcalBooked(inq); }
     // If a custom job # was given, apply it to the created event
     if(jobInput && wi){
       const ev = events.find(x=>x.id==='inq_'+inq.id);
