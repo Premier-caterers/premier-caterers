@@ -291,7 +291,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — job numbers + migration</span>
+  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — weekly cover sheet</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -701,74 +701,20 @@ function displayJob(fullJob){
 }
 
 function nextJobNumber(weekOf){
-  // weekOf is a YYYY-MM-DD Sunday string. Build prefix as YYMMDD- using UTC.
-  if(!weekOf) return '#'+(events.length+1);
-  const d = new Date(weekOf + 'T12:00:00Z');
-  const yy = String(d.getUTCFullYear()).slice(2);
-  const mm = String(d.getUTCMonth()+1).padStart(2,'0');
-  const dd = String(d.getUTCDate()).padStart(2,'0');
-  const prefix = yy+mm+dd+'-';
-  const nums = events
-    .filter(e => e.job && e.job.startsWith(prefix))
-    .map(e => { const part = e.job.split('-')[1] || ''; return parseInt(part) || 0; })
-    .filter(n => n > 0);
-  const max = nums.length ? Math.max(...nums) : 0;
-  return prefix + (max + 1);
+  // Find highest number for this week
+  const weStr = weekOf || '2026-06-07';
+  const d = new Date(weStr + 'T12:00:00');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  const yy = String(d.getFullYear()).slice(2);
+  const prefix = mm+dd+yy+'-';
+  const existing = events
+    .filter(e=>e.job && e.job.startsWith(prefix))
+    .map(e=>{ const n=e.job.split('-')[1]; return parseInt(n)||0; })
+    .filter(n=>!isNaN(n));
+  const max = existing.length ? Math.max(...existing) : 0;
+  return prefix + (max+1);
 }
-
-function jobIsDuplicate(proposedJob, excludeEventId){
-  if(!proposedJob || !proposedJob.includes('-')) return false;
-  return events.some(e => e.job === proposedJob && e.id !== excludeEventId);
-}
-
-function editJobNum(eventId){
-  const e = events.find(x => x.id === eventId);
-  if(!e) return;
-  const current = e.job || '';
-  // Extract prefix (YYMMDD-) and short part
-  let prefix = '', shortPart = '';
-  if(current.includes('-')){
-    prefix    = current.split('-')[0] + '-';
-    shortPart = current.split('-')[1] || '';
-  } else {
-    if(e.weekOf){
-      const d = new Date(e.weekOf + 'T12:00:00Z');
-      const yy = String(d.getUTCFullYear()).slice(2);
-      const mm = String(d.getUTCMonth()+1).padStart(2,'0');
-      const dd = String(d.getUTCDate()).padStart(2,'0');
-      prefix = yy+mm+dd+'-';
-    }
-    shortPart = current.replace(/^#/,'');
-  }
-  const val = prompt(
-    'Edit job # for ' + e.name + '\n\n' +
-    'Enter the short part only (number + optional letter)\n' +
-    'Examples:  1   2   1a   2b   3c\n\n' +
-    'Week prefix (' + (prefix||'YYMMDD-') + ') is kept automatically.\n' +
-    'Current short part: ' + shortPart,
-    shortPart
-  );
-  if(val === null) return;
-  const trimmed = val.trim().replace(/^#/,'');
-  if(!trimmed){ alert('Job # cannot be blank.'); return; }
-  const newFull = prefix + trimmed;
-  if(newFull === current) return;
-  if(jobIsDuplicate(newFull, eventId)){
-    const dup = events.find(x => x.job === newFull && x.id !== eventId);
-    if(!confirm(
-      '\u26a0\ufe0f DUPLICATE WARNING\n\n' +
-      '"#' + trimmed + '" is already used by:\n' +
-      (dup ? dup.name + ' (' + (dup.dayLabel||dup.day||'') + ')' : 'another event') + '\n\n' +
-      'Assign #' + trimmed + ' to ' + e.name + ' as well?\n' +
-      '(Only do this intentionally — then add letter suffixes to distinguish them.)'
-    )) return;
-  }
-  e.job = newFull;
-  _saveEvent(e);
-  render();
-  showToast('Job # updated \u2192 #' + trimmed + '  (stored as ' + newFull + ')');
-}
-
 
 const roles = {
   admin:   {canEdit:true, showStaff:true, showLinks:true, canViewInvoices:true,  canViewReports:true},
@@ -901,6 +847,31 @@ function setCoverSort(key){
   render();
 }
 
+function coverSaveMeal(eventId, mealIdx, field, val, isNumber){
+  const e = events.find(x=>x.id===eventId); if(!e) return;
+  if(!e.meals || !e.meals[mealIdx]) return;
+  e.meals[mealIdx][field] = isNumber ? (parseInt(val)||0) : val;
+  // keep label in sync with jobSuffix if label is blank
+  if(field==='jobSuffix' && !e.meals[mealIdx].label) e.meals[mealIdx].label = val;
+  _saveEvent(e);
+}
+
+function coverAddMeal(eventId){
+  const e = events.find(x=>x.id===eventId); if(!e) return;
+  if(!e.meals) e.meals = [];
+  e.meals.push({jobSuffix:'', label:'', name:'', typeLabel:'', dayLabel:'', addr:'', waiters:0, waiterTime:'', chefs:0, chefTime:'', porters:0, mashgiachNames:'', manager:''});
+  _saveEvent(e);
+  render();
+}
+
+function coverRemoveLastMeal(eventId){
+  const e = events.find(x=>x.id===eventId); if(!e||!e.meals||!e.meals.length) return;
+  if(!confirm('Remove the last meal row for ' + e.name + '?')) return;
+  e.meals.splice(e.meals.length-1, 1);
+  _saveEvent(e);
+  render();
+}
+
 function coverSaveField(id, field, val, isNumber){
   schedSaveField(id, field, val, isNumber);
   // keep mashgiach + mashgiachNames in sync
@@ -939,8 +910,6 @@ function renderCoverSheet(){
   </div>`;
 
   // Inline input style
-  const inpNum  = (id,field,val) => `<input type="number" min="0" value="${val&&val!=0?val:''}" placeholder="—" onchange="coverSaveField('${id}','${field}',this.value,true)" style="width:42px;border:none;background:transparent;font-size:12px;color:#222;text-align:center;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.border='1px solid #8B1A1A';this.style.background='#fff'" onblur="this.style.border='none';this.style.background='transparent'">`;
-  const inpTxt  = (id,field,val,w) => `<input type="text" value="${esc(val||'')}" placeholder="—" onblur="coverSaveField('${id}','${field}',this.value,false)" style="width:${w||'80px'};border:none;background:transparent;font-size:12px;color:#222;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.border='1px solid #8B1A1A';this.style.background='#fff'" onblur="coverSaveField('${id}','${field}',this.value,false);this.style.border='none';this.style.background='transparent'">`;
 
   const cols = [
     {label:'#',           w:'52px'},
@@ -961,6 +930,15 @@ function renderCoverSheet(){
   const thStyle = `padding:7px 8px;border:1px solid #bbb;background:#f0f0f0;font-size:11px;font-weight:700;text-align:left;white-space:nowrap;text-transform:uppercase;letter-spacing:.4px;color:#333`;
   const tdBase  = `border:1px solid #d0d0d0;font-size:12px;color:#222;vertical-align:middle;padding:4px 6px`;
 
+  const inpNum = (id,field,val,mi) => {
+    const onCh = mi===undefined ? `coverSaveField('${id}','${field}',this.value,true)` : `coverSaveMeal('${id}',${mi},'${field}',this.value,true)`;
+    return `<input type="number" min="0" value="${val&&val!=0?val:''}" placeholder="—" onchange="${onCh}" style="width:42px;border:none;background:transparent;font-size:12px;color:#222;text-align:center;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.border='1px solid #8B1A1A';this.style.background='#fff'" onblur="this.style.border='none';this.style.background='transparent'">`;
+  };
+  const inpTxt = (id,field,val,w,mi) => {
+    const onBl = mi===undefined ? `coverSaveField('${id}','${field}',this.value,false)` : `coverSaveMeal('${id}',${mi},'${field}',this.value,false)`;
+    return `<input type="text" value="${esc(val||'')}" placeholder="—" style="width:${w||'80px'};border:none;background:transparent;font-size:12px;color:#222;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.border='1px solid #8B1A1A';this.style.background='#fff'" onblur="${onBl};this.style.border='none';this.style.background='transparent'">`;
+  };
+
   let rows = '';
   weekEvents.forEach((e,i)=>{
     const bg = i%2===1 ? '#fafafa' : '#fff';
@@ -968,13 +946,15 @@ function renderCoverSheet(){
     const menuHtml = (e.menuLink||e.pdfMenuLink)
       ? `<a href="${esc(e.menuLink||e.pdfMenuLink)}" target="_blank" style="display:inline-block;background:#1a7340;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;text-decoration:none;font-weight:600">Menu ↗</a>`
       : '<span style="color:#bbb">—</span>';
+
+    // ── Main event row ──
     rows += `<tr>
       ${td(`<span style="font-weight:700;cursor:pointer" onclick="editJobNum('${e.id}')" title="Click to edit job #">${esc(coverJobNum(e.job))} <i class="ti ti-pencil" style="font-size:10px;opacity:.4"></i></span>`)}
-      ${td(`<span style="font-weight:600">${esc(e.name)}</span>`)}
+      ${td(inpTxt(e.id,'name',e.name,'100px'))}
       ${td(menuHtml)}
-      ${td(esc(e.typeLabel||e.type)||'<span style="color:#bbb">—</span>')}
-      ${td(esc(e.dayLabel||e.day)||'<span style="color:#bbb">—</span>')}
-      ${td(esc(e.addr)||'<span style="color:#bbb">—</span>','white-space:normal;word-break:break-word;max-width:200px')}
+      ${td(inpTxt(e.id,'typeLabel',e.typeLabel||e.type,'86px'))}
+      ${td(inpTxt(e.id,'dayLabel',e.dayLabel||e.day,'76px'))}
+      ${td(inpTxt(e.id,'addr',e.addr,'180px'),'white-space:normal;word-break:break-word')}
       ${td(inpNum(e.id,'waiters',e.waiters),'text-align:center')}
       ${td(inpTxt(e.id,'waiterTime',e.waiterTime,'76px'))}
       ${td(inpNum(e.id,'chefs',e.chefs),'text-align:center')}
@@ -983,7 +963,40 @@ function renderCoverSheet(){
       ${td(inpTxt(e.id,'mashgiach',e.mashgiach||e.mashgiachNames,'86px'))}
       ${td(inpTxt(e.id,'manager',e.manager,'86px'))}
     </tr>`;
+
+    // ── Sub-meal rows ──
+    (e.meals||[]).forEach((meal,mi)=>{
+      rows += `<tr>
+        <td style="${tdBase};background:${bg};padding-left:16px">
+          <span style="font-size:10px;color:#bbb;margin-right:2px">↳</span>
+          <input type="text" value="${esc(meal.jobSuffix||'')}" placeholder="a/b" title="Letter suffix"
+            style="width:30px;border:none;background:transparent;font-size:12px;color:#8B1A1A;font-weight:700;outline:none;padding:2px 3px;border-radius:3px"
+            onfocus="this.style.border='1px solid #8B1A1A';this.style.background='#fff'"
+            onblur="coverSaveMeal('${e.id}',${mi},'jobSuffix',this.value,false);this.style.border='none';this.style.background='transparent'">
+        </td>
+        ${td(inpTxt(e.id,'name',meal.name||'','100px',mi))}
+        <td style="${tdBase};background:${bg};color:#bbb;font-size:11px;text-align:center">—</td>
+        ${td(inpTxt(e.id,'typeLabel',meal.typeLabel||meal.type||'','86px',mi))}
+        ${td(inpTxt(e.id,'dayLabel',meal.dayLabel||meal.day||'','76px',mi))}
+        ${td(inpTxt(e.id,'addr',meal.addr||'','180px',mi),'white-space:normal;word-break:break-word')}
+        ${td(inpNum(e.id,'waiters',meal.waiters,mi),'text-align:center')}
+        ${td(inpTxt(e.id,'waiterTime',meal.waiterTime||'','76px',mi))}
+        ${td(inpNum(e.id,'chefs',meal.chefs,mi),'text-align:center')}
+        ${td(inpTxt(e.id,'chefTime',meal.chefTime||'','70px',mi))}
+        ${td(inpNum(e.id,'porters',meal.porters,mi),'text-align:center')}
+        ${td(inpTxt(e.id,'mashgiach',meal.mashgiachNames||meal.mashgiach||'','86px',mi))}
+        ${td(inpTxt(e.id,'manager',meal.manager||'','86px',mi))}
+      </tr>`;
+    });
+
+    // ── Add / remove meal row buttons ──
+    const hasMeals = (e.meals||[]).length > 0;
+    rows += `<tr><td colspan="${cols.length}" style="border:1px solid #e8e8e8;background:${bg};padding:3px 8px">
+      <button onclick="coverAddMeal('${e.id}')" style="border:none;background:none;color:#8B1A1A;font-size:11px;cursor:pointer;padding:2px 6px;border-radius:3px;display:inline-flex;align-items:center;gap:3px" onmouseover="this.style.background='#f5e8e8'" onmouseout="this.style.background='none'"><i class="ti ti-plus" style="font-size:11px"></i> Add meal row</button>
+      ${hasMeals?`<button onclick="coverRemoveLastMeal('${e.id}')" style="border:none;background:none;color:#999;font-size:11px;cursor:pointer;padding:2px 6px;border-radius:3px;margin-left:4px;display:inline-flex;align-items:center;gap:3px" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='none'"><i class="ti ti-minus" style="font-size:11px"></i> Remove last</button>`:''}
+    </td></tr>`;
   });
+
 
   const noEvents = weekEvents.length===0 ? `
     <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:2.5rem;text-align:center;color:var(--text2)">
@@ -1246,7 +1259,7 @@ function renderDetail(e,role){
 
   return `<div class="detail-panel">
     <div class="detail-header">
-      <div class="detail-title">${e.job} — ${e.name} ${role.canEdit?`<button onclick="editJobNum('${e.id}')" title="Edit job #" style="border:none;background:none;cursor:pointer;padding:2px 5px;color:var(--text3);font-size:13px;vertical-align:middle" onmouseover="this.style.color='#8B1A1A'" onmouseout="this.style.color='var(--text3)'"><i class="ti ti-pencil"></i></button>`:''}</div>
+      <div class="detail-title">${e.job} — ${e.name}</div>
       <div class="detail-actions">
         ${role.canEdit?(ed
           ?`<button class="icon-btn" onclick="saveEdit('${e.id}')" style="color:var(--blue-mid)" title="Save"><i class="ti ti-check"></i></button>
@@ -1345,6 +1358,7 @@ function renderDetail(e,role){
       ${role.showStaff?`<div>
         <div class="detail-block">
           <div class="detail-block-title">Staff</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;padding-bottom:4px;border-bottom:0.5px solid var(--border)">Main event</div>
           ${f('waiters','Waiters',e.waiters,'number')}
           ${f('waiterTime','Waiter arrival',e.waiterTime)}
           ${f('chefs','Chefs',e.chefs,'number')}
@@ -1352,6 +1366,20 @@ function renderDetail(e,role){
           ${f('porters','Porters',e.porters,'number')}
           ${f('manager','Manager',e.manager)}
           ${f('mashgiach','Mashgiach',e.mashgiach)}
+          ${(e.meals||[]).map((meal,mi)=>`
+          <div style="font-size:11px;font-weight:600;color:var(--blue-mid);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px;padding-top:8px;border-top:0.5px solid var(--border)">
+            ${coverJobNum(e.job)}${meal.jobSuffix||''} &nbsp;·&nbsp; ${meal.label||meal.dayLabel||('Meal '+(mi+1))}
+            ${meal.typeLabel?`<span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0"> — ${meal.typeLabel}</span>`:''}
+            ${meal.dayLabel?`<span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0"> (${meal.dayLabel})</span>`:''}
+          </div>
+          <div class="drow"><span class="dkey">Waiters</span><span class="dval">${meal.waiters||'—'}</span></div>
+          <div class="drow"><span class="dkey">Waiter arrival</span><span class="dval">${meal.waiterTime||'—'}</span></div>
+          <div class="drow"><span class="dkey">Chefs</span><span class="dval">${meal.chefs||'—'}</span></div>
+          <div class="drow"><span class="dkey">Chef arrival</span><span class="dval">${meal.chefTime||'—'}</span></div>
+          <div class="drow"><span class="dkey">Porters</span><span class="dval">${meal.porters||'—'}</span></div>
+          <div class="drow"><span class="dkey">Manager</span><span class="dval">${meal.manager||'—'}</span></div>
+          <div class="drow"><span class="dkey">Mashgiach</span><span class="dval">${meal.mashgiachNames||meal.mashgiach||'—'}</span></div>
+          `).join('')}
         </div>
       </div>`:''}
     </div>
@@ -1948,9 +1976,6 @@ function moveInquiry(id, stage){
   const inq = inquiries.find(x=>x.id===id);
   if(!inq) return;
   const prevStage = inq.stage;
-  if(stage==='booked' && !inq.eventDate){
-    if(!confirm('\u26a0\ufe0f No event date set for ' + ((inq.firstName||'')+' '+(inq.lastName||'')).trim() + '.\n\nA job # cannot be auto-generated without an event date. You can still book and assign the number manually.\n\nContinue?')) return;
-  }
   inq.stage=stage;
   _saveInquiry(inq);
   // Google Calendar sync (runs through Apps Script as your account)
@@ -2298,8 +2323,8 @@ function renderSchedule(){
     // Additional meal sections
     meals.forEach((meal, mi)=>{
       card += `<div class="sched-meal-header">
-        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--blue-mid)">Meal section ${mi+1}</span>
-        <input type="text" class="sched-meal-label" value="${(meal.label||'').replace(/"/g,'&quot;')}" placeholder="e.g. Shmorg, Dinner, Dessert…" onblur="updateMealLabel('${e.id}',${mi},this.value)">
+        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--blue-mid)">${coverJobNum(e.job)}${meal.jobSuffix||''} &nbsp;·&nbsp; Meal ${mi+1}</span>
+        <input type="text" class="sched-meal-label" value="${(meal.label||meal.jobSuffix||'').replace(/"/g,'&quot;')}" placeholder="e.g. Friday dinner, Saturday lunch…" onblur="updateMealLabel('${e.id}',${mi},this.value)">
         <button onclick="removeMealSection('${e.id}',${mi})" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:14px;padding:2px 4px"><i class="ti ti-trash"></i></button>
       </div>
       ${colHeaders}
@@ -5231,23 +5256,6 @@ function renderSettings(){
     <h3>Your sheet ID</h3>
     <p>Already in the script above: <code>1azVbq-bgpISGNX3I9c6UBLTDVv4SyRWzCA64ziUG67s</code><br>This matches the Google Sheet you shared with us.</p>
   </div>
-
-  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:.5rem">
-      <div>
-        <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:2px">Reformat existing job numbers</div>
-        <div style="font-size:12px;color:var(--text3)">One-time migration — converts all events to the new YYMMDD-N format</div>
-      </div>
-      <button onclick="migrateJobNumbers()" style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:14px;font-weight:500;cursor:pointer">
-        <i class="ti ti-refresh" style="font-size:15px"></i> Reformat job numbers
-      </button>
-    </div>
-    <div style="font-size:12px;color:var(--text3);line-height:1.6">
-      Reformats all existing event job numbers to <strong>YYMMDD-N</strong> format based on each event's week.<br>
-      Example: old <code>#3</code> on week ending Jun 14 2026 becomes <code>260614-3</code> (displays as <strong>#3</strong>).<br>
-      Letter suffixes are preserved. Safe to run multiple times.
-    </div>
-  </div>
   `;
 }
 
@@ -5256,50 +5264,6 @@ function copyScript(){
     const btn=document.querySelector('.copy-btn');
     if(btn){btn.innerHTML='<i class="ti ti-check" style="font-size:13px"></i> Copied!';setTimeout(()=>{btn.innerHTML='<i class="ti ti-copy" style="font-size:13px"></i> Copy script';},2000);}
   });
-}
-
-async function migrateJobNumbers(){
-  const toMigrate = events.filter(e => e.weekOf);
-  if(!toMigrate.length){ alert('No events with a weekOf date found.'); return; }
-
-  if(!confirm(
-    'Reformat job numbers for ' + toMigrate.length + ' events?\n\n' +
-    'This converts all job numbers to YYMMDD-N format based on each event\'s week.\n' +
-    'Examples:\n' +
-    '  #3  (weekOf 2026-06-14)  →  260614-3\n' +
-    '  060614-2a               →  260614-2a\n' +
-    '  260614-1                →  (already correct, unchanged)\n\n' +
-    'Letter suffixes are preserved. Safe to run multiple times.'
-  )) return;
-
-  let updated = 0, skipped = 0;
-  for(const e of toMigrate){
-    const d = new Date(e.weekOf + 'T12:00:00Z');
-    if(isNaN(d)){ skipped++; continue; }
-    const yy = String(d.getUTCFullYear()).slice(2);
-    const mm = String(d.getUTCMonth()+1).padStart(2,'0');
-    const dd = String(d.getUTCDate()).padStart(2,'0');
-    const correctPrefix = yy+mm+dd+'-';
-
-    const cur = (e.job||'').trim();
-    // Already correct format
-    if(cur.startsWith(correctPrefix)){ skipped++; continue; }
-
-    // Extract the short part (number + optional letter)
-    let shortPart = '';
-    if(cur.includes('-')){
-      shortPart = cur.split('-')[1] || '';      // old MMDDyy-N or any prefix-N
-    } else {
-      shortPart = cur.replace(/^#/,'');          // legacy #N
-    }
-    if(!shortPart){ skipped++; continue; }
-
-    e.job = correctPrefix + shortPart;
-    await _saveEvent(e);
-    updated++;
-  }
-  showToast('Job numbers updated: ' + updated + ' reformatted, ' + skipped + ' already correct or skipped.');
-  render();
 }
 
 function saveScriptUrl(){
