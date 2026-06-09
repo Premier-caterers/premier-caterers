@@ -38,7 +38,9 @@ a{color:var(--blue-mid);text-decoration:none}
 .topbar{background:var(--bg);border-bottom:0.5px solid var(--border);padding:0 1.25rem;display:flex;align-items:center;gap:10px;height:56px;position:sticky;top:0;z-index:100}
 .brand{display:flex;align-items:center;gap:8px;font-weight:500;font-size:15px;color:var(--text);flex-shrink:0}
 .brand-icon{width:32px;height:32px;background:var(--blue-bg);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--blue-mid);font-size:17px}
-.we-pill{font-size:12px;color:var(--text2);background:var(--bg2);padding:3px 10px;border-radius:10px;flex-shrink:0}
+.we-pill{font-size:15px;font-weight:700;color:#fff;background:var(--maroon,#8B1A1A);padding:7px 16px;border-radius:20px;flex-shrink:0;display:inline-flex;align-items:center;gap:6px;box-shadow:0 1px 3px rgba(0,0,0,.18);letter-spacing:.2px}
+.we-pill:hover{filter:brightness(1.08)}
+.we-pill .ti{font-size:16px}
 .topbar-spacer{flex:1}
 .role-switcher{display:flex;gap:3px;background:var(--bg2);border-radius:var(--radius);padding:3px}
 .role-btn{padding:5px 11px;border-radius:6px;border:none;background:transparent;font-size:12px;font-weight:500;color:var(--text2);transition:all .15s;cursor:pointer}
@@ -232,7 +234,7 @@ a{color:var(--blue-mid);text-decoration:none}
   .nav-item i{font-size:18px;width:22px}
   .detail-grid{grid-template-columns:1fr}
   .role-switcher{display:none}
-  .we-pill{display:none}
+  .we-pill{font-size:13px;padding:6px 12px}
 }
 
 /* ── PIPELINE ── */
@@ -277,7 +279,7 @@ a{color:var(--blue-mid);text-decoration:none}
   </div>
   <div style="display:flex;align-items:center;gap:6px">
     <button onclick="changeWeek(-1)" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:18px;padding:2px 6px;border-radius:4px;line-height:1" title="Previous week">‹</button>
-    <span class="we-pill" id="wePill" onclick="showWeekPicker()" style="cursor:pointer" title="Click to jump to a date">W/E Jun 7, 26</span>
+    <span class="we-pill" id="wePill" onclick="showWeekPicker()" style="cursor:pointer" title="Click to jump to a date"><i class="ti ti-calendar-week"></i><span id="wePillText">W/E Jun 7, 26</span></span>
     <button onclick="changeWeek(1)" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:18px;padding:2px 6px;border-radius:4px;line-height:1" title="Next week">›</button>
     <input type="date" id="weekJumper" style="display:none;font-size:12px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-family:inherit" onchange="jumpToWeek(this.value)">
   </div>
@@ -289,7 +291,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — open-card link</span>
+  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — current week + bigger pill</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -303,6 +305,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
     <button class="nav-item active" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
     <a class="nav-item" href="https://calendar.google.com" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-brand-google"></i>Google Calendar<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
+    <a class="nav-item" href="https://premier-caterers.github.io/premier-caterers/premier_caterers_form.html" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-clipboard-text"></i>Link to inquiry form<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
     <button class="nav-item" id="nav-schedule" onclick="showView('schedule')"><i class="ti ti-users"></i>Staff schedule</button>
     <button class="nav-item" id="nav-checklists" onclick="showView('checklists')"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">5</span></button>
     <button class="nav-item" id="nav-changes" onclick="showView('changes')"><i class="ti ti-refresh-alert"></i>Changes log<span class="nav-badge">2</span></button>
@@ -819,7 +822,7 @@ function renderEvents(){
     const ew = e.weekOf || '2026-05-31';
     return ew === currentWeekStr;
   });
-  const weekLabel = document.getElementById('wePill')?.textContent || ('W/E '+currentWeekStr);
+  const weekLabel = (document.getElementById('wePillText')||document.getElementById('wePill'))?.textContent || ('W/E '+currentWeekStr);
   
   if(weekEvents.length === 0){
     return `
@@ -832,7 +835,7 @@ function renderEvents(){
       <div style="font-size:15px;font-weight:500;margin-bottom:.5rem">No events for ${weekLabel}</div>
       <div style="font-size:13px;color:var(--text3);margin-bottom:1.25rem">Use the arrows to navigate weeks or add events for this week.</div>
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-        <button onclick="changeWeek(${-currentWeekOffset})" style="padding:8px 16px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;cursor:pointer">← Back to current week</button>
+        <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" style="padding:8px 16px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;cursor:pointer">← Back to current week</button>
         ${role.canEdit ? `<button onclick="openModal()" style="padding:8px 16px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;font-size:13px;cursor:pointer">+ Add event for this week</button>` : ''}
       </div>
     </div>`;
@@ -5264,7 +5267,18 @@ function toggleAssigned(eid, idx, name, val){
 
 
 // ── WEEK NAVIGATION ──
-let currentWeekOffset = 0; // 0 = current week
+function computeCurrentWeekOffset(){
+  // Anchor: W/E Sunday Jun 7 2026 = offset 0. Find the Sunday that ends THIS week.
+  const base = Date.UTC(2026, 5, 7);
+  const now = new Date();
+  const todayUTC = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const dow = new Date(todayUTC).getUTCDay();      // 0=Sun .. 6=Sat
+  const daysToSunday = (7 - dow) % 7;              // 0 if today is Sunday
+  const weekEnd = todayUTC + daysToSunday * 86400000;
+  return Math.round((weekEnd - base) / (7 * 86400000));
+}
+const CURRENT_WEEK_OFFSET = computeCurrentWeekOffset();
+let currentWeekOffset = CURRENT_WEEK_OFFSET; // start on the real current week
 
 function getWeekEndDate(offset){
   // Use UTC to avoid timezone day-shift
@@ -5287,7 +5301,7 @@ function updateWeekLabel(){
   const d = getWeekEndDate(currentWeekOffset);
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const label = 'W/E '+months[d.getUTCMonth()]+' '+d.getUTCDate()+', '+String(d.getUTCFullYear()).slice(2);
-  const pill = document.getElementById('wePill');
+  const pill = document.getElementById('wePillText') || document.getElementById('wePill');
   if(pill) pill.textContent = label;
 }
 
@@ -6354,6 +6368,7 @@ function initNow(){
   }
 }
 initNow();
+updateWeekLabel();
 </script>
 </body>
 </html>
