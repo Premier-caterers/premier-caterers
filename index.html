@@ -289,7 +289,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — calendar + link</span>
+  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — quote button</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -1146,11 +1146,18 @@ function renderPipeline(){
     {key:'lost',      label:'Lost / Declined', icon:'ti-circle-x',      cls:'stage-lost'},
   ];
 
+  let detailHtml = '';
+  if(selectedInqId){
+    const inqSel = inquiries.find(x=>x.id===selectedInqId);
+    if(inqSel) detailHtml = renderInqDetail(inqSel, role);
+  }
+
   let h = `
   <div class="section-header">
     <div class="section-title">Client Pipeline</div>
     ${role.canEdit ? `<button class="add-btn" onclick="openAddInquiryModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add inquiry</button>` : ''}
   </div>
+  ${detailHtml}
   <div class="pipeline-cols">
   ${stages.map(s=>{
     const cards = inquiries.filter(i=>i.stage===s.key);
@@ -1184,10 +1191,6 @@ function renderPipeline(){
   }).join('')}
   </div>`;
 
-  if(selectedInqId){
-    const inq = inquiries.find(x=>x.id===selectedInqId);
-    if(inq) h += renderInqDetail(inq, role);
-  }
   return h;
 }
 
@@ -1198,6 +1201,7 @@ function renderInqDetail(inq, role){
     <div class="detail-header">
       <div class="detail-title">${inq.firstName} ${inq.lastName}${inq.eventName?' — '+inq.eventName:''}</div>
       <div class="detail-actions">
+        ${role.canViewInvoices?`<button onclick="viewClientQuote('${inq.id}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-right:6px"><i class="ti ti-file-invoice" style="font-size:14px"></i>Quote / Invoice</button>`:''}
         <button class="icon-btn" onclick="closeInqDetail()"><i class="ti ti-x"></i></button>
       </div>
     </div>
@@ -1368,8 +1372,26 @@ function renderEstimateBlock(inq, role){
   </div>`;
 }
 
-async function convertEstimateToInvoice(id){
-  const inq=_findInq(id); if(!inq) return;
+// View this client's quote/invoice. If booked (event exists), jump to the full
+// invoice in the Invoices view; otherwise open the estimate (the pre-booking quote)
+// right here on the card.
+function viewClientQuote(id){
+  const inq = _findInq(id); if(!inq) return;
+  const evId = 'inq_'+inq.id;
+  const e = events.find(x=>x.id===evId);
+  if(e){
+    showView('invoices');
+    setTimeout(()=>{ try{ openInvoice(evId); }catch(_){ } }, 250);
+  } else {
+    ensureEstimate(inq);
+    _estimateOpenId = inq.id;
+    _saveInquiry(inq);
+    render();
+    setTimeout(()=>{ document.getElementById('estLinesBody-'+inq.id)?.scrollIntoView({behavior:'smooth', block:'center'}); }, 60);
+  }
+}
+
+async function convertEstimateToInvoice(id){  const inq=_findInq(id); if(!inq) return;
   ensureEstimate(inq);
   const evId='inq_'+inq.id;
   let e=events.find(x=>x.id===evId);
@@ -1454,7 +1476,13 @@ function formatDate(d){
 function selectInquiry(id){
   selectedInqId = selectedInqId===id ? null : id;
   render();
-  setTimeout(()=>document.querySelector('.inq-detail')?.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
+  if(selectedInqId){
+    setTimeout(()=>{
+      const d = document.querySelector('.inq-detail');
+      if(d) d.scrollIntoView({behavior:'smooth', block:'start'});
+      else document.getElementById('mainArea')?.scrollTo({top:0, behavior:'smooth'});
+    }, 50);
+  }
 }
 
 function closeInqDetail(){ selectedInqId=null; render(); }
@@ -5449,7 +5477,7 @@ function clearGitHubToken(){
 // making the user reconnect every hour, we keep one reusable token client and use
 // SILENT refresh (prompt:'') — Google quietly issues a fresh token with no popup,
 // as long as the user already consented once and is still signed into Google.
-const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/drive.readonly';
+const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify';
 let gmailToken = null;
 let gmailUser = null;
 let gmailMessages = [];          // cached inbox messages
@@ -6128,6 +6156,7 @@ window.toggleEstimateTaxExempt = toggleEstimateTaxExempt;
 window.updateEstimateLogistics = updateEstimateLogistics;
 window.updateEstimateNotes = updateEstimateNotes;
 window.convertEstimateToInvoice = convertEstimateToInvoice;
+window.viewClientQuote = viewClientQuote;
 window.moveEstimateLine = moveEstimateLine;
 window.emailMenuLink = emailMenuLink;
 window.openMenuEmail = openMenuEmail;
