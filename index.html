@@ -1,4 +1,4 @@
-<!-- Premier Caterers App | 06/10 — 14:15 -->
+<!-- Premier Caterers App | 06/10 — 14:30 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -292,7 +292,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">06/10 — 14:15</span>
+  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">06/10 — 14:30</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -594,7 +594,7 @@ function startFirebaseListeners(){
         return;
       }
     }
-    if(currentView==='pipeline') render();
+    if(currentView==='pipeline' || currentView==='events') render();
   });
   checklistCol.onSnapshot( snap=>{ checklists={}; snap.docs.forEach(d=>{ checklists[d.id]=d.data().items||[]; }); if(currentView==='checklists') render(); updateBadge(); });
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
