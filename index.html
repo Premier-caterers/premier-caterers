@@ -856,6 +856,101 @@ function coverSaveMeal(eventId, mealIdx, field, val, isNumber){
   _saveEvent(e);
 }
 
+function coverAddNewRow(){
+  if(!window._coverTempRows) window._coverTempRows = [];
+  window._coverTempRows.push({job:'', name:'', label:'', typeLabel:'', dayLabel:'', addr:'', waiters:0, waiterTime:'', chefs:0, chefTime:'', porters:0, mashgiach:'', manager:''});
+  render();
+  // Scroll to bottom of table
+  setTimeout(()=>document.querySelector('tfoot')?.scrollIntoView({behavior:'smooth', block:'nearest'}), 100);
+}
+
+function coverTempUpdate(ri, field, val){
+  if(!window._coverTempRows || !window._coverTempRows[ri]) return;
+  window._coverTempRows[ri][field] = val;
+}
+
+async function coverCommitRow(ri){
+  const row = (window._coverTempRows||[])[ri];
+  if(!row) return;
+  if(!row.name){ alert('Please enter a client name.'); return; }
+
+  const weekDate = getWeekEndDate(currentWeekOffset);
+  const weekStr  = weekDate.toISOString().split('T')[0];
+
+  // Build full job number
+  const yy = String(weekDate.getUTCFullYear()).slice(2);
+  const mm = String(weekDate.getUTCMonth()+1).padStart(2,'0');
+  const dd = String(weekDate.getUTCDate()).padStart(2,'0');
+  const prefix = yy+mm+dd+'-';
+  let fullJob = row.job ? (row.job.includes('-') ? row.job : prefix+row.job.replace(/^#/,'')) : nextJobNumber(weekStr);
+
+  // Detect: same job # + same name → sub-meal of existing event
+  const shortNum = fullJob.includes('-') ? fullJob.split('-')[1].replace(/[a-z]+$/i,'') : '';
+  const matchEvent = events.find(e =>
+    (e.weekOf||'') === weekStr &&
+    e.job && e.job.includes('-') &&
+    e.job.split('-')[1].replace(/[a-z]+$/i,'') === shortNum &&
+    e.name.toLowerCase().trim() === row.name.toLowerCase().trim()
+  );
+
+  if(matchEvent){
+    // Same client, same job # → add as sub-meal
+    if(confirm(`"${row.name}" already has job #${shortNum} this week.\n\nAdd "${row.label||'this meal'}" as a sub-meal row under that event?`)){
+      if(!matchEvent.meals) matchEvent.meals = [];
+      const suffix = fullJob.includes('-') ? (fullJob.split('-')[1].replace(/^\d+/,'')) : '';
+      matchEvent.meals.push({
+        jobSuffix: suffix, label: row.label||'', name: row.name,
+        typeLabel: row.typeLabel, dayLabel: row.dayLabel, addr: row.addr,
+        waiters: parseInt(row.waiters)||0, waiterTime: row.waiterTime,
+        chefs: parseInt(row.chefs)||0, chefTime: row.chefTime,
+        porters: parseInt(row.porters)||0, mashgiachNames: row.mashgiach, manager: row.manager
+      });
+      await _saveEvent(matchEvent);
+      showToast('Added as sub-meal under ' + matchEvent.name);
+    } else return;
+  } else {
+    // Different client or new job # → create new booked event
+    const sameJobDiffClient = events.find(e =>
+      (e.weekOf||'') === weekStr &&
+      e.job && e.job.split('-')[1]?.replace(/[a-z]+$/i,'') === shortNum
+    );
+    let msg = sameJobDiffClient
+      ? `Job #${shortNum} this week belongs to "${sameJobDiffClient.name}".\n\n"${row.name}" appears to be a different client at the same job #.\nCreate as a NEW booked event for this week?`
+      : `Create "${row.name}" as a new booked event for the week of ${weekStr}?`;
+    if(!confirm(msg)) return;
+
+    const wi = weekInfoFromDate(weekDate.toISOString().split('T')[0]) || {};
+    const newEvent = {
+      id: 'ev_' + Date.now(),
+      job: fullJob,
+      name: row.name,
+      type: 'other', typeLabel: row.typeLabel||'',
+      day: 'friday', dayLabel: row.dayLabel||'',
+      addr: row.addr||'',
+      weekOf: weekStr,
+      waiters: parseInt(row.waiters)||0, waiterTime: row.waiterTime||'',
+      chefs: parseInt(row.chefs)||0, chefTime: row.chefTime||'',
+      porters: parseInt(row.porters)||0,
+      mashgiach: row.mashgiach||'', manager: row.manager||'',
+      notes:'', menuLink:'', groceryLink:'', floorplan:'', venueLink:'', pdfMenuLink:'', logoData:'',
+      meals:[]
+    };
+    if(row.label) newEvent.meals.push({jobSuffix:'', label:row.label, name:row.name, typeLabel:row.typeLabel||'', dayLabel:row.dayLabel||'', addr:row.addr||'', waiters:parseInt(row.waiters)||0, waiterTime:row.waiterTime||'', chefs:parseInt(row.chefs)||0, chefTime:row.chefTime||'', porters:parseInt(row.porters)||0, mashgiachNames:row.mashgiach||'', manager:row.manager||''});
+    events.push(newEvent);
+    await _saveEvent(newEvent);
+    showToast('New event created: ' + row.name + ' (' + fullJob + ')');
+  }
+
+  // Remove temp row
+  window._coverTempRows.splice(ri, 1);
+  render();
+}
+
+function coverDiscardRow(ri){
+  if(window._coverTempRows) window._coverTempRows.splice(ri, 1);
+  render();
+}
+
 function coverAddMeal(eventId){
   const e = events.find(x=>x.id===eventId); if(!e) return;
   if(!e.meals) e.meals = [];
@@ -913,18 +1008,19 @@ function renderCoverSheet(){
 
   const cols = [
     {label:'#',           w:'52px'},
-    {label:'NAME',        w:'120px'},
-    {label:'MENU LINK',   w:'100px'},
-    {label:'TYPE',        w:'100px'},
-    {label:'DAY',         w:'90px'},
-    {label:'ADDRESS',     w:'200px'},
-    {label:'# WAITERS',   w:'72px'},
-    {label:'WAITER TIME', w:'90px'},
-    {label:'# CHEFS',     w:'64px'},
-    {label:'CHEFS TIME',  w:'84px'},
-    {label:'# PORTERS',   w:'68px'},
-    {label:'MASHGIACH',   w:'100px'},
-    {label:'MANAGER',     w:'100px'},
+    {label:'NAME',        w:'110px'},
+    {label:'MEAL',        w:'90px'},
+    {label:'MENU LINK',   w:'90px'},
+    {label:'TYPE',        w:'90px'},
+    {label:'DAY',         w:'80px'},
+    {label:'ADDRESS',     w:'180px'},
+    {label:'# WAITERS',   w:'68px'},
+    {label:'WAITER TIME', w:'84px'},
+    {label:'# CHEFS',     w:'60px'},
+    {label:'CHEFS TIME',  w:'78px'},
+    {label:'# PORTERS',   w:'64px'},
+    {label:'MASHGIACH',   w:'96px'},
+    {label:'MANAGER',     w:'96px'},
   ];
 
   const thStyle = `padding:7px 8px;border:1px solid #bbb;background:#f0f0f0;font-size:11px;font-weight:700;text-align:left;white-space:nowrap;text-transform:uppercase;letter-spacing:.4px;color:#333`;
@@ -932,11 +1028,11 @@ function renderCoverSheet(){
 
   const inpNum = (id,field,val,mi) => {
     const onCh = mi===undefined ? `coverSaveField('${id}','${field}',this.value,true)` : `coverSaveMeal('${id}',${mi},'${field}',this.value,true)`;
-    return `<input type="number" min="0" value="${val&&val!=0?val:''}" placeholder="—" onchange="${onCh}" style="width:42px;border:none;background:transparent;font-size:12px;color:#222;text-align:center;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.border='1px solid #8B1A1A';this.style.background='#fff'" onblur="this.style.border='none';this.style.background='transparent'">`;
+    return `<input type="number" min="0" value="${val&&val!=0?val:''}" placeholder="\u2014" onchange="${onCh}" style="width:40px;border:none;background:transparent;font-size:12px;color:#222;text-align:center;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.border='1px solid #8B1A1A';this.style.background='#fff'" onblur="this.style.border='none';this.style.background='transparent'">`;
   };
   const inpTxt = (id,field,val,w,mi) => {
     const onBl = mi===undefined ? `coverSaveField('${id}','${field}',this.value,false)` : `coverSaveMeal('${id}',${mi},'${field}',this.value,false)`;
-    return `<input type="text" value="${esc(val||'')}" placeholder="—" style="width:${w||'80px'};border:none;background:transparent;font-size:12px;color:#222;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.border='1px solid #8B1A1A';this.style.background='#fff'" onblur="${onBl};this.style.border='none';this.style.background='transparent'">`;
+    return `<input type="text" value="${esc(val||'')}" placeholder="\u2014" style="width:${w||'80px'};border:none;background:transparent;font-size:12px;color:#222;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.border='1px solid #8B1A1A';this.style.background='#fff'" onblur="${onBl};this.style.border='none';this.style.background='transparent'">`;
   };
 
   let rows = '';
@@ -944,58 +1040,86 @@ function renderCoverSheet(){
     const bg = i%2===1 ? '#fafafa' : '#fff';
     const td = (content, extra='') => `<td style="${tdBase};background:${bg};${extra}">${content}</td>`;
     const menuHtml = (e.menuLink||e.pdfMenuLink)
-      ? `<a href="${esc(e.menuLink||e.pdfMenuLink)}" target="_blank" style="display:inline-block;background:#1a7340;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;text-decoration:none;font-weight:600">Menu ↗</a>`
-      : '<span style="color:#bbb">—</span>';
+      ? `<a href="${esc(e.menuLink||e.pdfMenuLink)}" target="_blank" style="display:inline-block;background:#1a7340;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;text-decoration:none;font-weight:600">Menu \u2197</a>`
+      : '<span style="color:#bbb">\u2014</span>';
 
-    // ── Main event row ──
+    // Main event row
     rows += `<tr>
       ${td(`<span style="font-weight:700;cursor:pointer" onclick="editJobNum('${e.id}')" title="Click to edit job #">${esc(coverJobNum(e.job))} <i class="ti ti-pencil" style="font-size:10px;opacity:.4"></i></span>`)}
-      ${td(inpTxt(e.id,'name',e.name,'100px'))}
+      ${td(inpTxt(e.id,'name',e.name,'96px'))}
+      ${td(`<span style="font-size:11px;color:var(--text3);font-style:italic">Main</span>`)}
       ${td(menuHtml)}
-      ${td(inpTxt(e.id,'typeLabel',e.typeLabel||e.type,'86px'))}
-      ${td(inpTxt(e.id,'dayLabel',e.dayLabel||e.day,'76px'))}
-      ${td(inpTxt(e.id,'addr',e.addr,'180px'),'white-space:normal;word-break:break-word')}
+      ${td(inpTxt(e.id,'typeLabel',e.typeLabel||e.type,'82px'))}
+      ${td(inpTxt(e.id,'dayLabel',e.dayLabel||e.day,'72px'))}
+      ${td(inpTxt(e.id,'addr',e.addr,'165px'),'white-space:normal;word-break:break-word')}
       ${td(inpNum(e.id,'waiters',e.waiters),'text-align:center')}
-      ${td(inpTxt(e.id,'waiterTime',e.waiterTime,'76px'))}
+      ${td(inpTxt(e.id,'waiterTime',e.waiterTime,'72px'))}
       ${td(inpNum(e.id,'chefs',e.chefs),'text-align:center')}
-      ${td(inpTxt(e.id,'chefTime',e.chefTime,'70px'))}
+      ${td(inpTxt(e.id,'chefTime',e.chefTime,'66px'))}
       ${td(inpNum(e.id,'porters',e.porters),'text-align:center')}
-      ${td(inpTxt(e.id,'mashgiach',e.mashgiach||e.mashgiachNames,'86px'))}
-      ${td(inpTxt(e.id,'manager',e.manager,'86px'))}
+      ${td(inpTxt(e.id,'mashgiach',e.mashgiach||e.mashgiachNames,'82px'))}
+      ${td(inpTxt(e.id,'manager',e.manager,'82px'))}
     </tr>`;
 
-    // ── Sub-meal rows ──
+    // Sub-meal rows
     (e.meals||[]).forEach((meal,mi)=>{
       rows += `<tr>
-        <td style="${tdBase};background:${bg};padding-left:16px">
-          <span style="font-size:10px;color:#bbb;margin-right:2px">↳</span>
+        <td style="${tdBase};background:${bg};padding-left:14px">
+          <span style="font-size:10px;color:#bbb;margin-right:2px">\u21b3</span>
           <input type="text" value="${esc(meal.jobSuffix||'')}" placeholder="a/b" title="Letter suffix"
-            style="width:30px;border:none;background:transparent;font-size:12px;color:#8B1A1A;font-weight:700;outline:none;padding:2px 3px;border-radius:3px"
+            style="width:28px;border:none;background:transparent;font-size:12px;color:#8B1A1A;font-weight:700;outline:none;padding:2px 3px;border-radius:3px"
             onfocus="this.style.border='1px solid #8B1A1A';this.style.background='#fff'"
             onblur="coverSaveMeal('${e.id}',${mi},'jobSuffix',this.value,false);this.style.border='none';this.style.background='transparent'">
         </td>
-        ${td(inpTxt(e.id,'name',meal.name||'','100px',mi))}
-        <td style="${tdBase};background:${bg};color:#bbb;font-size:11px;text-align:center">—</td>
-        ${td(inpTxt(e.id,'typeLabel',meal.typeLabel||meal.type||'','86px',mi))}
-        ${td(inpTxt(e.id,'dayLabel',meal.dayLabel||meal.day||'','76px',mi))}
-        ${td(inpTxt(e.id,'addr',meal.addr||'','180px',mi),'white-space:normal;word-break:break-word')}
+        ${td(inpTxt(e.id,'name',meal.name||'','96px',mi))}
+        ${td(inpTxt(e.id,'label',meal.label||'','78px',mi),'font-style:italic')}
+        <td style="${tdBase};background:${bg};color:#bbb;font-size:11px;text-align:center">\u2014</td>
+        ${td(inpTxt(e.id,'typeLabel',meal.typeLabel||meal.type||'','82px',mi))}
+        ${td(inpTxt(e.id,'dayLabel',meal.dayLabel||meal.day||'','72px',mi))}
+        ${td(inpTxt(e.id,'addr',meal.addr||'','165px',mi),'white-space:normal;word-break:break-word')}
         ${td(inpNum(e.id,'waiters',meal.waiters,mi),'text-align:center')}
-        ${td(inpTxt(e.id,'waiterTime',meal.waiterTime||'','76px',mi))}
+        ${td(inpTxt(e.id,'waiterTime',meal.waiterTime||'','72px',mi))}
         ${td(inpNum(e.id,'chefs',meal.chefs,mi),'text-align:center')}
-        ${td(inpTxt(e.id,'chefTime',meal.chefTime||'','70px',mi))}
+        ${td(inpTxt(e.id,'chefTime',meal.chefTime||'','66px',mi))}
         ${td(inpNum(e.id,'porters',meal.porters,mi),'text-align:center')}
-        ${td(inpTxt(e.id,'mashgiach',meal.mashgiachNames||meal.mashgiach||'','86px',mi))}
-        ${td(inpTxt(e.id,'manager',meal.manager||'','86px',mi))}
+        ${td(inpTxt(e.id,'mashgiach',meal.mashgiachNames||meal.mashgiach||'','82px',mi))}
+        ${td(inpTxt(e.id,'manager',meal.manager||'','82px',mi))}
       </tr>`;
     });
 
-    // ── Add / remove meal row buttons ──
+    // Add / remove buttons
     const hasMeals = (e.meals||[]).length > 0;
     rows += `<tr><td colspan="${cols.length}" style="border:1px solid #e8e8e8;background:${bg};padding:3px 8px">
       <button onclick="coverAddMeal('${e.id}')" style="border:none;background:none;color:#8B1A1A;font-size:11px;cursor:pointer;padding:2px 6px;border-radius:3px;display:inline-flex;align-items:center;gap:3px" onmouseover="this.style.background='#f5e8e8'" onmouseout="this.style.background='none'"><i class="ti ti-plus" style="font-size:11px"></i> Add meal row</button>
       ${hasMeals?`<button onclick="coverRemoveLastMeal('${e.id}')" style="border:none;background:none;color:#999;font-size:11px;cursor:pointer;padding:2px 6px;border-radius:3px;margin-left:4px;display:inline-flex;align-items:center;gap:3px" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='none'"><i class="ti ti-minus" style="font-size:11px"></i> Remove last</button>`:''}
     </td></tr>`;
   });
+
+  // New event temp rows
+  const tempRows = window._coverTempRows || [];
+  tempRows.forEach((row,ri)=>{
+    rows += `<tr style="background:#fffdf0;outline:2px solid #FFE000;outline-offset:-1px">
+      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.job||'')}" placeholder="#" style="width:44px;border:1px dashed #ccc;background:#fff;font-size:12px;font-weight:700;color:#8B1A1A;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.borderColor='#8B1A1A'" onblur="coverTempUpdate(${ri},'job',this.value)"></td>
+      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.name||'')}" placeholder="Client name" style="width:96px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.borderColor='#8B1A1A'" onblur="coverTempUpdate(${ri},'name',this.value)"></td>
+      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.label||'')}" placeholder="Dinner/Lunch\u2026" style="width:78px;border:1px dashed #ccc;background:#fff;font-size:12px;font-style:italic;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.borderColor='#8B1A1A'" onblur="coverTempUpdate(${ri},'label',this.value)"></td>
+      <td style="${tdBase};background:#fffdf0;color:#bbb;font-size:11px;text-align:center">\u2014</td>
+      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.typeLabel||'')}" placeholder="Type" style="width:82px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.borderColor='#8B1A1A'" onblur="coverTempUpdate(${ri},'typeLabel',this.value)"></td>
+      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.dayLabel||'')}" placeholder="Day" style="width:72px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.borderColor='#8B1A1A'" onblur="coverTempUpdate(${ri},'dayLabel',this.value)"></td>
+      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.addr||'')}" placeholder="Address" style="width:165px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.borderColor='#8B1A1A'" onblur="coverTempUpdate(${ri},'addr',this.value)"></td>
+      <td style="${tdBase};background:#fffdf0;text-align:center"><input type="number" min="0" value="${row.waiters||''}" placeholder="\u2014" style="width:40px;border:1px dashed #ccc;background:#fff;font-size:12px;text-align:center;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'waiters',this.value)"></td>
+      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.waiterTime||'')}" placeholder="\u2014" style="width:72px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'waiterTime',this.value)"></td>
+      <td style="${tdBase};background:#fffdf0;text-align:center"><input type="number" min="0" value="${row.chefs||''}" placeholder="\u2014" style="width:40px;border:1px dashed #ccc;background:#fff;font-size:12px;text-align:center;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'chefs',this.value)"></td>
+      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.chefTime||'')}" placeholder="\u2014" style="width:66px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'chefTime',this.value)"></td>
+      <td style="${tdBase};background:#fffdf0;text-align:center"><input type="number" min="0" value="${row.porters||''}" placeholder="\u2014" style="width:40px;border:1px dashed #ccc;background:#fff;font-size:12px;text-align:center;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'porters',this.value)"></td>
+      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.mashgiach||'')}" placeholder="\u2014" style="width:82px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'mashgiach',this.value)"></td>
+      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.manager||'')}" placeholder="\u2014" style="width:82px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'manager',this.value)"></td>
+    </tr>
+    <tr><td colspan="${cols.length}" style="border:1px solid #e8e8e8;background:#fffbea;padding:4px 10px;text-align:right">
+      <button onclick="coverCommitRow(${ri})" style="padding:4px 14px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;margin-right:6px">\u2713 Save row</button>
+      <button onclick="coverDiscardRow(${ri})" style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);font-size:12px;cursor:pointer">\u2715 Discard</button>
+    </td></tr>`;
+  });
+
 
 
   const noEvents = weekEvents.length===0 ? `
