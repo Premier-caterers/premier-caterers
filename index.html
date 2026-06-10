@@ -291,7 +291,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — cover sheet v3</span>
+  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — bartenders column</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -862,7 +862,7 @@ function coverCopyFromAbove(eventId, mealIdx, field, isNumber){
   let sourceVal;
   if(mealIdx === 0){
     // copy from main event fields
-    const mainMap = {name:e.name, label:e.mainLabel||'', typeLabel:e.typeLabel||e.type||'', dayLabel:e.dayLabel||e.day||'', addr:e.addr||'', waiters:e.waiters||0, waiterTime:e.waiterTime||'', chefs:e.chefs||0, chefTime:e.chefTime||'', porters:e.porters||0, mashgiach:e.mashgiach||e.mashgiachNames||'', manager:e.manager||''};
+    const mainMap = {name:e.name, label:e.mainLabel||'', typeLabel:e.typeLabel||e.type||'', dayLabel:e.dayLabel||e.day||'', addr:e.addr||'', waiters:e.waiters||0, bartenders:e.bartenders||0, waiterTime:e.waiterTime||'', chefs:e.chefs||0, chefTime:e.chefTime||'', porters:e.porters||0, mashgiach:e.mashgiach||e.mashgiachNames||'', manager:e.manager||''};
     sourceVal = mainMap[field];
   } else {
     const above = e.meals[mealIdx-1];
@@ -879,7 +879,7 @@ function coverCreateDropOff(){
   const weekDate = getWeekEndDate(currentWeekOffset);
   const weekStr  = weekDate.toISOString().split('T')[0];
   const nextJob  = nextJobNumber(weekStr);
-  window._coverTempRows.push({job:nextJob, name:'', label:'Drop off', typeLabel:'Drop off catering', dayLabel:'', addr:'', waiters:0, waiterTime:'', chefs:0, chefTime:'', porters:0, mashgiach:'', manager:''});
+  window._coverTempRows.push({job:nextJob, name:'', label:'Drop off', typeLabel:'Drop off catering', dayLabel:'', addr:'', waiters:0, bartenders:0, waiterTime:'', chefs:0, chefTime:'', porters:0, mashgiach:'', manager:''});
   render();
   setTimeout(()=>document.querySelector('tfoot')?.scrollIntoView({behavior:'smooth',block:'nearest'}),100);
 }
@@ -982,7 +982,7 @@ function coverDiscardRow(ri){
 function coverAddMeal(eventId){
   const e = events.find(x=>x.id===eventId); if(!e) return;
   if(!e.meals) e.meals = [];
-  e.meals.push({jobSuffix:'', label:'', name:'', typeLabel:'', dayLabel:'', addr:'', waiters:0, waiterTime:'', chefs:0, chefTime:'', porters:0, mashgiachNames:'', manager:''});
+  e.meals.push({jobSuffix:'', label:'', name:'', typeLabel:'', dayLabel:'', addr:'', waiters:0, bartenders:0, waiterTime:'', chefs:0, chefTime:'', porters:0, mashgiachNames:'', manager:''});
   _saveEvent(e);
   render();
 }
@@ -1043,6 +1043,7 @@ function renderCoverSheet(){
     {label:'DAY',         w:'80px'},
     {label:'ADDRESS',     w:'180px'},
     {label:'# WAITERS',   w:'68px'},
+    {label:'BARTENDERS',  w:'72px'},
     {label:'WAITER TIME', w:'84px'},
     {label:'# CHEFS',     w:'60px'},
     {label:'CHEFS TIME',  w:'78px'},
@@ -1084,6 +1085,7 @@ function renderCoverSheet(){
       ${td(inpTxt(e.id,'dayLabel',e.dayLabel||e.day,'72px'))}
       ${td(inpTxt(e.id,'addr',e.addr,'165px'),'white-space:normal;word-break:break-word')}
       ${td(inpNum(e.id,'waiters',e.waiters),'text-align:center')}
+      ${td(inpNum(e.id,'bartenders',e.bartenders||0),'text-align:center')}
       ${td(inpTxt(e.id,'waiterTime',e.waiterTime,'72px'))}
       ${td(inpNum(e.id,'chefs',e.chefs),'text-align:center')}
       ${td(inpTxt(e.id,'chefTime',e.chefTime,'66px'))}
@@ -1109,6 +1111,7 @@ function renderCoverSheet(){
         <td style="${tdBase};background:${bg}">${inpTxt(e.id,'dayLabel',meal.dayLabel||meal.day||'','62px',mi)}${copyBtn(e.id,mi,'dayLabel',false)}</td>
         <td style="${tdBase};background:${bg};white-space:normal;word-break:break-word">${inpTxt(e.id,'addr',meal.addr||'','148px',mi)}${copyBtn(e.id,mi,'addr',false)}</td>
         <td style="${tdBase};background:${bg};text-align:center">${inpNum(e.id,'waiters',meal.waiters,mi)}${copyBtn(e.id,mi,'waiters',true)}</td>
+        <td style="${tdBase};background:${bg};text-align:center">${inpNum(e.id,'bartenders',meal.bartenders||0,mi)}${copyBtn(e.id,mi,'bartenders',true)}</td>
         <td style="${tdBase};background:${bg}">${inpTxt(e.id,'waiterTime',meal.waiterTime||'','62px',mi)}${copyBtn(e.id,mi,'waiterTime',false)}</td>
         <td style="${tdBase};background:${bg};text-align:center">${inpNum(e.id,'chefs',meal.chefs,mi)}${copyBtn(e.id,mi,'chefs',true)}</td>
         <td style="${tdBase};background:${bg}">${inpTxt(e.id,'chefTime',meal.chefTime||'','56px',mi)}${copyBtn(e.id,mi,'chefTime',false)}</td>
@@ -1138,6 +1141,7 @@ function renderCoverSheet(){
       <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.dayLabel||'')}" placeholder="Day" style="width:72px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.borderColor='#8B1A1A'" onblur="coverTempUpdate(${ri},'dayLabel',this.value)"></td>
       <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.addr||'')}" placeholder="Address" style="width:165px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.borderColor='#8B1A1A'" onblur="coverTempUpdate(${ri},'addr',this.value)"></td>
       <td style="${tdBase};background:#fffdf0;text-align:center"><input type="number" min="0" value="${row.waiters||''}" placeholder="\u2014" style="width:40px;border:1px dashed #ccc;background:#fff;font-size:12px;text-align:center;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'waiters',this.value)"></td>
+      <td style="${tdBase};background:#fffdf0;text-align:center"><input type="number" min="0" value="${row.bartenders||''}" placeholder="\u2014" style="width:40px;border:1px dashed #ccc;background:#fff;font-size:12px;text-align:center;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'bartenders',this.value)"></td>
       <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.waiterTime||'')}" placeholder="\u2014" style="width:72px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'waiterTime',this.value)"></td>
       <td style="${tdBase};background:#fffdf0;text-align:center"><input type="number" min="0" value="${row.chefs||''}" placeholder="\u2014" style="width:40px;border:1px dashed #ccc;background:#fff;font-size:12px;text-align:center;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'chefs',this.value)"></td>
       <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.chefTime||'')}" placeholder="\u2014" style="width:66px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'chefTime',this.value)"></td>
@@ -1196,7 +1200,7 @@ function printCoverSheet(){
   const weekStr  = weekDate.toISOString().split('T')[0];
   const weekEvents = coverSortEvents(events.filter(e=>(e.weekOf||'2026-05-31')===weekStr));
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const cols = ['#','NAME','MEAL','TYPE','DAY','ADDRESS','# WAITERS','WAITER TIME','# CHEFS','CHEFS TIME','# PORTERS','MASHGIACH','MANAGER'];
+  const cols = ['#','NAME','MEAL','TYPE','DAY','ADDRESS','# WAITERS','BARTENDERS','WAITER TIME','# CHEFS','CHEFS TIME','# PORTERS','MASHGIACH','MANAGER'];
   const th = s => `<th style="padding:6px 8px;border:1px solid #999;background:#f0f0f0;font-size:10px;font-weight:700;text-align:left;white-space:nowrap">${s}</th>`;
   const td = (s,bold,center,italic) => `<td style="padding:5px 8px;border:1px solid #ccc;font-size:11px;${bold?'font-weight:700;':''}${center?'text-align:center;':''}${italic?'font-style:italic;':''}">${esc(String(s||''))||'—'}</td>`;
   let rows = '';
@@ -1532,6 +1536,7 @@ function renderDetail(e,role){
           <div class="detail-block-title">Staff</div>
           <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;padding-bottom:4px;border-bottom:0.5px solid var(--border)">Main event</div>
           ${f('waiters','Waiters',e.waiters,'number')}
+          ${f('bartenders','Bartenders',e.bartenders,'number')}
           ${f('waiterTime','Waiter arrival',e.waiterTime)}
           ${f('chefs','Chefs',e.chefs,'number')}
           ${f('chefTime','Chef arrival',e.chefTime)}
@@ -1545,6 +1550,7 @@ function renderDetail(e,role){
             ${meal.dayLabel?`<span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0"> (${meal.dayLabel})</span>`:''}
           </div>
           <div class="drow"><span class="dkey">Waiters</span><span class="dval">${meal.waiters||'—'}</span></div>
+          <div class="drow"><span class="dkey">Bartenders</span><span class="dval">${meal.bartenders||'—'}</span></div>
           <div class="drow"><span class="dkey">Waiter arrival</span><span class="dval">${meal.waiterTime||'—'}</span></div>
           <div class="drow"><span class="dkey">Chefs</span><span class="dval">${meal.chefs||'—'}</span></div>
           <div class="drow"><span class="dkey">Chef arrival</span><span class="dval">${meal.chefTime||'—'}</span></div>
