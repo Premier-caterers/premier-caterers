@@ -1,4 +1,4 @@
-<!-- Premier Caterers App | 06/10 — 12:30 -->
+<!-- Premier Caterers App | 06/10 — 14:00 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -292,7 +292,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">06/10 — 12:30</span>
+  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">06/10 — 14:00</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -501,7 +501,14 @@ function autoSaveVenue(name, addr){
   }
 }
 
-async function _saveInvoice(eid,inv){ try{ await invoicesCol.doc(eid).set({...inv,ts:Date.now()}); }catch(err){ console.error(err); } }
+async function _saveInvoice(eid,inv){
+  try{
+    await invoicesCol.doc(eid).set({...inv,ts:Date.now()});
+    const inqId = eid.startsWith('inq_') ? eid.slice(4) : eid;
+    const inq = inquiries.find(x=>x.id===inqId);
+    if(inq && inq.stage==='booked') syncBookingToSheet(inq, inv);
+  }catch(err){ console.error(err); }
+}
 
 async function _saveEquipment(eid,eq){ try{ await db.collection('equipment').doc(eid).set({...eq,ts:Date.now()}); }catch(err){ console.error(err); } }
 
@@ -2156,8 +2163,33 @@ function moveInquiry(id, stage){
     if(ev0 && ev0.lost){ ev0.lost=false; _saveEvent(ev0); }
     createEventFromInquiry(inq);
     gcalBooked(inq);
+    syncBookingToSheet(inq);
   }
   render(); updatePipelineBadge();
+}
+
+// ── SHEET SYNC ───────────────────────────────────────────────────
+function syncBookingToSheet(inq, inv){
+  const scriptUrl = localStorage.getItem('scriptUrl'); if(!scriptUrl) return;
+  const ed = inq.eventDate||'';
+  let dateStr = '';
+  if(ed && ed.includes('-')){ const p=ed.split('-'); dateStr=(parseInt(p[1]))+'/'+parseInt(p[2]); }
+  const clientName = ((inq.firstName||'')+' '+(inq.lastName||'')).trim() || inq.name || '';
+  const eventType  = inq.eventType||'';
+  let subtotal = '', logistics = '';
+  if(inv){ const t=calcInvoiceTotals(inv); subtotal=t.subtotal.toFixed(2); logistics=t.logistics.toFixed(2); }
+  else if(inq.estimate && inq.estimate.lines && inq.estimate.lines.length){
+    const t=calcInvoiceTotals(inq.estimate); subtotal=t.subtotal.toFixed(2); logistics=t.logistics.toFixed(2);
+  }
+  const params = new URLSearchParams({
+    action:'syncSheet', sheetId:'1B-QUt4e2BFmCROI94YxOHq1lCFfK9DwbV7nghVY2GXY',
+    sheetTab:'2026 Monthly income', date:dateStr, clientName:clientName,
+    eventType:eventType, subtotal:subtotal, logistics:logistics
+  });
+  fetch(scriptUrl+'?'+params.toString())
+    .then(r=>r.json())
+    .then(d=>{ if(d.success) showToast('Sheet updated → '+clientName); else console.warn('Sheet sync:',d.error); })
+    .catch(err=>console.warn('Sheet sync error:',err));
 }
 
 // ── GOOGLE CALENDAR SYNC ──────────────────────────────────────
