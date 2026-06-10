@@ -291,7 +291,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated Jun 09, 2026 — print fix</span>
+  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">06/10 — 12:30</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -856,9 +856,19 @@ function coverSaveMeal(eventId, mealIdx, field, val, isNumber){
   _saveEvent(e);
 }
 
+function coverCreateDropOff(){
+  if(!window._coverTempRows) window._coverTempRows = [];
+  const weekDate = getWeekEndDate(currentWeekOffset);
+  const weekStr  = weekDate.toISOString().split('T')[0];
+  const nextJob  = nextJobNumber(weekStr);
+  window._coverTempRows.push({job:nextJob, name:'', label:'Drop off', typeLabel:'Drop off catering', dayLabel:'', addr:'', waiters:0, bartenders:0, waiterTime:'', chefs:0, chefTime:'', porters:0, mashgiach:'', manager:''});
+  render();
+  setTimeout(()=>document.querySelector('tfoot')?.scrollIntoView({behavior:'smooth',block:'nearest'}),100);
+}
+
 function coverAddNewRow(){
   if(!window._coverTempRows) window._coverTempRows = [];
-  window._coverTempRows.push({job:'', name:'', label:'', typeLabel:'', dayLabel:'', addr:'', waiters:0, waiterTime:'', chefs:0, chefTime:'', porters:0, mashgiach:'', manager:''});
+  window._coverTempRows.push({job:'', name:'', label:'', typeLabel:'', dayLabel:'', addr:'', waiters:0, bartenders:0, waiterTime:'', chefs:0, chefTime:'', porters:0, mashgiach:'', manager:''});
   render();
   // Scroll to bottom of table
   setTimeout(()=>document.querySelector('tfoot')?.scrollIntoView({behavior:'smooth', block:'nearest'}), 100);
@@ -1140,6 +1150,8 @@ function renderCoverSheet(){
         <button onclick="changeWeek(1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">›</button>
         <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" style="padding:5px 12px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:12px;cursor:pointer">Current week</button>
         <button onclick="printCoverSheet()" style="padding:5px 14px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-printer"></i> Print / Save PDF</button>
+        <button onclick="coverAddNewRow()" style="padding:5px 14px;border:0.5px solid #8B1A1A;border-radius:var(--radius);background:#fff;color:#8B1A1A;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-plus"></i> New event</button>
+        <button onclick="coverCreateDropOff()" style="padding:5px 14px;border:0.5px solid #666;border-radius:var(--radius);background:#fff;color:#555;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-truck-delivery"></i> New drop off</button>
       </div>
     </div>
     ${sortBar}
@@ -1157,6 +1169,13 @@ function renderCoverSheet(){
           <tr>${cols.map(c=>`<th style="${thStyle};width:${c.w};min-width:${c.w}">${c.label}</th>`).join('')}</tr>
         </thead>
         <tbody>${rows}</tbody>
+        <tfoot>
+          <tr><td colspan="${cols.length}" style="padding:8px 10px;border:1px solid #e0e0e0;background:#f9f9f9">
+            <button onclick="coverAddNewRow()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border:0.5px solid #8B1A1A;border-radius:var(--radius);background:#fff;color:#8B1A1A;font-size:12px;font-weight:600;cursor:pointer" onmouseover="this.style.background='#f5e8e8'" onmouseout="this.style.background='#fff'"><i class="ti ti-plus" style="font-size:13px"></i> Add new event row</button>
+            <button onclick="coverCreateDropOff()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border:0.5px solid #555;border-radius:var(--radius);background:#fff;color:#555;font-size:12px;font-weight:600;cursor:pointer;margin-left:8px" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='#fff'"><i class="ti ti-truck-delivery" style="font-size:13px"></i> New drop off</button>
+            <span style="font-size:11px;color:var(--text3);margin-left:12px">Fill in job # and name — app detects if new event or sub-meal</span>
+          </td></tr>
+        </tfoot>
       </table>
     </div>` : ''}`;
 }
