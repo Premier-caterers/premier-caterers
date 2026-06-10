@@ -1,3 +1,4 @@
+<!-- Premier Caterers App | 06/10 — 12:30 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1169,13 +1170,7 @@ function renderCoverSheet(){
           <tr>${cols.map(c=>`<th style="${thStyle};width:${c.w};min-width:${c.w}">${c.label}</th>`).join('')}</tr>
         </thead>
         <tbody>${rows}</tbody>
-        <tfoot>
-          <tr><td colspan="${cols.length}" style="padding:8px 10px;border:1px solid #e0e0e0;background:#f9f9f9">
-            <button onclick="coverAddNewRow()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border:0.5px solid #8B1A1A;border-radius:var(--radius);background:#fff;color:#8B1A1A;font-size:12px;font-weight:600;cursor:pointer" onmouseover="this.style.background='#f5e8e8'" onmouseout="this.style.background='#fff'"><i class="ti ti-plus" style="font-size:13px"></i> Add new event row</button>
-            <button onclick="coverCreateDropOff()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border:0.5px solid #555;border-radius:var(--radius);background:#fff;color:#555;font-size:12px;font-weight:600;cursor:pointer;margin-left:8px" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='#fff'"><i class="ti ti-truck-delivery" style="font-size:13px"></i> New drop off</button>
-            <span style="font-size:11px;color:var(--text3);margin-left:12px">Fill in job # and name — app detects if new event or sub-meal</span>
-          </td></tr>
-        </tfoot>
+        <tfoot><tr><td colspan="${cols.length}" style="padding:8px 10px;border:1px solid #e0e0e0;background:#f9f9f9"><button onclick="coverAddNewRow()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border:0.5px solid #8B1A1A;border-radius:var(--radius);background:#fff;color:#8B1A1A;font-size:12px;font-weight:600;cursor:pointer"><i class="ti ti-plus" style="font-size:13px"></i> Add new event row</button><button onclick="coverCreateDropOff()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border:0.5px solid #666;border-radius:var(--radius);background:#fff;color:#555;font-size:12px;font-weight:600;cursor:pointer;margin-left:8px"><i class="ti ti-truck-delivery" style="font-size:13px"></i> New drop off</button></td></tr></tfoot>
       </table>
     </div>` : ''}`;
 }
