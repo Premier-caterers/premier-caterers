@@ -1,4 +1,4 @@
-<!-- Premier Caterers App | 06/10 — 15:15 -->
+<!-- Premier Caterers App | 06/10 — 16:00 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -292,7 +292,7 @@ a{color:var(--blue-mid);text-decoration:none}
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">06/10 — 15:15</span>
+  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">06/10 — 12:30</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -419,6 +419,7 @@ a{color:var(--blue-mid);text-decoration:none}
 <!-- Firebase Compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
 <script>
 
@@ -436,6 +437,7 @@ const firebaseConfig = {
   appId: "1:471701398759:web:559a7bee3b645ce545ee42"
 };
 // db and collections initialized in _startApp() after Firebase SDK loads
+let storage;
 let db, eventsCol, changesCol, inquiriesCol, checklistCol, equipCol, invoicesCol, venuesCol, trashCol;
 let groceryStationsCol, groceryListsCol;
 let groceryStations = []; // [{id, eventTypes:[], stationKey, label, items:[{name,code,qty,supplier,notes}]}]
@@ -862,6 +864,16 @@ function coverSaveMeal(eventId, mealIdx, field, val, isNumber){
   // keep label in sync with jobSuffix if label is blank
   if(field==='jobSuffix' && !e.meals[mealIdx].label) e.meals[mealIdx].label = val;
   _saveEvent(e);
+}
+
+function coverCreateDropOff(){
+  if(!window._coverTempRows) window._coverTempRows = [];
+  const weekDate = getWeekEndDate(currentWeekOffset);
+  const weekStr  = weekDate.toISOString().split('T')[0];
+  const nextJob  = nextJobNumber(weekStr);
+  window._coverTempRows.push({job:nextJob, name:'', label:'Drop off', typeLabel:'Drop off catering', dayLabel:'', addr:'', waiters:0, bartenders:0, waiterTime:'', chefs:0, chefTime:'', porters:0, mashgiach:'', manager:''});
+  render();
+  setTimeout(()=>document.querySelector('tfoot')?.scrollIntoView({behavior:'smooth',block:'nearest'}),100);
 }
 
 function coverCreateDropOff(){
@@ -1310,7 +1322,7 @@ function renderEvents(){
 
   dayOrder.forEach(d=>{
     if(!byDay[d]) return;
-    h+=`<div class="day-label">${byDay[d][0].dayLabel}</div><div class="event-grid">`;
+    h+=`<div class="day-label">${formatEventDay(byDay[d][0])}</div><div class="event-grid">`;
     byDay[d].forEach(e=>{
       const chips=[
         e.chefs>0?`<span class="staff-chip"><i class="ti ti-chef-hat"></i>${e.chefs} chef${e.chefs>1?'s':''}</span>`:'',
@@ -1401,10 +1413,8 @@ function renderEvents(){
           <span class="job-pill" style="flex-shrink:0;cursor:pointer" onclick="selectEvent('${e.id}')">${displayJob(e.job)}</span>
           <span style="font-size:14px;font-weight:500;color:var(--text);flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="selectEvent('${e.id}')">${e.name}</span>
           <span class="type-badge t-${e.type}" style="flex-shrink:0">${e.typeLabel}</span>
-          <span style="font-size:12px;color:var(--text3);flex-shrink:0">${e.dayLabel}</span>
-          ${e.menuLink ? `<a href="${e.menuLink}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:2px 9px;border:0.5px solid var(--green-border);border-radius:8px;background:var(--green-bg);color:var(--green-text);text-decoration:none;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-file-text" style="font-size:11px"></i>Menu</a>` : `<span style="font-size:11px;padding:2px 9px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text3);flex-shrink:0">No menu</span>`}
-          ${role.canViewInvoices ? `<button onclick="event.stopPropagation();showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:2px 9px;border:0.5px solid ${!invStatus||invStatus==='none'?'var(--border2)':invStatus==='paid'?'var(--green-border)':invStatus==='invoice'?'#c4b5fd':'var(--amber-border)'};border-radius:8px;background:${!invStatus||invStatus==='none'?'var(--bg2)':invStatus==='paid'?'var(--green-bg)':invStatus==='invoice'?'#f5f3ff':'var(--amber-bg)'};color:${invColor};cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-file-invoice" style="font-size:11px"></i>${!invStatus||invStatus==='none'?'No invoice':invStatus==='quote'?'Quote':invStatus==='approved'?'Approved':invStatus==='invoice'?'Invoice open':'Paid ✓'}</button>` : ''}
-          <button onclick="event.stopPropagation();openEventGrocery('${e.id}')" style="font-size:11px;padding:2px 9px;border:0.5px solid ${(groceryLists[e.id]&&groceryLists[e.id].items&&groceryLists[e.id].items.length)?'var(--green-border)':'var(--border2)'};border-radius:8px;background:${(groceryLists[e.id]&&groceryLists[e.id].items&&groceryLists[e.id].items.length)?'var(--green-bg)':'var(--bg2)'};color:${(groceryLists[e.id]&&groceryLists[e.id].items&&groceryLists[e.id].items.length)?'var(--green-text)':'var(--text3)'};cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-shopping-cart" style="font-size:11px"></i>${(groceryLists[e.id]&&groceryLists[e.id].items&&groceryLists[e.id].items.length)?'Grocery ('+groceryLists[e.id].items.length+')':'Grocery'}</button>
+          <span style="font-size:12px;color:var(--text3);flex-shrink:0">${formatEventDay(e)}</span>
+          ${renderDocBtns(e, role, inv, invStatus, invColor)}
         </div>`;
       });
       listH += '</div>';
@@ -2164,12 +2174,105 @@ function moveInquiry(id, stage){
     if(ev0 && ev0.lost){ ev0.lost=false; _saveEvent(ev0); }
     createEventFromInquiry(inq);
     gcalBooked(inq);
-    syncBookingToSheet(inq);
   }
   render(); updatePipelineBadge();
 }
 
-// ── SHEET SYNC ───────────────────────────────────────────────────
+
+function formatEventDay(e){
+  // Always return "Day M/D" e.g. "Mon 6/9"
+  const dayShort = {monday:'Mon',tuesday:'Tue',wednesday:'Wed',thursday:'Thu',friday:'Fri',saturday:'Sat',sunday:'Sun'};
+  const d = dayShort[e.day] || e.dayLabel || '';
+  if(e.eventDate){
+    const parts = e.eventDate.split('-');
+    if(parts.length===3) return d + (d?' ':'') + parseInt(parts[1])+'/'+parseInt(parts[2]);
+  }
+  // Fallback: use dayLabel if it already has a date
+  if(e.dayLabel && e.dayLabel.match(/\d/)) return e.dayLabel;
+  return d;
+}
+
+
+// ── DOCUMENT BUTTONS (used in list + card view) ───────────────
+function docBtn(label, icon, hasIt, onClick, href){
+  const bg = hasIt ? 'var(--green-bg)' : 'var(--bg2)';
+  const border = hasIt ? 'var(--green-border)' : 'var(--border2)';
+  const color = hasIt ? 'var(--green-text)' : 'var(--text3)';
+  const inner = `<i class="ti ${icon}" style="font-size:11px"></i>${label}`;
+  const style = `font-size:11px;padding:2px 9px;border:0.5px solid ${border};border-radius:8px;background:${bg};color:${color};cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0;text-decoration:none`;
+  if(href && hasIt) return `<a href="${href}" target="_blank" onclick="event.stopPropagation()" style="${style}">${inner}</a>`;
+  return `<button onclick="event.stopPropagation();${onClick}" style="${style}">${inner}</button>`;
+}
+
+function renderDocBtns(e, role, inv, invStatus, invColor){
+  const gHas = groceryLists[e.id]&&groceryLists[e.id].items&&groceryLists[e.id].items.length;
+  const gCount = gHas ? groceryLists[e.id].items.length : 0;
+  // Other slot labels
+  const o1 = e.other1Label||'Other 1', o2 = e.other2Label||'Other 2', o3 = e.other3Label||'Other 3';
+  return [
+    // Menu
+    e.menuLink
+      ? `<a href="${e.menuLink}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:2px 9px;border:0.5px solid var(--green-border);border-radius:8px;background:var(--green-bg);color:var(--green-text);text-decoration:none;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-file-text" style="font-size:11px"></i>Menu</a>`
+      : docBtn('No menu','ti-file-text',false,`openAttachModal('${e.id}','menuLink','','Menu')`,null),
+    // Invoice
+    role.canViewInvoices ? `<button onclick="event.stopPropagation();showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:2px 9px;border:0.5px solid ${!invStatus||invStatus==='none'?'var(--border2)':invStatus==='paid'?'var(--green-border)':invStatus==='invoice'?'#c4b5fd':'var(--amber-border)'};border-radius:8px;background:${!invStatus||invStatus==='none'?'var(--bg2)':invStatus==='paid'?'var(--green-bg)':invStatus==='invoice'?'#f5f3ff':'var(--amber-bg)'};color:${invColor};cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-file-invoice" style="font-size:11px"></i>${!invStatus||invStatus==='none'?'No invoice':invStatus==='quote'?'Quote':invStatus==='approved'?'Approved':invStatus==='invoice'?'Invoice open':'Paid ✓'}</button>` : '',
+    // Grocery
+    `<button onclick="event.stopPropagation();openEventGrocery('${e.id}')" style="font-size:11px;padding:2px 9px;border:0.5px solid ${gHas?'var(--green-border)':'var(--border2)'};border-radius:8px;background:${gHas?'var(--green-bg)':'var(--bg2)'};color:${gHas?'var(--green-text)':'var(--text3)'};cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-shopping-cart" style="font-size:11px"></i>${gHas?'Grocery ('+gCount+')':'Grocery'}</button>`,
+    // Checklist
+    docBtn('Checklist','ti-checklist',false,`goChecklist('${e.id}')`,null),
+    // Floorplan
+    e.floorplan ? docBtn('Floorplan','ti-layout-2',true,`openAttachModal('${e.id}','floorplan','${e.floorplan}','Floorplan')`,e.floorplan)
+                : docBtn('Floorplan','ti-layout-2',false,`openAttachModal('${e.id}','floorplan','','Floorplan')`,null),
+    // Logo
+    e.logoData ? docBtn('Logo','ti-photo',true,`openAttachModal('${e.id}','logoData','${e.logoData}','Logo')`,e.logoData)
+               : docBtn('Logo','ti-photo',false,`openAttachModal('${e.id}','logoData','','Logo')`,null),
+    // Schedule (client/vendor doc)
+    e.scheduleDoc ? docBtn('Schedule','ti-calendar-event',true,`openAttachModal('${e.id}','scheduleDoc','${e.scheduleDoc}','Event Schedule')`,e.scheduleDoc)
+                  : docBtn('Schedule','ti-calendar-event',false,`openAttachModal('${e.id}','scheduleDoc','','Event Schedule')`,null),
+    // Insurance
+    e.insuranceDoc ? docBtn('Insurance','ti-shield',true,`openAttachModal('${e.id}','insuranceDoc','${e.insuranceDoc}','Insurance Certificate')`,e.insuranceDoc)
+                   : docBtn('Insurance','ti-shield',false,`openAttachModal('${e.id}','insuranceDoc','','Insurance Certificate')`,null),
+    // Venue
+    e.venueLink ? docBtn('Venue','ti-building',true,`openAttachModal('${e.id}','venueLink','${e.venueLink}','Venue')`,e.venueLink)
+                : docBtn('Venue','ti-building',false,`openAttachModal('${e.id}','venueLink','','Venue')`,null),
+    // Email client
+    docBtn('Email','ti-mail',false,`openClientEmail('${e.id}')`,null),
+    // Other 1
+    e.other1 ? docBtn(o1,'ti-paperclip',true,`openAttachModal('${e.id}','other1','${e.other1}','${o1}')`,e.other1)
+             : `<button onclick="event.stopPropagation();openOtherSlot('${e.id}',1)" style="font-size:11px;padding:2px 9px;border:0.5px dashed var(--border2);border-radius:8px;background:var(--bg2);color:var(--text3);cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-plus" style="font-size:11px"></i>${o1}</button>`,
+    // Other 2
+    e.other2 ? docBtn(o2,'ti-paperclip',true,`openAttachModal('${e.id}','other2','${e.other2}','${o2}')`,e.other2)
+             : `<button onclick="event.stopPropagation();openOtherSlot('${e.id}',2)" style="font-size:11px;padding:2px 9px;border:0.5px dashed var(--border2);border-radius:8px;background:var(--bg2);color:var(--text3);cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-plus" style="font-size:11px"></i>${o2}</button>`,
+    // Other 3
+    e.other3 ? docBtn(o3,'ti-paperclip',true,`openAttachModal('${e.id}','other3','${e.other3}','${o3}')`,e.other3)
+             : `<button onclick="event.stopPropagation();openOtherSlot('${e.id}',3)" style="font-size:11px;padding:2px 9px;border:0.5px dashed var(--border2);border-radius:8px;background:var(--bg2);color:var(--text3);cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-plus" style="font-size:11px"></i>${o3}</button>`,
+  ].filter(Boolean).join('\n          ');
+}
+
+// Open other slot — name it first then attach
+function openOtherSlot(eventId, slot){
+  const e = events.find(x=>x.id===eventId); if(!e) return;
+  const field = 'other'+slot+'Label';
+  const current = e[field]||'';
+  const name = prompt('Name this slot (e.g. "Contract", "Seating chart", "Insurance"):', current||'Other '+slot);
+  if(!name) return;
+  e[field] = name.trim();
+  _saveEvent(e);
+  openAttachModal(eventId, 'other'+slot, '', name.trim());
+}
+
+// Email client from event
+function openClientEmail(eventId){
+  const e = events.find(x=>x.id===eventId);
+  const inq = inquiries.find(x=>'inq_'+x.id===eventId || x.id===eventId);
+  const email = inq?.email || e?.email || '';
+  if(!email){ showToast('No client email on file'); return; }
+  // Use existing Gmail compose if available
+  if(typeof openGmailCompose === 'function'){ openGmailCompose(email, '', ''); return; }
+  window.open('mailto:'+email);
+}
+
+// ── SHEET SYNC ────────────────────────────────
 function syncBookingToSheet(inq, inv){
   const scriptUrl = localStorage.getItem('scriptUrl'); if(!scriptUrl) return;
   const ed = inq.eventDate||'';
@@ -3968,7 +4071,6 @@ function getFullEventDate(e){
     friday:'Friday', saturday:'Saturday', sunday:'Sunday'
   };
   const fullDay = dayFull[e.day] || e.dayLabel || '';
-  // Use actual event date if available
   if(e.eventDate){
     const parts = e.eventDate.split('-');
     if(parts.length===3){
@@ -3976,7 +4078,6 @@ function getFullEventDate(e){
       return fullDay + (fullDay?', ':'') + dateStr;
     }
   }
-  // Fallback to week lookup
   const dateObj = eventDayDates[e.day];
   if(dateObj){
     const dateStr = (dateObj.getUTCMonth()+1) + '/' + dateObj.getUTCDate() + '/' + dateObj.getUTCFullYear();
