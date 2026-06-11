@@ -1,4 +1,4 @@
-<!-- Premier Caterers App | 06/10 — 17:30 -->
+<!-- Premier Caterers App | 06/11 — 09:07 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -30,7 +30,7 @@
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">06/10 — 17:30</span>
+  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">06/11 — 09:07</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -595,13 +595,13 @@ function setCoverSort(key){
   render();
 }
 
-function coverSaveMeal(eventId, mealIdx, field, val, isNumber){
+async function coverSaveMeal(eventId, mealIdx, field, val, isNumber){
   const e = events.find(x=>x.id===eventId); if(!e) return;
   if(!e.meals || !e.meals[mealIdx]) return;
   e.meals[mealIdx][field] = isNumber ? (parseInt(val)||0) : val;
   // keep label in sync with jobSuffix if label is blank
   if(field==='jobSuffix' && !e.meals[mealIdx].label) e.meals[mealIdx].label = val;
-  _saveEvent(e);
+  await _saveEvent(e);
 }
 
 function coverCreateDropOff(){
@@ -952,7 +952,7 @@ function printCoverSheet(){
       ${td(e.name,true)}
       ${td(mainLabel,false,false,true)}
       ${td(e.typeLabel||e.type)}
-      ${td(e.dayLabel||e.day)}
+      ${td(formatEventDay(e))}
       ${td(e.addr)}
       ${num(e.waiters)}
       ${num(e.bartenders)}
