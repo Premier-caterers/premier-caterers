@@ -1,4 +1,4 @@
-<!-- Premier Caterers App | 06/11 — 09:07 -->
+<!-- Premier Caterers App | 06/11 — 09:36 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -30,7 +30,7 @@
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">06/11 — 09:07</span>
+  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">06/11 — 09:36</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -1920,14 +1920,23 @@ function moveInquiry(id, stage){
 function formatEventDay(e){
   // Always return "Day M/D" e.g. "Mon 6/9"
   const dayShort = {monday:'Mon',tuesday:'Tue',wednesday:'Wed',thursday:'Thu',friday:'Fri',saturday:'Sat',sunday:'Sun'};
-  const d = dayShort[e.day] || e.dayLabel || '';
+  const d = dayShort[(e.day||'').toLowerCase()] || '';
   if(e.eventDate){
     const parts = e.eventDate.split('-');
-    if(parts.length===3) return d + (d?' ':'') + parseInt(parts[1])+'/'+parseInt(parts[2]);
+    if(parts.length===3) return (d?d+' ':'') + parseInt(parts[1])+'/'+parseInt(parts[2]);
   }
-  // Fallback: use dayLabel if it already has a date
-  if(e.dayLabel && e.dayLabel.match(/\d/)) return e.dayLabel;
-  return d;
+  // Try to extract M/D from dayLabel like "Fri 6/12" or "Jun 12, 2026"
+  if(e.dayLabel){
+    const m = e.dayLabel.match(/(\d{1,2})\/(\d{1,2})/);
+    if(m) return (d?d+' ':'')+m[1]+'/'+m[2];
+    const m2 = e.dayLabel.match(/(\w+)\s+(\d{1,2}),?\s*\d{4}/);
+    if(m2){
+      const months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+      const mo = months[m2[1].toLowerCase().slice(0,3)];
+      if(mo) return (d?d+' ':'')+mo+'/'+m2[2];
+    }
+  }
+  return d || e.dayLabel || '';
 }
 
 
