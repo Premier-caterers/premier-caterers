@@ -30,7 +30,7 @@
     <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
     <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
   </div>
-  <span class="ts-stamp" style="font-size:10px;color:var(--text3);white-space:nowrap">06/11 — 09:46</span>
+  <span class="ts-stamp" id="tsStamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated 06/11 — 20:31</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -742,6 +742,41 @@ function coverSaveField(id, field, val, isNumber){
   if(field==='manager'  ){ const ev=events.find(x=>x.id===id); if(ev){ ev.managerCount=ev.managerCount||0; } }
 }
 
+// Derive a numeric count from a staff value that may be a number ("3"), a note ("9+1"),
+// or a list of names ("Yossi, Dovid, Shmuli" -> 3).
+function staffNum(v){
+  if(v==null) return 0;
+  if(typeof v==='number') return v;
+  const s=String(v).trim();
+  if(s==='') return 0;
+  if(/^\d+$/.test(s)) return parseInt(s,10);
+  const lead=s.match(/^\s*(\d+)/);                 // "9+1" -> 9
+  if(lead) return parseInt(lead[1],10);
+  const parts=s.split(/[,\n;/&]+|\band\b/i).map(x=>x.trim()).filter(Boolean); // names -> count
+  return parts.length||0;
+}
+const COVER_NAMEKEY={waiters:'waiterNames',bartenders:'bartenderNames',chefs:'chefNames',porters:'porterNames'};
+// Cover-sheet staff cell: accepts a number OR names. Numbers set the count; names go to the
+// matching names field (which the Staff Schedule shows) and the count is auto-derived. This
+// keeps the numeric count field intact everywhere it's used (schedule, stats, invoices).
+function _applyStaffVal(obj, dept, val){
+  const nk=COVER_NAMEKEY[dept];
+  const v=(val||'').trim();
+  if(v===''){ obj[dept]=0; if(nk) obj[nk]=''; }
+  else if(/^\d+$/.test(v)){ obj[dept]=parseInt(v,10); if(nk) obj[nk]=''; }
+  else { if(nk) obj[nk]=v; obj[dept]=staffNum(v); }
+}
+function coverSaveStaff(id, dept, val){
+  const e=events.find(x=>x.id===id); if(!e) return;
+  _applyStaffVal(e, dept, val);
+  _saveEvent(e);
+}
+function coverSaveStaffMeal(id, mi, dept, val){
+  const e=events.find(x=>x.id===id); if(!e||!e.meals||!e.meals[mi]) return;
+  _applyStaffVal(e.meals[mi], dept, val);
+  _saveEvent(e);
+}
+
 function renderCoverSheet(){
   const weekDate = getWeekEndDate(currentWeekOffset);
   const weekStr  = weekDate.toISOString().split('T')[0];
@@ -798,6 +833,13 @@ function renderCoverSheet(){
     const onBl = mi===undefined ? `coverSaveField('${id}','${field}',this.value,false)` : `coverSaveMeal('${id}',${mi},'${field}',this.value,false)`;
     return `<input type="text" value="${esc(val||'')}" placeholder="\u2014" class="cs-inp" onblur="${onBl}">`;
   };
+  // Staff count cell: shows names if present, otherwise the count. Accepts a number OR typed names.
+  const inpStaff = (id,dept,countVal,namesVal,mi) => {
+    const hasNames = namesVal && String(namesVal).trim();
+    const shown = hasNames ? namesVal : (countVal&&countVal!=0?countVal:'');
+    const onBl = mi===undefined ? `coverSaveStaff('${id}','${dept}',this.value)` : `coverSaveStaffMeal('${id}',${mi},'${dept}',this.value)`;
+    return `<input type="text" value="${esc(shown)}" placeholder="\u2014" class="cs-inp cs-inp-staff" title="Type a number or names" onblur="${onBl}">`;
+  };
 
   let rows = '';
   weekEvents.forEach((e,i)=>{
@@ -815,12 +857,12 @@ function renderCoverSheet(){
       <td class="cs-td">${inpTxt(e.id,'typeLabel',e.typeLabel||e.type)}</td>
       <td class="cs-td">${inpTxt(e.id,'dayLabel',formatEventDay(e))}</td>
       <td class="cs-td">${inpTxt(e.id,'addr',e.addr)}</td>
-      <td class="cs-td cs-num">${inpNum(e.id,'waiters',e.waiters)}</td>
-      <td class="cs-td cs-num">${inpNum(e.id,'bartenders',e.bartenders||0)}</td>
+      <td class="cs-td cs-num">${inpStaff(e.id,'waiters',e.waiters,e.waiterNames)}</td>
+      <td class="cs-td cs-num">${inpStaff(e.id,'bartenders',e.bartenders,e.bartenderNames)}</td>
       <td class="cs-td">${inpTxt(e.id,'waiterTime',e.waiterTime)}</td>
-      <td class="cs-td cs-num">${inpNum(e.id,'chefs',e.chefs)}</td>
+      <td class="cs-td cs-num">${inpStaff(e.id,'chefs',e.chefs,e.chefNames)}</td>
       <td class="cs-td">${inpTxt(e.id,'chefTime',e.chefTime)}</td>
-      <td class="cs-td cs-num">${inpNum(e.id,'porters',e.porters)}</td>
+      <td class="cs-td cs-num">${inpStaff(e.id,'porters',e.porters,e.porterNames)}</td>
       <td class="cs-td">${inpTxt(e.id,'mashgiach',e.mashgiach||e.mashgiachNames)}</td>
       <td class="cs-td">${inpTxt(e.id,'manager',e.manager)}</td>
     </tr>`;
@@ -835,12 +877,12 @@ function renderCoverSheet(){
         <td class="cs-td">${inpTxt(e.id,'typeLabel',meal.typeLabel||meal.type||'',mi)}</td>
         <td class="cs-td">${inpTxt(e.id,'dayLabel',formatMealDay(meal),mi)}</td>
         <td class="cs-td">${inpTxt(e.id,'addr',meal.addr||'',mi)}</td>
-        <td class="cs-td cs-num">${inpNum(e.id,'waiters',meal.waiters,mi)}</td>
-        <td class="cs-td cs-num">${inpNum(e.id,'bartenders',meal.bartenders||0,mi)}</td>
+        <td class="cs-td cs-num">${inpStaff(e.id,'waiters',meal.waiters,meal.waiterNames,mi)}</td>
+        <td class="cs-td cs-num">${inpStaff(e.id,'bartenders',meal.bartenders,meal.bartenderNames,mi)}</td>
         <td class="cs-td">${inpTxt(e.id,'waiterTime',meal.waiterTime||'',mi)}</td>
-        <td class="cs-td cs-num">${inpNum(e.id,'chefs',meal.chefs,mi)}</td>
+        <td class="cs-td cs-num">${inpStaff(e.id,'chefs',meal.chefs,meal.chefNames,mi)}</td>
         <td class="cs-td">${inpTxt(e.id,'chefTime',meal.chefTime||'',mi)}</td>
-        <td class="cs-td cs-num">${inpNum(e.id,'porters',meal.porters,mi)}</td>
+        <td class="cs-td cs-num">${inpStaff(e.id,'porters',meal.porters,meal.porterNames,mi)}</td>
         <td class="cs-td">${inpTxt(e.id,'mashgiach',meal.mashgiachNames||meal.mashgiach||'',mi)}</td>
         <td class="cs-td">${inpTxt(e.id,'manager',meal.manager||'',mi)}</td>
       </tr>`;
@@ -932,6 +974,8 @@ function printCoverSheet(){
   const th = s => `<th style="padding:6px 8px;border:1px solid #999;background:#f0f0f0;font-size:10px;font-weight:700;text-align:left;white-space:nowrap">${s}</th>`;
   const td = (s,bold,center,italic) => `<td style="padding:5px 8px;border:1px solid #ccc;font-size:11px;${bold?'font-weight:700;':''}${center?'text-align:center;':''}${italic?'font-style:italic;':''}">${esc(String(s===0?'0':s||''))||'—'}</td>`;
   const num = v => td(v&&v!=0?v:'—',false,true);
+  // Print the names if present, otherwise the numeric count.
+  const staff = (countV, namesV) => { const n=(namesV&&String(namesV).trim())?namesV:(countV&&countV!=0?countV:'—'); return td(n,false,true); };
   let rows = '';
   let ri = 0;
   weekEvents.forEach(e=>{
@@ -945,12 +989,12 @@ function printCoverSheet(){
       ${td(e.typeLabel||e.type)}
       ${td(formatEventDay(e))}
       ${td(e.addr)}
-      ${num(e.waiters)}
-      ${num(e.bartenders)}
+      ${staff(e.waiters,e.waiterNames)}
+      ${staff(e.bartenders,e.bartenderNames)}
       ${td(e.waiterTime)}
-      ${num(e.chefs)}
+      ${staff(e.chefs,e.chefNames)}
       ${td(e.chefTime)}
-      ${num(e.porters)}
+      ${staff(e.porters,e.porterNames)}
       ${td(e.mashgiach||e.mashgiachNames)}
       ${td(e.manager)}
     </tr>`;
@@ -963,12 +1007,12 @@ function printCoverSheet(){
         ${td(meal.typeLabel||meal.type||e.typeLabel||'')}
         ${td(meal.dayLabel||meal.day||e.dayLabel||'')}
         ${td(meal.addr||e.addr)}
-        ${num(meal.waiters)}
-        ${num(meal.bartenders)}
+        ${staff(meal.waiters,meal.waiterNames)}
+        ${staff(meal.bartenders,meal.bartenderNames)}
         ${td(meal.waiterTime||'')}
-        ${num(meal.chefs)}
+        ${staff(meal.chefs,meal.chefNames)}
         ${td(meal.chefTime||'')}
-        ${num(meal.porters)}
+        ${staff(meal.porters,meal.porterNames)}
         ${td(meal.mashgiachNames||meal.mashgiach||'')}
         ${td(meal.manager||'')}
       </tr>`;
@@ -989,6 +1033,24 @@ function printCoverSheet(){
 
 
 // ── EVENTS ──
+// ── This Week (events) collapse state ──
+window._ewDayCollapsed = window._ewDayCollapsed || {};   // {day: true} collapse-all default per day group
+window._ewCardCollapsed = window._ewCardCollapsed || {}; // {eventId: true|false} explicit per-card override
+function ewCardCompact(e){
+  if(e.id in window._ewCardCollapsed) return window._ewCardCollapsed[e.id];
+  return !!window._ewDayCollapsed[e.day];
+}
+function toggleEwDay(day){
+  window._ewDayCollapsed[day] = !window._ewDayCollapsed[day];
+  events.forEach(e=>{ if(e.day===day) delete window._ewCardCollapsed[e.id]; });
+  render();
+}
+function toggleEwCard(eid){
+  const e = events.find(x=>x.id===eid); if(!e) return;
+  window._ewCardCollapsed[eid] = !ewCardCompact(e);
+  render();
+}
+
 function renderEvents(){
   const role = roles[currentRole];
   // Filter events by weekOf field
@@ -1051,8 +1113,22 @@ function renderEvents(){
 
   dayOrder.forEach(d=>{
     if(!byDay[d]) return;
-    h+=`<div class="day-label">${formatEventDay(byDay[d][0])}</div><div class="event-grid">`;
+    const dayCompact = !!window._ewDayCollapsed[d];
+    h+=`<div class="day-label ew-day-label"><span>${formatEventDay(byDay[d][0])}</span><button class="pl-col-toggle" onclick="toggleEwDay('${d}')" title="${dayCompact?'Expand all':'Minimize all'}"><i class="ti ti-chevrons-${dayCompact?'down':'up'}"></i></button></div><div class="event-grid">`;
     byDay[d].forEach(e=>{
+      const ewCompact = ewCardCompact(e);
+      const ewChev = `<button class="pl-card-toggle" onclick="event.stopPropagation();toggleEwCard('${e.id}')" title="${ewCompact?'Expand':'Minimize'}"><i class="ti ti-chevron-${ewCompact?'down':'up'}"></i></button>`;
+      if(ewCompact){
+        h+=`<div class="event-card compact ${selectedId===e.id?'selected':''}" onclick="selectEvent('${e.id}')" style="${e.lost?'background:var(--amber-bg);border-color:var(--amber-border)':''}">
+          <div class="ew-compact-row">
+            <span class="job-pill">${displayJob(e.job)}</span>
+            <span class="client-name" style="flex:1;min-width:0;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.name}</span>
+            <span class="type-badge t-${e.type}">${e.typeLabel}</span>
+            ${ewChev}
+          </div>
+        </div>`;
+        return;
+      }
       const chips=[
         e.chefs>0?`<span class="staff-chip"><i class="ti ti-chef-hat"></i>${e.chefs} chef${e.chefs>1?'s':''}</span>`:'',
         e.waiters>0?`<span class="staff-chip"><i class="ti ti-users"></i>${e.waiters} waiter${e.waiters>1?'s':''}</span>`:'',
@@ -1078,7 +1154,7 @@ function renderEvents(){
           ${e.lost ? '<span style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:8px;background:var(--amber-text);color:var(--amber-bg);font-weight:600">LOST</span>' : ''}
           ${!e.lost && changes.some(c=>c.job===e.job && changeDepts.some(d=>!(c.acks||{})[d])) ? '<i class="ti ti-alert-triangle" style="font-size:14px;color:var(--amber-text);margin-left:auto" title="Unacknowledged changes"></i>' : ''}
         </div>
-        <div class="client-name">${e.name}</div>
+        <div class="pl-card-head"><div class="client-name">${e.name}</div>${ewChev}</div>
         ${e.addr?`<div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>${e.addr}</div>`:''}
         ${contactChips(e)}
         ${role.showStaff&&chips?`<div class="staff-chips">${chips}</div>`:''}
@@ -6767,6 +6843,10 @@ window.toggleContactActions = toggleContactActions;
 window.openClientEmail = openClientEmail;
 window.togglePlColumn = togglePlColumn;
 window.togglePlCard = togglePlCard;
+window.toggleEwDay = toggleEwDay;
+window.toggleEwCard = toggleEwCard;
+window.coverSaveStaff = coverSaveStaff;
+window.coverSaveStaffMeal = coverSaveStaffMeal;
 window.openModal = openModal;
 window.closeModal = closeModal;
 window.setDay = setDay;
@@ -6928,6 +7008,18 @@ function initNow(){
 }
 initNow();
 updateWeekLabel();
+// Build/deploy stamp — reflects when this file was last modified (i.e. last GitHub upload),
+// so it auto-updates on every deploy with no manual editing.
+(function(){
+  try{
+    const el=document.getElementById('tsStamp');
+    if(!el) return;
+    const d=new Date(document.lastModified);
+    if(isNaN(d.getTime())) return;
+    const p=n=>String(n).padStart(2,'0');
+    el.textContent='Updated '+p(d.getMonth()+1)+'/'+p(d.getDate())+' — '+p(d.getHours())+':'+p(d.getMinutes());
+  }catch(e){}
+})();
 </script>
 </body>
 </html>
