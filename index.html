@@ -767,147 +767,135 @@ function renderCoverSheet(){
     <span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Sort:</span>
     ${sorts.map(s=>{
       const active = coverSortKey===s.key;
-      const arrow  = active ? (coverSortDir===1?' ↑':' ↓') : '';
-      return `<button onclick="setCoverSort('${s.key}')" style="padding:4px 10px;border:0.5px solid ${active?'#8B1A1A':'var(--border2)'};border-radius:20px;background:${active?'#8B1A1A':'var(--bg2)'};color:${active?'#fff':'var(--text2)'};font-size:11px;font-weight:${active?'700':'500'};cursor:pointer;white-space:nowrap">${s.label}${arrow}</button>`;
+      const arrow  = active ? (coverSortDir===1?' \u2191':' \u2193') : '';
+      return `<button onclick="setCoverSort('${s.key}')" style="padding:4px 12px;border:0.5px solid ${active?'#8B1A1A':'var(--border2)'};border-radius:20px;background:${active?'#8B1A1A':'var(--bg2)'};color:${active?'#fff':'var(--text2)'};font-size:11px;font-weight:${active?'700':'500'};cursor:pointer;white-space:nowrap">${s.label}${arrow}</button>`;
     }).join('')}
   </div>`;
 
-  // Inline input style
-
   const cols = [
-    {label:'#',           w:'52px'},
-    {label:'NAME',        w:'110px'},
-    {label:'MEAL',        w:'90px'},
-    {label:'MENU LINK',   w:'90px'},
-    {label:'TYPE',        w:'90px'},
-    {label:'DAY',         w:'80px'},
-    {label:'ADDRESS',     w:'180px'},
-    {label:'# WAITERS',   w:'68px'},
-    {label:'BARTENDERS',  w:'72px'},
-    {label:'WAITER TIME', w:'84px'},
-    {label:'# CHEFS',     w:'60px'},
-    {label:'CHEFS TIME',  w:'78px'},
-    {label:'# PORTERS',   w:'64px'},
-    {label:'MASHGIACH',   w:'96px'},
-    {label:'MANAGER',     w:'96px'},
+    {label:'#',           w:'56px',  num:true},
+    {label:'NAME',        w:'138px'},
+    {label:'MEAL',        w:'94px'},
+    {label:'MENU',        w:'78px',  num:true},
+    {label:'TYPE',        w:'104px'},
+    {label:'DAY',         w:'92px'},
+    {label:'ADDRESS',     w:'210px'},
+    {label:'WAITERS',     w:'66px',  num:true},
+    {label:'BAR',         w:'56px',  num:true},
+    {label:'WAITER TIME', w:'92px'},
+    {label:'CHEFS',       w:'58px',  num:true},
+    {label:'CHEF TIME',   w:'84px'},
+    {label:'PORTERS',     w:'62px',  num:true},
+    {label:'MASHGIACH',   w:'108px'},
+    {label:'MANAGER',     w:'108px'},
   ];
-
-  const thStyle = `padding:7px 8px;border:1px solid #bbb;background:#f0f0f0;font-size:11px;font-weight:700;text-align:left;white-space:nowrap;text-transform:uppercase;letter-spacing:.4px;color:#333`;
-  const tdBase  = `border:1px solid #d0d0d0;font-size:12px;color:#222;vertical-align:middle;padding:4px 6px`;
 
   const inpNum = (id,field,val,mi) => {
     const onCh = mi===undefined ? `coverSaveField('${id}','${field}',this.value,true)` : `coverSaveMeal('${id}',${mi},'${field}',this.value,true)`;
-    return `<input type="number" min="0" value="${val&&val!=0?val:''}" placeholder="\u2014" onchange="${onCh}" style="width:40px;border:none;background:transparent;font-size:12px;color:#222;text-align:center;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.border='1px solid #8B1A1A';this.style.background='#fff'" onblur="this.style.border='none';this.style.background='transparent'">`;
+    return `<input type="number" min="0" value="${val&&val!=0?val:''}" placeholder="\u2014" class="cs-inp cs-inp-num" onchange="${onCh}">`;
   };
-  const inpTxt = (id,field,val,w,mi) => {
+  const inpTxt = (id,field,val,mi) => {
     const onBl = mi===undefined ? `coverSaveField('${id}','${field}',this.value,false)` : `coverSaveMeal('${id}',${mi},'${field}',this.value,false)`;
-    return `<input type="text" value="${esc(val||'')}" placeholder="\u2014" style="width:${w||'80px'};border:none;background:transparent;font-size:12px;color:#222;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.border='1px solid #8B1A1A';this.style.background='#fff'" onblur="${onBl};this.style.border='none';this.style.background='transparent'">`;
+    return `<input type="text" value="${esc(val||'')}" placeholder="\u2014" class="cs-inp" onblur="${onBl}">`;
   };
 
   let rows = '';
   weekEvents.forEach((e,i)=>{
-    const bg = i%2===1 ? '#fafafa' : '#fff';
-    const td = (content, extra='') => `<td style="${tdBase};background:${bg};${extra}">${content}</td>`;
+    const alt = i%2===1 ? ' cs-alt' : '';
     const menuHtml = (e.menuLink||e.pdfMenuLink)
-      ? `<a href="${esc(e.menuLink||e.pdfMenuLink)}" target="_blank" style="display:inline-block;background:#1a7340;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;text-decoration:none;font-weight:600">Menu \u2197</a>`
-      : '<span style="color:#bbb">\u2014</span>';
+      ? `<a href="${esc(e.menuLink||e.pdfMenuLink)}" target="_blank" class="cs-menu-pill">Menu \u2197</a>`
+      : '<span class="cs-dash">\u2014</span>';
 
     // Main event row
-    rows += `<tr>
-      ${td(`<span style="font-weight:700;cursor:pointer" onclick="editJobNum('${e.id}')" title="Click to edit job #">${esc(coverJobNum(e.job))} <i class="ti ti-pencil" style="font-size:10px;opacity:.4"></i></span>`)}
-      ${td(inpTxt(e.id,'name',e.name,'96px'))}
-      ${td(`<span style="font-size:11px;color:var(--text3);font-style:italic">Main</span>`)}
-      ${td(menuHtml)}
-      ${td(inpTxt(e.id,'typeLabel',e.typeLabel||e.type,'82px'))}
-      ${td(inpTxt(e.id,'dayLabel',formatEventDay(e),'72px'))}
-      ${td(inpTxt(e.id,'addr',e.addr,'165px'),'white-space:normal;word-break:break-word')}
-      ${td(inpNum(e.id,'waiters',e.waiters),'text-align:center')}
-      ${td(inpNum(e.id,'bartenders',e.bartenders||0),'text-align:center')}
-      ${td(inpTxt(e.id,'waiterTime',e.waiterTime,'72px'))}
-      ${td(inpNum(e.id,'chefs',e.chefs),'text-align:center')}
-      ${td(inpTxt(e.id,'chefTime',e.chefTime,'66px'))}
-      ${td(inpNum(e.id,'porters',e.porters),'text-align:center')}
-      ${td(inpTxt(e.id,'mashgiach',e.mashgiach||e.mashgiachNames,'82px'))}
-      ${td(inpTxt(e.id,'manager',e.manager,'82px'))}
+    rows += `<tr class="cs-row${alt}">
+      <td class="cs-td cs-num"><span class="cs-job" onclick="editJobNum('${e.id}')" title="Click to edit job #">${esc(coverJobNum(e.job))} <i class="ti ti-pencil"></i></span></td>
+      <td class="cs-td">${inpTxt(e.id,'name',e.name)}</td>
+      <td class="cs-td"><span class="cs-meal-tag">Main</span></td>
+      <td class="cs-td cs-num">${menuHtml}</td>
+      <td class="cs-td">${inpTxt(e.id,'typeLabel',e.typeLabel||e.type)}</td>
+      <td class="cs-td">${inpTxt(e.id,'dayLabel',formatEventDay(e))}</td>
+      <td class="cs-td">${inpTxt(e.id,'addr',e.addr)}</td>
+      <td class="cs-td cs-num">${inpNum(e.id,'waiters',e.waiters)}</td>
+      <td class="cs-td cs-num">${inpNum(e.id,'bartenders',e.bartenders||0)}</td>
+      <td class="cs-td">${inpTxt(e.id,'waiterTime',e.waiterTime)}</td>
+      <td class="cs-td cs-num">${inpNum(e.id,'chefs',e.chefs)}</td>
+      <td class="cs-td">${inpTxt(e.id,'chefTime',e.chefTime)}</td>
+      <td class="cs-td cs-num">${inpNum(e.id,'porters',e.porters)}</td>
+      <td class="cs-td">${inpTxt(e.id,'mashgiach',e.mashgiach||e.mashgiachNames)}</td>
+      <td class="cs-td">${inpTxt(e.id,'manager',e.manager)}</td>
     </tr>`;
 
     // Sub-meal rows
     (e.meals||[]).forEach((meal,mi)=>{
-      rows += `<tr>
-        <td style="${tdBase};background:${bg};padding-left:14px">
-          <span style="font-size:10px;color:#bbb;margin-right:2px">\u21b3</span>
-          <input type="text" value="${esc(meal.jobSuffix||'')}" placeholder="a/b" title="Letter suffix"
-            style="width:28px;border:none;background:transparent;font-size:12px;color:#8B1A1A;font-weight:700;outline:none;padding:2px 3px;border-radius:3px"
-            onfocus="this.style.border='1px solid #8B1A1A';this.style.background='#fff'"
-            onblur="coverSaveMeal('${e.id}',${mi},'jobSuffix',this.value,false);this.style.border='none';this.style.background='transparent'">
-        </td>
-        ${td(inpTxt(e.id,'name',meal.name||'','96px',mi))}
-        ${td(inpTxt(e.id,'label',meal.label||'','78px',mi),'font-style:italic')}
-        <td style="${tdBase};background:${bg};color:#bbb;font-size:11px;text-align:center">\u2014</td>
-        ${td(inpTxt(e.id,'typeLabel',meal.typeLabel||meal.type||'','82px',mi))}
-        ${td(inpTxt(e.id,'dayLabel',formatMealDay(meal),'72px',mi))}
-        ${td(inpTxt(e.id,'addr',meal.addr||'','165px',mi),'white-space:normal;word-break:break-word')}
-        ${td(inpNum(e.id,'waiters',meal.waiters,mi),'text-align:center')}
-        ${td(inpNum(e.id,'bartenders',meal.bartenders||0,mi),'text-align:center')}
-        ${td(inpTxt(e.id,'waiterTime',meal.waiterTime||'','72px',mi))}
-        ${td(inpNum(e.id,'chefs',meal.chefs,mi),'text-align:center')}
-        ${td(inpTxt(e.id,'chefTime',meal.chefTime||'','66px',mi))}
-        ${td(inpNum(e.id,'porters',meal.porters,mi),'text-align:center')}
-        ${td(inpTxt(e.id,'mashgiach',meal.mashgiachNames||meal.mashgiach||'','82px',mi))}
-        ${td(inpTxt(e.id,'manager',meal.manager||'','82px',mi))}
+      rows += `<tr class="cs-row cs-meal">
+        <td class="cs-td cs-num"><span class="cs-meal-job"><span class="cs-arrow">\u21b3</span><input type="text" value="${esc(meal.jobSuffix||'')}" placeholder="a" title="Letter suffix" class="cs-inp cs-inp-suffix" onblur="coverSaveMeal('${e.id}',${mi},'jobSuffix',this.value,false)"></span></td>
+        <td class="cs-td">${inpTxt(e.id,'name',meal.name||'',mi)}</td>
+        <td class="cs-td">${inpTxt(e.id,'label',meal.label||'',mi)}</td>
+        <td class="cs-td cs-num"><span class="cs-dash">\u2014</span></td>
+        <td class="cs-td">${inpTxt(e.id,'typeLabel',meal.typeLabel||meal.type||'',mi)}</td>
+        <td class="cs-td">${inpTxt(e.id,'dayLabel',formatMealDay(meal),mi)}</td>
+        <td class="cs-td">${inpTxt(e.id,'addr',meal.addr||'',mi)}</td>
+        <td class="cs-td cs-num">${inpNum(e.id,'waiters',meal.waiters,mi)}</td>
+        <td class="cs-td cs-num">${inpNum(e.id,'bartenders',meal.bartenders||0,mi)}</td>
+        <td class="cs-td">${inpTxt(e.id,'waiterTime',meal.waiterTime||'',mi)}</td>
+        <td class="cs-td cs-num">${inpNum(e.id,'chefs',meal.chefs,mi)}</td>
+        <td class="cs-td">${inpTxt(e.id,'chefTime',meal.chefTime||'',mi)}</td>
+        <td class="cs-td cs-num">${inpNum(e.id,'porters',meal.porters,mi)}</td>
+        <td class="cs-td">${inpTxt(e.id,'mashgiach',meal.mashgiachNames||meal.mashgiach||'',mi)}</td>
+        <td class="cs-td">${inpTxt(e.id,'manager',meal.manager||'',mi)}</td>
       </tr>`;
     });
 
-    // Add / remove buttons
+    // Add / remove meal buttons
     const hasMeals = (e.meals||[]).length > 0;
-    rows += `<tr><td colspan="${cols.length}" style="border:1px solid #e8e8e8;background:${bg};padding:3px 8px">
-      <button onclick="coverAddMeal('${e.id}')" style="border:none;background:none;color:#8B1A1A;font-size:11px;cursor:pointer;padding:2px 6px;border-radius:3px;display:inline-flex;align-items:center;gap:3px" onmouseover="this.style.background='#f5e8e8'" onmouseout="this.style.background='none'"><i class="ti ti-plus" style="font-size:11px"></i> Add meal row</button>
-      ${hasMeals?`<button onclick="coverRemoveLastMeal('${e.id}')" style="border:none;background:none;color:#999;font-size:11px;cursor:pointer;padding:2px 6px;border-radius:3px;margin-left:4px;display:inline-flex;align-items:center;gap:3px" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='none'"><i class="ti ti-minus" style="font-size:11px"></i> Remove last</button>`:''}
+    rows += `<tr><td colspan="${cols.length}" class="cs-meal-actions">
+      <button onclick="coverAddMeal('${e.id}')" class="cs-link add"><i class="ti ti-plus"></i> Add meal row</button>
+      ${hasMeals?`<button onclick="coverRemoveLastMeal('${e.id}')" class="cs-link rem"><i class="ti ti-minus"></i> Remove last</button>`:''}
     </td></tr>`;
   });
 
   // New event temp rows
   const tempRows = window._coverTempRows || [];
   tempRows.forEach((row,ri)=>{
-    rows += `<tr style="background:#fffdf0;outline:2px solid #FFE000;outline-offset:-1px">
-      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.job||'')}" placeholder="#" style="width:44px;border:1px dashed #ccc;background:#fff;font-size:12px;font-weight:700;color:#8B1A1A;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.borderColor='#8B1A1A'" onblur="coverTempUpdate(${ri},'job',this.value)"></td>
-      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.name||'')}" placeholder="Client name" style="width:96px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.borderColor='#8B1A1A'" onblur="coverTempUpdate(${ri},'name',this.value)"></td>
-      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.label||'')}" placeholder="Dinner/Lunch\u2026" style="width:78px;border:1px dashed #ccc;background:#fff;font-size:12px;font-style:italic;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.borderColor='#8B1A1A'" onblur="coverTempUpdate(${ri},'label',this.value)"></td>
-      <td style="${tdBase};background:#fffdf0;color:#bbb;font-size:11px;text-align:center">\u2014</td>
-      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.typeLabel||'')}" placeholder="Type" style="width:82px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.borderColor='#8B1A1A'" onblur="coverTempUpdate(${ri},'typeLabel',this.value)"></td>
-      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.dayLabel||'')}" placeholder="Day" style="width:72px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.borderColor='#8B1A1A'" onblur="coverTempUpdate(${ri},'dayLabel',this.value)"></td>
-      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.addr||'')}" placeholder="Address" style="width:165px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onfocus="this.style.borderColor='#8B1A1A'" onblur="coverTempUpdate(${ri},'addr',this.value)"></td>
-      <td style="${tdBase};background:#fffdf0;text-align:center"><input type="number" min="0" value="${row.waiters||''}" placeholder="\u2014" style="width:40px;border:1px dashed #ccc;background:#fff;font-size:12px;text-align:center;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'waiters',this.value)"></td>
-      <td style="${tdBase};background:#fffdf0;text-align:center"><input type="number" min="0" value="${row.bartenders||''}" placeholder="\u2014" style="width:40px;border:1px dashed #ccc;background:#fff;font-size:12px;text-align:center;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'bartenders',this.value)"></td>
-      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.waiterTime||'')}" placeholder="\u2014" style="width:72px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'waiterTime',this.value)"></td>
-      <td style="${tdBase};background:#fffdf0;text-align:center"><input type="number" min="0" value="${row.chefs||''}" placeholder="\u2014" style="width:40px;border:1px dashed #ccc;background:#fff;font-size:12px;text-align:center;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'chefs',this.value)"></td>
-      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.chefTime||'')}" placeholder="\u2014" style="width:66px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'chefTime',this.value)"></td>
-      <td style="${tdBase};background:#fffdf0;text-align:center"><input type="number" min="0" value="${row.porters||''}" placeholder="\u2014" style="width:40px;border:1px dashed #ccc;background:#fff;font-size:12px;text-align:center;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'porters',this.value)"></td>
-      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.mashgiach||'')}" placeholder="\u2014" style="width:82px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'mashgiach',this.value)"></td>
-      <td style="${tdBase};background:#fffdf0"><input type="text" value="${esc(row.manager||'')}" placeholder="\u2014" style="width:82px;border:1px dashed #ccc;background:#fff;font-size:12px;outline:none;padding:2px 4px;border-radius:3px" onblur="coverTempUpdate(${ri},'manager',this.value)"></td>
+    const tinp = (field,val,extra='') => `<input type="text" value="${esc(val||'')}" class="cs-temp-inp" ${extra} onblur="coverTempUpdate(${ri},'${field}',this.value)">`;
+    const tnum = (field,val) => `<input type="number" min="0" value="${row[field]||''}" placeholder="\u2014" class="cs-temp-inp cs-inp-num" onblur="coverTempUpdate(${ri},'${field}',this.value)">`;
+    rows += `<tr class="cs-row cs-temp cs-temp-row">
+      <td class="cs-td cs-num">${tinp('job',row.job,'placeholder="#" style="font-weight:700;color:#8B1A1A;text-align:center"')}</td>
+      <td class="cs-td">${tinp('name',row.name,'placeholder="Client name"')}</td>
+      <td class="cs-td">${tinp('label',row.label,'placeholder="Dinner/Lunch\u2026" style="font-style:italic"')}</td>
+      <td class="cs-td cs-num"><span class="cs-dash">\u2014</span></td>
+      <td class="cs-td">${tinp('typeLabel',row.typeLabel,'placeholder="Type"')}</td>
+      <td class="cs-td">${tinp('dayLabel',row.dayLabel,'placeholder="Day"')}</td>
+      <td class="cs-td">${tinp('addr',row.addr,'placeholder="Address"')}</td>
+      <td class="cs-td cs-num">${tnum('waiters',row.waiters)}</td>
+      <td class="cs-td cs-num">${tnum('bartenders',row.bartenders)}</td>
+      <td class="cs-td">${tinp('waiterTime',row.waiterTime,'placeholder="\u2014"')}</td>
+      <td class="cs-td cs-num">${tnum('chefs',row.chefs)}</td>
+      <td class="cs-td">${tinp('chefTime',row.chefTime,'placeholder="\u2014"')}</td>
+      <td class="cs-td cs-num">${tnum('porters',row.porters)}</td>
+      <td class="cs-td">${tinp('mashgiach',row.mashgiach,'placeholder="\u2014"')}</td>
+      <td class="cs-td">${tinp('manager',row.manager,'placeholder="\u2014"')}</td>
     </tr>
-    <tr><td colspan="${cols.length}" style="border:1px solid #e8e8e8;background:#fffbea;padding:4px 10px;text-align:right">
-      <button onclick="coverCommitRow(${ri})" style="padding:4px 14px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;margin-right:6px">\u2713 Save row</button>
-      <button onclick="coverDiscardRow(${ri})" style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);font-size:12px;cursor:pointer">\u2715 Discard</button>
+    <tr><td colspan="${cols.length}" class="cs-temp-bar">
+      <button onclick="coverCommitRow(${ri})" style="padding:5px 16px;border:none;border-radius:7px;background:#8B1A1A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;margin-right:6px">\u2713 Save row</button>
+      <button onclick="coverDiscardRow(${ri})" style="padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text2);font-size:12px;cursor:pointer">\u2715 Discard</button>
     </td></tr>`;
   });
-
-
 
   const noEvents = weekEvents.length===0 ? `
     <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:2.5rem;text-align:center;color:var(--text2)">
       <i class="ti ti-table-off" style="font-size:32px;margin-bottom:1rem;display:block;color:var(--text3)"></i>
       <div style="font-size:15px;font-weight:500;margin-bottom:.5rem">No events for ${wLabel}</div>
-      <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" style="padding:8px 16px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;cursor:pointer;margin-top:.5rem">← Back to current week</button>
+      <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" style="padding:8px 16px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;cursor:pointer;margin-top:.5rem">\u2190 Back to current week</button>
     </div>` : '';
 
   return `
     <div class="section-header">
       <div class="section-title">Weekly Cover Sheet</div>
       <div style="display:flex;gap:8px;align-items:center">
-        <button onclick="changeWeek(-1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">‹</button>
+        <button onclick="changeWeek(-1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">\u2039</button>
         <span style="font-size:13px;font-weight:600;color:var(--text)">${wLabel}</span>
-        <button onclick="changeWeek(1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">›</button>
+        <button onclick="changeWeek(1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">\u203a</button>
         <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" style="padding:5px 12px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:12px;cursor:pointer">Current week</button>
         <button onclick="printCoverSheet()" style="padding:5px 14px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-printer"></i> Print / Save PDF</button>
         <button onclick="coverAddNewRow()" style="padding:5px 14px;border:0.5px solid #8B1A1A;border-radius:var(--radius);background:#fff;color:#8B1A1A;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-plus"></i> New event</button>
@@ -917,20 +905,21 @@ function renderCoverSheet(){
     ${sortBar}
     ${noEvents}
     ${weekEvents.length>0?`
-    <div style="overflow-x:auto;border-radius:var(--radius-lg);box-shadow:0 1px 4px rgba(0,0,0,.08)">
-      <table style="border-collapse:collapse;width:100%;min-width:900px;background:#fff">
-        <thead>
-          <tr>
-            <th colspan="${cols.length}" style="padding:10px 14px;background:#ffee00;border:1px solid #bbb;font-size:14px;font-weight:800;color:#111;text-align:left;letter-spacing:.3px">
-              W/E &nbsp;<span style="font-size:16px">${weekDate.getUTCMonth()+1}/${weekDate.getUTCDate()}</span>
-              <span style="font-size:11px;font-weight:500;color:#555;margin-left:12px">Click staffing cells to edit — changes sync to Staff Schedule automatically</span>
-            </th>
-          </tr>
-          <tr>${cols.map(c=>`<th style="${thStyle};width:${c.w};min-width:${c.w}">${c.label}</th>`).join('')}</tr>
-        </thead>
-        <tbody>${rows}</tbody>
-        <tfoot><tr><td colspan="${cols.length}" style="padding:8px 10px;border:1px solid #e0e0e0;background:#f9f9f9"><button onclick="coverAddNewRow()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border:0.5px solid #8B1A1A;border-radius:var(--radius);background:#fff;color:#8B1A1A;font-size:12px;font-weight:600;cursor:pointer"><i class="ti ti-plus" style="font-size:13px"></i> Add new event row</button><button onclick="coverCreateDropOff()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border:0.5px solid #666;border-radius:var(--radius);background:#fff;color:#555;font-size:12px;font-weight:600;cursor:pointer;margin-left:8px"><i class="ti ti-truck-delivery" style="font-size:13px"></i> New drop off</button></td></tr></tfoot>
-      </table>
+    <div class="cs-hint"><i class="ti ti-info-circle" style="font-size:13px"></i> Click any staffing cell to edit \u2014 changes sync to the Staff Schedule automatically.</div>
+    <div class="cs-wrap">
+      <div class="cs-scroll">
+        <table class="cs-table">
+          <thead>
+            <tr><th colspan="${cols.length}" class="cs-banner-cell"><div class="cs-banner"><b>${weekDate.getUTCMonth()+1}/${weekDate.getUTCDate()}</b><span>Week ending ${months[weekDate.getUTCMonth()]} ${weekDate.getUTCDate()}, '${String(weekDate.getUTCFullYear()).slice(2)}</span></div></th></tr>
+            <tr>${cols.map(c=>`<th class="cs-th${c.num?' cs-num':''}" style="width:${c.w};min-width:${c.w}">${c.label}</th>`).join('')}</tr>
+          </thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr><td colspan="${cols.length}" class="cs-foot">
+            <button onclick="coverAddNewRow()" class="cs-foot-btn" style="border:0.5px solid #8B1A1A;background:#fff;color:#8B1A1A"><i class="ti ti-plus"></i> Add new event row</button>
+            <button onclick="coverCreateDropOff()" class="cs-foot-btn" style="border:0.5px solid #999;background:#fff;color:#555;margin-left:8px"><i class="ti ti-truck-delivery"></i> New drop off</button>
+          </td></tr></tfoot>
+        </table>
+      </div>
     </div>` : ''}`;
 }
 
@@ -1091,6 +1080,7 @@ function renderEvents(){
         </div>
         <div class="client-name">${e.name}</div>
         ${e.addr?`<div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>${e.addr}</div>`:''}
+        ${contactChips(e)}
         ${role.showStaff&&chips?`<div class="staff-chips">${chips}</div>`:''}
         ${e.logoData ? `<div style="margin-top:8px;margin-bottom:6px"><img src="${driveImgUrl(e.logoData)}" style="max-height:36px;max-width:80px;object-fit:contain;border-radius:4px;opacity:.9" onerror="this.style.display='none'"></div>` : ''}
         <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
@@ -1193,6 +1183,7 @@ function renderDetail(e,role){
         <button class="icon-btn" onclick="closeDetail()" title="Close"><i class="ti ti-x"></i></button>
       </div>
     </div>
+    ${(()=>{ const cc=contactChips(e); return cc?`<div style="margin:-2px 0 12px">${cc}</div>`:''; })()}
     <div class="detail-grid">
       <div>
         <div class="detail-block">
@@ -1360,12 +1351,44 @@ function saveEdit(id){
 // ── PIPELINE ──
 let selectedInqId = null;
 
+// ── Pipeline collapse state ──
+window._plColCollapsed = window._plColCollapsed || {};   // {columnKey: true}  collapse-all default per column
+window._plCardCollapsed = window._plCardCollapsed || {}; // {inqId: true|false} explicit per-card override
+// A booked inquiry counts as a "past event" once its event date is before today (UTC).
+function inqIsPast(inq){
+  if(!inq || inq.stage!=='booked' || !inq.eventDate) return false;
+  const d = new Date(inq.eventDate);
+  if(isNaN(d.getTime())) return false;
+  const n = new Date();
+  return Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()) < Date.UTC(n.getUTCFullYear(),n.getUTCMonth(),n.getUTCDate());
+}
+function plColumnOf(inq){
+  if(inq.stage==='booked') return inqIsPast(inq) ? 'past' : 'booked';
+  return inq.stage;
+}
+function plCardCompact(inq, colKey){
+  if(inq.id in window._plCardCollapsed) return window._plCardCollapsed[inq.id];
+  return !!window._plColCollapsed[colKey];
+}
+function togglePlColumn(colKey){
+  window._plColCollapsed[colKey] = !window._plColCollapsed[colKey];
+  // a column-level toggle wins: clear any per-card overrides for cards in this column
+  inquiries.forEach(i=>{ if(plColumnOf(i)===colKey) delete window._plCardCollapsed[i.id]; });
+  render();
+}
+function togglePlCard(inqId){
+  const inq = inquiries.find(x=>x.id===inqId); if(!inq) return;
+  window._plCardCollapsed[inqId] = !plCardCompact(inq, plColumnOf(inq));
+  render();
+}
+
 function renderPipeline(){
   const role = roles[currentRole];
   const stages = [
     {key:'new',       label:'New Inquiry',     icon:'ti-mail',          cls:'stage-new'},
     {key:'menu_sent', label:'Menu Sent',       icon:'ti-file-text',     cls:'stage-menu_sent'},
     {key:'booked',    label:'Booked',          icon:'ti-circle-check',  cls:'stage-booked'},
+    {key:'past',      label:'Past Events',     icon:'ti-calendar-check', cls:'stage-past'},
     {key:'lost',      label:'Lost / Declined', icon:'ti-circle-x',      cls:'stage-lost'},
   ];
 
@@ -1383,16 +1406,35 @@ function renderPipeline(){
   ${detailHtml}
   <div class="pipeline-cols">
   ${stages.map(s=>{
-    const cards = inquiries.filter(i=>i.stage===s.key);
+    const cards = s.key==='booked' ? inquiries.filter(i=>i.stage==='booked' && !inqIsPast(i))
+                : s.key==='past'   ? inquiries.filter(i=>i.stage==='booked' &&  inqIsPast(i))
+                :                    inquiries.filter(i=>i.stage===s.key);
+    const colCompact = !!window._plColCollapsed[s.key];
     return `<div class="pipeline-col">
       <div class="pipeline-col-header">
         <div class="pipeline-col-title"><i class="ti ${s.icon}" style="font-size:14px"></i>${s.label}</div>
-        <span class="pipeline-count">${cards.length}</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          ${cards.length?`<button class="pl-col-toggle" onclick="togglePlColumn('${s.key}')" title="${colCompact?'Expand all cards':'Minimize all cards'}"><i class="ti ti-chevrons-${colCompact?'down':'up'}"></i></button>`:''}
+          <span class="pipeline-count">${cards.length}</span>
+        </div>
       </div>
       ${cards.length===0 ? `<div style="text-align:center;padding:1.5rem 0;font-size:12px;color:var(--text3)">No clients yet</div>` : ''}
-      ${cards.map(inq=>`
+      ${cards.map(inq=>{
+        const compact = plCardCompact(inq, s.key);
+        const nm = `${inq.firstName||''} ${inq.lastName||''}`.trim();
+        const chev = `<button class="pl-card-toggle" onclick="event.stopPropagation();togglePlCard('${inq.id}')" title="${compact?'Expand':'Minimize'}"><i class="ti ti-chevron-${compact?'down':'up'}"></i></button>`;
+        if(compact){
+          return `<div class="inq-card compact ${selectedInqId===inq.id?'selected':''}" onclick="selectInquiry('${inq.id}')">
+            <div class="pl-card-head"><div class="inq-name">${nm}</div>${chev}</div>
+            <div class="pl-compact-meta">
+              ${inq.eventType ? `<span><i class="ti ti-tag" style="font-size:11px"></i>${inq.eventType}</span>` : ''}
+              ${inq.eventDate ? `<span><i class="ti ti-calendar" style="font-size:11px"></i>${formatDate(inq.eventDate)}</span>` : ''}
+            </div>
+          </div>`;
+        }
+        return `
       <div class="inq-card ${selectedInqId===inq.id?'selected':''}" onclick="selectInquiry('${inq.id}')">
-        <div class="inq-name">${inq.firstName} ${inq.lastName}</div>
+        <div class="pl-card-head"><div class="inq-name">${nm}</div>${chev}</div>
         ${inq.eventName ? `<div class="inq-event-name">${inq.eventName}</div>` : ''}
         <div class="inq-meta">
           ${inq.eventType ? `<span><i class="ti ti-tag" style="font-size:11px"></i>${inq.eventType}</span>` : ''}
@@ -1403,14 +1445,15 @@ function renderPipeline(){
         </div>
         ${role.canEdit ? `<div class="inq-actions">
           ${s.key==='new' ? `<button class="stage-btn stage-menu_sent" onclick="event.stopPropagation();moveInquiry('${inq.id}','menu_sent')">Mark menu sent</button>` : ''}
-          ${s.key!=='new' && s.key!=='lost' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();moveInquiry('${inq.id}','new')"><i class="ti ti-arrow-back-up" style="font-size:11px"></i> Move to new</button>` : ''}
-          ${s.key!=='booked'&&s.key!=='lost' ? `<button class="stage-btn stage-booked" onclick="event.stopPropagation();moveInquiry('${inq.id}','booked')">Book event</button>` : ''}
-          ${s.key==='booked' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">→ Go to event week</button>` : ''}
-          ${s.key!=='lost' ? `<button class="stage-btn" style="background:var(--amber-bg);color:var(--amber-text)" onclick="event.stopPropagation();markInquiryLost('${inq.id}')">Mark lost</button>` : ''}
+          ${s.key!=='new' && s.key!=='lost' && s.key!=='past' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();moveInquiry('${inq.id}','new')"><i class="ti ti-arrow-back-up" style="font-size:11px"></i> Move to new</button>` : ''}
+          ${s.key!=='booked'&&s.key!=='lost'&&s.key!=='past' ? `<button class="stage-btn stage-booked" onclick="event.stopPropagation();moveInquiry('${inq.id}','booked')">Book event</button>` : ''}
+          ${s.key==='booked'||s.key==='past' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">→ Go to event week</button>` : ''}
+          ${s.key!=='lost'&&s.key!=='past' ? `<button class="stage-btn" style="background:var(--amber-bg);color:var(--amber-text)" onclick="event.stopPropagation();markInquiryLost('${inq.id}')">Mark lost</button>` : ''}
           ${s.key==='lost' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();reviveInquiry('${inq.id}')"><i class="ti ti-arrow-back-up" style="font-size:12px"></i> Revive</button>` : ''}
           <button onclick="event.stopPropagation();deleteInquiry('${inq.id}')" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px;margin-left:auto"><i class="ti ti-trash"></i></button>
         </div>` : ''}
-      </div>`).join('')}
+      </div>`;
+      }).join('')}
     </div>`;
   }).join('')}
   </div>`;
@@ -2133,15 +2176,65 @@ function openOtherSlot(eventId, slot){
   openAttachModal(eventId, 'other'+slot, '', name.trim());
 }
 
-// Email client from event
+// Email client from event — routes into the in-app Gmail compose with the
+// client's address pre-filled in the To field. Falls back to Gmail web compose
+// (still "opens to Gmail") if the in-app Gmail account isn't connected.
 function openClientEmail(eventId){
   const e = events.find(x=>x.id===eventId);
   const inq = inquiries.find(x=>'inq_'+x.id===eventId || x.id===eventId);
-  const email = inq?.email || e?.email || '';
+  const email = (inq?.email || e?.email || '').trim();
   if(!email){ showToast('No client email on file'); return; }
-  // Use existing Gmail compose if available
-  if(typeof openGmailCompose === 'function'){ openGmailCompose(email, '', ''); return; }
-  window.open('mailto:'+email);
+  if(typeof isGmailConnected === 'function' && isGmailConnected()){
+    window._emailTab = 'compose';
+    showView('email');
+    _prefillComposeTo(email);
+  } else {
+    window.open('https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(email), '_blank');
+  }
+}
+// Poll for the compose "To" input (the email view renders asynchronously) and fill it.
+function _prefillComposeTo(email, tries){
+  tries = tries||0;
+  const toEl = document.getElementById('compose-to');
+  if(toEl){ toEl.value = email; try{ toEl.focus(); }catch(_){} return; }
+  if(tries < 25) setTimeout(()=>_prefillComposeTo(email, tries+1), 80);
+}
+
+// ── CLIENT CONTACT CHIPS (phone + email with quick actions) ──
+function _digits(s){ return (s||'').toString().replace(/[^0-9]/g,''); }
+function _waNum(phone){ let d=_digits(phone); if(d.length===10) d='1'+d; return d; } // assume US if 10 digits
+function toggleContactActions(el, ev){
+  if(ev) ev.stopPropagation();
+  const wasOpen = el.classList.contains('open');
+  document.querySelectorAll('.contact-chip.open').forEach(c=>{ if(c!==el) c.classList.remove('open'); });
+  el.classList.toggle('open', !wasOpen);
+}
+// Build the phone + email contact chips for an event. Returns '' if no contact on file.
+function contactChips(e){
+  const phone = (e.phone||'').trim();
+  const email = (e.email||'').trim();
+  if(!phone && !email) return '';
+  let chips = '';
+  if(phone){
+    const tel = _digits(phone), wa = _waNum(phone);
+    chips += `<div class="contact-chip" onclick="toggleContactActions(this,event)">
+      <span class="contact-chip-face"><i class="ti ti-phone"></i>${phone}</span>
+      <div class="contact-actions">
+        <a class="contact-act ca-call" href="tel:${tel}" onclick="event.stopPropagation()"><i class="ti ti-phone"></i>Call</a>
+        <a class="contact-act ca-text" href="sms:${tel}" onclick="event.stopPropagation()"><i class="ti ti-message"></i>Text</a>
+        <a class="contact-act ca-wa" href="https://wa.me/${wa}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><i class="ti ti-brand-whatsapp"></i>WhatsApp</a>
+      </div>
+    </div>`;
+  }
+  if(email){
+    chips += `<div class="contact-chip" onclick="toggleContactActions(this,event)">
+      <span class="contact-chip-face"><i class="ti ti-mail"></i>${email}</span>
+      <div class="contact-actions">
+        <a class="contact-act ca-mail" onclick="event.stopPropagation();openClientEmail('${e.id}')"><i class="ti ti-mail"></i>Email</a>
+      </div>
+    </div>`;
+  }
+  return `<div class="contact-row" onclick="event.stopPropagation()">${chips}</div>`;
 }
 
 // ── SHEET SYNC ────────────────────────────────
@@ -6670,6 +6763,10 @@ window.cancelEdit = cancelEdit;
 window.closeDetail = closeDetail;
 window.selectEvent = selectEvent;
 window.goChecklist = goChecklist;
+window.toggleContactActions = toggleContactActions;
+window.openClientEmail = openClientEmail;
+window.togglePlColumn = togglePlColumn;
+window.togglePlCard = togglePlCard;
 window.openModal = openModal;
 window.closeModal = closeModal;
 window.setDay = setDay;
