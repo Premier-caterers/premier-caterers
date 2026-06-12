@@ -41,8 +41,9 @@
 <div class="layout">
   <div class="sidebar" id="sidebar">
     <div class="sidebar-label">Views</div>
+    <button class="nav-item active" id="nav-home" onclick="showView('home')"><i class="ti ti-home"></i>Home</button>
     <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
-    <button class="nav-item active" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
+    <button class="nav-item" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
     <button class="nav-item" id="nav-coversheet" onclick="showView('coversheet')"><i class="ti ti-layout-rows"></i>Weekly cover sheet</button>
     <a class="nav-item" href="https://calendar.google.com" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-brand-google"></i>Google Calendar<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
     <a class="nav-item" href="https://premier-caterers.github.io/premier-caterers/premier_caterers_form.html" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-clipboard-text"></i>Link to inquiry form<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
@@ -319,7 +320,7 @@ async function emptyTrash(){
 
 
 function startFirebaseListeners(){
-  eventsCol.onSnapshot( snap=>{ const first=events.length===0; events=snap.docs.map(d=>d.data()); if(first||currentView==='events') render(); });
+  eventsCol.onSnapshot( snap=>{ const first=events.length===0; events=snap.docs.map(d=>d.data()); if(first||currentView==='events'||currentView==='home') render(); });
   changesCol.onSnapshot( snap=>{ changes=snap.docs.map(d=>d.data()).sort((a,b)=>(b.time||'').localeCompare(a.time||'')); if(currentView==='changes') render(); });
   inquiriesCol.onSnapshot( snap=>{
     inquiries=snap.docs.map(d=>d.data());
@@ -336,7 +337,7 @@ function startFirebaseListeners(){
     }
     if(currentView==='pipeline' || currentView==='events') render();
   });
-  checklistCol.onSnapshot( snap=>{ checklists={}; snap.docs.forEach(d=>{ checklists[d.id]=d.data().items||[]; }); if(currentView==='checklists') render(); updateBadge(); });
+  checklistCol.onSnapshot( snap=>{ checklists={}; snap.docs.forEach(d=>{ checklists[d.id]=d.data().items||[]; }); if(currentView==='checklists'||currentView==='home') render(); updateBadge(); });
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
   invoicesCol.onSnapshot( snap=>{ invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); }); if(currentView==='invoices') render(); });
   venuesCol.onSnapshot( snap=>{ venues=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='venues') render(); });
@@ -472,7 +473,7 @@ const roles = {
   kitchen: {canEdit:false, showStaff:false, showLinks:false, canViewInvoices:false, canViewReports:false},
 };
 
-let currentView='events', currentRole='admin', selectedId=null, editingId=null, activeDay='all', eventsViewMode='card';
+let currentView='home', currentRole='admin', selectedId=null, editingId=null, activeDay='all', eventsViewMode='card';
 
 function setRole(r,btn){
   currentRole=r;
@@ -515,7 +516,8 @@ function showView(v){
 function render(){
   let html = '';
   try {
-    html = currentView==='pipeline'  ? renderPipeline()  :
+    html = currentView==='home'      ? renderHome()      :
+           currentView==='pipeline'  ? renderPipeline()  :
            currentView==='events'    ? renderEvents()    :
            currentView==='coversheet'? renderCoverSheet():
            currentView==='schedule'  ? renderSchedule()  :
@@ -1033,6 +1035,93 @@ function printCoverSheet(){
 
 
 // ── EVENTS ──
+// ── HOME / DASHBOARD ──
+function renderHome(){
+  const weekDate = getWeekEndDate(currentWeekOffset);
+  const weekStr  = weekDate.toISOString().split('T')[0];
+  const months   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const wLabel   = months[weekDate.getUTCMonth()]+' '+weekDate.getUTCDate()+", '"+String(weekDate.getUTCFullYear()).slice(2);
+
+  const dayOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+  const weekEvents = events.filter(e=>(e.weekOf||'2026-05-31')===weekStr)
+    .sort((a,b)=> dayOrder.indexOf((a.day||'').toLowerCase()) - dayOrder.indexOf((b.day||'').toLowerCase()));
+
+  // Open to-dos across this week's events
+  const todos = [];
+  weekEvents.forEach(e=>{
+    (checklists[e.id]||[]).forEach(it=>{
+      if(it.na) return;
+      const doneAny = it.assignees && it.assignees.some(a=>a.done);
+      if(!doneAny) todos.push({eid:e.id, name:e.name, text:it.text});
+    });
+  });
+
+  const newInq = (typeof inquiries!=='undefined') ? inquiries.filter(i=>i.stage==='new').length : 0;
+  const openTodoCount = todos.length;
+
+  const tiles = [
+    {key:'pipeline',   label:'Pipeline',         icon:'ti-layout-kanban', badge:newInq||''},
+    {key:'events',     label:'This Week',        icon:'ti-calendar',      badge:weekEvents.length||''},
+    {key:'coversheet', label:'Cover Sheet',      icon:'ti-layout-rows'},
+    {key:'schedule',   label:'Staff Schedule',   icon:'ti-users'},
+    {key:'checklists', label:'Checklists',       icon:'ti-checklist',     badge:openTodoCount||''},
+    {key:'changes',    label:'Changes Log',      icon:'ti-refresh-alert'},
+    {key:'invoices',   label:'Quotes / Invoices',icon:'ti-file-invoice'},
+    {key:'grocery',    label:'Grocery',          icon:'ti-shopping-cart'},
+    {key:'equipment',  label:'Equipment',        icon:'ti-tool'},
+    {key:'venues',     label:'Venues',           icon:'ti-building'},
+    {key:'email',      label:'Email',            icon:'ti-mail'},
+    {key:'reports',    label:'Reports',          icon:'ti-chart-bar'},
+  ];
+
+  const tileHtml = tiles.map(t=>`
+    <button class="home-tile" onclick="showView('${t.key}')">
+      <div class="home-tile-icon"><i class="ti ${t.icon}"></i></div>
+      <div class="home-tile-label">${t.label}</div>
+      ${t.badge?`<span class="home-tile-badge">${t.badge}</span>`:''}
+    </button>`).join('');
+
+  const eventsBox = `
+    <div class="home-box">
+      <div class="home-box-head"><i class="ti ti-calendar"></i> This week's events <span class="home-box-count">${weekEvents.length}</span></div>
+      <div class="home-box-body">
+        ${weekEvents.length===0 ? `<div class="home-empty">No events this week</div>` :
+          weekEvents.map(e=>`
+            <button class="home-row" onclick="showView('events');setTimeout(()=>selectEvent('${e.id}'),250)">
+              <span class="home-row-pill">${displayJob(e.job)}</span>
+              <span class="home-row-main">${e.name}</span>
+              <span class="home-row-meta">${(e.dayLabel||formatEventDay(e)||'')}${e.typeLabel?' · '+e.typeLabel:''}</span>
+              <i class="ti ti-chevron-right home-row-chev"></i>
+            </button>`).join('')}
+      </div>
+    </div>`;
+
+  const MAXT = 14;
+  const todoBox = `
+    <div class="home-box">
+      <div class="home-box-head"><i class="ti ti-checklist"></i> Open to-dos <span class="home-box-count">${openTodoCount}</span></div>
+      <div class="home-box-body">
+        ${openTodoCount===0 ? `<div class="home-empty">${weekEvents.length? 'All caught up for this week 🎉':'No events this week'}</div>` :
+          todos.slice(0,MAXT).map(t=>`
+            <button class="home-row" onclick="goChecklist('${t.eid}')">
+              <span class="home-row-dot"></span>
+              <span class="home-row-main">${t.text}</span>
+              <span class="home-row-meta">${t.name}</span>
+              <i class="ti ti-chevron-right home-row-chev"></i>
+            </button>`).join('')
+          + (openTodoCount>MAXT?`<button class="home-row home-row-more" onclick="showView('checklists')">+${openTodoCount-MAXT} more — view all checklists</button>`:'')}
+      </div>
+    </div>`;
+
+  return `
+    <div class="home-header">
+      <div class="home-greeting">Premier Caterers</div>
+      <div class="home-sub">Operations hub · Week ending ${wLabel}</div>
+    </div>
+    <div class="home-tiles">${tileHtml}</div>
+    <div class="home-boxes">${eventsBox}${todoBox}</div>`;
+}
+
 // ── This Week (events) collapse state ──
 window._ewDayCollapsed = window._ewDayCollapsed || {};   // {day: true} collapse-all default per day group
 window._ewCardCollapsed = window._ewCardCollapsed || {}; // {eventId: true|false} explicit per-card override
@@ -5541,6 +5630,13 @@ function renderSettings(){
   <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
     <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Gmail Integration</div>
     <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Connect events@thepremiercaterer.com to send and receive emails in the app.</div>
+    <label style="display:flex;align-items:flex-start;gap:9px;padding:11px 13px;border:0.5px solid ${gmailViaScript()?'var(--green-border)':'var(--border2)'};border-radius:var(--radius);background:${gmailViaScript()?'var(--green-bg)':'var(--bg2)'};margin-bottom:1rem;cursor:pointer">
+      <input type="checkbox" ${gmailViaScript()?'checked':''} ${localStorage.getItem('scriptUrl')?'':'disabled'} onchange="localStorage.setItem('gmailViaScript',this.checked?'1':'0');if(this.checked){gmailUser='events@thepremiercaterer.com';} render()" style="margin-top:2px;width:16px;height:16px;accent-color:var(--green-text);cursor:pointer">
+      <div>
+        <div style="font-size:13px;font-weight:500;color:var(--text)">Route Gmail through Apps Script <span style="font-size:11px;color:var(--green-text)">(recommended — never disconnects)</span></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;line-height:1.5">Sends &amp; reads mail via your Apps Script (authorized once as events@), so the hourly OAuth drop on iPhone/laptop goes away. ${localStorage.getItem('scriptUrl')?'':'<strong>Save your Apps Script URL below first to enable.</strong>'} Requires the Gmail relay code added to your Apps Script.</div>
+      </div>
+    </label>
     ${isGmailConnected()
       ? `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <div style="font-size:13px;color:var(--green-text);display:flex;align-items:center;gap:5px"><i class="ti ti-circle-check"></i> Connected as ${gmailUser||'events@thepremiercaterer.com'}</div>
@@ -6146,7 +6242,12 @@ let gmailTokenClient = null;     // built once, reused for every refresh
 let _gmailTokenPromise = null;   // de-dupes concurrent refresh attempts
 
 function gmailClientId(){ return localStorage.getItem('gmailClientId') || ''; }
-function isGmailConnected(){ return !!gmailToken; }
+// Apps Script relay: when enabled (and a Script URL is saved), Gmail send/read go through
+// Apps Script (authorized once as events@), so the browser OAuth token is never needed and
+// the connection can't silently drop. Falls back to direct OAuth when off.
+function gmailViaScript(){ return localStorage.getItem('gmailViaScript')==='1' && !!localStorage.getItem('scriptUrl'); }
+function gmailRelayUrl(){ const u=localStorage.getItem('scriptUrl')||''; return u; }
+function isGmailConnected(){ return gmailViaScript() ? true : !!gmailToken; }
 
 // Load the GIS library once.
 function loadGisLibrary(){
@@ -6233,6 +6334,7 @@ async function gmailSignIn(){
 // has connected before — so sending email just works without re-clicking Connect.
 function restoreGmailSession(){
   try{
+    if(gmailViaScript()){ gmailUser = 'events@thepremiercaterer.com'; return; } // relay mode: no token needed
     const t = localStorage.getItem('gmailToken');
     const exp = parseInt(localStorage.getItem('gmailTokenExpiry')||'0', 10);
     if(t && exp && Date.now() < (exp - 60000)){
@@ -6261,6 +6363,25 @@ async function fetchGmailProfile(){
 }
 
 async function fetchInboxMessages(query=''){
+  if(gmailViaScript()){
+    try{
+      const u = gmailRelayUrl();
+      const url = u + (u.includes('?')?'&':'?') + 'action=gmailList&max=40&q=' + encodeURIComponent(query||'in:inbox');
+      const r = await fetch(url);
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.error||'relay error');
+      gmailMessages = (d.messages||[]).map(m=>({
+        id:m.id, threadId:m.threadId, snippet:m.snippet||'',
+        payload:{ headers:[
+          {name:'Subject', value:m.subject||''},
+          {name:'From',    value:m.from||''},
+          {name:'To',      value:m.to||''},
+          {name:'Date',    value:m.date||''},
+        ]}
+      }));
+      return gmailMessages;
+    }catch(e){ console.error('Relay inbox error:', e); showToast('Could not load inbox'); return []; }
+  }
   try{ await ensureGmailToken(); }
   catch(e){ showToast('Please connect Gmail first'); return []; }
   try{
@@ -6279,6 +6400,15 @@ async function fetchInboxMessages(query=''){
 }
 
 async function fetchMessageBody(id){
+  if(gmailViaScript()){
+    try{
+      const u = gmailRelayUrl();
+      const url = u + (u.includes('?')?'&':'?') + 'action=gmailGet&id=' + encodeURIComponent(id);
+      const r = await fetch(url);
+      const d = await r.json();
+      return d.ok ? (d.html || d.body || '') : '';
+    }catch(e){ console.error('Relay get error:', e); return ''; }
+  }
   try{ await ensureGmailToken(); }catch(e){ return ''; }
   try{
     const r = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/'+id+'?format=full', {headers:{'Authorization':'Bearer '+gmailToken}});
@@ -6300,6 +6430,20 @@ async function fetchMessageBody(id){
 }
 
 async function sendGmailEmail(to, subject, body, htmlBody, attachments){
+  if(gmailViaScript()){
+    try{
+      const payload = {
+        action:'gmailSend', to, subject:subject||'',
+        body: body||'', htmlBody: htmlBody||body||'',
+        attachments: (attachments||[]).map(a=>({ filename:a.filename, mimeType:a.mime||'application/pdf', base64:a.base64 }))
+      };
+      // text/plain keeps this a "simple" cross-origin request (no preflight to Apps Script)
+      const r = await fetch(gmailRelayUrl(), { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
+      const d = await r.json();
+      if(d.ok){ showToast('Email sent ✓'); return true; }
+      alert('Email error: '+(d.error||'send failed')); return false;
+    }catch(e){ alert('Email error: '+e.message); return false; }
+  }
   try{ await ensureGmailToken(); }
   catch(e){ alert('Please connect Gmail first in Settings.'); gmailSignIn(); return false; }
   try{
