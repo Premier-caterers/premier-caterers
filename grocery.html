@@ -1,0 +1,556 @@
+<!-- Premier Caterers Grocery | Phase 1 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Premier Caterers — Grocery</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<style>
+:root{
+  --bg:#fff;--bg2:#f7f7f5;--bg3:#f0f0ec;
+  --text:#1a1a18;--text2:#6b6b65;--text3:#9a9a94;
+  --border:rgba(0,0,0,0.12);--border2:rgba(0,0,0,0.22);
+  --maroon:#8B1A1A;--maroon-bg:#f7ecec;
+  --blue-bg:#E6F1FB;--blue-text:#0C447C;--blue-mid:#185FA5;--blue-border:#B5D4F4;
+  --amber-bg:#FAEEDA;--amber-text:#633806;--amber-border:#FAC775;
+  --green-bg:#EAF3DE;--green-text:#27500A;--green-border:#97C459;
+  --coral-bg:#FAECE7;--coral-text:#712B13;--coral-border:#E8A98F;
+  --radius:8px;--radius-lg:12px;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#1e1e1c;--bg2:#282826;--bg3:#323230;
+  --text:#f0f0ec;--text2:#a0a09a;--text3:#68685e;
+  --border:rgba(255,255,255,0.1);--border2:rgba(255,255,255,0.2);
+  --maroon:#C0392B;--maroon-bg:#3a1f1d;
+  --blue-bg:#042C53;--blue-text:#B5D4F4;--blue-mid:#378ADD;
+  --amber-bg:#412402;--amber-text:#FAC775;
+  --green-bg:#173404;--green-text:#C0DD97;
+  --coral-bg:#4A1B0C;--coral-text:#F5C4B3;
+}}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg3);color:var(--text);font-size:15px;line-height:1.5;-webkit-text-size-adjust:100%}
+button{font-family:inherit;cursor:pointer}
+input,select{font-family:inherit;font-size:14px}
+.ti{font-style:normal}
+a{color:var(--maroon);text-decoration:none}
+
+/* Topbar */
+.topbar{background:var(--bg);border-bottom:0.5px solid var(--border);padding:0 1rem;display:flex;align-items:center;gap:12px;height:56px;position:sticky;top:0;z-index:100}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;flex-shrink:0}
+.brand-mark{width:30px;height:30px;background:var(--maroon-bg);color:var(--maroon);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:17px}
+.brand small{font-weight:400;color:var(--text3);font-size:12px}
+.spacer{flex:1}
+.weeknav{display:flex;align-items:center;gap:4px}
+.we-pill{font-size:14px;font-weight:700;color:#fff;background:var(--maroon);padding:6px 14px;border-radius:20px;display:inline-flex;align-items:center;gap:6px;box-shadow:0 1px 3px rgba(0,0,0,.18);min-width:150px;justify-content:center}
+.wbtn{width:30px;height:30px;border:0.5px solid var(--border2);background:var(--bg);border-radius:8px;color:var(--text2);display:flex;align-items:center;justify-content:center;font-size:16px}
+.wbtn:hover{background:var(--bg2)}
+.applink{font-size:12px;color:var(--text2);display:inline-flex;align-items:center;gap:5px;padding:6px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);white-space:nowrap}
+.applink:hover{background:var(--bg2)}
+
+/* Tabs */
+.tabs{display:flex;gap:2px;background:var(--bg);border-bottom:0.5px solid var(--border);padding:0 1rem;overflow-x:auto}
+.tab{padding:12px 14px;font-size:13.5px;font-weight:500;color:var(--text2);border:none;background:none;border-bottom:2px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.tab.active{color:var(--maroon);border-bottom-color:var(--maroon)}
+.tab .cnt{font-size:11px;background:var(--bg3);color:var(--text2);border-radius:9px;padding:0 6px;min-width:16px;text-align:center}
+
+.wrap{max-width:1100px;margin:0 auto;padding:1.25rem 1rem 4rem}
+.empty{text-align:center;color:var(--text3);font-size:14px;padding:3rem 1rem}
+.muted{color:var(--text3)}
+
+/* Event card */
+.ev{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:1.1rem;overflow:hidden}
+.ev-head{display:flex;align-items:center;gap:10px;padding:.85rem 1rem;border-bottom:0.5px solid var(--border);flex-wrap:wrap}
+.job-pill{font-size:12px;font-weight:700;color:var(--maroon);background:var(--maroon-bg);border-radius:6px;padding:2px 8px}
+.ev-name{font-weight:600;font-size:15px}
+.ev-meta{font-size:12px;color:var(--text3)}
+.mode-tag{font-size:10.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;padding:2px 7px;border-radius:5px}
+.mode-catered{background:var(--blue-bg);color:var(--blue-text)}
+.mode-dropoff{background:var(--amber-bg);color:var(--amber-text)}
+.ev-count{margin-left:auto;font-size:12px;color:var(--text2);background:var(--bg2);border-radius:10px;padding:1px 9px}
+
+/* Grocery table */
+.gt{width:100%;border-collapse:collapse;font-size:13.5px}
+.gt th{text-align:left;font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:var(--text3);font-weight:600;padding:7px 8px;border-bottom:0.5px solid var(--border)}
+.gt td{padding:2px 6px;border-bottom:0.5px solid var(--border)}
+.gt tr:last-child td{border-bottom:none}
+.gt input,.gt select{width:100%;border:1px solid transparent;background:transparent;color:var(--text);padding:5px 6px;border-radius:6px}
+.gt input:hover,.gt select:hover{background:var(--bg2)}
+.gt input:focus,.gt select:focus{outline:none;background:var(--bg);border-color:var(--maroon);box-shadow:0 0 0 2px var(--maroon-bg)}
+.col-sec{width:20%}.col-kit{width:54px}.col-item{width:34%}.col-qty{width:74px}.col-ven{width:16%}.col-x{width:30px}
+.kit-cell{padding:0 6px!important}
+.kit{width:100%;border:none;border-radius:6px;font-weight:700;font-size:12px;text-align:center;padding:6px 2px;cursor:pointer;-webkit-appearance:none;appearance:none}
+.kit-P{background:var(--green-bg);color:var(--green-text)}
+.kit-D{background:var(--blue-bg);color:var(--blue-text)}
+.kit-M{background:var(--coral-bg);color:var(--coral-text)}
+.kit-X{background:var(--bg2);color:var(--text2)}
+.rowx{border:none;background:none;color:var(--text3);font-size:15px;width:26px;height:26px;border-radius:6px;opacity:.5}
+.ev:hover .rowx,.rowx:hover{opacity:1}.rowx:hover{background:var(--coral-bg);color:var(--coral-text)}
+.ev-foot{display:flex;gap:8px;padding:.6rem 1rem;flex-wrap:wrap}
+.addbtn{font-size:12.5px;font-weight:500;color:var(--maroon);background:var(--maroon-bg);border:none;border-radius:var(--radius);padding:7px 12px;display:inline-flex;align-items:center;gap:5px}
+.addbtn.ghost{background:none;color:var(--text2);border:0.5px solid var(--border2)}
+.addbtn:hover{filter:brightness(.97)}
+
+/* By-vendor */
+.vend-block{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:.9rem;overflow:hidden}
+.vend-head{display:flex;align-items:center;gap:8px;padding:.7rem 1rem;border-bottom:0.5px solid var(--border);font-weight:600;font-size:14px}
+.vend-head .ti{color:var(--maroon)}
+.vend-head .n{margin-left:auto;font-size:12px;color:var(--text2);background:var(--bg2);border-radius:10px;padding:1px 9px}
+.vend-copy{font-size:11.5px;color:var(--text2);border:0.5px solid var(--border2);background:var(--bg);border-radius:6px;padding:4px 9px;display:inline-flex;gap:4px;align-items:center}
+.vrow{display:flex;align-items:center;gap:8px;padding:6px 1rem;font-size:13.5px;border-bottom:0.5px solid var(--border)}
+.vrow:last-child{border-bottom:none}
+.vrow .vk{flex-shrink:0;width:22px;height:20px;border-radius:4px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.vrow .vi{flex:1}
+.vrow .vq{flex-shrink:0;color:var(--text2);font-size:12.5px;font-weight:600}
+.vrow .vfor{flex-shrink:0;color:var(--text3);font-size:11px;max-width:30%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.instock-note{font-size:12px;color:var(--text3);background:var(--bg2);border-radius:var(--radius);padding:.6rem .9rem;margin-bottom:.9rem;display:flex;gap:8px;align-items:center}
+.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:1rem;flex-wrap:wrap}
+.chk{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--text2)}
+.chk input{width:16px;height:16px;accent-color:var(--maroon)}
+
+/* Library + vendors lists */
+.lib-row,.ven-row{display:flex;align-items:center;gap:10px;background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius);padding:.7rem .9rem;margin-bottom:7px}
+.lib-row:hover,.ven-row:hover{border-color:var(--border2)}
+.lib-name{font-weight:600;font-size:14px}
+.lib-sec{font-size:11px;color:var(--text3)}
+.lib-comp{font-size:12px;color:var(--text2);margin-left:auto;background:var(--bg2);border-radius:10px;padding:1px 9px}
+.iconbtn{border:none;background:none;color:var(--text3);font-size:16px;width:30px;height:30px;border-radius:6px}
+.iconbtn:hover{background:var(--bg2);color:var(--text)}
+.search{width:100%;max-width:340px;padding:9px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);margin-bottom:1rem}
+.pri{background:var(--maroon);color:#fff;border:none;border-radius:var(--radius);padding:9px 15px;font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.pri:hover{filter:brightness(1.05)}
+.flag{font-size:10.5px;font-weight:700;color:var(--amber-text);background:var(--amber-bg);border-radius:5px;padding:2px 7px}
+
+/* Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:500;padding:1rem}
+.modal{background:var(--bg);border-radius:var(--radius-lg);width:100%;max-width:560px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-h{display:flex;align-items:center;padding:1rem 1.1rem;border-bottom:0.5px solid var(--border);font-weight:600;position:sticky;top:0;background:var(--bg)}
+.modal-h .iconbtn{margin-left:auto}
+.modal-b{padding:1.1rem}
+.fld{margin-bottom:.9rem}
+.fld label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px}
+.fld input,.fld select{width:100%;padding:9px 11px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text)}
+.comp-edit{display:flex;gap:6px;margin-bottom:6px;align-items:center}
+.comp-edit input,.comp-edit select{padding:7px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px}
+.modal-f{display:flex;gap:8px;padding:1rem 1.1rem;border-top:0.5px solid var(--border);position:sticky;bottom:0;background:var(--bg)}
+.modal-f .pri{flex:1;justify-content:center}
+.btn-cancel{background:var(--bg2);color:var(--text2);border:none;border-radius:var(--radius);padding:9px 15px;font-size:13.5px}
+
+/* Pick-dish list */
+.pick{max-height:50vh;overflow-y:auto}
+.pick-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius);cursor:pointer}
+.pick-row:hover{background:var(--bg2)}
+.pick-row .pn{font-size:13.5px;font-weight:500}
+.pick-row .ps{font-size:11px;color:var(--text3)}
+.pick-row .pc{margin-left:auto;font-size:11px;color:var(--text3)}
+
+/* Toast */
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);font-size:13px;padding:9px 16px;border-radius:20px;opacity:0;transition:opacity .2s;z-index:900;pointer-events:none}
+.toast.show{opacity:.95}
+
+@media(max-width:640px){
+  .col-sec{width:auto}.col-item{width:auto}.col-ven{width:auto}
+  .ev-meta{width:100%}
+  .gt{font-size:13px}
+  .applink span{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><div class="brand-mark"><i class="ti ti-shopping-cart"></i></div>
+    <div>Grocery<br><small>Premier Caterers</small></div></div>
+  <div class="spacer"></div>
+  <div class="weeknav">
+    <button class="wbtn" onclick="changeWeek(-1)"><i class="ti ti-chevron-left"></i></button>
+    <span class="we-pill" id="wePill">—</span>
+    <button class="wbtn" onclick="changeWeek(1)"><i class="ti ti-chevron-right"></i></button>
+  </div>
+  <a class="applink" href="index.html"><i class="ti ti-arrow-back-up"></i><span>Main app</span></a>
+</div>
+
+<div class="tabs">
+  <button class="tab active" id="tab-week" onclick="setTab('week')"><i class="ti ti-calendar"></i>This week <span class="cnt" id="cnt-week">0</span></button>
+  <button class="tab" id="tab-vendor" onclick="setTab('vendor')"><i class="ti ti-truck-delivery"></i>By vendor</button>
+  <button class="tab" id="tab-lib" onclick="setTab('lib')"><i class="ti ti-books"></i>Dish library <span class="cnt" id="cnt-lib">0</span></button>
+  <button class="tab" id="tab-ven" onclick="setTab('ven')"><i class="ti ti-building-store"></i>Vendors <span class="cnt" id="cnt-ven">0</span></button>
+</div>
+
+<div class="wrap" id="view"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- Firebase (same project as main app) ----------
+const firebaseConfig = {
+  apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
+  authDomain: "premier-caterers-internal-app.firebaseapp.com",
+  projectId: "premier-caterers-internal-app",
+  storageBucket: "premier-caterers-internal-app.firebasestorage.app",
+  messagingSenderId: "471701398759",
+  appId: "1:471701398759:web:559a7bee3b645ce545ee42"
+};
+if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// ---------- State ----------
+let weekOffset = 0;
+let tab = 'week';
+let events = [];          // shared 'events' collection
+let items = [];           // groceryItems for current week
+let dishes = [];          // groceryDishes (library)
+let vendors = [];         // groceryVendors (controlled list)
+let libSearch = '';
+let consolidate = false;
+let itemsUnsub = null;
+
+const KITCHENS = ['P','D','M','X'];
+const KITCHEN_LABEL = {P:'Parve',D:'Dairy',M:'Meat',X:'Off-shelf / ready'};
+const DEFAULT_VENDORS = [ // name, inStock(no-order)
+  ['premier',true],['aisle',false],['bertram',false],['chefs',false],['rd',false],
+  ['strauss',false],['fish',false],['costco',false],['oh nuts',false],['bagels',false],
+  ['elegent',false],['sterns',false],['a1',false],['ab',false],['aaaa',false]
+];
+const SECTIONS = ['Pre-set','Appetizer','Soup','Salads','Entree','Sides','Hot Station',
+  'Carving','Sushi / Poke','Dessert','Bar / Beverage','Fruit','Kids','Linens / Equipment','Other'];
+
+// ---------- Utilities ----------
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function genId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function weekDate(off){ return new Date(Date.UTC(2026,5,7) + off*7*24*60*60*1000); } // Jun 7 2026 = Sunday
+function weekKey(off){ return weekDate(off).toISOString().split('T')[0]; }
+function weekLabel(off){ const d=weekDate(off); return 'W/E '+MONTHS[d.getUTCMonth()]+' '+d.getUTCDate(); }
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function displayJob(j){ if(!j) return ''; const p=String(j).split('-'); return p.length>1?('#'+p[1]):('#'+String(j).replace('#','')); }
+function eventMode(e){ return (e && e.type==='dropoff') ? 'dropoff' : 'catered'; }
+let toastT;
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1400); }
+
+// ---------- Listeners ----------
+function startListeners(){
+  db.collection('events').onSnapshot(s=>{ events=s.docs.map(d=>({id:d.id,...d.data()})); render(); updateCounts(); });
+  db.collection('groceryDishes').onSnapshot(s=>{ dishes=s.docs.map(d=>({id:d.id,...d.data()})); if(tab==='lib'||tab==='week')render(); updateCounts(); });
+  db.collection('groceryVendors').onSnapshot(s=>{
+    vendors=s.docs.map(d=>({id:d.id,...d.data()}));
+    if(vendors.length===0){ seedVendors(); }
+    if(tab==='ven'||tab==='week'||tab==='vendor')render(); updateCounts();
+  });
+  watchItems();
+}
+function watchItems(){
+  if(itemsUnsub) itemsUnsub();
+  itemsUnsub = db.collection('groceryItems').where('weekOf','==',weekKey(weekOffset))
+    .onSnapshot(s=>{ items=s.docs.map(d=>({id:d.id,...d.data()})); if(tab==='week'||tab==='vendor')render(); updateCounts(); });
+}
+function seedVendors(){
+  const batch=db.batch();
+  DEFAULT_VENDORS.forEach(([name,inStock],i)=>{
+    const id=genId(); batch.set(db.collection('groceryVendors').doc(id),{name,inStock,order:i});
+  });
+  batch.commit().then(()=>toast('Vendor list ready'));
+}
+
+// ---------- Firestore writes ----------
+function saveItem(it){ db.collection('groceryItems').doc(it.id).set(it); }
+function delItem(id){ db.collection('groceryItems').doc(id).delete(); }
+function addItem(eventId, partial){
+  const it={ id:genId(), eventId, weekOf:weekKey(weekOffset),
+    section:'', kitchen:'X', item:'', qty:'', vendor:'',
+    order:Date.now(), ...partial };
+  saveItem(it);
+}
+
+// ---------- Counts ----------
+function updateCounts(){
+  const wk=weekKey(weekOffset);
+  document.getElementById('cnt-week').textContent = events.filter(e=>(e.weekOf||'')===wk).length;
+  document.getElementById('cnt-lib').textContent = dishes.length;
+  document.getElementById('cnt-ven').textContent = vendors.length;
+  document.getElementById('wePill').textContent = weekLabel(weekOffset);
+}
+
+// ---------- Navigation ----------
+function changeWeek(d){ weekOffset+=d; updateCounts(); watchItems(); render(); }
+function setTab(t){ tab=t; document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active'); render(); }
+
+// ---------- Render dispatch ----------
+function render(){
+  const v=document.getElementById('view');
+  if(tab==='week') v.innerHTML=renderWeek();
+  else if(tab==='vendor') v.innerHTML=renderVendorView();
+  else if(tab==='lib') v.innerHTML=renderLibrary();
+  else if(tab==='ven') v.innerHTML=renderVendors();
+}
+
+// ===== TAB: This week (per-event grocery lists) =====
+function vendorOptions(sel){
+  const opts=['<option value="">vendor…</option>'].concat(
+    vendors.slice().sort((a,b)=>a.name.localeCompare(b.name))
+      .map(v=>`<option value="${esc(v.name)}"${v.name===sel?' selected':''}>${esc(v.name)}</option>`));
+  return opts.join('');
+}
+function sectionOptions(sel){
+  const set=[...new Set(SECTIONS.concat(sel&&!SECTIONS.includes(sel)?[sel]:[]))];
+  return ['<option value="">section…</option>'].concat(
+    set.map(s=>`<option value="${esc(s)}"${s===sel?' selected':''}>${esc(s)}</option>`)).join('');
+}
+function itemRow(it){
+  return `<tr data-id="${it.id}">
+    <td class="col-sec"><select onchange="editItem('${it.id}','section',this.value)">${sectionOptions(it.section)}</select></td>
+    <td class="col-kit kit-cell"><select class="kit kit-${it.kitchen||'X'}" onchange="editItem('${it.id}','kitchen',this.value);this.className='kit kit-'+this.value">
+      ${KITCHENS.map(k=>`<option value="${k}"${k===(it.kitchen||'X')?' selected':''}>${k}</option>`).join('')}</select></td>
+    <td class="col-item"><input value="${esc(it.item)}" placeholder="item" oninput="editItemDebounced('${it.id}','item',this.value)"></td>
+    <td class="col-qty"><input value="${esc(it.qty)}" placeholder="qty" oninput="editItemDebounced('${it.id}','qty',this.value)"></td>
+    <td class="col-ven"><select onchange="editItem('${it.id}','vendor',this.value)">${vendorOptions(it.vendor)}</select></td>
+    <td class="col-x"><button class="rowx" onclick="delItem('${it.id}')" title="Remove">×</button></td>
+  </tr>`;
+}
+function renderWeek(){
+  const wk=weekKey(weekOffset);
+  const wkEvents=events.filter(e=>(e.weekOf||'')===wk)
+    .sort((a,b)=>(displayJob(a.job)).localeCompare(displayJob(b.job),undefined,{numeric:true}));
+  if(wkEvents.length===0) return `<div class="empty"><i class="ti ti-calendar-off" style="font-size:30px;display:block;margin-bottom:8px"></i>No events for ${weekLabel(weekOffset)}.<br>Use the arrows to change week, or add events in the main app.</div>`;
+  return wkEvents.map(e=>{
+    const mode=eventMode(e);
+    const rows=items.filter(it=>it.eventId===e.id).sort((a,b)=>(a.order||0)-(b.order||0));
+    return `<div class="ev">
+      <div class="ev-head">
+        <span class="job-pill">${esc(displayJob(e.job))}</span>
+        <span class="ev-name">${esc(e.name||'Untitled')}</span>
+        <span class="mode-tag mode-${mode}">${mode==='dropoff'?'Drop-off':'Catered'}</span>
+        <span class="ev-meta">${esc(e.typeLabel||e.type||'')}${e.guests?' · '+esc(e.guests)+' guests':''}</span>
+        <span class="ev-count">${rows.length} item${rows.length===1?'':'s'}</span>
+      </div>
+      ${rows.length? `<table class="gt"><thead><tr>
+          <th class="col-sec">Section</th><th class="col-kit">Kit</th><th class="col-item">Item</th>
+          <th class="col-qty">Qty</th><th class="col-ven">Vendor</th><th class="col-x"></th>
+        </tr></thead><tbody>${rows.map(itemRow).join('')}</tbody></table>`
+        : `<div style="padding:1rem;color:var(--text3);font-size:13px">No items yet.</div>`}
+      <div class="ev-foot">
+        <button class="addbtn" onclick="addItem('${e.id}')"><i class="ti ti-plus"></i> Add item</button>
+        <button class="addbtn ghost" onclick="openPickDish('${e.id}')"><i class="ti ti-books"></i> Add from library</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// inline edits
+let editT={};
+function editItem(id,field,val){ const it=items.find(x=>x.id===id); if(!it)return; it[field]=val; saveItem(it); }
+function editItemDebounced(id,field,val){ const it=items.find(x=>x.id===id); if(!it)return; it[field]=val;
+  clearTimeout(editT[id+field]); editT[id+field]=setTimeout(()=>saveItem(it),450); }
+
+// ===== TAB: By vendor =====
+function renderVendorView(){
+  const wk=weekKey(weekOffset);
+  const evName=id=>{ const e=events.find(x=>x.id===id); return e?(displayJob(e.job)+' '+(e.name||'')):''; };
+  const inStockNames=new Set(vendors.filter(v=>v.inStock).map(v=>v.name));
+  const all=items.filter(it=>it.item && it.item.trim());
+  const orderable=all.filter(it=>!inStockNames.has(it.vendor));
+  const inStock=all.filter(it=>inStockNames.has(it.vendor)||!it.vendor);
+
+  if(all.length===0) return `<div class="empty">No grocery items this week yet. Add some on the <a href="#" onclick="setTab('week');return false">This week</a> tab.</div>`;
+
+  // group orderable by vendor
+  const groups={};
+  orderable.forEach(it=>{ const v=it.vendor||'(no vendor)'; (groups[v]=groups[v]||[]).push(it); });
+  const vnames=Object.keys(groups).sort((a,b)=>a.localeCompare(b));
+
+  let html=`<div class="toolbar">
+    <label class="chk"><input type="checkbox" ${consolidate?'checked':''} onchange="consolidate=this.checked;render()"> Consolidate duplicates (same item + vendor)</label>
+  </div>`;
+
+  html+=vnames.map(v=>{
+    let list=groups[v];
+    let bodyRows;
+    if(consolidate){
+      const m={};
+      list.forEach(it=>{ const k=(it.item||'').toLowerCase().trim();
+        if(!m[k]) m[k]={item:it.item,kitchen:it.kitchen,qtys:[]};
+        if(it.qty) m[k].qtys.push(it.qty); });
+      bodyRows=Object.values(m).map(r=>`<div class="vrow">
+        <span class="vk kit-${r.kitchen||'X'}">${r.kitchen||'X'}</span>
+        <span class="vi">${esc(r.item)}</span>
+        <span class="vq">${esc(r.qtys.join(' + '))}</span></div>`).join('');
+    } else {
+      bodyRows=list.map(it=>`<div class="vrow">
+        <span class="vk kit-${it.kitchen||'X'}">${it.kitchen||'X'}</span>
+        <span class="vi">${esc(it.item)}</span>
+        <span class="vq">${esc(it.qty)}</span>
+        <span class="vfor">${esc(evName(it.eventId))}</span></div>`).join('');
+    }
+    const copyText=list.map(it=>`${it.item}${it.qty?' — '+it.qty:''}`).join('\n');
+    return `<div class="vend-block">
+      <div class="vend-head"><i class="ti ti-truck-delivery"></i> ${esc(v)}
+        <span class="n">${list.length}</span>
+        <button class="vend-copy" onclick='copyVendor(${JSON.stringify(copyText)})'><i class="ti ti-copy"></i> Copy</button></div>
+      ${bodyRows}
+    </div>`;
+  }).join('');
+
+  if(inStock.length){
+    html+=`<div class="instock-note"><i class="ti ti-package"></i>
+      <span><b>${inStock.length} in-stock / Premier item${inStock.length===1?'':'s'}</b> are on the kitchen list but excluded from vendor orders.</span></div>`;
+  }
+  return html;
+}
+function copyVendor(text){ navigator.clipboard.writeText(text).then(()=>toast('Copied to clipboard')); }
+
+// ===== TAB: Dish library =====
+function renderLibrary(){
+  const q=libSearch.toLowerCase();
+  const list=dishes.filter(d=>!q || (d.name||'').toLowerCase().includes(q) || (d.section||'').toLowerCase().includes(q))
+    .sort((a,b)=>(a.section||'').localeCompare(b.section||'')|| (a.name||'').localeCompare(b.name||''));
+  let html=`<div style="display:flex;gap:10px;align-items:center;margin-bottom:1rem;flex-wrap:wrap">
+      <input class="search" placeholder="Search dishes…" value="${esc(libSearch)}" oninput="libSearch=this.value;render()" style="margin:0">
+      <button class="pri" onclick="openDishEdit()"><i class="ti ti-plus"></i> New dish</button></div>`;
+  if(list.length===0) html+=`<div class="empty">${dishes.length===0?'No dishes yet. Add your standardized dishes here — each one stores its grocery breakdown once and reuses it forever.':'No dishes match your search.'}</div>`;
+  html+=list.map(d=>`<div class="lib-row">
+      <div><div class="lib-name">${esc(d.name)}</div><div class="lib-sec">${esc(d.section||'—')}</div></div>
+      <span class="lib-comp">${(d.components||[]).length} component${(d.components||[]).length===1?'':'s'}</span>
+      <button class="iconbtn" onclick="openDishEdit('${d.id}')"><i class="ti ti-pencil"></i></button>
+      <button class="iconbtn" onclick="deleteDish('${d.id}')"><i class="ti ti-trash"></i></button>
+    </div>`).join('');
+  return html;
+}
+function deleteDish(id){ const d=dishes.find(x=>x.id===id); if(confirm('Delete "'+(d?d.name:'')+'" from the library?')) db.collection('groceryDishes').doc(id).delete(); }
+
+// ===== TAB: Vendors =====
+function renderVendors(){
+  const list=vendors.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  let html=`<div style="margin-bottom:1rem"><button class="pri" onclick="openVendorEdit()"><i class="ti ti-plus"></i> New vendor</button>
+    <span class="muted" style="font-size:12.5px;margin-left:10px">In-stock vendors (like Premier) are excluded from order emails.</span></div>`;
+  html+=list.map(v=>`<div class="ven-row">
+      <i class="ti ti-building-store" style="color:var(--text3)"></i>
+      <span class="lib-name">${esc(v.name)}</span>
+      ${v.inStock?'<span class="flag">in-stock · no order</span>':''}
+      <span style="margin-left:auto"></span>
+      <button class="iconbtn" onclick="openVendorEdit('${v.id}')"><i class="ti ti-pencil"></i></button>
+      <button class="iconbtn" onclick="deleteVendor('${v.id}')"><i class="ti ti-trash"></i></button>
+    </div>`).join('');
+  return html;
+}
+function deleteVendor(id){ const v=vendors.find(x=>x.id===id); if(confirm('Delete vendor "'+(v?v.name:'')+'"?')) db.collection('groceryVendors').doc(id).delete(); }
+
+// ---------- Modals ----------
+function closeModal(){ const m=document.getElementById('modalHost'); if(m) m.remove(); }
+function modalShell(inner){
+  closeModal();
+  const host=document.createElement('div'); host.id='modalHost';
+  host.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">${inner}</div></div>`;
+  document.body.appendChild(host);
+}
+
+// Pick dish to add to event
+function openPickDish(eventId){
+  const e=events.find(x=>x.id===eventId); const mode=eventMode(e);
+  const list=dishes.slice().sort((a,b)=>(a.section||'').localeCompare(b.section||'')||(a.name||'').localeCompare(b.name||''));
+  const rows = list.length? list.map(d=>{
+    const n=mode==='dropoff' ? 1 : (d.components||[]).length;
+    return `<div class="pick-row" onclick="applyDish('${eventId}','${d.id}')">
+      <div><div class="pn">${esc(d.name)}</div><div class="ps">${esc(d.section||'')}</div></div>
+      <span class="pc">${mode==='dropoff'?'ready line':n+' comp'}</span></div>`;
+  }).join('') : `<div class="empty" style="padding:2rem">No dishes in the library yet.<br><button class="addbtn" style="margin-top:10px" onclick="closeModal();setTab('lib');openDishEdit()">Create your first dish</button></div>`;
+  modalShell(`<div class="modal-h">Add from library
+      <span style="font-size:11px;font-weight:600;color:var(--text3);margin-left:8px">${mode==='dropoff'?'drop-off · ready dish':'catered · explodes to components'}</span>
+      <button class="iconbtn" onclick="closeModal()"><i class="ti ti-x"></i></button></div>
+    <div class="modal-b"><div class="pick">${rows}</div></div>`);
+}
+function applyDish(eventId,dishId){
+  const d=dishes.find(x=>x.id===dishId); const e=events.find(x=>x.id===eventId); if(!d)return;
+  const mode=eventMode(e); const base=Date.now();
+  if(mode==='dropoff' && d.dropoff && (d.dropoff.item||d.name)){
+    addItem(eventId,{ section:d.section||'', kitchen:d.dropoff.kitchen||'X',
+      item:d.dropoff.item||d.name, qty:d.dropoff.qty||'', vendor:d.dropoff.vendor||'', order:base });
+  } else {
+    const comps=d.components||[];
+    if(comps.length===0){ addItem(eventId,{section:d.section||'',item:d.name,kitchen:'X',order:base}); }
+    comps.forEach((c,i)=> addItem(eventId,{ section:d.section||'', kitchen:c.kitchen||'X',
+      item:c.item||'', qty:c.qty||'', vendor:c.vendor||'', order:base+i }));
+  }
+  closeModal();
+  toast(mode==='dropoff'?'Added ready dish':'Exploded '+((d.components||[]).length)+' components');
+}
+
+// Dish editor
+let editComps=[];
+function openDishEdit(id){
+  const d=id?dishes.find(x=>x.id===id):null;
+  editComps = d ? JSON.parse(JSON.stringify(d.components||[])) : [{item:'',kitchen:'X',vendor:'',qty:''}];
+  const secOpts=SECTIONS.map(s=>`<option value="${s}"${d&&d.section===s?' selected':''}>${s}</option>`).join('');
+  modalShell(`<div class="modal-h">${d?'Edit dish':'New dish'}<button class="iconbtn" onclick="closeModal()"><i class="ti ti-x"></i></button></div>
+    <div class="modal-b">
+      <div class="fld"><label>Dish name</label><input id="d-name" value="${d?esc(d.name):''}" placeholder="e.g. Caesar salad with croutons"></div>
+      <div class="fld"><label>Menu section</label><select id="d-section"><option value="">—</option>${secOpts}</select></div>
+      <div class="fld"><label>Catered breakdown — components (item · kitchen · vendor · default qty)</label>
+        <div id="compList"></div>
+        <button class="addbtn ghost" onclick="addCompRow()" style="margin-top:6px"><i class="ti ti-plus"></i> Add component</button>
+      </div>
+      <div class="fld"><label>Drop-off ready line (optional — used for drop-off events)</label>
+        <div class="comp-edit">
+          <input id="do-item" style="flex:2" placeholder="ready dish (defaults to name)" value="${d&&d.dropoff?esc(d.dropoff.item||''):''}">
+          <input id="do-qty" style="width:70px" placeholder="qty/size" value="${d&&d.dropoff?esc(d.dropoff.qty||''):''}">
+        </div>
+      </div>
+    </div>
+    <div class="modal-f"><button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="pri" onclick="saveDish('${d?d.id:''}')"><i class="ti ti-check"></i> Save dish</button></div>`);
+  if(d&&d.section) document.getElementById('d-section').value=d.section;
+  renderCompRows();
+}
+function renderCompRows(){
+  const host=document.getElementById('compList'); if(!host)return;
+  host.innerHTML=editComps.map((c,i)=>`<div class="comp-edit">
+    <input style="flex:2" placeholder="component" value="${esc(c.item)}" oninput="editComps[${i}].item=this.value">
+    <select style="width:54px" onchange="editComps[${i}].kitchen=this.value">
+      ${KITCHENS.map(k=>`<option value="${k}"${(c.kitchen||'X')===k?' selected':''}>${k}</option>`).join('')}</select>
+    <select style="width:90px" onchange="editComps[${i}].vendor=this.value">
+      <option value="">vendor</option>${vendors.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(v=>`<option value="${esc(v.name)}"${c.vendor===v.name?' selected':''}>${esc(v.name)}</option>`).join('')}</select>
+    <input style="width:60px" placeholder="qty" value="${esc(c.qty)}" oninput="editComps[${i}].qty=this.value">
+    <button class="iconbtn" onclick="editComps.splice(${i},1);renderCompRows()"><i class="ti ti-x"></i></button>
+  </div>`).join('');
+}
+function addCompRow(){ editComps.push({item:'',kitchen:'X',vendor:'',qty:''}); renderCompRows(); }
+function saveDish(id){
+  const name=document.getElementById('d-name').value.trim();
+  if(!name){ toast('Give the dish a name'); return; }
+  const dish={ id:id||genId(), name, section:document.getElementById('d-section').value,
+    components: editComps.filter(c=>c.item && c.item.trim()),
+    dropoff:{ item:document.getElementById('do-item').value.trim(), qty:document.getElementById('do-qty').value.trim(), kitchen:'X', vendor:'' },
+    updated:Date.now() };
+  db.collection('groceryDishes').doc(dish.id).set(dish).then(()=>{ closeModal(); toast('Dish saved'); });
+}
+
+// Vendor editor
+function openVendorEdit(id){
+  const v=id?vendors.find(x=>x.id===id):null;
+  modalShell(`<div class="modal-h">${v?'Edit vendor':'New vendor'}<button class="iconbtn" onclick="closeModal()"><i class="ti ti-x"></i></button></div>
+    <div class="modal-b">
+      <div class="fld"><label>Vendor name</label><input id="v-name" value="${v?esc(v.name):''}" placeholder="e.g. bertram"></div>
+      <div class="fld"><label class="chk"><input type="checkbox" id="v-instock" ${v&&v.inStock?'checked':''}> In-stock / Premier — exclude from order emails</label></div>
+    </div>
+    <div class="modal-f"><button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="pri" onclick="saveVendor('${v?v.id:''}')"><i class="ti ti-check"></i> Save</button></div>`);
+}
+function saveVendor(id){
+  const name=document.getElementById('v-name').value.trim();
+  if(!name){ toast('Enter a vendor name'); return; }
+  const v={ id:id||genId(), name, inStock:document.getElementById('v-instock').checked, order:Date.now() };
+  db.collection('groceryVendors').doc(v.id).set(v,{merge:true}).then(()=>{ closeModal(); toast('Vendor saved'); });
+}
+
+// expose for inline handlers
+Object.assign(window,{changeWeek,setTab,addItem,delItem,editItem,editItemDebounced,
+  openPickDish,applyDish,openDishEdit,saveDish,addCompRow,renderCompRows,deleteDish,
+  openVendorEdit,saveVendor,deleteVendor,closeModal,copyVendor});
+
+// ---------- Go ----------
+updateCounts();
+startListeners();
+render();
+</script>
+</body>
+</html>
