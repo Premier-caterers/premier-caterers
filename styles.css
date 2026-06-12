@@ -276,6 +276,11 @@ a{color:var(--blue-mid);text-decoration:none}
 .inq-card.compact .inq-event-name{display:none}
 .pl-compact-meta{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:11px;color:var(--text2);margin-top:3px;padding-left:1px}
 .pl-compact-meta span{display:inline-flex;align-items:center;gap:4px}
+/* This Week minimize */
+.ew-day-label{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ew-compact-row{display:flex;align-items:center;gap:8px}
+.event-card.compact{padding:.65rem .9rem}
+.event-card.compact .ew-compact-row .client-name{font-size:14px}
 .inq-detail{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-top:1rem}
 @media(max-width:700px){.pipeline-cols{grid-template-columns:1fr}}
 
@@ -316,6 +321,7 @@ a{color:var(--blue-mid);text-decoration:none}
 .cs-inp:hover{background:#f1f1ed}
 .cs-inp:focus{border-color:#8B1A1A;background:#fff;box-shadow:0 0 0 2px rgba(139,26,26,.12)}
 .cs-inp-num{text-align:center;width:48px;margin:0 auto;display:block}
+.cs-inp-staff{text-align:center;width:100%}
 .cs-inp-suffix{width:30px;color:#8B1A1A;font-weight:700;text-align:center}
 .cs-menu-pill{display:inline-flex;align-items:center;gap:3px;background:#1a7340;color:#fff;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap}
 .cs-menu-pill:hover{background:#155e34}
