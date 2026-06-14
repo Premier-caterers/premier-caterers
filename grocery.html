@@ -1,4 +1,4 @@
-<!-- Premier Caterers Grocery | Phase 1 + 127-dish library -->
+<!-- Premier Caterers Grocery | Phase 1-4 + 127-dish library -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -189,6 +189,84 @@ a{color:var(--maroon);text-decoration:none}
   .gt{font-size:13px}
   .applink span{display:none}
 }
+
+/* ===== Phase 3: Menu document ===== */
+.mdoc-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:650;display:flex;align-items:stretch;justify-content:center}
+.mdoc-shell{background:var(--bg3);width:100%;max-width:920px;display:flex;flex-direction:column;height:100%}
+.mdoc-toolbar{background:var(--bg);border-bottom:0.5px solid var(--border);padding:.7rem 1rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mdoc-seg{display:inline-flex;border:0.5px solid var(--border2);border-radius:8px;overflow:hidden}
+.mdoc-seg button{border:none;background:var(--bg);color:var(--text2);font-size:13px;font-weight:600;padding:7px 16px}
+.mdoc-seg button.on{background:var(--maroon);color:#fff}
+.mdoc-tool-sp{flex:1}
+.mdoc-print-btn{background:var(--maroon);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;display:inline-flex;gap:6px;align-items:center}
+.mdoc-x{border:none;background:none;color:var(--text3);font-size:20px;width:34px;height:34px;border-radius:6px}
+.mdoc-x:hover{background:var(--bg2);color:var(--text)}
+.mdoc-scroll{flex:1;overflow-y:auto;padding:1.5rem 1rem 3rem;display:flex;justify-content:center}
+.mdoc-print{background:#fff;color:#1a1a18;width:100%;max-width:760px;min-height:100%;padding:46px 54px;box-shadow:0 6px 30px rgba(0,0,0,.25);font-family:Georgia,'Times New Roman',serif}
+.mdoc-print.internal{max-width:860px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+.mdoc-head{text-align:center;border-bottom:2px solid #8B1A1A;padding-bottom:14px;margin-bottom:24px}
+.mdoc-brand{font-family:Georgia,serif;font-size:26px;letter-spacing:5px;color:#8B1A1A;font-weight:700}
+.mdoc-brand small{display:block;letter-spacing:6px;font-size:10px;color:#8B1A1A;font-weight:400;margin-top:3px}
+.mdoc-evline{margin-top:11px;font-size:13px;color:#555;font-family:-apple-system,sans-serif}
+.mdoc-evline b{color:#1a1a18}
+.mdoc-sec{margin:0 0 22px}
+.mdoc-sec h3{text-align:center;font-size:15px;letter-spacing:1.5px;text-transform:uppercase;color:#8B1A1A;margin:0 0 9px;font-family:-apple-system,sans-serif;font-weight:700}
+.mdoc-dish{text-align:center;font-size:15px;line-height:1.75;color:#1a1a18}
+.mdoc-isec{display:flex;border:1px solid #ddd;border-bottom:none}
+.mdoc-print.internal .mdoc-isec:last-child{border-bottom:1px solid #ddd}
+.mdoc-isec .ml{flex:0 0 42%;padding:9px 13px;border-right:1px solid #ddd}
+.mdoc-isec .mr{flex:1;padding:7px 11px}
+.mdoc-isec .secname{font-weight:700;font-size:12.5px;color:#8B1A1A;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+.mdoc-isec .mdish{font-size:13px;line-height:1.55;color:#1a1a18}
+.mdoc-grow{display:flex;align-items:center;gap:8px;font-size:12px;padding:2px 0;border-bottom:0.5px solid #eee}
+.mdoc-grow:last-child{border-bottom:none}
+.mdoc-k{flex-shrink:0;width:18px;height:16px;border-radius:3px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.mdoc-k.P{background:#EAF3DE;color:#27500A}.mdoc-k.D{background:#E6F1FB;color:#0C447C}
+.mdoc-k.M{background:#FAECE7;color:#712B13}.mdoc-k.X{background:#f0f0ec;color:#777}
+.mdoc-gi{flex:1}.mdoc-gq{color:#666;font-size:11px;min-width:34px;text-align:right}
+.mdoc-gv{color:#999;font-size:11px;min-width:54px;text-align:right}
+.mdoc-empty{text-align:center;color:#999;padding:48px 20px;font-size:14px}
+@media print{
+  body{background:#fff}
+  body>*:not(#menuDocHost){display:none!important}
+  #menuDocHost .mdoc-bg{position:static;background:#fff;display:block}
+  #menuDocHost .mdoc-shell{max-width:none;height:auto;display:block}
+  #menuDocHost .mdoc-toolbar{display:none!important}
+  #menuDocHost .mdoc-scroll{overflow:visible;padding:0;display:block}
+  #menuDocHost .mdoc-print{box-shadow:none;max-width:none;width:auto;padding:20px;min-height:0}
+}
+
+.mdoc-arrh{font-size:14px;letter-spacing:.5px;text-transform:uppercase;color:#8B1A1A;font-weight:700;font-family:-apple-system,sans-serif;border-bottom:1px solid #ddd;padding-bottom:4px;margin:26px 0 10px}
+.mdoc-arr{white-space:pre-wrap;font-size:13.5px;line-height:1.7;font-family:-apple-system,sans-serif;color:#1a1a18;outline:none;border:1px dashed transparent;border-radius:6px;padding:6px 8px;min-height:1em}
+.mdoc-arr:hover{border-color:#e3c9c9}
+.mdoc-arr:focus{border-color:#8B1A1A;background:#fcf6f6}
+.mdoc-contract{white-space:pre-wrap;font-size:11.5px;line-height:1.6;font-family:-apple-system,sans-serif;color:#333;padding:4px 8px;page-break-inside:avoid}
+@media print{ .mdoc-arr{border-color:transparent!important;background:none!important} }
+
+.mdoc-est{width:100%;border-collapse:collapse;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;margin-top:2px}
+.mdoc-est th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#aaa;font-weight:600;padding:0 6px 5px;border-bottom:1px solid #ddd}
+.mdoc-est th.q,.mdoc-est th.p,.mdoc-est th.a{text-align:right}
+.mdoc-est td{padding:0;border-bottom:0.5px solid #f1f1ec;vertical-align:middle}
+.mdoc-est td.a{text-align:right;color:#1a1a18;white-space:nowrap;padding-right:6px;font-variant-numeric:tabular-nums;width:84px}
+.mdoc-est td:nth-child(2),.mdoc-est td:nth-child(3){width:64px}
+.mdoc-est td:last-child{width:22px;text-align:center}
+.ei{border:1px solid transparent;border-radius:5px;font:inherit;color:#1a1a18;background:none;padding:5px 6px;width:100%;outline:none;box-sizing:border-box}
+.ei:hover{border-color:#e3c9c9}.ei:focus{border-color:#8B1A1A;background:#fcf6f6}
+.eq,.ep,.edep{text-align:right;font-variant-numeric:tabular-nums}
+.erm{border:none;background:none;color:#cfcfcf;font-size:16px;cursor:pointer;width:20px;line-height:1;padding:0}
+.erm:hover{color:#b5302a}
+.eadd{margin:7px 2px 2px;border:1px dashed #d9c3c3;background:none;color:#8B1A1A;font-size:12px;border-radius:6px;padding:4px 11px;cursor:pointer;font-family:-apple-system,sans-serif}
+.etx{display:flex;align-items:center;gap:7px;font-size:12px;color:#666;margin:9px 2px 0;font-family:-apple-system,sans-serif}
+.mdoc-tot{margin:12px 0 0 auto;max-width:300px;border-top:1px solid #ddd;padding-top:8px;font-family:-apple-system,sans-serif;font-size:13px}
+.mdoc-tot>div{display:flex;justify-content:space-between;align-items:center;padding:3px 6px;color:#444}
+.mdoc-tot>div span:last-child{font-variant-numeric:tabular-nums;color:#1a1a18}
+.mdoc-tot .grand{font-weight:700;font-size:15px;border-top:1px solid #ddd;border-bottom:2px solid #8B1A1A;margin:5px 0;padding:7px 6px}
+.mdoc-tot .bal{font-weight:700}.mdoc-tot .bal span:last-child{color:#8B1A1A}
+.mdoc-tot .edep{max-width:96px;text-align:right;padding:3px 5px}
+@media print{ .erm,.eadd{display:none!important} .ei{border-color:transparent!important;background:none!important} }
+
+.mdoc-quote-btn{background:var(--maroon-bg);color:var(--maroon);border:0.5px solid var(--maroon);border-radius:8px;padding:8px 13px;font-size:13px;font-weight:600;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.mdoc-quote-btn:hover{filter:brightness(.97)}
 </style>
 </head>
 <body>
@@ -380,6 +458,7 @@ function renderWeek(){
         <button class="addbtn" style="background:var(--maroon);color:#fff" onclick="openBuilder('${e.id}')"><i class="ti ti-clipboard-list"></i> Build menu</button>
         <button class="addbtn ghost" onclick="addItem('${e.id}')"><i class="ti ti-plus"></i> Add item</button>
         <button class="addbtn ghost" onclick="openPickDish('${e.id}')"><i class="ti ti-books"></i> Add one dish</button>
+        <button class="addbtn ghost" onclick="openMenuDoc('${e.id}')"><i class="ti ti-file-text"></i> Menu</button>
       </div>
     </div>`;
   }).join('');
@@ -706,16 +785,183 @@ async function buildGrocery(){
     if(!desired.has(key)) batch.delete(db.collection('groceryItems').doc(it.id)); });
   desired.forEach((v,key)=>{ if(!existingKeys.has(key)){ const id=genId();
     batch.set(db.collection('groceryItems').doc(id),{id,eventId:eid,weekOf:weekKey(weekOffset),section:v.section,kitchen:v.kitchen,item:v.item,qty:'',vendor:v.vendor,order:order++,menuDish:v.menuDish,comp:v.comp}); } });
-  batch.set(db.collection('groceryMenus').doc(eid),{eventId:eid,dishIds:sel,updated:Date.now()});
+  batch.set(db.collection('groceryMenus').doc(eid),{eventId:eid,dishIds:sel,updated:Date.now()},{merge:true});
   try{ await batch.commit(); closeBuilder(); toast('Grocery built from menu ✓'); }
   catch(err){ alert('Build failed: '+err.message); }
+}
+
+// ---------- Menu document (Phase 3) ----------
+let menuDocEventId=null, menuDocMode='client', menuDocDishIds=[];
+let menuDocEstimate=null;
+const EST_LOG=0.0284, EST_TAX=0.06625;   // match main-app invoice rates exactly
+const CONTRACT_TEXT = `A $1,000.00 DEPOSIT IS DUE TO SECURE THE DATE OF YOUR EVENT
+
+A TOTAL OF 50% IS DUE 14 DAYS PRIOR TO THE EVENT. A TOTAL OF 90% IS DUE 1 WEEK PRIOR TO THE EVENT. THE BALANCE IS DUE ON OR BEFORE THE EVENT
+
+ALL FINAL DETAILS IN REGARDS TO FINAL NUMBER OF GUESTS AND ANY MENU CHANGES ARE DUE SEVEN DAYS PRIOR TO YOUR EVENT
+
+APPROVED AND ACCEPTED:
+
+DATE _______________      ___________________________________
+                          PREMIER CATERERS, LLC
+
+THE PATRON ACKNOWLEDGES AND AGREES THAT THE PATRON HAS READ ALL PAGES OF THIS MENU / CONTRACT, UNDERSTANDS THE CONTRACT TERMS AND HAS RECEIVED A FULLY SIGNED COPY OF THIS CONTRACT. UNSIGNED CONTRACT CONSTITUTES AN OFFER ONLY, WHICH IS WITHDRAWN AFTER 30 DAYS FROM ISSUE
+
+DATE _______________      ___________________________________
+                          CLIENT SIGNATURE`;
+async function openMenuDoc(eventId){
+  menuDocEventId=eventId; menuDocMode='client'; menuDocDishIds=[]; menuDocEstimate=null;
+  const ev=events.find(x=>x.id===eventId);
+  try{ const snap=await db.collection('groceryMenus').doc(eventId).get();
+    if(snap.exists){ const d=snap.data(); menuDocDishIds=(d.dishIds||[]).slice(); if(d.estimate) menuDocEstimate=d.estimate; } }catch(e){}
+  if(!menuDocEstimate) menuDocEstimate=defaultEstimate(ev);
+  if(!menuDocEstimate.lines) menuDocEstimate.lines=[];
+  if(menuDocDishIds.length===0){ const seen=new Set();
+    items.filter(it=>it.eventId===eventId && it.menuDish).forEach(it=>{ if(!seen.has(it.menuDish)){seen.add(it.menuDish); menuDocDishIds.push(it.menuDish);} }); }
+  let host=document.getElementById('menuDocHost');
+  if(!host){ host=document.createElement('div'); host.id='menuDocHost'; document.body.appendChild(host); }
+  host.innerHTML=renderMenuDoc();
+}
+function closeMenuDoc(){ const h=document.getElementById('menuDocHost'); if(h)h.remove(); menuDocEventId=null; }
+function setMenuDocMode(m){ menuDocMode=m; const h=document.getElementById('menuDocHost'); if(h)h.innerHTML=renderMenuDoc(); }
+function printMenuDoc(){ window.print(); }
+function defaultEstimate(e){
+  const g=(e&&e.guests)?((String(e.guests).match(/\d+/)||[''])[0]):'';
+  return {lines:[
+    {desc:'Catering — per guest (based on the menu)',qty:g,price:''},
+    {desc:'Waiters / bartenders / kitchen staff (each)',qty:'',price:'245'},
+    {desc:'Catering manager',qty:'1',price:'500'},
+    {desc:'Rabbinical supervision',qty:'1',price:'475'}
+  ],deposit:'1000',taxExempt:false};
+}
+function money(n){ n=isFinite(n)?n:0; return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function estTotals(est){
+  const sub=(est.lines||[]).reduce((s,l)=>s+(parseFloat(l.qty||0)*parseFloat(l.price||0)),0);
+  const log=sub*EST_LOG, taxBase=sub+log, tax=est.taxExempt?0:taxBase*EST_TAX, grand=taxBase+tax;
+  return {sub,log,tax,grand,bal:grand-parseFloat(est.deposit||0)};
+}
+function renderEstimateBlock(){
+  const est=menuDocEstimate, t=estTotals(est);
+  const rows=(est.lines||[]).map((l,i)=>{
+    const amt=parseFloat(l.qty||0)*parseFloat(l.price||0);
+    return `<tr><td><input class="ei ed" value="${esc(l.desc||'')}" oninput="estLine(${i},'desc',this.value)"></td>`+
+      `<td><input class="ei eq" value="${esc(l.qty||'')}" inputmode="decimal" oninput="estLine(${i},'qty',this.value)"></td>`+
+      `<td><input class="ei ep" value="${esc(l.price||'')}" inputmode="decimal" oninput="estLine(${i},'price',this.value)"></td>`+
+      `<td class="a"><span id="est-amt-${i}">${money(amt)}</span></td>`+
+      `<td><button class="erm" onclick="estDelLine(${i})" title="remove line">\u00d7</button></td></tr>`;
+  }).join('');
+  return `<table class="mdoc-est"><thead><tr><th class="d">Description</th><th class="q">Qty</th><th class="p">Rate</th><th class="a">Amount</th><th></th></tr></thead><tbody>${rows}</tbody></table>`+
+    `<button class="eadd" onclick="estAddLine()">+ Add line</button>`+
+    `<label class="etx"><input type="checkbox" ${est.taxExempt?'checked':''} onchange="estField('taxExempt',this.checked)"> Tax exempt (organization / synagogue)</label>`+
+    `<div class="mdoc-tot"><div><span>Subtotal</span><span id="est-sub">${money(t.sub)}</span></div>`+
+    `<div><span>Logistics (2.84%)</span><span id="est-log">${money(t.log)}</span></div>`+
+    `<div><span>Sales tax (6.625%)</span><span id="est-tax">${money(t.tax)}</span></div>`+
+    `<div class="grand"><span>Total</span><span id="est-grand">${money(t.grand)}</span></div>`+
+    `<div><span>Deposit</span><span><input class="ei edep" value="${esc(est.deposit||'')}" inputmode="decimal" oninput="estField('deposit',this.value)"></span></div>`+
+    `<div class="bal"><span>Balance due</span><span id="est-bal">${money(t.bal)}</span></div></div>`;
+}
+function menuDocEstimateContract(){
+  return `<div class="mdoc-arrblock"><h3 class="mdoc-arrh">Arrangements</h3><div id="estBlock">${renderEstimateBlock()}</div>`+
+    `<h3 class="mdoc-arrh">Contract</h3><div class="mdoc-contract">${esc(CONTRACT_TEXT)}</div></div>`;
+}
+function estRecalc(){
+  const est=menuDocEstimate, t=estTotals(est);
+  (est.lines||[]).forEach((l,i)=>{ const el=document.getElementById('est-amt-'+i); if(el) el.textContent=money(parseFloat(l.qty||0)*parseFloat(l.price||0)); });
+  const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=money(v);};
+  set('est-sub',t.sub);set('est-log',t.log);set('est-tax',t.tax);set('est-grand',t.grand);set('est-bal',t.bal);
+}
+function estRerender(){ const c=document.getElementById('estBlock'); if(c) c.innerHTML=renderEstimateBlock(); }
+let _estSaveT;
+function estSave(){ clearTimeout(_estSaveT); const eid=menuDocEventId, est=JSON.parse(JSON.stringify(menuDocEstimate));
+  _estSaveT=setTimeout(()=>{ if(eid) db.collection('groceryMenus').doc(eid).set({eventId:eid,estimate:est,updated:Date.now()},{merge:true}).catch(()=>{}); },600); }
+function estLine(i,f,v){ if(!menuDocEstimate.lines[i])return; menuDocEstimate.lines[i][f]=v; estRecalc(); estSave(); }
+function estField(f,v){ menuDocEstimate[f]=v; estRecalc(); estSave(); }
+function estAddLine(){ menuDocEstimate.lines.push({desc:'',qty:'',price:''}); estRerender(); estSave(); }
+function estDelLine(i){ menuDocEstimate.lines.splice(i,1); estRerender(); estSave(); }
+function estCategory(d){ d=(d||'').toLowerCase();
+  if(/waiter|bartend|staff|chef|manager|rabbinic|mashgiach|supervis/.test(d)) return 'Staffing';
+  if(/logistic|delivery|deposit|gratuit/.test(d)) return 'Logistics';
+  return 'Food'; }
+function estUnit(d){ d=(d||'').toLowerCase();
+  if(/guest/.test(d)) return 'guest';
+  if(/each|staff|waiter|bartend|chef|person/.test(d)) return 'person';
+  return 'event'; }
+async function saveQuoteToMainApp(){
+  const eid=menuDocEventId; if(!eid) return;
+  const e=events.find(x=>x.id===eid)||{};
+  const lines=(menuDocEstimate.lines||[]).map((l,i)=>({
+    id:'g'+i, category:estCategory(l.desc), description:l.desc||'',
+    qty:parseFloat(l.qty||0)||0, unit:estUnit(l.desc), price:parseFloat(l.price||0)||0 }));
+  if(lines.length===0){ toast('Add an estimate line first'); return; }
+  const fin={ lines, deposit:parseFloat(menuDocEstimate.deposit||0)||0,
+    taxExempt:!!menuDocEstimate.taxExempt, logisticsRate:EST_LOG };
+  let existing=null;
+  try{ const s=await db.collection('invoices').doc(eid).get(); if(s.exists) existing=s.data(); }catch(err){}
+  if(existing){
+    const st=existing.status||'quote';
+    const msg=(st!=='quote')
+      ? 'An invoice already exists for this event and is marked "'+st+'". Replacing it overwrites its line items and pricing with this estimate (its status and contact info are kept). Continue?'
+      : 'A quote already exists for this event in the main app. Update its line items and pricing with this estimate? (Contact info and status are kept.)';
+    if(!confirm(msg)) return;
+    try{ await db.collection('invoices').doc(eid).set(Object.assign({},existing,fin,{updated:Date.now()})); toast('Quote updated in main app \u2713'); }
+    catch(err){ toast('Could not save \u2014 check connection'); }
+  } else {
+    const inv=Object.assign({ eventId:eid, status:'quote', quoteNumber:e.job||'', clientName:e.name||'',
+      eventType:e.typeLabel||e.type||'', eventDate:e.dayLabel||'', address:e.addr||'',
+      clientPhone:'', clientEmail:'', notes:'',
+      createdAt:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) }, fin);
+    try{ await db.collection('invoices').doc(eid).set(inv); toast('Quote sent to main app \u2713'); }
+    catch(err){ toast('Could not save \u2014 check connection'); }
+  }
+}
+function menuDocHeader(e){
+  return `<div class="mdoc-head"><div class="mdoc-brand">PREMIER CATERERS<small>FINE KOSHER CATERING</small></div>
+    <div class="mdoc-evline"><b>${esc(displayJob(e&&e.job))}${e&&e.name?(' · '+esc(e.name)):''}</b>${e&&e.typeLabel?(' · '+esc(e.typeLabel)):''}${e&&e.guests?(' · '+esc(e.guests)+' guests'):''}</div></div>`;
+}
+function renderMenuDoc(){
+  const e=events.find(x=>x.id===menuDocEventId);
+  const selected=menuDocDishIds.map(id=>dishes.find(d=>d.id===id)).filter(Boolean);
+  let bodyHtml;
+  if(menuDocMode==='client'){
+    const order=SECTIONS.concat([...new Set(selected.map(d=>d.section||'Other'))].filter(s=>!SECTIONS.includes(s)));
+    let secs='';
+    order.forEach(sec=>{ const ds=selected.filter(d=>(d.section||'Other')===sec); if(ds.length===0) return;
+      secs+=`<div class="mdoc-sec"><h3>${esc(sec)}</h3>${ds.map(d=>`<div class="mdoc-dish">${esc(d.name)}</div>`).join('')}</div>`; });
+    if(!secs) secs=`<div class="mdoc-empty">No menu selected yet. Use \u201cBuild menu\u201d first, then reopen.</div>`;
+    bodyHtml=`<div class="mdoc-print">${menuDocHeader(e)}${secs}${menuDocEstimateContract()}</div>`;
+  } else {
+    const evItems=items.filter(it=>it.eventId===menuDocEventId);
+    const gsecs=evItems.map(it=>it.section||'Other');
+    const order=SECTIONS.concat([...new Set(selected.map(d=>d.section||'Other').concat(gsecs))].filter(s=>!SECTIONS.includes(s)));
+    let rows='';
+    order.forEach(sec=>{
+      const ds=selected.filter(d=>(d.section||'Other')===sec);
+      const gi=evItems.filter(it=>(it.section||'Other')===sec).sort((a,b)=>(a.order||0)-(b.order||0));
+      if(ds.length===0 && gi.length===0) return;
+      rows+=`<div class="mdoc-isec"><div class="ml"><div class="secname">${esc(sec)}</div>${ds.map(d=>`<div class="mdish">${esc(d.name)}</div>`).join('')||'<div class="mdish" style="color:#aaa">\u2014</div>'}</div>`+
+        `<div class="mr">${gi.map(it=>`<div class="mdoc-grow"><span class="mdoc-k ${it.kitchen||'X'}">${esc(it.kitchen||'X')}</span><span class="mdoc-gi">${esc(it.item)}</span><span class="mdoc-gq">${esc(it.qty||'')}</span><span class="mdoc-gv">${esc(it.vendor||'')}</span></div>`).join('')||'<div style="color:#bbb;font-size:12px;padding:4px 0">no grocery rows</div>'}</div></div>`;
+    });
+    if(!rows) rows=`<div class="mdoc-empty">Nothing to show yet. Build the menu and grocery first.</div>`;
+    bodyHtml=`<div class="mdoc-print internal">${menuDocHeader(e)}${rows}</div>`;
+  }
+  return `<div class="mdoc-bg" onclick="if(event.target===this)closeMenuDoc()"><div class="mdoc-shell">
+    <div class="mdoc-toolbar">
+      <div class="mdoc-seg"><button class="${menuDocMode==='client'?'on':''}" onclick="setMenuDocMode('client')">Client</button><button class="${menuDocMode==='internal'?'on':''}" onclick="setMenuDocMode('internal')">Internal</button></div>
+      <span style="font-size:12px;color:var(--text3)">${menuDocMode==='client'?'Menu only — for the client':'Menu + grocery — kitchen copy'}</span>
+      <div class="mdoc-tool-sp"></div>
+      <button class="mdoc-quote-btn" onclick="saveQuoteToMainApp()"><i class="ti ti-receipt"></i> Save as quote</button>
+      <button class="mdoc-print-btn" onclick="printMenuDoc()"><i class="ti ti-printer"></i> Print</button>
+      <button class="mdoc-x" onclick="closeMenuDoc()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mdoc-scroll">${bodyHtml}</div>
+  </div></div>`;
 }
 
 // expose for inline handlers
 Object.assign(window,{changeWeek,setTab,addItem,delItem,editItem,editItemDebounced,
   openPickDish,applyDish,openDishEdit,saveDish,addCompRow,renderCompRows,deleteDish,
   openVendorEdit,saveVendor,deleteVendor,closeModal,copyVendor,importStarter,
-  openBuilder,closeBuilder,reRenderBuilder,toggleBsec,toggleBuilderDish,applyTemplate,buildGrocery});
+  openBuilder,closeBuilder,reRenderBuilder,toggleBsec,toggleBuilderDish,applyTemplate,buildGrocery,openMenuDoc,closeMenuDoc,setMenuDocMode,printMenuDoc,estLine,estField,estAddLine,estDelLine,saveQuoteToMainApp});
 
 // ---------- Go ----------
 updateCounts();
