@@ -820,7 +820,7 @@ async function openMenuDoc(eventId){
   if(ev&&ev.inquiryId){ try{ const isnap=await db.collection('inquiries').doc(ev.inquiryId).get(); if(isnap.exists) _inq=isnap.data(); }catch(e){} }
   if(!menuDocEstimate) menuDocEstimate=defaultEstimate(ev);
   menuDocCover=mergeCover(coverAuto(ev,_inq), menuDocCoverSaved);
-  if(!menuDocTemplateMenu){ const _tid=templateIdFor(ev); if(_tid&&MENU_TEMPLATES[_tid]) menuDocTemplateMenu=tmplBuild(_tid); }
+  { const _tid=templateIdFor(ev); if(_tid&&MENU_TEMPLATES[_tid]){ menuDocTemplateMenu = menuDocTemplateMenu ? tmplMigrate(menuDocTemplateMenu,_tid) : tmplBuild(_tid); tmplSave(); } }
   if(!menuDocEstimate.lines) menuDocEstimate.lines=[];
   if(menuDocDishIds.length===0){ const seen=new Set();
     items.filter(it=>it.eventId===eventId && it.menuDish).forEach(it=>{ if(!seen.has(it.menuDish)){seen.add(it.menuDish); menuDocDishIds.push(it.menuDish);} }); }
@@ -1148,6 +1148,28 @@ function tmplBuild(tid){
   }));
   m.templateId=tid; m.pricing=Object.assign({}, tpl.pricing||{});
   return m;
+}
+// Heal an old saved menu into the current template shape, keeping the office's selections (matched by name)
+function tmplMigrate(saved, tid){
+  const fresh=tmplBuild(tid);
+  if(!saved||!saved.phases) return fresh;
+  const onSet=new Set(), stOn=new Set(), choose={};
+  (saved.phases||[]).forEach(ph=>(ph.stations||[]).forEach(st=>{ const sn=(st.name||'');
+    const mark=it=>{ if(it&&it.on===true) onSet.add(sn+'||'+(it.n||it.name||'')); };
+    (st.items||[]).forEach(mark); (st.groups||[]).forEach(g=>(g.items||[]).forEach(mark)); (st.orItems||[]).forEach(mark);
+    if(st.entreeSides){
+      (st.entreeSides.potatoes||[]).forEach(p=>{ const nm=(p&&p.n)||(typeof p==='string'?p:''); if(p&&p.on===true) onSet.add(sn+'||POT||'+nm); });
+      (st.entreeSides.vegetables||[]).forEach(p=>{ const nm=(p&&p.n)||(typeof p==='string'?p:''); if(p&&p.on===true) onSet.add(sn+'||VEG||'+nm); }); }
+    if(st.on===true) stOn.add(sn); if(st.choose!==undefined) choose[sn]=st.choose; }));
+  (fresh.phases||[]).forEach(ph=>(ph.stations||[]).forEach(st=>{ const sn=(st.name||'');
+    const ap=it=>{ if(onSet.has(sn+'||'+(it.n||it.name||''))) it.on=true; };
+    (st.items||[]).forEach(ap); (st.groups||[]).forEach(g=>(g.items||[]).forEach(ap)); (st.orItems||[]).forEach(ap);
+    if(st.entreeSides){
+      (st.entreeSides.potatoes||[]).forEach(p=>{ if(onSet.has(sn+'||POT||'+p.n)) p.on=true; });
+      (st.entreeSides.vegetables||[]).forEach(p=>{ if(onSet.has(sn+'||VEG||'+p.n)) p.on=true; }); }
+    if(stOn.has(sn)) st.on=true; if(choose[sn]!==undefined) st.choose=choose[sn]; }));
+  if(saved.pricing) fresh.pricing=Object.assign({}, fresh.pricing||{}, saved.pricing);
+  return fresh;
 }
 let _tmplSaveT;
 function tmplSave(){ clearTimeout(_tmplSaveT); const eid=menuDocEventId, mm=JSON.parse(JSON.stringify(menuDocTemplateMenu));
