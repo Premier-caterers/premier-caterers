@@ -938,10 +938,17 @@ function renderMenuDoc(){
     if(menuDocTemplateMenu) secs=renderTemplateClientHtml();
     bodyHtml=`<div class="mdoc-print">${menuDocHeader(e)}${renderCoverEditor(e)}${secs}${menuDocEstimateContract()}</div>`;
   } else {
+    let rows;
+    if(menuDocTemplateMenu){
+      // template event: show the menu in correct serving order, with the grocery list beneath (full per-item grocery wiring is Stage 3)
+      const evItems=items.filter(it=>it.eventId===menuDocEventId).sort((a,b)=>(a.order||0)-(b.order||0));
+      const grocery = evItems.length ? `<div class="mdoc-isec"><div class="ml"><div class="secname">Grocery / kitchen list</div></div><div class="mr">${evItems.map(it=>`<div class="mdoc-grow"><span class="mdoc-k ${it.kitchen||'X'}">${esc(it.kitchen||'X')}</span><span class="mdoc-gi">${esc(it.item)}</span><span class="mdoc-gq">${esc(it.qty||'')}</span><span class="mdoc-gv">${esc(it.vendor||'')}</span></div>`).join('')}</div></div>` : '';
+      rows = `<div class="mdoc-tmpl-internal" style="max-width:780px;margin:0 auto">${renderTemplateClientHtml()}</div>${grocery}`;
+    } else {
     const evItems=items.filter(it=>it.eventId===menuDocEventId);
     const gsecs=evItems.map(it=>it.section||'Other');
     const order=SECTIONS.concat([...new Set(selected.map(d=>d.section||'Other').concat(gsecs))].filter(s=>!SECTIONS.includes(s)));
-    let rows='';
+    rows='';
     order.forEach(sec=>{
       const ds=selected.filter(d=>(d.section||'Other')===sec);
       const gi=evItems.filter(it=>(it.section||'Other')===sec).sort((a,b)=>(a.order||0)-(b.order||0));
@@ -949,6 +956,7 @@ function renderMenuDoc(){
       rows+=`<div class="mdoc-isec"><div class="ml"><div class="secname">${esc(sec)}</div>${ds.map(d=>`<div class="mdish">${esc(d.name)}</div>`).join('')||'<div class="mdish" style="color:#aaa">\u2014</div>'}</div>`+
         `<div class="mr">${gi.map(it=>`<div class="mdoc-grow"><span class="mdoc-k ${it.kitchen||'X'}">${esc(it.kitchen||'X')}</span><span class="mdoc-gi">${esc(it.item)}</span><span class="mdoc-gq">${esc(it.qty||'')}</span><span class="mdoc-gv">${esc(it.vendor||'')}</span></div>`).join('')||'<div style="color:#bbb;font-size:12px;padding:4px 0">no grocery rows</div>'}</div></div>`;
     });
+    }
     if(!rows) rows=`<div class="mdoc-empty">Nothing to show yet. Build the menu and grocery first.</div>`;
     bodyHtml=`<div class="mdoc-print internal">${menuDocHeader(e)}${rows}</div>`;
   }
