@@ -332,6 +332,9 @@ const TEMPLATES = {
 };
 
 const KITCHENS = ['P','D','M','X'];
+const ITEM_GROCERY_SEED = {"Cold soup sips - strawberry & peach": [{"item": "cold peach soup", "kitchen": "P", "vendor": "rd", "qty": ""}, {"item": "grilled sliced peach", "kitchen": "P", "vendor": "rd", "qty": ""}], "Seared tuna on a bamboo skewer": [{"item": "seared tuna", "kitchen": "P", "vendor": "fish", "qty": ""}, {"item": "avocados", "kitchen": "X", "vendor": "premier", "qty": ""}], "Breaded portobello mushroom fries": [{"item": "breaded portobello fries", "kitchen": "M", "vendor": "premier", "qty": ""}, {"item": "dipping sauce", "kitchen": "X", "vendor": "premier", "qty": ""}], "Sweet potato fritters": [{"item": "sweet potato fritters", "kitchen": "P", "vendor": "premier", "qty": ""}, {"item": "cranberry sauce", "kitchen": "X", "vendor": "premier", "qty": ""}], "Beef empanadas": [{"item": "beef empanadas", "kitchen": "M", "vendor": "chefs", "qty": ""}, {"item": "dip for empanadas", "kitchen": "M", "vendor": "premier", "qty": ""}], "Mini Reuben sandwiches": [{"item": "sliced cocktail bread - square", "kitchen": "X", "vendor": "strauss", "qty": ""}, {"item": "sliced corned beef", "kitchen": "X", "vendor": "premier", "qty": ""}, {"item": "sauerkraut", "kitchen": "X", "vendor": "premier", "qty": ""}, {"item": "margarine", "kitchen": "X", "vendor": "premier", "qty": ""}, {"item": "russian dressing", "kitchen": "X", "vendor": "premier", "qty": ""}], "Pulled beef in a phyllo cup": [{"item": "pulled beef", "kitchen": "M", "vendor": "premier", "qty": ""}, {"item": "phyllo cup / mini taco shell", "kitchen": "X", "vendor": "bertram", "qty": ""}], "Cranberry and slivered almond infused quinoa": [{"item": "cranberry quinoa", "kitchen": "P", "vendor": "premier", "qty": ""}], "Caesar salad with croutons": [{"item": "romaine", "kitchen": "X", "vendor": "bertram", "qty": ""}, {"item": "caesar dressing", "kitchen": "P", "vendor": "premier", "qty": ""}, {"item": "caesar croutons", "kitchen": "X", "vendor": "premier", "qty": ""}], "Tomato, baby corn, hearts of palm salad": [{"item": "tomatoes, baby corn, hop salad", "kitchen": "P", "vendor": "premier", "qty": ""}], "Papaya, mango & avocado salad": [{"item": "papaya, mango", "kitchen": "P", "vendor": "premier", "qty": ""}, {"item": "avocado", "kitchen": "P", "vendor": "premier", "qty": ""}], "Shell pasta with spinach and garlic": [{"item": "shell pasta", "kitchen": "P", "vendor": "premier", "qty": ""}], "Roasted butternut squash salad": [{"item": "butternut squash / sweet potato salad", "kitchen": "P", "vendor": "premier", "qty": ""}], "Grilled vegetables": [{"item": "grilled vegetables", "kitchen": "P", "vendor": "premier", "qty": ""}], "Pesto pasta": [{"item": "pesto pasta", "kitchen": "P", "vendor": "premier", "qty": ""}], "Roasted beet salad": [{"item": "beet salad", "kitchen": "P", "vendor": "premier", "qty": ""}], "Broccoli cashew salad": [{"item": "brocoli cashew salad", "kitchen": "P", "vendor": "bertram", "qty": ""}], "Arugula and pear salad": [{"item": "arugala", "kitchen": "X", "vendor": "aisle", "qty": ""}, {"item": "pears", "kitchen": "X", "vendor": "premier", "qty": ""}, {"item": "red onions", "kitchen": "X", "vendor": "premier", "qty": ""}, {"item": "cherry tomatoes", "kitchen": "X", "vendor": "premier", "qty": ""}, {"item": "dressing for above", "kitchen": "P", "vendor": "premier", "qty": ""}], "Sun dried tortellini with pesto": [{"item": "sun dried tortilini with pesto", "kitchen": "P", "vendor": "chefs", "qty": ""}], "Baby kale, quinoa and avocado salad": [{"item": "baby kale", "kitchen": "X", "vendor": "aisle", "qty": ""}, {"item": "quinoa", "kitchen": "P", "vendor": "premier", "qty": ""}, {"item": "avocados", "kitchen": "X", "vendor": "premier", "qty": ""}, {"item": "dressing for above", "kitchen": "P", "vendor": "premier", "qty": ""}], "Tuna nicoise salad": [{"item": "tuna nicoise salad", "kitchen": "P", "vendor": "premier", "qty": ""}, {"item": "components for tuna nicoise", "kitchen": "P", "vendor": "premier", "qty": ""}, {"item": "dressing for tuna nicoise", "kitchen": "P", "vendor": "premier", "qty": ""}], "Farro grain salad": [{"item": "farro grain", "kitchen": "P", "vendor": "premier", "qty": ""}], "Crunchy rainbow cabbage salad": [{"item": "red cabbage salad", "kitchen": "P", "vendor": "bertram", "qty": ""}], "Roasted butternut squash and sweet potato salad": [{"item": "butternut squash / sweet potato salad", "kitchen": "P", "vendor": "premier", "qty": ""}], "Smashed potatoes and sauteed onions": [{"item": "smashed potatoes", "kitchen": "M", "vendor": "premier", "qty": ""}], "Beef wellington": [{"item": "mini beef wellingtons", "kitchen": "M", "vendor": "premier", "qty": ""}, {"item": "hoisin sauce", "kitchen": "X", "vendor": "premier", "qty": ""}], "Roasted red potatoes with sauteed onions": [{"item": "roasted red potatos", "kitchen": "M", "vendor": "premier", "qty": ""}]};
+let itemGroceryMap={};
+let _igReg=[]; let igEditName=null;
 const KITCHEN_LABEL = {P:'Parve',D:'Dairy',M:'Meat',X:'Off-shelf / ready'};
 const DEFAULT_VENDORS = [ // name, inStock(no-order)
   ['premier',true],['aisle',false],['bertram',false],['chefs',false],['rd',false],['gg',false],
@@ -357,6 +360,7 @@ function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg
 function startListeners(){
   db.collection('events').onSnapshot(s=>{ events=s.docs.map(d=>({id:d.id,...d.data()})); render(); updateCounts(); });
   db.collection('groceryDishes').onSnapshot(s=>{ dishes=s.docs.map(d=>({id:d.id,...d.data()})); if(tab==='lib'||tab==='week')render(); updateCounts(); });
+  db.collection('menuItemGrocery').onSnapshot(s=>{ itemGroceryMap={}; s.docs.forEach(d=>{ const v=d.data(); if(v&&v.name) itemGroceryMap[v.name]=v.components||[]; }); const h=document.getElementById('menuDocHost'); if(h&&menuDocMode==='internal') h.innerHTML=renderMenuDoc(); });
   db.collection('groceryVendors').onSnapshot(s=>{
     vendors=s.docs.map(d=>({id:d.id,...d.data()}));
     if(vendors.length===0){ seedVendors(); }
@@ -940,10 +944,7 @@ function renderMenuDoc(){
   } else {
     let rows;
     if(menuDocTemplateMenu){
-      // template event: show the menu in correct serving order, with the grocery list beneath (full per-item grocery wiring is Stage 3)
-      const evItems=items.filter(it=>it.eventId===menuDocEventId).sort((a,b)=>(a.order||0)-(b.order||0));
-      const grocery = evItems.length ? `<div class="mdoc-isec"><div class="ml"><div class="secname">Grocery / kitchen list</div></div><div class="mr">${evItems.map(it=>`<div class="mdoc-grow"><span class="mdoc-k ${it.kitchen||'X'}">${esc(it.kitchen||'X')}</span><span class="mdoc-gi">${esc(it.item)}</span><span class="mdoc-gq">${esc(it.qty||'')}</span><span class="mdoc-gv">${esc(it.vendor||'')}</span></div>`).join('')}</div></div>` : '';
-      rows = `<div class="mdoc-tmpl-internal" style="max-width:780px;margin:0 auto">${renderTemplateClientHtml()}</div>${grocery}`;
+      rows = renderTemplateKitchenHtml();
     } else {
     const evItems=items.filter(it=>it.eventId===menuDocEventId);
     const gsecs=evItems.map(it=>it.section||'Other');
@@ -1422,7 +1423,84 @@ async function buildTemplateMenuPdf(opts){
 }
 
 // expose for inline handlers
-Object.assign(window,{changeWeek,setTab,addItem,delItem,editItem,editItemDebounced,
+
+// ── STAGE 3: per-item grocery components (kitchen copy) ──
+function _igId(name){ return (name||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,140)||'item'; }
+function itemComps(name){ if(Object.prototype.hasOwnProperty.call(itemGroceryMap,name)) return itemGroceryMap[name]; return ITEM_GROCERY_SEED[name]||[]; }
+function openItemGroceryIdx(i){ const nm=_igReg[i]; if(nm!=null) openItemGrocery(nm); }
+function openItemGrocery(name){
+  igEditName=name;
+  const cur=itemComps(name);
+  editComps = cur.length ? JSON.parse(JSON.stringify(cur)) : [{item:'',kitchen:'X',vendor:'',qty:''}];
+  modalShell(`<div class="modal-h">Grocery components<button class="iconbtn" onclick="closeModal()"><i class="ti ti-x"></i></button></div>
+    <div class="modal-b">
+      <div style="font-size:12.5px;color:var(--text2);font-weight:600;margin-bottom:2px">${esc(name)}</div>
+      <div style="font-size:11.5px;color:var(--text3);margin-bottom:12px">These components feed the kitchen copy &amp; grocery list. Saved once and reused for this item on every event.</div>
+      <div class="fld"><label>Components (item · kitchen · vendor · qty)</label>
+        <div id="compList"></div>
+        <button class="addbtn ghost" onclick="addCompRow()" style="margin-top:6px"><i class="ti ti-plus"></i> Add component</button>
+      </div>
+    </div>
+    <div class="modal-f"><button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="pri" onclick="saveItemGrocery()"><i class="ti ti-check"></i> Save grocery</button></div>`);
+  renderCompRows();
+}
+function saveItemGrocery(){
+  const comps=editComps.filter(c=>c.item&&c.item.trim()).map(c=>({item:c.item.trim(),kitchen:c.kitchen||'X',vendor:c.vendor||'',qty:c.qty||''}));
+  itemGroceryMap[igEditName]=comps;
+  db.collection('menuItemGrocery').doc(_igId(igEditName)).set({name:igEditName,components:comps,updated:Date.now()},{merge:true}).catch(()=>{});
+  closeModal();
+  const h=document.getElementById('menuDocHost'); if(h) h.innerHTML=renderMenuDoc();
+  toast('Grocery saved \u2713');
+}
+function renderTemplateKitchenHtml(){
+  const m=menuDocTemplateMenu; if(!m) return '<div class="mdoc-empty">No template menu.</div>';
+  _igReg=[]; const allComps=[];
+  let h='<div style="max-width:840px;margin:0 auto">';
+  const renderItem=(nm)=>{
+    const comps=itemComps(nm); comps.forEach(c=>allComps.push(c));
+    const idx=_igReg.push(nm)-1;
+    h+='<div style="padding:6px 0 7px;border-bottom:1px solid #f1f1f3">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
+      +'<span style="font-size:13.5px;font-weight:600;color:#1a1a1a">'+esc(nm)+'</span>'
+      +'<button class="mdoc-quote-btn" style="padding:2px 9px;font-size:11px;white-space:nowrap" onclick="openItemGroceryIdx('+idx+')">'+(comps.length?'edit grocery':'+ add grocery')+'</button></div>';
+    if(comps.length){
+      h+='<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px 12px">'
+        +comps.map(c=>'<span style="font-size:11.5px;color:#444"><span class="mdoc-k '+(c.kitchen||'X')+'">'+esc(c.kitchen||'X')+'</span> '+esc(c.item)+(c.vendor?(' <span style="color:#aaa">\u00b7 '+esc(c.vendor)+'</span>'):'')+'</span>').join('')+'</div>';
+    } else {
+      h+='<div style="margin-top:3px;font-size:11.5px;color:#c08a00;font-style:italic">no grocery components yet \u2014 click \u201c+ add grocery\u201d</div>';
+    }
+    h+='</div>';
+  };
+  (m.phases||[]).forEach(ph=>{
+    const sts=(ph.stations||[]).filter(stationVisible); if(!sts.length) return;
+    h+='<div style="text-align:center;font-weight:800;font-size:15px;margin:16px 0 8px;color:#111">'+esc(ph.title)+'</div>';
+    sts.forEach(st=>{
+      h+='<div style="margin:10px 0 2px;font-weight:700;font-size:13.5px;border-bottom:2px solid #222;padding-bottom:2px">'+esc(st.name)+'</div>';
+      (st.items||[]).filter(i=>i.on===true).forEach(i=>renderItem(i.n));
+      (st.groups||[]).forEach(g=>(g.items||[]).filter(i=>i.on===true).forEach(i=>renderItem(i.n)));
+      (st.orItems||[]).filter(i=>i.on===true).forEach(i=>renderItem(i.n));
+      if(st.entreeSides){ (st.entreeSides.potatoes||[]).filter(i=>i.on===true).forEach(i=>renderItem(i.n)); (st.entreeSides.vegetables||[]).filter(i=>i.on===true).forEach(i=>renderItem(i.n)); }
+      if(!_sHasCheckable(st)) renderItem(st.name);
+    });
+  });
+  if(allComps.length){
+    const byV={}; allComps.forEach(c=>{ const v=(c.vendor||'').trim()||'(no vendor)'; (byV[v]=byV[v]||[]).push(c); });
+    h+='<div style="text-align:center;font-weight:800;font-size:15px;margin:24px 0 8px;color:#111">Grocery list by vendor</div>';
+    Object.keys(byV).sort().forEach(v=>{
+      h+='<div style="margin:9px 0 3px;font-weight:700;font-size:12.5px;text-transform:capitalize">'+esc(v)+'</div>';
+      const seen=new Set();
+      byV[v].forEach(c=>{ const key=(c.item||'').toLowerCase().trim(); if(seen.has(key)) return; seen.add(key);
+        h+='<div style="font-size:12px;padding:1px 0;color:#333"><span class="mdoc-k '+(c.kitchen||'X')+'">'+esc(c.kitchen||'X')+'</span> '+esc(c.item)+'</div>'; });
+    });
+  } else {
+    h+='<div style="text-align:center;color:#999;font-size:12.5px;margin-top:20px">No grocery components yet. Use \u201c+ add grocery\u201d on the items above.</div>';
+  }
+  h+='</div>';
+  return h;
+}
+
+Object.assign(window,{changeWeek,setTab,addItem,delItem,editItem,editItemDebounced,openItemGrocery,openItemGroceryIdx,saveItemGrocery,
   openPickDish,applyDish,openDishEdit,saveDish,addCompRow,renderCompRows,deleteDish,
   openVendorEdit,saveVendor,deleteVendor,closeModal,copyVendor,importStarter,
   openBuilder,closeBuilder,reRenderBuilder,toggleBsec,toggleBuilderDish,applyTemplate,buildGrocery,openMenuDoc,closeMenuDoc,setMenuDocMode,printMenuDoc,estLine,estField,estAddLine,estDelLine,saveQuoteToMainApp,coverField,downloadMenuPdf,tmplToggleStation,tmplToggleItem,tmplChoose,tmplPrice});
