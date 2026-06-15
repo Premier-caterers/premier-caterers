@@ -1137,10 +1137,14 @@ function templateIdFor(e){ if(!e) return null; const t=(e.type||'').toLowerCase(
 function tmplBuild(tid){
   const tpl=MENU_TEMPLATES[tid]; const m=JSON.parse(JSON.stringify(tpl));
   (m.phases||[]).forEach(ph=>(ph.stations||[]).forEach(st=>{
-    st.on=true;
-    (st.items||[]).forEach(it=>it.on=true);
-    (st.groups||[]).forEach(g=>(g.items||[]).forEach(it=>it.on=true));
-    (st.orItems||[]).forEach(it=>it.on=true);
+    st.on=false;
+    (st.items||[]).forEach(it=>it.on=false);
+    (st.groups||[]).forEach(g=>(g.items||[]).forEach(it=>it.on=false));
+    (st.orItems||[]).forEach(it=>it.on=false);
+    if(st.entreeSides){
+      st.entreeSides.potatoes=(st.entreeSides.potatoes||[]).map(p=>typeof p==='string'?{n:p,on:false}:Object.assign({on:false},p));
+      st.entreeSides.vegetables=(st.entreeSides.vegetables||[]).map(p=>typeof p==='string'?{n:p,on:false}:Object.assign({on:false},p));
+    }
   }));
   m.templateId=tid; m.pricing=Object.assign({}, tpl.pricing||{});
   return m;
@@ -1149,11 +1153,27 @@ let _tmplSaveT;
 function tmplSave(){ clearTimeout(_tmplSaveT); const eid=menuDocEventId, mm=JSON.parse(JSON.stringify(menuDocTemplateMenu));
   _tmplSaveT=setTimeout(()=>{ if(eid) db.collection('groceryMenus').doc(eid).set({eventId:eid,templateMenu:mm,updated:Date.now()},{merge:true}).catch(()=>{}); },600); }
 function _ts(pi,si){ return menuDocTemplateMenu.phases[pi].stations[si]; }
-function tmplToggleStation(pi,si,on){ _ts(pi,si).on=on; tmplSave(); }
+function _sChecked(st){ let a=false;
+  (st.items||[]).forEach(i=>{if(i.on===true)a=true;});
+  (st.groups||[]).forEach(g=>(g.items||[]).forEach(i=>{if(i.on===true)a=true;}));
+  (st.orItems||[]).forEach(i=>{if(i.on===true)a=true;});
+  if(st.entreeSides){ (st.entreeSides.potatoes||[]).forEach(i=>{if(i&&i.on===true)a=true;}); (st.entreeSides.vegetables||[]).forEach(i=>{if(i&&i.on===true)a=true;}); }
+  return a; }
+function _sHasCheckable(st){ return !!((st.items&&st.items.length)||(st.groups&&st.groups.length)||(st.orItems&&st.orItems.length)||st.entreeSides); }
+function stationVisible(st){ if(_sHasCheckable(st)) return _sChecked(st); return st.on===true; }
+function _sSetAll(st,on){ st.on=on;
+  (st.items||[]).forEach(i=>i.on=on);
+  (st.groups||[]).forEach(g=>(g.items||[]).forEach(i=>i.on=on));
+  (st.orItems||[]).forEach(i=>i.on=on);
+  if(st.entreeSides){ (st.entreeSides.potatoes||[]).forEach(i=>i.on=on); (st.entreeSides.vegetables||[]).forEach(i=>i.on=on); } }
+function tmplToggleStation(pi,si,on){ _sSetAll(_ts(pi,si),on); tmplSave();
+  const sc=document.querySelector('#menuDocHost .mdoc-scroll'); const top=sc?sc.scrollTop:0;
+  const h=document.getElementById('menuDocHost'); if(h){ h.innerHTML=renderMenuDoc(); const s2=document.querySelector('#menuDocHost .mdoc-scroll'); if(s2) s2.scrollTop=top; } }
 function tmplToggleItem(pi,si,kind,gi,ii,on){
   const st=_ts(pi,si); let arr=null;
   if(kind==='items') arr=st.items; else if(kind==='group') arr=st.groups[gi].items; else if(kind==='or') arr=st.orItems;
-  if(arr&&arr[ii]) arr[ii].on=on; tmplSave();
+  else if(kind==='pot') arr=st.entreeSides.potatoes; else if(kind==='veg') arr=st.entreeSides.vegetables;
+  if(arr&&arr[ii]) arr[ii].on=on; if(on) st.on=true; tmplSave();
 }
 function tmplChoose(pi,si,v){ _ts(pi,si).choose=v; tmplSave(); }
 function tmplPrice(field,v){ if(!menuDocTemplateMenu.pricing) menuDocTemplateMenu.pricing={}; menuDocTemplateMenu.pricing[field]=v; tmplSave(); }
@@ -1184,7 +1204,7 @@ function renderTemplateEdit(){
     (ph.stations||[]).forEach((st,si)=>{
       h+='<div style="border-top:1px solid #eee;padding:8px 0">';
       h+='<label style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px;color:#111">'
-        +'<input type="checkbox" '+(st.on!==false?'checked':'')+' onchange="tmplToggleStation('+pi+','+si+',this.checked)"> '+esc(st.name);
+        +'<input type="checkbox" '+((_sChecked(st)||(!_sHasCheckable(st)&&st.on===true))?'checked':'')+' onchange="tmplToggleStation('+pi+','+si+',this.checked)"> '+esc(st.name);
       if(st.choose!==undefined) h+=' <span style="font-weight:400;font-size:12px;color:#666;margin-left:4px">choose '
         +'<input value="'+esc(st.choose)+'" oninput="tmplChoose('+pi+','+si+',this.value)" style="width:46px;padding:2px 5px;border:1px solid #d8dadf;border-radius:5px;font-size:12px"></span>';
       if(st.upcharge) h+=' <span style="font-weight:400;font-size:12px;color:#999">(+'+esc(st.upcharge)+')</span>';
@@ -1192,6 +1212,13 @@ function renderTemplateEdit(){
       (st.groups||[]).forEach((g,gi)=>{ h+='<div style="font-weight:600;font-size:12px;color:#555;padding:4px 0 2px 26px">'+esc(g.label)+'</div>'+(g.items||[]).map((it,ii)=>itemRow(it,pi,si,'group',gi,ii)).join(''); });
       (st.items||[]).forEach((it,ii)=>{ h+=itemRow(it,pi,si,'items',null,ii); });
       (st.orItems||[]).forEach((it,ii)=>{ h+=itemRow(it,pi,si,'or',null,ii); });
+      if(st.entreeSides){
+        h+='<div style="font-weight:600;font-size:12px;color:#555;padding:6px 0 2px 26px">'+esc(st.entreeSides.label||'Sides')+'</div>';
+        h+='<div style="font-size:11px;color:#999;padding:0 0 1px 30px">Potatoes</div>';
+        (st.entreeSides.potatoes||[]).forEach((it,ii)=>{ h+=itemRow(it,pi,si,'pot',null,ii); });
+        h+='<div style="font-size:11px;color:#999;padding:3px 0 1px 30px">Vegetables</div>';
+        (st.entreeSides.vegetables||[]).forEach((it,ii)=>{ h+=itemRow(it,pi,si,'veg',null,ii); });
+      }
       h+='</div>';
     });
   });
@@ -1202,7 +1229,7 @@ function renderTemplateClientHtml(){
   const li=it=>'<div class="mdoc-dish">'+esc(it.n||it.name)+(it.d?(' <span style="font-size:11px;color:#888">'+esc(it.d)+'</span>'):'')+'</div>';
   let h='';
   (m.phases||[]).forEach(ph=>{
-    const sts=(ph.stations||[]).filter(s=>s.on!==false); if(!sts.length) return;
+    const sts=(ph.stations||[]).filter(stationVisible); if(!sts.length) return;
     h+='<div class="mdoc-sec" style="text-align:center;margin-top:16px"><h3 style="display:inline-block">'+esc(ph.title)+'</h3></div>';
     sts.forEach(st=>{
       h+='<div class="mdoc-sec"><h4 style="margin:10px 0 3px;font-size:14px">'+esc(st.name)
@@ -1214,6 +1241,7 @@ function renderTemplateClientHtml(){
       ors.forEach((it,idx)=>{ if(idx>0) h+='<div style="color:#999;font-size:12px">~or~</div>'; h+=li(it); });
       if(Array.isArray(st.servedWith)&&st.servedWith.length) h+='<div style="font-size:11px;font-weight:600;margin-top:3px">Served with</div>'+st.servedWith.map(x=>'<div class="mdoc-dish" style="padding-left:12px">'+esc(x)+'</div>').join('');
       if(st.note) h+='<div style="font-size:11px;color:#666;margin-top:2px">'+esc(st.note)+'</div>';
+      if(st.entreeSides){ const pots=(st.entreeSides.potatoes||[]).filter(i=>i&&i.on===true), vegs=(st.entreeSides.vegetables||[]).filter(i=>i&&i.on===true); if(pots.length||vegs.length){ h+='<div style="font-size:11px;font-weight:600;margin-top:3px">'+esc(st.entreeSides.label||'')+'</div>'; pots.concat(vegs).forEach(i=>h+=li(i)); } }
       h+='</div>';
     });
   });
@@ -1234,9 +1262,7 @@ async function buildTemplateMenuPdf(opts){
     const m=menuDocTemplateMenu; if(!m){ toast('No template menu'); return; }
     const e=events.find(x=>x.id===menuDocEventId)||{};
     const cov=menuDocCover||{};
-    let hasQuote=false;
-    try{ const qs=await db.collection('invoices').doc(menuDocEventId).get(); hasQuote=qs.exists; }catch(_){}
-    const includeArr = !hasQuote;   // Arrangements drop off when a quote is attached
+    const includeArr = true;   // always include Arrangements for now (manual toggle to come)
     const { jsPDF }=window.jspdf;
     const doc=new jsPDF({unit:'pt',format:'letter'});
     const PW=612, PH=792, M=54, RM=PW-M, MIDX=M+250, BODY_TOP=152, BODY_BOT=726;
@@ -1257,8 +1283,8 @@ async function buildTemplateMenuPdf(opts){
       doc.setFillColor(255,255,0); doc.rect(RM-tgw,30,tgw,16,'F');
       doc.setTextColor(0,0,0); doc.text(tagLabel, RM-tgw+8, 41);
       if(evName){ setF(true,9,[0,0,0]); const nw=doc.getTextWidth(evName);
-        doc.setFillColor(255,255,0); doc.rect(M+8,104,nw+8,13,'F');
-        doc.setTextColor(0,0,0); doc.text(evName, M+12, 113); }
+        doc.setFillColor(255,255,0); doc.rect(M+8,120,nw+8,13,'F');
+        doc.setTextColor(0,0,0); doc.text(evName, M+12, 129); }
       let yy=40;
       hdrRows.forEach(r=>{ if(r[0]){ setF(false,8.5,[30,30,30]); doc.text(r[0], MIDX+12, yy);
         const lw=doc.getTextWidth(r[0]); setF(true,8.5,[30,30,30]); doc.text(String(r[1]||''), MIDX+12+lw, yy); } yy+=8.4; });
@@ -1271,7 +1297,8 @@ async function buildTemplateMenuPdf(opts){
       doc.text('events@thepremiercaterer.com', M, 762);
       doc.text('OU & PCK Kosher Supervision', M, 772);
       const pgs='Page '+pg+' of '+total; doc.text(pgs, RM-doc.getTextWidth(pgs), 752);
-      const stamp='Last update: '+menuLastUpdateStr(); doc.text(stamp, RM-doc.getTextWidth(stamp), 762);
+      doc.text('Last update:', RM-doc.getTextWidth('Last update:'), 762);
+      const dt=menuLastUpdateStr(); doc.text(dt, RM-doc.getTextWidth(dt), 772);
     }
     function need(h){ if(y+h>BODY_BOT){ doc.addPage(); drawHeader(); y=BODY_TOP; } }
     function writeText(txt,x,sz,b,col,gap,wrap,ul){
@@ -1317,10 +1344,12 @@ async function buildTemplateMenuPdf(opts){
         ors.forEach(it=>{ if(!first){ need(12); setF(false,9,[100,100,100]); doc.text('~or~', M+4, y); y+=12; } itemLine(it); first=false; });
         if(st.optionalCourse){ const oc=st.optionalCourse; y+=28; sectionHeader('Soup Course'); y+=15;
           writeText('Optional \u2014 additional '+oc.upcharge, M+4, 10, false, [0,0,0], 3); } }
-      if(st.entreeSides){ const es=st.entreeSides; y+=4;
-        writeText(es.label, M+18, 8.5, true, [0,0,0], 4, RM-M-22);
-        (es.potatoes||[]).forEach(x2=>writeText(x2, M+18, 10, false, [0,0,0], 2)); y+=4;
-        (es.vegetables||[]).forEach(x2=>writeText(x2, M+18, 10, false, [0,0,0], 2)); }
+      if(st.entreeSides){ const es=st.entreeSides;
+        const pots=(es.potatoes||[]).filter(i=>i&&i.on===true), vegs=(es.vegetables||[]).filter(i=>i&&i.on===true);
+        if(pots.length||vegs.length){ y+=4;
+          writeText(es.label, M+18, 8.5, true, [0,0,0], 4, RM-M-22);
+          pots.forEach(i=>writeText(i.n, M+18, 10, false, [0,0,0], 2)); y+=4;
+          vegs.forEach(i=>writeText(i.n, M+18, 10, false, [0,0,0], 2)); } }
       if(st.coffee){ y+=4; need(14); setF(true,9.5,[0,0,0]); doc.text(st.coffee, PW/2, y, {align:'center'}); y+=14; }
     }
 
@@ -1328,7 +1357,7 @@ async function buildTemplateMenuPdf(opts){
     drawHeader();
     writeText('Notes:', M, 10, false, [0,0,0], 3);
     (m.phases||[]).forEach(ph=>{
-      const sts=(ph.stations||[]).filter(s=>s.on!==false);
+      const sts=(ph.stations||[]).filter(stationVisible);
       if(!sts.length) return;
       phaseHeader(ph.title, !!ph.instruction);
       sts.forEach(st=>station(st));
