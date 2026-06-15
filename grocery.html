@@ -1048,6 +1048,7 @@ function drawFrame(doc,e,cov,p,total,modStr,PW,PH,M){
 
 async function downloadMenuPdf(opts){
     opts=opts||{};
+    if(menuDocTemplateMenu){ return buildTemplateMenuPdf(opts); }
   try{
     toast('Building PDF\u2026');
     await ensureJsPdf();
@@ -1217,6 +1218,148 @@ function renderTemplateClientHtml(){
     });
   });
   return h;
+}
+
+// ── STAGE 2: full template menu PDF (matches the approved format) ──
+function menuLastUpdateStr(){
+  const d=new Date(); const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const hh=String(d.getHours()).padStart(2,'0'), mm=String(d.getMinutes()).padStart(2,'0');
+  return days[d.getDay()]+' '+(d.getMonth()+1)+'/'+d.getDate()+' '+hh+':'+mm;
+}
+async function buildTemplateMenuPdf(opts){
+  opts=opts||{};
+  try{
+    toast('Building PDF\u2026');
+    await ensureJsPdf();
+    const m=menuDocTemplateMenu; if(!m){ toast('No template menu'); return; }
+    const e=events.find(x=>x.id===menuDocEventId)||{};
+    const cov=menuDocCover||{};
+    let hasQuote=false;
+    try{ const qs=await db.collection('invoices').doc(menuDocEventId).get(); hasQuote=qs.exists; }catch(_){}
+    const includeArr = !hasQuote;   // Arrangements drop off when a quote is attached
+    const { jsPDF }=window.jspdf;
+    const doc=new jsPDF({unit:'pt',format:'letter'});
+    const PW=612, PH=792, M=54, RM=PW-M, MIDX=M+250, BODY_TOP=152, BODY_BOT=726;
+    let y=BODY_TOP;
+
+    const isDrop=e&&(e.type==='dropoff'||/drop\s*off/i.test(e.typeLabel||''));
+    const tagLabel=(isDrop?'DROP OFF ':'EVENT ')+(displayJob(e.job)||'#\u2014');
+    const evName=((cov.eventName||cov.clientName||e.name||'')+(e.typeLabel?('  '+e.typeLabel):'')).trim();
+    const hdrRows=[['Date: ',cov.eventDate||e.dayLabel||''],['Type of event: ',e.typeLabel||e.type||''],
+      ['Guest count: ',cov.guests||e.guests||''],['',''],['Venue: ',cov.venueName||''],
+      ['Location: ',cov.venueAddr||e.addr||''],['',''],['Contact: ',cov.clientName||e.name||''],
+      ['Email: ',cov.clientEmail||''],['Phone: ',cov.clientPhone||''],['Party planner: ',cov.planner||'']];
+
+    function setF(b,sz,col){ doc.setFont('helvetica',b?'bold':'normal'); doc.setFontSize(sz); col=col||[0,0,0]; doc.setTextColor(col[0],col[1],col[2]); }
+    function drawHeader(){
+      try{ doc.addImage(PC_LOGO,'JPEG', M+4, 28, 150, 74); }catch(_){}
+      setF(true,10,[0,0,0]); const tw=doc.getTextWidth(tagLabel), tgw=tw+16;
+      doc.setFillColor(255,255,0); doc.rect(RM-tgw,30,tgw,16,'F');
+      doc.setTextColor(0,0,0); doc.text(tagLabel, RM-tgw+8, 41);
+      if(evName){ setF(true,9,[0,0,0]); const nw=doc.getTextWidth(evName);
+        doc.setFillColor(255,255,0); doc.rect(M+8,104,nw+8,13,'F');
+        doc.setTextColor(0,0,0); doc.text(evName, M+12, 113); }
+      let yy=40;
+      hdrRows.forEach(r=>{ if(r[0]){ setF(false,8.5,[30,30,30]); doc.text(r[0], MIDX+12, yy);
+        const lw=doc.getTextWidth(r[0]); setF(true,8.5,[30,30,30]); doc.text(String(r[1]||''), MIDX+12+lw, yy); } yy+=8.4; });
+      doc.setDrawColor(225,225,225); doc.setLineWidth(0.5); doc.line(M,138,RM,138);
+    }
+    function drawFooter(pg,total){
+      doc.setDrawColor(210,210,210); doc.setLineWidth(0.6); doc.line(M,740,RM,740);
+      setF(false,7.5,[115,115,115]);
+      doc.text('201-250-9487', M, 752);
+      doc.text('events@thepremiercaterer.com', M, 762);
+      doc.text('OU & PCK Kosher Supervision', M, 772);
+      const pgs='Page '+pg+' of '+total; doc.text(pgs, RM-doc.getTextWidth(pgs), 752);
+      const stamp='Last update: '+menuLastUpdateStr(); doc.text(stamp, RM-doc.getTextWidth(stamp), 762);
+    }
+    function need(h){ if(y+h>BODY_BOT){ doc.addPage(); drawHeader(); y=BODY_TOP; } }
+    function writeText(txt,x,sz,b,col,gap,wrap,ul){
+      const lines = wrap ? doc.splitTextToSize(String(txt),wrap) : [String(txt)];
+      lines.forEach(ln=>{ need(sz+gap); setF(b,sz,col); doc.text(ln,x,y);
+        if(ul){ const w=doc.getTextWidth(ln); doc.setDrawColor((col||[0,0,0])[0],(col||[0,0,0])[1],(col||[0,0,0])[2]); doc.setLineWidth(0.6); doc.line(x,y+1.5,x+w,y+1.5); }
+        y+=sz+gap; });
+    }
+    function sectionHeader(label,sz){ sz=sz||11.5; need(sz+6); setF(true,sz,[0,0,0]); doc.text(label,M,y);
+      const w=doc.getTextWidth(label); doc.setDrawColor(0,0,0); doc.setLineWidth(0.7); doc.line(M,y+1.5,M+w,y+1.5); return w; }
+    function phaseHeader(title,instr){ y+=24; const sz=instr?12:14; need(sz+8); setF(true,sz,[0,0,0]);
+      const tw=doc.getTextWidth(title); doc.text(title, PW/2, y, {align:'center'});
+      if(!instr){ doc.setDrawColor(0,0,0); doc.setLineWidth(0.8); doc.line(PW/2-tw/2,y+2,PW/2+tw/2,y+2); } y+=20; }
+    function itemLine(it,x){ x=x||(M+4); const name=String(it.n||it.name||''); const wrapw=RM-x-10;
+      const lines=doc.splitTextToSize(name,wrapw);
+      lines.forEach((ln,i)=>{ need(13); setF(false,10.5,[0,0,0]); doc.text(ln,x,y);
+        if(i===lines.length-1){ const w=doc.getTextWidth(ln+' ');
+          if(it.d){ setF(false,7.5,[60,60,60]); doc.text(String(it.d),x+w,y); }
+          if(it.up){ setF(true,7.5,[60,60,60]); doc.text('('+it.up+')',x+w,y); } }
+        y+=13; }); }
+    function station(st){
+      y+=20; let suffix='';
+      if(st.choose!==undefined) suffix='(choose '+st.choose+')';
+      if(st.upcharge) suffix='(additional '+st.upcharge+')';
+      const w=sectionHeader(st.name);
+      if(suffix){ setF(false,8.5,[80,80,80]); doc.text(suffix, M+w+4, y); }
+      y+=15;
+      if(st.desc) writeText(st.desc, M+4, 9.5, false, [50,50,50], 2.5, RM-M-8);
+      (st.groups||[]).forEach(g=>{ const its=(g.items||[]).filter(i=>i.on!==false); if(!its.length) return;
+        y+=3; writeText(g.label, M+4, 10, true, [0,0,0], 3, null, true); its.forEach(it=>itemLine(it)); });
+      (st.items||[]).filter(i=>i.on!==false).forEach(it=>itemLine(it));
+      if(st.note) writeText(st.note, M+4, 8, true, [40,40,40], 3, RM-M-8);
+      if(st.fillers) writeText(st.fillers, M+18, 8.5, false, [50,50,50], 3, RM-M-22);
+      (st.options||[]).forEach(op=>itemLine({n:'(optional) '+op.name, up:'additional '+op.upcharge}));
+      if(Array.isArray(st.servedWith)&&st.servedWith.length){ y+=2; writeText('Served with', M+24, 8.5, true, [0,0,0], 2);
+        st.servedWith.forEach(x2=>writeText(x2, M+24, 10, false, [0,0,0], 2)); }
+      if(st.sauces) writeText(st.sauces, M+24, 9, false, [50,50,50], 2, RM-M-28);
+      if(st.servedNote) writeText(st.servedNote, M+18, 8.5, false, [50,50,50], 2);
+      if(st.optionBlock){ const ob=st.optionBlock; y+=3;
+        writeText(ob.name+'  (additional '+ob.upcharge+')', M+18, 9.5, true, [0,0,0], 3, null, true);
+        (ob.items||[]).forEach(x2=>writeText(x2, M+18, 10, false, [0,0,0], 2)); }
+      if(st.orItems){ const ors=(st.orItems||[]).filter(i=>i.on!==false); let first=true;
+        ors.forEach(it=>{ if(!first){ need(12); setF(false,9,[100,100,100]); doc.text('~or~', M+4, y); y+=12; } itemLine(it); first=false; });
+        if(st.optionalCourse){ const oc=st.optionalCourse; y+=28; sectionHeader('Soup Course'); y+=15;
+          writeText('Optional \u2014 additional '+oc.upcharge, M+4, 10, false, [0,0,0], 3); } }
+      if(st.entreeSides){ const es=st.entreeSides; y+=4;
+        writeText(es.label, M+18, 8.5, true, [0,0,0], 4, RM-M-22);
+        (es.potatoes||[]).forEach(x2=>writeText(x2, M+18, 10, false, [0,0,0], 2)); y+=4;
+        (es.vegetables||[]).forEach(x2=>writeText(x2, M+18, 10, false, [0,0,0], 2)); }
+      if(st.coffee){ y+=4; need(14); setF(true,9.5,[0,0,0]); doc.text(st.coffee, PW/2, y, {align:'center'}); y+=14; }
+    }
+
+    // ---- build body ----
+    drawHeader();
+    writeText('Notes:', M, 10, false, [0,0,0], 3);
+    (m.phases||[]).forEach(ph=>{
+      const sts=(ph.stations||[]).filter(s=>s.on!==false);
+      if(!sts.length) return;
+      phaseHeader(ph.title, !!ph.instruction);
+      sts.forEach(st=>station(st));
+    });
+    if(includeArr){
+      doc.addPage(); drawHeader(); y=BODY_TOP;
+      phaseHeader('Arrangements', false);
+      const p=m.pricing||{};
+      writeText('Based on a minimum of '+(p.perPersonMin||'')+' people the cost will be $'+(p.perPerson||'')+' per person', M, 11, false,[0,0,0],4);
+      [['Waiters / bartenders / Chefs @ $'+(p.staffEach||'')+' each'],
+       ['Staffing for cocktail hour only @ $'+(p.cocktailStaffEach||'')+' each'],
+       ['Management fee @ $'+(p.managementFee||'')],
+       ['Rabbinical supervision @ $'+(p.rabbinical||'')],
+       ['Logistics fee @ '+(p.logisticsPct||'')+'%'],
+       ['Sales tax @ '+(p.taxPct||'')+'%'],['Gratuity']].forEach(r=>writeText(r[0], M+24, 11, false,[0,0,0],4));
+      y+=14; writeText('CONTRACT', M, 10, true,[0,0,0],5,null,true);
+      String(CONTRACT_TEXT).split('\n').forEach(ln=>{ if(ln.trim()) writeText(ln.trim(), M, 8.5, false,[40,40,40],4, RM-M); else y+=4; });
+    }
+
+    // ---- footers (page X of Y) ----
+    const total=doc.getNumberOfPages();
+    for(let p=1;p<=total;p++){ doc.setPage(p); drawFooter(p,total); }
+
+    const safe=((cov.clientName||e.name||'event')+'').replace(/[^\w\- ]/g,'').trim();
+    const fname=('Premier Menu '+(displayJob(e.job)||'')+' '+safe).replace(/\s+/g,' ').trim()+'.pdf';
+    if(opts.mode==='print'){
+      try{ doc.autoPrint(); const url=doc.output('bloburl'); const w2=window.open(url,'_blank');
+        if(!w2){ doc.save(fname); toast('Pop-up blocked \u2014 saved the PDF instead'); } else { toast('Opening print\u2026'); } }
+      catch(_){ doc.save(fname); toast('PDF ready \u2713'); }
+    } else { doc.save(fname); toast('PDF ready \u2713'); }
+  }catch(err){ console.error('template PDF error',err); toast('PDF failed: '+(err&&err.message||err)); }
 }
 
 // expose for inline handlers
