@@ -2027,54 +2027,43 @@ function _scopeCssForPdf(css, scopeSel){
   return out;
 }
 
-async function downloadHtmlAsPdf(html, filenameBase){
+// Produce a PDF the reliable way: render the document with the browser's own
+// print engine (the same engine the Print buttons use, which renders these
+// documents correctly) and let the user save it as a PDF. We load it into a
+// hidden iframe and open the print dialog; the document's title becomes the
+// suggested filename, and "Save as PDF" is the destination to choose.
+function downloadHtmlAsPdf(html, filenameBase){
   const fname = (filenameBase || 'document').replace(/[^a-z0-9_\-]/gi,'_');
-  let stage;
   try{
-    if(typeof showToast==='function') showToast('Building PDF…');
-    await ensureHtml2Pdf();
-    if(!window.html2pdf) throw new Error('PDF library unavailable');
+    if(typeof showToast==='function') showToast('Opening PDF — choose "Save as PDF"');
+    // Give the document a title so the saved-PDF filename is sensible
+    const titledHtml = /<title>/i.test(html)
+      ? html.replace(/<title>[\s\S]*?<\/title>/i, '<title>'+fname+'</title>')
+      : html.replace(/<head>/i, '<head><title>'+fname+'</title>');
 
-    // Render the document in the live page (so fonts and the embedded logo are
-    // already available), inside an offscreen, style-scoped staging element.
-    const parsed = new DOMParser().parseFromString(html, 'text/html');
-    let css=''; parsed.querySelectorAll('style').forEach(function(s){ css+=s.textContent+'\n'; });
+    const f = document.createElement('iframe');
+    f.setAttribute('aria-hidden','true');
+    f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0';
+    document.body.appendChild(f);
+    const d = f.contentWindow.document;
+    d.open(); d.write(titledHtml); d.close();
 
-    stage = document.createElement('div');
-    stage.id = '_pdfstage';
-    stage.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;background:#ffffff';
-    const styleEl = document.createElement('style');
-    styleEl.textContent = _scopeCssForPdf(css, '#_pdfstage');
-    stage.appendChild(styleEl);
-    const content = document.createElement('div');
-    content.innerHTML = parsed.body.innerHTML;
-    stage.appendChild(content);
-    document.body.appendChild(stage);
-
-    // Wait for any images (e.g. the logo) to finish loading before snapshotting.
-    const imgs = Array.prototype.slice.call(stage.querySelectorAll('img'));
-    await Promise.all(imgs.map(function(img){
-      if(img.complete && img.naturalWidth>0) return Promise.resolve();
-      return new Promise(function(res){ img.onload=res; img.onerror=res; });
-    }));
-    await new Promise(r=>setTimeout(r,120)); // let layout settle
-
-    const opt = {
-      margin: [18,18,18,18],
-      filename: fname + '.pdf',
-      image: { type:'jpeg', quality:0.98 },
-      html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff' },
-      jsPDF: { unit:'pt', format:'letter', orientation:'portrait' },
-      pagebreak: { mode:['css','legacy'] }
+    let fired=false;
+    const go=function(){
+      if(fired) return; fired=true;
+      try{ f.contentWindow.focus(); f.contentWindow.print(); }
+      catch(e){ console.error('print failed:', e); }
+      setTimeout(function(){ try{ document.body.removeChild(f); }catch(e){} }, 2000);
     };
-    await window.html2pdf().set(opt).from(stage).save();
-    document.body.removeChild(stage); stage=null;
-    if(typeof showToast==='function') showToast('PDF downloaded ✓');
+    f.onload = function(){ setTimeout(go, 250); };
+    setTimeout(go, 600); // fallback: written docs don't always fire onload
   }catch(err){
-    console.error('PDF build failed:', err);
-    if(stage && stage.parentNode) stage.parentNode.removeChild(stage);
-    alert('Could not build a PDF (the PDF helper may be blocked on your network).\n\nOpening the print dialog instead — choose "Save as PDF" there to get a PDF.');
-    try{ const w=window.open('','_blank'); w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>w.print(),400); }catch(e){}
+    console.error('PDF (print) failed:', err);
+    try{
+      const w=window.open('','_blank');
+      if(w){ w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>w.print(),400); }
+      else alert('Please allow pop-ups for this site so the PDF can open, then choose "Save as PDF".');
+    }catch(e){}
   }
 }
 async function buildEstimatePdfBase64(inq){
