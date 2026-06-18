@@ -56,6 +56,7 @@
     <div class="sidebar-label">Views</div>
     <button class="nav-item active" id="nav-home" onclick="showView('home')"><i class="ti ti-home"></i>Home</button>
     <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
+    <button class="nav-item" id="nav-clients" onclick="showView('clients')"><i class="ti ti-address-book"></i>Clients</button>
     <button class="nav-item" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
     <button class="nav-item" id="nav-coversheet" onclick="showView('coversheet')"><i class="ti ti-layout-rows"></i>Weekly cover sheet</button>
     <a class="nav-item" href="https://calendar.google.com" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-brand-google"></i>Google Calendar<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
@@ -488,7 +489,7 @@ const roles = {
 };
 
 /* ===================== LOGIN / ACCESS CONTROL (added) ===================== */
-const ALL_SECTIONS = ['home','pipeline','events','coversheet','schedule','checklists','changes','invoices','reports','grocery','equipment','venues','email','trash','settings'];
+const ALL_SECTIONS = ['home','pipeline','clients','events','coversheet','schedule','checklists','changes','invoices','reports','grocery','equipment','venues','email','trash','settings'];
 const access = {
   admin:   ALL_SECTIONS.slice(),
   kenny:   ALL_SECTIONS.slice(),
@@ -664,6 +665,7 @@ function render(){
   try {
     html = currentView==='home'      ? renderHome()      :
            currentView==='pipeline'  ? renderPipeline()  :
+           currentView==='clients'   ? renderClients()   :
            currentView==='events'    ? renderEvents()    :
            currentView==='coversheet'? renderCoverSheet():
            currentView==='schedule'  ? renderSchedule()  :
@@ -2844,6 +2846,197 @@ function promoteToEvent(id){
     currentWeekOffset = Math.round((evWeekMs - base) / (7*24*60*60*1000));
   }
   showView('events');
+}
+
+// ── CLIENTS DIRECTORY ────────────────────────────────────────
+// One row per client (grouped by organization if present, else by name),
+// showing their history across not-yet-booked inquiries, booked events, and
+// past events. From any client you can start a new potential event (to the
+// pipeline) or a new booked event, pre-filled with their name/contact/venue.
+
+function _realCurrentWeekStartMs(){
+  const base = Date.UTC(2026, 5, 7); // Jun 7 2026 = Sunday, week-0 anchor
+  return base + (CURRENT_WEEK_OFFSET * 7*24*60*60*1000);
+}
+function _weekMsOf(weekOf){
+  if(!weekOf) return null;
+  const p = weekOf.split('-').map(Number);
+  if(p.length!==3) return null;
+  return Date.UTC(p[0], p[1]-1, p[2]);
+}
+
+function buildClientGroups(){
+  const groups = {};
+  function ensure(key, displayName){
+    if(!groups[key]) groups[key] = { key, name:displayName||'(no name)', contact:'', phone:'', email:'',
+      venueName:'', venueLocation:'', firstName:'', lastName:'', organization:'', items:[] };
+    return groups[key];
+  }
+  const nowMs = _realCurrentWeekStartMs();
+
+  // Booked / past events
+  events.forEach(e=>{
+    if(e.lost) return;
+    const org = (e.organization||'').trim();
+    const key = org ? ('org:'+org.toLowerCase()) : ('nm:'+(e.name||'').trim().toLowerCase());
+    if(key==='nm:'||key==='org:') return;
+    const g = ensure(key, org || e.name);
+    const wms = _weekMsOf(e.weekOf);
+    const isPast = wms!==null ? (wms < nowMs) : false;
+    g.items.push({ kind:'event', id:e.id, label:(e.typeLabel||e.type||'Event'),
+      date:(e.dayLabel||''), status:(isPast?'past':'booked'), sort:(e.weekOf||'') });
+    g.organization = org || g.organization;
+    if(org && !g.contact && e.contactName) g.contact = e.contactName;
+    if(!g.phone && e.phone) g.phone = e.phone;
+    if(!g.email && e.email) g.email = e.email;
+    if(!g.venueLocation && e.addr) g.venueLocation = e.addr;
+    if(!org && !g.lastName){ // reconstruct name parts for re-booking
+      const toks = (e.name||'').trim().split(/\s+/);
+      g.lastName = toks.pop()||''; g.firstName = toks.join(' ');
+    }
+  });
+
+  // Not-yet-booked inquiries (skip lost, and skip any that already became an event)
+  inquiries.forEach(inq=>{
+    if(inq.stage==='booked' || inq.stage==='lost') return;
+    if(events.find(x=>x.id==='inq_'+inq.id)) return;
+    const org = (inq.organization||'').trim();
+    const person = ((inq.firstName||'')+' '+(inq.lastName||'')).trim();
+    const key = org ? ('org:'+org.toLowerCase()) : ('nm:'+person.toLowerCase());
+    if(key==='nm:'||key==='org:') return;
+    const g = ensure(key, org || person);
+    g.items.push({ kind:'inq', id:inq.id, label:(inq.eventType||'Inquiry'),
+      date:(inq.eventDate?formatDate(inq.eventDate):''), status:'unbooked', sort:(inq.eventDate||'') });
+    g.organization = org || g.organization;
+    if(!g.firstName) g.firstName = inq.firstName||'';
+    if(!g.lastName)  g.lastName  = inq.lastName||'';
+    if(org && !g.contact) g.contact = person;
+    if(!g.phone && inq.phone) g.phone = inq.phone;
+    if(!g.email && inq.email) g.email = inq.email;
+    if(!g.venueName && inq.venueName) g.venueName = inq.venueName;
+    if(!g.venueLocation && inq.venueLocation) g.venueLocation = inq.venueLocation;
+  });
+
+  // Stash an index for the re-book actions, and sort each client's history newest-first
+  window._clientsIndex = {};
+  Object.keys(groups).forEach(k=>{
+    const g = groups[k];
+    g.items.sort((a,b)=> (b.sort||'').localeCompare(a.sort||''));
+    window._clientsIndex[k] = { firstName:g.firstName, lastName:g.lastName, organization:g.organization,
+      phone:g.phone, email:g.email, venueName:g.venueName, venueLocation:g.venueLocation };
+  });
+  return groups;
+}
+
+function renderClients(){
+  const role = roles[currentRole]||{};
+  const groups = buildClientGroups();
+  let list = Object.keys(groups).map(k=>groups[k]);
+
+  // Status filter
+  const filter = window._clientsFilter || 'all';
+  const hasStatus = (g, st)=> g.items.some(it=>it.status===st);
+  if(filter==='unbooked') list = list.filter(g=>hasStatus(g,'unbooked'));
+  else if(filter==='booked') list = list.filter(g=>hasStatus(g,'booked'));
+  else if(filter==='past') list = list.filter(g=>hasStatus(g,'past'));
+
+  // Search
+  const q = (window._clientsSearch||'').trim().toLowerCase();
+  if(q) list = list.filter(g=> (g.name||'').toLowerCase().includes(q)
+      || (g.contact||'').toLowerCase().includes(q)
+      || (g.email||'').toLowerCase().includes(q)
+      || (g.phone||'').toLowerCase().includes(q));
+
+  // Sort clients alphabetically by name
+  list.sort((a,b)=> (a.name||'').toLowerCase().localeCompare((b.name||'').toLowerCase()));
+
+  const tab = (key,label)=>`<button onclick="window._clientsFilter='${key}';render()" style="padding:6px 14px;border:0.5px solid ${filter===key?'var(--blue-border)':'var(--border2)'};border-radius:var(--radius);background:${filter===key?'var(--blue-bg)':'var(--bg2)'};color:${filter===key?'var(--blue-text)':'var(--text2)'};font-size:13px;cursor:pointer">${label}</button>`;
+
+  const statusPill = (st)=>{
+    const map = { unbooked:['Not booked','var(--amber-bg)','var(--amber-text)'],
+                  booked:['Booked','var(--blue-bg)','var(--blue-text)'],
+                  past:['Past','var(--bg2)','var(--text3)'] };
+    const m = map[st]||['',' ',' ']; return `<span style="font-size:10px;padding:1px 7px;border-radius:8px;background:${m[1]};color:${m[2]}">${m[0]}</span>`;
+  };
+
+  const cards = list.map(g=>{
+    const hist = g.items.map(it=>{
+      const click = it.kind==='event' ? `gotoEvent('${it.id}')` : `goToInquiry('${it.id}')`;
+      return `<div onclick="${click}" style="display:flex;align-items:center;gap:8px;padding:5px 8px;border:0.5px solid var(--border);border-radius:7px;background:var(--bg);cursor:pointer;font-size:12px" title="Open">
+        ${statusPill(it.status)}
+        <span style="flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${it.label}</span>
+        ${it.date?`<span style="color:var(--text3)">${it.date}</span>`:''}
+        <i class="ti ti-chevron-right" style="font-size:13px;color:var(--text3)"></i>
+      </div>`;
+    }).join('');
+    const actions = role.canEdit ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <button onclick="newEventForClient('${g.key}','new')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--amber-border);border-radius:7px;background:var(--amber-bg);color:var(--amber-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-plus" style="font-size:13px"></i>New potential event</button>
+        <button onclick="newEventForClient('${g.key}','booked')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-calendar-plus" style="font-size:13px"></i>New booked event</button>
+      </div>` : '';
+    const contactLine = g.contact ? `<div style="font-size:12px;color:var(--text3);margin-top:1px"><i class="ti ti-user" style="font-size:11px"></i> ${g.contact}</div>` : '';
+    const metaBits = [g.phone?`<i class="ti ti-phone" style="font-size:11px"></i>${g.phone}`:'', g.email?`<i class="ti ti-mail" style="font-size:11px"></i>${g.email}`:''].filter(Boolean).join('&nbsp;&nbsp;');
+    return `<div style="border:0.5px solid var(--border2);border-radius:var(--radius-lg);background:var(--bg);padding:1rem 1.1rem;margin-bottom:.75rem">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div style="min-width:0">
+          <div style="font-size:15px;font-weight:600;color:var(--text)">${g.name}</div>
+          ${contactLine}
+          ${metaBits?`<div style="font-size:11px;color:var(--text3);margin-top:3px">${metaBits}</div>`:''}
+        </div>
+        <span style="font-size:11px;color:var(--text3);white-space:nowrap">${g.items.length} event${g.items.length===1?'':'s'}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;margin-top:10px">${hist}</div>
+      ${actions}
+    </div>`;
+  }).join('');
+
+  return `<div class="view-pad" style="padding:1.5rem;max-width:900px;margin:0 auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:1rem">
+      <h2 style="margin:0;font-size:20px;color:var(--text)">Clients</h2>
+      <input type="text" value="${(window._clientsSearch||'').replace(/"/g,'&quot;')}" oninput="window._clientsSearch=this.value;clearTimeout(window._cliT);window._cliT=setTimeout(render,250)" placeholder="Search clients…" style="font-size:13px;padding:7px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);min-width:200px">
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap">
+      ${tab('all','All')} ${tab('unbooked','Not booked')} ${tab('booked','Booked')} ${tab('past','Past')}
+    </div>
+    ${list.length? cards : `<div style="text-align:center;padding:3rem 0;color:var(--text3);font-size:13px">No clients match this view yet.</div>`}
+  </div>`;
+}
+
+function goToInquiry(id){ showView('pipeline'); selectInquiry(id); }
+
+function gotoEvent(eid){
+  const ev = events.find(x=>x.id===eid); if(!ev) return;
+  if(ev.weekOf){
+    const base = Date.UTC(2026, 5, 7);
+    const p = ev.weekOf.split('-').map(Number);
+    if(p.length===3) currentWeekOffset = Math.round((Date.UTC(p[0],p[1]-1,p[2]) - base)/(7*24*60*60*1000));
+  }
+  showView('events');
+  selectedId = eid;
+  render();
+}
+
+function newEventForClient(key, mode){
+  const c = (window._clientsIndex||{})[key];
+  if(!c){ alert('Could not find that client.'); return; }
+  const inq = {
+    id: Date.now()+'',
+    firstName: c.firstName||'', lastName: c.lastName||'',
+    organization: c.organization||'',
+    eventName:'', eventType:'', eventDate:'',
+    phone: c.phone||'', email: c.email||'',
+    venueName: c.venueName||'', venueLocation: c.venueLocation||'',
+    guestCount:'', cuisine:'', meatDairy:'', shabbos:'No',
+    howFound:'', referredBy:'', eventAttended:'', plannerName:'', comments:'',
+    source:'website', menuAutomationTriggered:false,  // once you add an event type, the menu auto-builds
+    stage: (mode==='booked' ? 'booked' : 'new'),
+    submittedAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+  };
+  inquiries.push(inq);
+  _saveInquiry(inq);
+  if(mode==='booked'){ createEventFromInquiry(inq); }
+  showView('pipeline');
+  selectInquiry(inq.id);
+  showToast(mode==='booked' ? 'New booked event created — add the date & details ✓' : 'New potential event added to the pipeline ✓');
 }
 
 function updatePipelineBadge(){
