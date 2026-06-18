@@ -1784,6 +1784,7 @@ function renderInqDetail(inq, role){
     <div class="detail-header">
       <div class="detail-title">${clientPrimary(inq)||(inq.firstName+' '+inq.lastName)}${clientContact(inq)?` <span style="font-size:12px;font-weight:400;color:var(--text3)">· ${clientContact(inq)}</span>`:''}${inq.eventName?' — '+inq.eventName:''}</div>
       <div class="detail-actions">
+        ${role.canEdit?`<button onclick="openEditInquiryModal('${inq.id}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-right:6px"><i class="ti ti-edit" style="font-size:14px"></i>Edit details</button>`:''}
         ${role.canViewInvoices?`<button onclick="viewClientQuote('${inq.id}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-right:6px"><i class="ti ti-file-invoice" style="font-size:14px"></i>Quote / Invoice</button>`:''}
         <button class="icon-btn" onclick="closeInqDetail()"><i class="ti ti-x"></i></button>
       </div>
@@ -3068,6 +3069,97 @@ function addInquiryFromForm(data){
   });
   save(); updatePipelineBadge();
   if(currentView==='pipeline') render();
+}
+
+// Edit every detail of an inquiry (the in-app version of the inquiry sheet).
+// Works for any stage; if the inquiry is booked, saving also refreshes its
+// This-Week event (date/week, type, client name, venue) to match.
+function openEditInquiryModal(id){
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq){ alert('Could not find that inquiry.'); return; }
+  document.getElementById('editInqModal')?.remove();
+  const esc = s => String(s==null?'':s).replace(/"/g,'&quot;');
+  const typeOpts = ['','Aufruf','Bar Mitzvah','Bat Mitzvah','Wedding','Kiddush','Bris','Sheva Brachos','Vort','Shloshim','Breakfast','Brunch','Corporate','Drop off catering','Other'];
+  const cuisineOpts = ['','Meat','Dairy','Both','Not sure yet'];
+  const shabbosOpts = ['No','Yes','Both'];
+  const stageOpts = [['new','New'],['menu_sent','Menu sent'],['booked','Booked'],['lost','Lost / Declined']];
+  const sel = (opts, cur) => opts.map(o=>{
+    const v = Array.isArray(o)?o[0]:o, lbl = Array.isArray(o)?o[1]:(o||'—');
+    return `<option value="${esc(v)}" ${String(cur||'')===String(v)?'selected':''}>${lbl}</option>`;
+  }).join('');
+  const m = document.createElement('div');
+  m.id = 'editInqModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:2rem;overflow-y:auto';
+  m.innerHTML = `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:620px;box-shadow:0 8px 40px rgba(0,0,0,.2);margin:auto">
+    <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Edit inquiry details</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>First name</label><input id="ie-firstName" value="${esc(inq.firstName)}"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Last name</label><input id="ie-lastName" value="${esc(inq.lastName)}"></div>
+    </div>
+    <div class="modal-row"><label>Organization / business name <span style="color:var(--text3);font-weight:400">(used as client name when filled)</span></label><input id="ie-organization" value="${esc(inq.organization)}"></div>
+    <div class="modal-row"><label>Event name</label><input id="ie-eventName" value="${esc(inq.eventName)}"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>Event type</label><select id="ie-eventType">${sel(typeOpts, inq.eventType)}</select></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Event date</label><input id="ie-eventDate" type="date" value="${esc(inq.eventDate)}"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>Guests</label><input id="ie-guestCount" value="${esc(inq.guestCount)}"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Cuisine</label><select id="ie-cuisine">${sel(cuisineOpts, inq.cuisine)}</select></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Shabbos?</label><select id="ie-shabbos">${sel(shabbosOpts, inq.shabbos||'No')}</select></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>Venue name</label><input id="ie-venueName" value="${esc(inq.venueName)}"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Venue location</label><input id="ie-venueLocation" value="${esc(inq.venueLocation)}"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>Phone</label><input id="ie-phone" value="${esc(inq.phone)}"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Email</label><input id="ie-email" value="${esc(inq.email)}"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>How found us</label><input id="ie-howFound" value="${esc(inq.howFound)}"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Referred by</label><input id="ie-referredBy" value="${esc(inq.referredBy)}"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>Event attended</label><input id="ie-eventAttended" value="${esc(inq.eventAttended)}"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Party planner</label><input id="ie-plannerName" value="${esc(inq.plannerName)}"></div>
+    </div>
+    <div class="modal-row"><label>Notes / comments</label><textarea id="ie-comments" style="min-height:70px">${esc(inq.comments)}</textarea></div>
+    <div class="modal-row"><label>Stage</label><select id="ie-stage">${sel(stageOpts, inq.stage)}</select></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem">
+      <button class="btn-cancel" onclick="document.getElementById('editInqModal').remove()">Cancel</button>
+      <button class="btn-save" onclick="saveInquiryEdits('${inq.id}')">Save changes</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+function saveInquiryEdits(id){
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq) return;
+  const g = k => { const el=document.getElementById('ie-'+k); return el? (el.value||'').trim() : (inq[k]||''); };
+  const wasBooked = inq.stage==='booked';
+  inq.firstName=g('firstName'); inq.lastName=g('lastName'); inq.organization=g('organization');
+  inq.eventName=g('eventName'); inq.eventType=g('eventType'); inq.eventDate=g('eventDate');
+  inq.guestCount=g('guestCount'); inq.cuisine=g('cuisine'); inq.shabbos=g('shabbos');
+  inq.venueName=g('venueName'); inq.venueLocation=g('venueLocation');
+  inq.phone=g('phone'); inq.email=g('email');
+  inq.howFound=g('howFound'); inq.referredBy=g('referredBy'); inq.eventAttended=g('eventAttended'); inq.plannerName=g('plannerName');
+  inq.comments=g('comments');
+  const newStage=g('stage')||inq.stage;
+  inq.stage=newStage;
+  _saveInquiry(inq);
+
+  // Keep the linked This-Week event in sync (and create one if newly booked)
+  if(newStage==='booked'){
+    createEventFromInquiry(inq); // creates or refreshes date/week, type, client name, venue
+  } else if(wasBooked && newStage!=='booked'){
+    const ev = events.find(x=>x.id==='inq_'+inq.id);
+    if(ev){ ev.lost = (newStage==='lost'); _saveEvent(ev); }
+  }
+
+  document.getElementById('editInqModal')?.remove();
+  showToast('Inquiry updated ✓');
+  render(); updatePipelineBadge();
 }
 
 function openAddInquiryModal(){
