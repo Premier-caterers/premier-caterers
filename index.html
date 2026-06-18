@@ -111,6 +111,7 @@
       <div class="modal-row" style="margin-bottom:0"><label>First name</label><input id="m-firstName" placeholder="David"></div>
       <div class="modal-row" style="margin-bottom:0"><label>Last name</label><input id="m-lastName" placeholder="Smith"></div>
     </div>
+    <div class="modal-row"><label>Organization / business name <span style="color:var(--text3);font-weight:400">(optional — used as the client name when filled)</span></label><input id="m-organization" placeholder="e.g. Congregation Beth Sholom"></div>
     <div class="modal-row"><label>Event name</label><input id="m-eventName" placeholder="Smith Bar Mitzvah"></div>
     <div class="modal-row"><label>Event type</label>
       <select id="m-type">
@@ -506,6 +507,21 @@ async function pcHash(s){
 }
 function loginRoleFor(u){ return u==='owner' ? 'admin' : u; }
 function prettyName(u){ return u==='owner'?'Kenny / Admin':(u?u.charAt(0).toUpperCase()+u.slice(1):''); }
+
+// Client naming: when an organization/business name is set, it is the primary
+// client name shown everywhere, and the person (first + last) becomes the contact.
+// When blank, the person's name is the client (behaves exactly as before).
+function clientPrimary(o){
+  if(!o) return '';
+  var org=(o.organization||'').trim();
+  if(org) return org;
+  return ((o.firstName||'')+' '+(o.lastName||'')).trim();
+}
+function clientContact(o){
+  if(!o) return '';
+  var org=(o.organization||'').trim();
+  return org ? ((o.firstName||'')+' '+(o.lastName||'')).trim() : '';
+}
 
 function showLogin(){
   settingsUnlocked=false; authUser=null;
@@ -1374,6 +1390,7 @@ function renderEvents(){
           ${!e.lost && changes.some(c=>c.job===e.job && changeDepts.some(d=>!(c.acks||{})[d])) ? '<i class="ti ti-alert-triangle" style="font-size:14px;color:var(--amber-text);margin-left:auto" title="Unacknowledged changes"></i>' : ''}
         </div>
         <div class="pl-card-head"><div class="client-name">${e.name}</div>${ewChev}</div>
+        ${e.contactName ? `<div style="font-size:11px;color:var(--text3);margin:-2px 0 4px"><i class="ti ti-user" style="font-size:10px"></i> ${e.contactName}</div>` : ''}
         ${e.addr?`<div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>${e.addr}</div>`:''}
         ${contactChips(e)}
         ${role.showStaff&&chips?`<div class="staff-chips">${chips}</div>`:''}
@@ -1716,7 +1733,8 @@ function renderPipeline(){
       ${cards.length===0 ? `<div style="text-align:center;padding:1.5rem 0;font-size:12px;color:var(--text3)">No clients yet</div>` : ''}
       ${cards.map(inq=>{
         const compact = plCardCompact(inq, s.key);
-        const nm = `${inq.firstName||''} ${inq.lastName||''}`.trim();
+        const nm = clientPrimary(inq) || `${inq.firstName||''} ${inq.lastName||''}`.trim();
+        const contact = clientContact(inq);
         const chev = `<button class="pl-card-toggle" onclick="event.stopPropagation();togglePlCard('${inq.id}')" title="${compact?'Expand':'Minimize'}"><i class="ti ti-chevron-${compact?'down':'up'}"></i></button>`;
         if(compact){
           return `<div class="inq-card compact ${selectedInqId===inq.id?'selected':''}" onclick="selectInquiry('${inq.id}')">
@@ -1730,6 +1748,7 @@ function renderPipeline(){
         return `
       <div class="inq-card ${selectedInqId===inq.id?'selected':''}" onclick="selectInquiry('${inq.id}')">
         <div class="pl-card-head"><div class="inq-name">${nm}</div>${chev}</div>
+        ${contact ? `<div style="font-size:11px;color:var(--text3);margin:-2px 0 4px"><i class="ti ti-user" style="font-size:10px"></i> ${contact}</div>` : ''}
         ${inq.eventName ? `<div class="inq-event-name">${inq.eventName}</div>` : ''}
         <div class="inq-meta">
           ${inq.eventType ? `<span><i class="ti ti-tag" style="font-size:11px"></i>${inq.eventType}</span>` : ''}
@@ -1761,7 +1780,7 @@ function renderInqDetail(inq, role){
   const stageName = {new:'New Inquiry', menu_sent:'Menu Sent', booked:'Booked'}[inq.stage]||inq.stage;
   return `<div class="inq-detail">
     <div class="detail-header">
-      <div class="detail-title">${inq.firstName} ${inq.lastName}${inq.eventName?' — '+inq.eventName:''}</div>
+      <div class="detail-title">${clientPrimary(inq)||(inq.firstName+' '+inq.lastName)}${clientContact(inq)?` <span style="font-size:12px;font-weight:400;color:var(--text3)">· ${clientContact(inq)}</span>`:''}${inq.eventName?' — '+inq.eventName:''}</div>
       <div class="detail-actions">
         ${role.canViewInvoices?`<button onclick="viewClientQuote('${inq.id}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-right:6px"><i class="ti ti-file-invoice" style="font-size:14px"></i>Quote / Invoice</button>`:''}
         <button class="icon-btn" onclick="closeInqDetail()"><i class="ti ti-x"></i></button>
@@ -1875,6 +1894,11 @@ function updateEstimateLine(id, idx, field, val){
 }
 function addEstimateLine(id){ const inq=_findInq(id); if(!inq) return; ensureEstimate(inq); inq.estimate.lines.push({id:'l'+Date.now(),category:'Other',description:'',qty:1,unit:'item',price:0}); _saveInquiry(inq); render(); }
 function removeEstimateLine(id, idx){ const inq=_findInq(id); if(!inq||!inq.estimate) return; inq.estimate.lines.splice(idx,1); _saveInquiry(inq); render(); }
+function duplicateEstimateLine(id, idx){
+  const inq=_findInq(id); if(!inq||!inq.estimate||!Array.isArray(inq.estimate.lines)||!inq.estimate.lines[idx]) return;
+  inq.estimate.lines.push(Object.assign({}, inq.estimate.lines[idx]));  // copy added after the last line
+  _saveInquiry(inq); render();
+}
 function toggleEstimateTaxExempt(id){ const inq=_findInq(id); if(!inq||!inq.estimate) return; inq.estimate.taxExempt=!inq.estimate.taxExempt; _saveInquiry(inq); render(); }
 function updateEstimateLogistics(id,val){ const inq=_findInq(id); if(!inq||!inq.estimate) return; inq.estimate.logisticsRate=(parseFloat(val)||0)/100; _saveInquiry(inq); render(); }
 function updateEstimateNotes(id,val){ const inq=_findInq(id); if(!inq||!inq.estimate) return; inq.estimate.notes=val; _saveInquiry(inq); }
@@ -1899,7 +1923,7 @@ function renderEstimateBlock(inq, role){
   const tots = calcInvoiceTotals(est);
   const inp='background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:4px 6px;font-size:13px;color:var(--text);font-family:inherit';
   const rows = est.lines.map((l,i)=>`
-    <div style="display:grid;grid-template-columns:18px 1fr 52px 78px 70px 60px;gap:6px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border)">
+    <div style="display:grid;grid-template-columns:18px 1fr 52px 78px 70px 86px;gap:6px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border)">
       <span class="drag-handle" title="Drag to reorder" style="cursor:grab;color:var(--text3);font-size:15px;touch-action:none"><i class="ti ti-grip-vertical"></i></span>
       <input value="${(l.description||'').replace(/"/g,'&quot;')}" onchange="updateEstimateLine('${inq.id}',${i},'description',this.value)" placeholder="Description" style="${inp};width:100%">
       <input type="number" value="${l.qty||0}" min="0" step="1" onchange="updateEstimateLine('${inq.id}',${i},'qty',this.value)" style="${inp};width:100%;text-align:right">
@@ -1908,6 +1932,7 @@ function renderEstimateBlock(inq, role){
       <span style="display:flex;gap:1px;justify-content:flex-end">
         <button onclick="moveEstimateLine('${inq.id}',${i},-1)" title="Move up" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:1px" ${i===0?'disabled style="opacity:.3"':''}><i class="ti ti-arrow-up"></i></button>
         <button onclick="moveEstimateLine('${inq.id}',${i},1)" title="Move down" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:1px" ${i===est.lines.length-1?'disabled style="opacity:.3"':''}><i class="ti ti-arrow-down"></i></button>
+        <button onclick="duplicateEstimateLine('${inq.id}',${i})" title="Duplicate line" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:1px"><i class="ti ti-copy"></i></button>
         <button onclick="removeEstimateLine('${inq.id}',${i})" title="Remove" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:13px;padding:1px"><i class="ti ti-x"></i></button>
       </span>
     </div>`).join('');
@@ -2750,7 +2775,9 @@ function createEventFromInquiry(inq){
     existing.day = wi.day || existing.day;
     existing.dayLabel = dayLabel || existing.dayLabel;
     existing.type = type; existing.typeLabel = inq.eventType || typeLabelMap[type] || 'Event';
-    existing.name = inq.lastName || inq.firstName || existing.name;
+    existing.name = clientPrimary(inq) || existing.name;
+    existing.organization = (inq.organization||'').trim();
+    existing.contactName = clientContact(inq);
     existing.addr = inq.venueLocation || existing.addr;
     if(menuLink && !existing.menuLink) existing.menuLink = menuLink;
     existing.inquiryId = inq.id;
@@ -2763,7 +2790,9 @@ function createEventFromInquiry(inq){
     id: evId,
     job: autoJob,
     inquiryId: inq.id,
-    name: inq.lastName || inq.firstName || (inq.eventName||'Event'),
+    name: clientPrimary(inq) || (inq.eventName||'Event'),
+    organization: (inq.organization||'').trim(),
+    contactName: clientContact(inq),
     addr: inq.venueLocation||'',
     email: inq.email||'', phone: inq.phone||'',
     type, typeLabel: inq.eventType || typeLabelMap[type] || 'Event',
@@ -2830,6 +2859,7 @@ function addInquiryFromForm(data){
   _saveInquiry({
     id: Date.now()+'',
     firstName: data.firstName||'', lastName: data.lastName||'',
+    organization: data.organization||'',
     eventName: data.eventName||'', eventType: data.eventType||'',
     eventDate: data.eventDate||'', phone: data.phone||'', email: data.email||'',
     venueName: data.venueName||'', venueLocation: data.venueLocation||'',
@@ -4642,11 +4672,12 @@ function renderInvoiceDetail(){
             ${canEdit?`<input type="number" value="${line.price}" min="0" step="0.01" onchange="updateInvoiceLine('${eid}',${i},'price',this.value)" style="${inpStyle}">`:('$'+parseFloat(line.price||0).toFixed(2))}
           </td>
           <td style="padding:8px 10px;text-align:right;font-weight:500">$${(parseFloat(line.qty||0)*parseFloat(line.price||0)).toFixed(2)}</td>
-          <td style="padding:4px 6px;text-align:center;width:80px">
+          <td style="padding:4px 6px;text-align:center;width:104px">
             ${canEdit?`<div style="display:flex;gap:2px;justify-content:center;align-items:center">
               <span class="drag-handle" title="Drag to reorder" style="cursor:grab;color:var(--text3);font-size:15px;padding:2px;touch-action:none"><i class="ti ti-grip-vertical"></i></span>
               <button onclick="moveInvoiceLine('${eid}',${i},-1)" title="Move up" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;padding:2px" ${i===0?'disabled style="opacity:.3"':''}><i class="ti ti-arrow-up"></i></button>
               <button onclick="moveInvoiceLine('${eid}',${i},1)" title="Move down" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;padding:2px" ${i===inv.lines.length-1?'disabled style="opacity:.3"':''}><i class="ti ti-arrow-down"></i></button>
+              <button onclick="duplicateInvoiceLine('${eid}',${i})" title="Duplicate line" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;padding:2px"><i class="ti ti-copy"></i></button>
               <button onclick="removeInvoiceLine('${eid}',${i})" title="Remove line" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:14px;padding:2px"><i class="ti ti-trash"></i></button>
             </div>`:''}
           </td>
@@ -4776,6 +4807,16 @@ function moveEstimateLine(id, idx, dir){
   if(ni<0 || ni>=arr.length) return;
   const t = arr[idx]; arr[idx] = arr[ni]; arr[ni] = t;
   _saveInquiry(inq); render();
+}
+
+function duplicateInvoiceLine(eid, idx){
+  const inv = invoices[eid];
+  if(!inv || !Array.isArray(inv.lines) || !inv.lines[idx]) return;
+  const copy = Object.assign({}, inv.lines[idx]);
+  copy.id = 'custom_'+Date.now();
+  inv.lines.push(copy);  // copy added after the last line
+  _saveInvoice(eid, inv);
+  renderInvoiceDetail();
 }
 
 function removeInvoiceLine(eid, idx){
@@ -5093,7 +5134,7 @@ function buildInvoiceHTML(eid){
     '<div class="meta">'+
       '<div><strong>'+docType+' #</strong>'+e.job+'</div>'+
       '<div><strong>Date</strong>'+now+'</div>'+
-      '<div><strong>Client</strong>'+e.name+'</div>'+
+      '<div><strong>Client</strong>'+e.name+(e.contactName?'<br><span style="font-size:11px;color:#666;font-weight:400">Attn: '+e.contactName+'</span>':'')+'</div>'+
       '<div><strong>Event type</strong>'+e.typeLabel+'</div>'+
       '<div><strong>Event date</strong>'+getFullEventDate(e)+'</div>'+
       (e.addr?'<div><strong>Venue</strong>'+e.addr+'</div>':'')+
@@ -5953,7 +5994,7 @@ function loadFromSheet(url){ return; //
 // ── ADD EVENT ──
 function openModal(){
   // Reset all fields
-  ['m-firstName','m-lastName','m-eventName','m-eventDate','m-phone','m-email','m-venueName','m-venueLocation','m-guestCount','m-cuisine','m-howFound','m-referredBy','m-eventAttended','m-plannerName','m-job','m-notes'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['m-firstName','m-lastName','m-organization','m-eventName','m-eventDate','m-phone','m-email','m-venueName','m-venueLocation','m-guestCount','m-cuisine','m-howFound','m-referredBy','m-eventAttended','m-plannerName','m-job','m-notes'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   const t=document.getElementById('m-type'); if(t) t.value='';
   const md=document.getElementById('m-meatDairy'); if(md) md.value='';
   const sh=document.getElementById('m-shabbos'); if(sh) sh.value='No';
@@ -5990,6 +6031,7 @@ function addEvent(){
     const inq = {
       id: Date.now()+'',
       firstName, lastName,
+      organization: document.getElementById('m-organization')?.value?.trim()||'',
       eventName: document.getElementById('m-eventName')?.value?.trim()||'',
       eventType,
       eventDate,
@@ -6880,10 +6922,51 @@ function renderComposeForm(replyTo, replySubject, replyBody){
     +'<div class="modal-row"><label>To</label><input type="email" id="compose-to" value="'+(replyTo||'')+'" placeholder="recipient@email.com"></div>'
     +'<div class="modal-row"><label>Subject</label><input type="text" id="compose-subject" value="'+(replySubject||'')+'" placeholder="Subject..."></div>'
     +'<div class="modal-row"><label>Message</label><textarea id="compose-body" style="min-height:200px">'+(replyBody||'')+'</textarea></div>'
+    +'<div class="modal-row"><label>Attachments</label>'
+      +'<input type="file" id="compose-attach" multiple style="display:none" onchange="addComposeAttachments(this.files)">'
+      +'<button type="button" onclick="document.getElementById(\'compose-attach\').click()" style="font-size:13px;padding:6px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:6px;width:fit-content"><i class="ti ti-paperclip" style="font-size:14px"></i> Add attachment</button>'
+      +'<div id="compose-attach-list" style="margin-top:6px;display:flex;flex-direction:column;gap:4px">'+renderComposeAttachList()+'</div>'
+    +'</div>'
     +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:.75rem">'
-    +'<button onclick="window._emailTab=\'inbox\';render()" class="btn-cancel">Cancel</button>'
+    +'<button onclick="window._composeAttachments=[];window._emailTab=\'inbox\';render()" class="btn-cancel">Cancel</button>'
     +'<button onclick="sendComposedEmail()" class="btn-save"><i class="ti ti-send" style="font-size:13px"></i> Send</button>'
     +'</div></div>';
+}
+
+function renderComposeAttachList(){
+  const list = window._composeAttachments || [];
+  if(!list.length) return '';
+  return list.map(function(a,i){
+    return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);background:var(--bg2);border:0.5px solid var(--border);border-radius:6px;padding:4px 8px">'
+      +'<i class="ti ti-file" style="font-size:13px"></i><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+a.filename+'</span>'
+      +'<button onclick="removeComposeAttachment('+i+')" title="Remove" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:13px"><i class="ti ti-x"></i></button></div>';
+  }).join('');
+}
+
+function addComposeAttachments(fileList){
+  if(!window._composeAttachments) window._composeAttachments = [];
+  const files = Array.prototype.slice.call(fileList||[]);
+  let pending = files.length;
+  if(!pending) return;
+  files.forEach(function(file){
+    // Gmail-friendly size guard (~25MB total); warn on large files
+    if(file.size > 24*1024*1024){ alert('"'+file.name+'" is larger than 24 MB and may be too big to email.'); }
+    const reader = new FileReader();
+    reader.onload = function(){
+      const b64 = String(reader.result).split(',')[1] || '';
+      window._composeAttachments.push({ filename:file.name, mime:file.type||'application/octet-stream', base64:b64 });
+      pending--;
+      if(pending<=0){ const el=document.getElementById('compose-attach-list'); if(el) el.innerHTML=renderComposeAttachList(); }
+    };
+    reader.onerror = function(){ pending--; };
+    reader.readAsDataURL(file);
+  });
+}
+
+function removeComposeAttachment(i){
+  if(!window._composeAttachments) return;
+  window._composeAttachments.splice(i,1);
+  const el=document.getElementById('compose-attach-list'); if(el) el.innerHTML=renderComposeAttachList();
 }
 
 async function refreshInbox(){
@@ -6952,8 +7035,9 @@ async function sendComposedEmail(){
   const btn = document.querySelector('#mainArea .btn-save');
   if(btn){ btn.disabled=true; btn.textContent='Sending...'; }
   const html = '<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap">'+body+'</pre>';
-  const ok = await sendGmailEmail(to, subject, body, html);
-  if(ok){ window._emailTab='sent'; render(); setTimeout(refreshInbox, 500); }
+  const attachments = window._composeAttachments || [];
+  const ok = await sendGmailEmail(to, subject, body, html, attachments);
+  if(ok){ window._composeAttachments=[]; window._emailTab='sent'; render(); setTimeout(refreshInbox, 500); }
   else if(btn){ btn.disabled=false; btn.textContent='Send'; }
 }
 
