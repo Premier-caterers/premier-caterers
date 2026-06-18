@@ -565,13 +565,14 @@ async function savePw(u){
 }
 function finishLogin(u){
   authUser=u; currentRole=loginRoleFor(u);
+  try{ localStorage.setItem('pcSession', JSON.stringify({user:u, ts:Date.now()})); }catch(e){}
   const ov=document.getElementById('loginOverlay'); if(ov) ov.style.display='none';
   applyAccess();
   if(!access[currentRole].includes(currentView)) currentView = access[currentRole][0]||'home';
   updateUserBar();
   try{ render(); }catch(e){ console.error(e); }
 }
-function logout(){ authUser=null; currentRole=null; settingsUnlocked=false; showLogin(); }
+function logout(){ authUser=null; currentRole=null; settingsUnlocked=false; try{ localStorage.removeItem('pcSession'); }catch(e){} showLogin(); }
 function updateUserBar(){
   const el=document.getElementById('userBar'); if(!el) return;
   el.innerHTML = authUser
@@ -7331,8 +7332,22 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
   }, 1500);
 });
-// ---- show login on load (added) ----
-try{ updateUserBar(); showLogin(); }catch(e){ console.error('login init error', e); }
+// ---- restore saved login if present, else show login (added) ----
+function pcRestoreSession(){
+  try{
+    const raw = localStorage.getItem('pcSession');
+    if(!raw) return false;
+    const s = JSON.parse(raw);
+    const validUsers = ['owner','shelley','josh','kitchen'];
+    if(!s || validUsers.indexOf(s.user)===-1) return false;
+    const THIRTY_DAYS = 30*24*60*60*1000;
+    if(!s.ts || (Date.now()-s.ts) > THIRTY_DAYS){ localStorage.removeItem('pcSession'); return false; }
+    if(s.user==='owner') settingsUnlocked = true; // owner stays fully signed in across reloads
+    finishLogin(s.user);                          // also refreshes the saved timestamp
+    return true;
+  }catch(e){ return false; }
+}
+try{ updateUserBar(); if(!pcRestoreSession()) showLogin(); }catch(e){ console.error('login init error', e); }
 // Initialize Firebase - retry until firebase global is available
 var _initAttempts = 0;
 function initNow(){
