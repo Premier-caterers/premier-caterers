@@ -81,6 +81,7 @@
       <div class="field"><label>First name <span class="req">*</span></label><input id="firstName" placeholder="First name"></div>
       <div class="field"><label>Last name <span class="req">*</span></label><input id="lastName" placeholder="Last name"></div>
     </div>
+    <div class="field"><label>Organization / business name</label><input id="organization" placeholder="(optional — e.g. your shul, company, or organization)"></div>
     <div class="row">
       <div class="field"><label>Email address</label><input id="email" type="email" placeholder="your@email.com"></div>
       <div class="field"><label>Phone number</label><input id="phone" type="tel" placeholder="(555) 555-5555"></div>
@@ -200,6 +201,7 @@ async function submitForm(){
   const inquiryData = {
     id: Date.now() + '',
     firstName, lastName,
+    organization:  gv('organization'),
     email:         gv('email'),
     phone:         gv('phone'),
     eventName:     gv('eventName'),
