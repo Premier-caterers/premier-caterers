@@ -1,4 +1,4 @@
-<!-- Premier Caterers App | 06/11 — 09:46 -->
+<!-- Premier Caterers App | 06/17 — 21:31 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -23,14 +23,8 @@
     <input type="date" id="weekJumper" style="display:none;font-size:12px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-family:inherit" onchange="jumpToWeek(this.value)">
   </div>
   <div class="topbar-spacer"></div>
-  <div class="role-switcher" id="roleSwitcher">
-    <button class="role-btn active" onclick="setRole('admin',this)">Admin</button>
-    <button class="role-btn" onclick="setRole('shelley',this)">Shelley</button>
-    <button class="role-btn" onclick="setRole('kenny',this)">Kenny</button>
-    <button class="role-btn" onclick="setRole('josh',this)">Josh</button>
-    <button class="role-btn" onclick="setRole('kitchen',this)">Kitchen</button>
-  </div>
-  <span class="ts-stamp" id="tsStamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated 06/11 — 20:31</span>
+  <div class="role-switcher" id="userBar"></div>
+  <span class="ts-stamp" id="tsStamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated 06/17 — 21:31</span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -38,6 +32,25 @@
 </div>
 
 <div class="nav-overlay" id="navOverlay" onclick="closeMobileNav()"></div>
+<!-- ===================== LOGIN OVERLAY (added) ===================== -->
+<style>
+  #loginOverlay{position:fixed;inset:0;z-index:99999;background:#8B1A1A;display:none;align-items:center;justify-content:center;padding:24px}
+  #loginOverlay .lg-card{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);width:100%;max-width:360px;padding:34px 30px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:center}
+  #loginOverlay .lg-title{font-size:22px;font-weight:700;color:#8B1A1A;margin-bottom:4px}
+  #loginOverlay .lg-sub{font-size:13px;color:#666;margin-bottom:20px}
+  #loginOverlay .lg-users{display:flex;flex-direction:column;gap:10px}
+  #loginOverlay .lg-user{padding:13px;border:1px solid #e3d3d3;border-radius:10px;background:#fbf6f6;color:#8B1A1A;font-size:15px;font-weight:600;cursor:pointer}
+  #loginOverlay .lg-user:hover{background:#f3e7e7}
+  #loginOverlay .lg-input{width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid #ddd;border-radius:10px;font-size:16px;margin-bottom:10px}
+  #loginOverlay .lg-go{width:100%;padding:13px;border:none;border-radius:10px;background:#8B1A1A;color:#fff;font-size:15px;font-weight:600;cursor:pointer;margin-top:4px}
+  #loginOverlay .lg-back{width:100%;padding:10px;border:none;background:none;color:#999;font-size:13px;cursor:pointer;margin-top:8px}
+  #loginOverlay .lg-err{color:#c0392b;font-size:13px;min-height:18px;margin-bottom:6px}
+  #userBar .ub-name{font-size:13px;color:var(--text2,#444);display:inline-flex;align-items:center;gap:5px;margin-right:10px}
+  #userBar .ub-out{padding:5px 12px;border:0.5px solid var(--border2,#ccc);border-radius:8px;background:var(--bg2,#f3f3f3);color:var(--text2,#444);font-size:12px;cursor:pointer}
+</style>
+<div id="loginOverlay"><div class="lg-card"><div id="loginStep"></div></div></div>
+<!-- =================== END LOGIN OVERLAY (added) =================== -->
+
 <div class="layout">
   <div class="sidebar" id="sidebar">
     <div class="sidebar-label">Views</div>
@@ -56,7 +69,7 @@
     <button class="nav-item" id="nav-equipment" onclick="showView('equipment')"><i class="ti ti-tool"></i>Equipment</button>
     <button class="nav-item" id="nav-venues" onclick="showView('venues')"><i class="ti ti-building"></i>Venues</button>
     <button class="nav-item" id="nav-email" onclick="showView('email')"><i class="ti ti-mail"></i>Email<span class="nav-badge" id="emailBadge" style="display:none">0</span></button>
-    <div class="sidebar-label">Setup</div>
+    <div class="sidebar-label" id="setupLabel">Setup</div>
     <button class="nav-item" id="nav-trash" onclick="showView('trash')"><i class="ti ti-trash"></i>Trash<span class="nav-badge" id="trashBadge" style="display:none">0</span></button>
     <button class="nav-item" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
   </div>
@@ -473,6 +486,112 @@ const roles = {
   kitchen: {canEdit:false, showStaff:false, showLinks:false, canViewInvoices:false, canViewReports:false},
 };
 
+/* ===================== LOGIN / ACCESS CONTROL (added) ===================== */
+const ALL_SECTIONS = ['home','pipeline','events','coversheet','schedule','checklists','changes','invoices','reports','grocery','equipment','venues','email','trash','settings'];
+const access = {
+  admin:   ALL_SECTIONS.slice(),
+  kenny:   ALL_SECTIONS.slice(),
+  shelley: ALL_SECTIONS.filter(s=>!['reports','trash','settings'].includes(s)),
+  josh:    ALL_SECTIONS.filter(s=>!['reports','trash','settings'].includes(s)),
+  kitchen: ALL_SECTIONS.filter(s=>!['reports','trash','settings','email','invoices'].includes(s)),
+};
+const OWNER_HASH   = 'd4ae28692a6a51cd93378a6ae5d3c004920edfaaa688e4dbeefb8cbe4730dcae'; // 736868
+const DEFAULT_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4'; // 1234
+let authUser = null;            // 'owner' | 'shelley' | 'josh' | 'kitchen'
+let settingsUnlocked = false;
+
+async function pcHash(s){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(s)));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function loginRoleFor(u){ return u==='owner' ? 'admin' : u; }
+function prettyName(u){ return u==='owner'?'Kenny / Admin':(u?u.charAt(0).toUpperCase()+u.slice(1):''); }
+
+function showLogin(){
+  settingsUnlocked=false; authUser=null;
+  const ov=document.getElementById('loginOverlay'); if(!ov) return;
+  ov.style.display='flex';
+  document.getElementById('loginStep').innerHTML =
+    `<div class="lg-title">Premier Caterers</div><div class="lg-sub">Who's signing in?</div>
+     <div class="lg-users">
+       <button class="lg-user" onclick="loginPick('owner')">Kenny / Admin</button>
+       <button class="lg-user" onclick="loginPick('shelley')">Shelley</button>
+       <button class="lg-user" onclick="loginPick('josh')">Josh</button>
+       <button class="lg-user" onclick="loginPick('kitchen')">Kitchen</button>
+     </div>`;
+  updateUserBar();
+}
+function loginPick(u){
+  if(u==='kitchen'){ finishLogin('kitchen'); return; }
+  document.getElementById('loginStep').innerHTML =
+    `<div class="lg-title">${prettyName(u)}</div><div class="lg-sub">Enter your password</div>
+     <input id="lgPw" type="password" class="lg-input" placeholder="Password" onkeydown="if(event.key==='Enter')loginSubmit('${u}')">
+     <div id="lgErr" class="lg-err"></div>
+     <button class="lg-go" onclick="loginSubmit('${u}')">Sign in</button>
+     <button class="lg-back" onclick="showLogin()">&larr; back</button>`;
+  setTimeout(()=>{const i=document.getElementById('lgPw'); if(i)i.focus();},60);
+}
+async function loginSubmit(u){
+  const pw=(document.getElementById('lgPw')||{}).value||'';
+  const err=document.getElementById('lgErr'); if(err) err.textContent='';
+  const h=await pcHash(pw);
+  if(u==='owner'){ if(h===OWNER_HASH){ settingsUnlocked=true; finishLogin('owner'); } else if(err){ err.textContent='Incorrect password.'; } return; }
+  let doc=null;
+  try{ const s=await db.collection('appAuth').doc(u).get(); if(s.exists) doc=s.data(); }catch(e){}
+  const storedHash = (doc&&doc.hash) ? doc.hash : DEFAULT_HASH;
+  const mustChange = doc ? !!doc.mustChange : true;
+  if(h!==storedHash){ if(err) err.textContent='Incorrect password.'; return; }
+  if(mustChange){
+    document.getElementById('loginStep').innerHTML =
+      `<div class="lg-title">${prettyName(u)}</div><div class="lg-sub">First sign-in &mdash; please create your own password</div>
+       <input id="npw1" type="password" class="lg-input" placeholder="New password">
+       <input id="npw2" type="password" class="lg-input" placeholder="Confirm new password" onkeydown="if(event.key==='Enter')savePw('${u}')">
+       <div id="lgErr" class="lg-err"></div>
+       <button class="lg-go" onclick="savePw('${u}')">Save &amp; sign in</button>`;
+    setTimeout(()=>{const i=document.getElementById('npw1'); if(i)i.focus();},60);
+    return;
+  }
+  finishLogin(u);
+}
+async function savePw(u){
+  const a=(document.getElementById('npw1')||{}).value||'', b=(document.getElementById('npw2')||{}).value||'';
+  const err=document.getElementById('lgErr'); if(err) err.textContent='';
+  if(a.length<4){ if(err) err.textContent='Use at least 4 characters.'; return; }
+  if(a!==b){ if(err) err.textContent='The two passwords do not match.'; return; }
+  const h=await pcHash(a);
+  try{ await db.collection('appAuth').doc(u).set({hash:h,mustChange:false,updated:Date.now()}); }
+  catch(e){ if(err) err.textContent='Could not save — check your connection.'; return; }
+  finishLogin(u);
+}
+function finishLogin(u){
+  authUser=u; currentRole=loginRoleFor(u);
+  const ov=document.getElementById('loginOverlay'); if(ov) ov.style.display='none';
+  applyAccess();
+  if(!access[currentRole].includes(currentView)) currentView = access[currentRole][0]||'home';
+  updateUserBar();
+  try{ render(); }catch(e){ console.error(e); }
+}
+function logout(){ authUser=null; currentRole=null; settingsUnlocked=false; showLogin(); }
+function updateUserBar(){
+  const el=document.getElementById('userBar'); if(!el) return;
+  el.innerHTML = authUser
+    ? `<span class="ub-name"><i class="ti ti-user"></i> ${prettyName(authUser)}</span><button class="ub-out" onclick="logout()">Log out</button>`
+    : '';
+}
+function applyAccess(){
+  const allowed = access[currentRole]||[];
+  ALL_SECTIONS.forEach(sec=>{ const el=document.getElementById('nav-'+sec); if(el) el.style.display = allowed.includes(sec)?'':'none'; });
+  const setup=document.getElementById('setupLabel');
+  if(setup) setup.style.display = (allowed.includes('trash')||allowed.includes('settings'))?'':'none';
+}
+async function resetUserPassword(u){
+  if(currentRole!=='admin' && currentRole!=='kenny') return;
+  if(!confirm('Reset the '+u+' password back to the starting password 1234? They will be asked to create a new one the next time they sign in.')) return;
+  try{ await db.collection('appAuth').doc(u).set({hash:DEFAULT_HASH,mustChange:true,updated:Date.now()}); (window.showToast?showToast(u+' password reset to 1234 \u2713'):alert(u+' password reset to 1234.')); }
+  catch(e){ alert('Could not reset — check your connection.'); }
+}
+/* =================== END LOGIN / ACCESS CONTROL (added) =================== */
+
 let currentView='home', currentRole='admin', selectedId=null, editingId=null, activeDay='all', eventsViewMode='card';
 
 function setRole(r,btn){
@@ -496,6 +615,16 @@ function closeMobileNav(){
 }
 function showView(v){
   closeMobileNav();
+  /* ---- access control (added) ---- */
+  if(!authUser){ showLogin(); return; }
+  if(!(access[currentRole]||[]).includes(v)){ alert('You don\u2019t have access to that section.'); return; }
+  if(v==='settings' && !settingsUnlocked){
+    const pw = prompt('Enter the Settings password:');
+    if(pw===null) return;
+    pcHash(pw).then(h=>{ if(h===OWNER_HASH){ settingsUnlocked=true; showView('settings'); } else { alert('Incorrect password.'); } });
+    return;
+  }
+  /* ---- end access control ---- */
   const role = roles[currentRole]||{};
   // Block unauthorized views
   if(v==='invoices' && !role.canViewInvoices){
@@ -5604,6 +5733,14 @@ function renderSettings(){
   const ghToken = localStorage.getItem('githubToken');
   return `
   <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
+    <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Team logins</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Reset a team member's password back to the starting password (1234). They'll be asked to create a new one the next time they sign in.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="resetUserPassword('shelley')" style="padding:8px 14px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-size:13px;cursor:pointer">Reset Shelley&rsquo;s password</button>
+      <button onclick="resetUserPassword('josh')" style="padding:8px 14px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-size:13px;cursor:pointer">Reset Josh&rsquo;s password</button>
+    </div>
+  </div>
+  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1rem">
       <div>
         <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:2px">Push update to GitHub</div>
@@ -6150,6 +6287,13 @@ function filterDay(d){ setDay(d); }
 
 // ── GITHUB AUTO-DEPLOY ──
 async function pushToGitHub(){
+  /* ---- deploy confirmation (added) ---- */
+  const _html = document.documentElement.outerHTML;
+  const _kb = Math.round(new Blob([_html]).size/1024);
+  const _when = new Date().toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short'});
+  const _warn = _kb < 600 ? ('\n\n*** WARNING: this version is only '+_kb+' KB. Your full app is about 641 KB. If this looks too small it may be missing features — Cancel and check before publishing. ***') : '';
+  if(!confirm('Publish this version to your live site?\n\nSize going live: '+_kb+' KB\nDate / time: '+_when+_warn+'\n\nOK = publish    Cancel = stop')){ return; }
+  /* ---- end deploy confirmation ---- */
   const token = localStorage.getItem('githubToken');
   const repo = 'Premier-caterers/premier-caterers';
   const path = 'index.html';
@@ -6180,8 +6324,12 @@ async function pushToGitHub(){
     const fileData = await getResp.json();
     const sha = fileData.sha;
 
-    // Step 2: Get the current page HTML
-    const html = document.documentElement.outerHTML;
+    // Step 2: Get the current page HTML (stamp the deploy time into the comment, doctype + topbar stamp)
+    const _now = new Date();
+    const _p2 = n => String(n).padStart(2,'0');
+    const _stamp = _p2(_now.getMonth()+1)+'/'+_p2(_now.getDate())+' \u2014 '+_p2(_now.getHours())+':'+_p2(_now.getMinutes());
+    try{ const _ts=document.getElementById('tsStamp'); if(_ts) _ts.textContent='Updated '+_stamp; }catch(e){}
+    const html = '<!-- Premier Caterers App | '+_stamp+' -->\n<!DOCTYPE html>\n' + document.documentElement.outerHTML;
     const encoded = btoa(unescape(encodeURIComponent(html)));
 
     // Step 3: Push update
@@ -7111,6 +7259,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
   }, 1500);
 });
+// ---- show login on load (added) ----
+try{ updateUserBar(); showLogin(); }catch(e){ console.error('login init error', e); }
 // Initialize Firebase - retry until firebase global is available
 var _initAttempts = 0;
 function initNow(){
