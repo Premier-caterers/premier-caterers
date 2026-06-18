@@ -2002,34 +2002,77 @@ async function ensureHtml2Pdf(){
 // Turn a full HTML document string into a downloaded .pdf that looks like the printed page.
 // If the PDF library can't load (e.g. network blocks the CDN), falls back to the print dialog
 // where the user can still choose "Save as PDF".
+// Scope a document's CSS so it only applies inside the PDF staging element
+// (prevents the document's bare body/table/etc rules from disturbing the app).
+function _scopeCssForPdf(css, scopeSel){
+  var out=''; var i=0; var n=css.length;
+  while(i<n){
+    var sel='';
+    while(i<n && css[i]!=='{' && css[i]!=='}'){ sel+=css[i++]; }
+    if(i>=n) break;
+    if(css[i]==='}'){ i++; continue; }
+    var depth=1; i++; var block='';
+    while(i<n && depth>0){ var c=css[i]; if(c==='{')depth++; else if(c==='}')depth--; if(depth>0)block+=c; i++; }
+    sel=sel.trim();
+    if(sel.charAt(0)==='@'){ continue; } // drop @media print / @page / etc for canvas
+    var scoped=sel.split(',').map(function(s){
+      s=s.trim(); if(!s) return '';
+      if(s==='body'||s==='html'||s===':root') return scopeSel;
+      if(s.indexOf('body ')===0) return scopeSel+' '+s.slice(5);
+      if(s.indexOf('html ')===0) return scopeSel+' '+s.slice(5);
+      return scopeSel+' '+s;
+    }).filter(Boolean).join(',');
+    if(scoped) out+=scoped+'{'+block+'}\n';
+  }
+  return out;
+}
+
 async function downloadHtmlAsPdf(html, filenameBase){
   const fname = (filenameBase || 'document').replace(/[^a-z0-9_\-]/gi,'_');
+  let stage;
   try{
     if(typeof showToast==='function') showToast('Building PDF…');
     await ensureHtml2Pdf();
     if(!window.html2pdf) throw new Error('PDF library unavailable');
-    // Render the full document (with its own styles) in a hidden, offscreen iframe,
-    // then snapshot it into a PDF.
-    const iframe = document.createElement('iframe');
-    iframe.setAttribute('aria-hidden','true');
-    iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:816px;height:1056px;border:0;background:#fff';
-    document.body.appendChild(iframe);
-    const idoc = iframe.contentDocument || iframe.contentWindow.document;
-    idoc.open(); idoc.write(html); idoc.close();
-    await new Promise(r=>setTimeout(r,350)); // let fonts/images/layout settle
+
+    // Render the document in the live page (so fonts and the embedded logo are
+    // already available), inside an offscreen, style-scoped staging element.
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    let css=''; parsed.querySelectorAll('style').forEach(function(s){ css+=s.textContent+'\n'; });
+
+    stage = document.createElement('div');
+    stage.id = '_pdfstage';
+    stage.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;background:#ffffff';
+    const styleEl = document.createElement('style');
+    styleEl.textContent = _scopeCssForPdf(css, '#_pdfstage');
+    stage.appendChild(styleEl);
+    const content = document.createElement('div');
+    content.innerHTML = parsed.body.innerHTML;
+    stage.appendChild(content);
+    document.body.appendChild(stage);
+
+    // Wait for any images (e.g. the logo) to finish loading before snapshotting.
+    const imgs = Array.prototype.slice.call(stage.querySelectorAll('img'));
+    await Promise.all(imgs.map(function(img){
+      if(img.complete && img.naturalWidth>0) return Promise.resolve();
+      return new Promise(function(res){ img.onload=res; img.onerror=res; });
+    }));
+    await new Promise(r=>setTimeout(r,120)); // let layout settle
+
     const opt = {
-      margin: [10,10,10,10],
+      margin: [18,18,18,18],
       filename: fname + '.pdf',
       image: { type:'jpeg', quality:0.98 },
-      html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff', windowWidth:816 },
+      html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff' },
       jsPDF: { unit:'pt', format:'letter', orientation:'portrait' },
       pagebreak: { mode:['css','legacy'] }
     };
-    await window.html2pdf().set(opt).from(idoc.body).save();
-    document.body.removeChild(iframe);
+    await window.html2pdf().set(opt).from(stage).save();
+    document.body.removeChild(stage); stage=null;
     if(typeof showToast==='function') showToast('PDF downloaded ✓');
   }catch(err){
     console.error('PDF build failed:', err);
+    if(stage && stage.parentNode) stage.parentNode.removeChild(stage);
     alert('Could not build a PDF (the PDF helper may be blocked on your network).\n\nOpening the print dialog instead — choose "Save as PDF" there to get a PDF.');
     try{ const w=window.open('','_blank'); w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>w.print(),400); }catch(e){}
   }
