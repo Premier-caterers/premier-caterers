@@ -1992,6 +1992,48 @@ async function ensureJsPdf(){
   await _loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
   await _loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
 }
+
+// Load html2pdf on demand (used to turn a styled HTML document into a real PDF download)
+async function ensureHtml2Pdf(){
+  if(window.html2pdf) return;
+  await _loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js');
+}
+
+// Turn a full HTML document string into a downloaded .pdf that looks like the printed page.
+// If the PDF library can't load (e.g. network blocks the CDN), falls back to the print dialog
+// where the user can still choose "Save as PDF".
+async function downloadHtmlAsPdf(html, filenameBase){
+  const fname = (filenameBase || 'document').replace(/[^a-z0-9_\-]/gi,'_');
+  try{
+    if(typeof showToast==='function') showToast('Building PDF…');
+    await ensureHtml2Pdf();
+    if(!window.html2pdf) throw new Error('PDF library unavailable');
+    // Render the full document (with its own styles) in a hidden, offscreen iframe,
+    // then snapshot it into a PDF.
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden','true');
+    iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:816px;height:1056px;border:0;background:#fff';
+    document.body.appendChild(iframe);
+    const idoc = iframe.contentDocument || iframe.contentWindow.document;
+    idoc.open(); idoc.write(html); idoc.close();
+    await new Promise(r=>setTimeout(r,350)); // let fonts/images/layout settle
+    const opt = {
+      margin: [10,10,10,10],
+      filename: fname + '.pdf',
+      image: { type:'jpeg', quality:0.98 },
+      html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff', windowWidth:816 },
+      jsPDF: { unit:'pt', format:'letter', orientation:'portrait' },
+      pagebreak: { mode:['css','legacy'] }
+    };
+    await window.html2pdf().set(opt).from(idoc.body).save();
+    document.body.removeChild(iframe);
+    if(typeof showToast==='function') showToast('PDF downloaded ✓');
+  }catch(err){
+    console.error('PDF build failed:', err);
+    alert('Could not build a PDF (the PDF helper may be blocked on your network).\n\nOpening the print dialog instead — choose "Save as PDF" there to get a PDF.');
+    try{ const w=window.open('','_blank'); w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>w.print(),400); }catch(e){}
+  }
+}
 async function buildEstimatePdfBase64(inq){
   await ensureJsPdf();
   const { jsPDF } = window.jspdf;
@@ -4094,7 +4136,7 @@ async function seedGroceryDatabase(){
 }
 
 // ── Print / Download grocery list ──────────────────────────────
-function printGroceryList(){
+function printGroceryList(_returnHtml){
   const tab = window._grocTab || 'weekly';
   const schedWeekStr = getWeekEndDate(currentWeekOffset).toISOString().split('T')[0];
   const weekEvents = events.filter(e=>(e.weekOf||'')===schedWeekStr && !e.noStaffing);
@@ -4125,10 +4167,11 @@ function printGroceryList(){
     html+=`</table>`;
   });
   html+=`</body></html>`;
+  if(_returnHtml) return html;
   const w=window.open('','_blank'); w.document.write(html); w.document.close(); w.print();
 }
 
-function downloadGroceryList(){ printGroceryList(); }
+function downloadGroceryList(){ downloadHtmlAsPdf(printGroceryList(true), 'Grocery_List'); }
 
 // ── Master station seed data (from your spreadsheet) ───────────
 const GROCERY_MASTER_STATIONS = [
@@ -4280,7 +4323,7 @@ function printFullSchedule(){
 }
 function downloadFullSchedule(){
   const html=generateScheduleHTML(events);
-  const a=document.createElement('a'); a.href='data:text/html;charset=utf-8,'+encodeURIComponent(html); a.download='Staff_Schedule_WE.html'; a.click();
+  downloadHtmlAsPdf(html, 'Staff_Schedule_WE');
 }
 function printEventSchedule(id){
   const e=events.find(x=>x.id===id); if(!e) return;
@@ -4289,7 +4332,7 @@ function printEventSchedule(id){
 function downloadEventSchedule(id){
   const e=events.find(x=>x.id===id); if(!e) return;
   const html=generateScheduleHTML([e]);
-  const a=document.createElement('a'); a.href='data:text/html;charset=utf-8,'+encodeURIComponent(html); a.download=`Staff_${e.job}_${e.name}.html`; a.click();
+  downloadHtmlAsPdf(html, `Staff_${e.job}_${e.name}`);
 }
 
 // ── QUOTES / INVOICES ──
@@ -4966,10 +5009,7 @@ function downloadInvoice(eid){
   const html = buildInvoiceHTML(eid);
   const isInvoice = inv.status==='invoice'||inv.status==='paid';
   const docType = isInvoice ? 'Invoice' : 'Quote';
-  const a = document.createElement('a');
-  a.href = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-  a.download = docType+'_'+e.name.replace(/[^a-z0-9]/gi,'_')+'_'+e.job+'.html';
-  a.click();
+  downloadHtmlAsPdf(html, docType+'_'+e.name.replace(/[^a-z0-9]/gi,'_')+'_'+e.job);
 }
 
 function printInvoice(eid){
@@ -6059,7 +6099,7 @@ function downloadChecklist(eid){
   const items=(checklists[eid]||[]).filter(i=>!i.na);
   if(!e||!items.length) return;
   const html=generateChecklistHTML(e,items);
-  const a=document.createElement('a'); a.href='data:text/html;charset=utf-8,'+encodeURIComponent(html); a.download=`Checklist_${e.job}_${e.name}.html`; a.click();
+  downloadHtmlAsPdf(html, `Checklist_${e.job}_${e.name}`);
 }
 
 function generateChecklistHTML(e,items){
