@@ -3775,7 +3775,7 @@ function updateBadge(){ updatePipelineBadge();
 // ── CHANGES ──
 const changeDepts = [
   'Meat kitchen','Parve kitchen','Dairy kitchen','Equipment',
-  'Grocery','Josh','Barry','Kenny','Vendors','Menu','Invoice','Printouts'
+  'Grocery','Shelley','Josh','Barry','Kenny','Vendors','Menu','Invoice','Printouts'
 ];
 
 function renderChanges(){
@@ -6255,20 +6255,38 @@ function renderSettings(){
 
   <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
     <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Text (SMS) Notifications</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Change notices are texted to staff through your connected Gmail (events@thepremiercaterer.com). Pick each person's cell carrier so the text can reach them. Leave a carrier blank to skip that person.</div>
-    ${!isGmailConnected()?`<div class="banner" style="margin-bottom:1rem;background:var(--amber-bg);border:0.5px solid var(--amber-border)"><i class="ti ti-alert-triangle" style="font-size:16px;color:var(--amber-text);flex-shrink:0"></i><div class="banner-text" style="color:var(--amber-text)">Connect Gmail above first — texts send through it.</div></div>`:''}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
-      ${Object.entries(deptContacts).map(([dept,c])=>`
-      <div style="background:var(--bg2);border-radius:var(--radius);padding:8px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <i class="ti ti-message-2" style="font-size:14px;color:var(--blue-mid)"></i>
-        <span style="font-weight:500;color:var(--text)">${dept}</span>
-        <span style="color:var(--text3)">${c.whatsapp}</span>
-        <select onchange="setDeptCarrier('${dept}',this.value)" style="margin-left:auto;font-size:11px;padding:3px 6px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text)">
-          <option value="">Carrier…</option>
-          ${Object.keys(carrierGateways).map(cn=>`<option value="${cn}" ${getDeptCarrier(dept)===cn?'selected':''}>${cn}</option>`).join('')}
-        </select>
-      </div>`).join('')}
-    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Change notices are texted to staff. Choose how they send.</div>
+    <label style="display:flex;align-items:flex-start;gap:9px;padding:11px 13px;border:0.5px solid ${smsUseTwilio()?'var(--green-border)':'var(--border2)'};border-radius:var(--radius);background:${smsUseTwilio()?'var(--green-bg)':'var(--bg2)'};margin-bottom:1rem;cursor:pointer">
+      <input type="checkbox" ${smsUseTwilio()?'checked':''} onchange="localStorage.setItem('smsUseTwilio',this.checked?'1':'0');render()" style="margin-top:2px;width:16px;height:16px;accent-color:var(--green-text);cursor:pointer">
+      <div>
+        <div style="font-size:13px;font-weight:500;color:var(--text)">Use Twilio for reliable texts</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Sends real SMS through Twilio (works with Verizon). Turn this on after you've completed the Twilio setup in Apps Script. When off, texts use the free carrier-email method below.</div>
+      </div>
+    </label>
+    ${smsUseTwilio()
+      ? `<div style="font-size:12px;color:var(--text2);background:var(--bg2);border-radius:var(--radius);padding:10px 12px">Texts will send via Twilio to each department's number below. Carriers aren't needed in this mode. Make sure your Apps Script URL is saved (Google Sheets section) and the script has been deployed with the Twilio setup done.</div>
+         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-top:.75rem">
+           ${Object.entries(deptContacts).map(([dept,c])=>`
+           <div style="background:var(--bg2);border-radius:var(--radius);padding:8px 12px;display:flex;align-items:center;gap:8px">
+             <i class="ti ti-message-2" style="font-size:14px;color:var(--blue-mid)"></i>
+             <span style="font-weight:500;color:var(--text)">${dept}</span>
+             <span style="color:var(--text3);margin-left:auto">${c.whatsapp}</span>
+           </div>`).join('')}
+         </div>`
+      : `<div style="font-size:12px;color:var(--text3);margin-bottom:.75rem">Free carrier-email method: pick each person's cell carrier (Verizon often blocks these — use Twilio above for those). Leave blank to skip.</div>
+         ${!isGmailConnected()?`<div class="banner" style="margin-bottom:1rem;background:var(--amber-bg);border:0.5px solid var(--amber-border)"><i class="ti ti-alert-triangle" style="font-size:16px;color:var(--amber-text);flex-shrink:0"></i><div class="banner-text" style="color:var(--amber-text)">Connect Gmail above first — free texts send through it.</div></div>`:''}
+         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+           ${Object.entries(deptContacts).map(([dept,c])=>`
+           <div style="background:var(--bg2);border-radius:var(--radius);padding:8px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+             <i class="ti ti-message-2" style="font-size:14px;color:var(--blue-mid)"></i>
+             <span style="font-weight:500;color:var(--text)">${dept}</span>
+             <span style="color:var(--text3)">${c.whatsapp}</span>
+             <select onchange="setDeptCarrier('${dept}',this.value)" style="margin-left:auto;font-size:11px;padding:3px 6px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text)">
+               <option value="">Carrier…</option>
+               ${Object.keys(carrierGateways).map(cn=>`<option value="${cn}" ${getDeptCarrier(dept)===cn?'selected':''}>${cn}</option>`).join('')}
+             </select>
+           </div>`).join('')}
+         </div>`}
     <div style="margin-top:.75rem;font-size:12px;color:var(--text3)">
       <i class="ti ti-printer" style="font-size:12px"></i> Change notices also print to: <strong>${PRINTER_EMAIL}</strong>
     </div>
@@ -7444,6 +7462,23 @@ async function sendTextViaEmail(number, carrier, body){
   catch(e){ return false; }
 }
 
+// Send a real text via Twilio, through the Apps Script relay (token stays server-side).
+async function sendTextViaTwilio(number, body){
+  const base = localStorage.getItem('scriptUrl');
+  if(!base) return false;
+  let digits = String(number||'').replace(/[^0-9]/g,'');
+  if(digits.length===10) digits = '1'+digits;
+  const to = '+'+digits;
+  const url = base + (base.includes('?')?'&':'?') + 'action=smsSend&to=' + encodeURIComponent(to) + '&body=' + encodeURIComponent(body);
+  try{
+    const r = await fetch(url);
+    const d = await r.json();
+    if(!d.ok && d.error) console.warn('Twilio relay:', d.error, d.code||'');
+    return !!d.ok;
+  }catch(e){ console.error('Twilio relay failed:', e); return false; }
+}
+function smsUseTwilio(){ return localStorage.getItem('smsUseTwilio')==='1'; }
+
 async function sendWhatsAppMessage(to, body){
   const url = 'https://api.twilio.com/2010-04-01/Accounts/'+getTwilioSID()+'/Messages.json';
   const params = new URLSearchParams({
@@ -7485,27 +7520,47 @@ async function sendChangeNotifications(change, notifyDepts){
     (change.desc || change.text || '') + '\n\n' +
     'Reply CONFIRMED to acknowledge.';
 
-  if(!isGmailConnected()){
+  const useTwilio = smsUseTwilio();
+  if(!useTwilio && !isGmailConnected()){
     showToast('Connect Gmail in Settings to send text notifications', 6000);
     return [];
   }
+  if(useTwilio && !localStorage.getItem('scriptUrl')){
+    showToast('Add your Apps Script URL in Settings to send Twilio texts', 6000);
+    return [];
+  }
 
-  // Text each selected dept that has a number + carrier set
+  // Text each selected dept
   const results = [];
   const noCarrier = [];
   for(const dept of (notifyDepts||[])){
     const contact = deptContacts[dept];
-    const carrier = getDeptCarrier(dept);
     if(!contact?.whatsapp){ continue; }
-    if(!carrier){ noCarrier.push(dept); continue; }
-    const ok = await sendTextViaEmail(contact.whatsapp, carrier, msg);
+    let ok;
+    if(useTwilio){
+      ok = await sendTextViaTwilio(contact.whatsapp, msg);
+    } else {
+      const carrier = getDeptCarrier(dept);
+      if(!carrier){ noCarrier.push(dept); continue; }
+      ok = await sendTextViaEmail(contact.whatsapp, carrier, msg);
+    }
     results.push({dept, ok});
   }
 
-  // Always also send to the printer
+  // Always also send to the printer — big header + the checked names/depts as a checklist
   if(isGmailConnected()){
-    const subject = 'Change Notice — '+jobNum+' '+eventName;
-    await sendGmailEmail(PRINTER_EMAIL, subject, msg, '<pre style="font-family:Arial,sans-serif;font-size:14px">'+msg+'</pre>');
+    const subject = 'CHANGE TO JOB #'+jobNum+' — '+eventName;
+    const header = 'CHANGE TO JOB #'+jobNum;
+    const deptList = (notifyDepts||[]).length
+      ? '\n\nApplies to:\n' + (notifyDepts||[]).map(d=>'\u2610 '+d).join('\n')
+      : '';
+    const bodyText = msg + deptList;
+    const printBody = header + '\n' + '='.repeat(header.length) + '\n\n' + bodyText;
+    const htmlBody =
+      '<div style="font-family:Arial,sans-serif">' +
+      '<div style="font-size:28px;font-weight:bold;border-bottom:3px solid #000;padding-bottom:6px;margin-bottom:14px">'+header+'</div>' +
+      '<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap;margin:0">'+bodyText+'</pre></div>';
+    await sendGmailEmail(PRINTER_EMAIL, subject, printBody, htmlBody);
   }
 
   const sent   = results.filter(r=>r.ok).map(r=>r.dept).join(', ');
