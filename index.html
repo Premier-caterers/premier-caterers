@@ -524,6 +524,12 @@ function clientContact(o){
   return org ? ((o.firstName||'')+' '+(o.lastName||'')).trim() : '';
 }
 
+// Friendly name of whoever is logged in (used to stamp who initiated a change)
+function initiatorName(){
+  const map = { owner:'Kenny', kenny:'Kenny', shelley:'Shelley', josh:'Josh', kitchen:'Kitchen', admin:'Admin' };
+  return map[authUser] || (authUser ? authUser.charAt(0).toUpperCase()+authUser.slice(1) : 'Unknown');
+}
+
 function showLogin(){
   settingsUnlocked=false; authUser=null;
   const ov=document.getElementById('loginOverlay'); if(!ov) return;
@@ -3914,7 +3920,7 @@ function addChange(){
   if(!desc||!desc.trim()) return;
   const checked=[...document.querySelectorAll('input[name=notifyDept]:checked')].map(i=>i.value);
   const acks={}; checked.forEach(d=>{acks[d]=false;});
-  const _c={id:'ch'+Date.now(),time,job,desc,acks,notifyDepts:checked};
+  const _c={id:'ch'+Date.now(),time,job,desc,acks,notifyDepts:checked,by:initiatorName(),ts:Date.now()};
   document.getElementById('newDesc').value='';
   changes.unshift(_c); _saveChange(_c);
   // Send WhatsApp + printer email notifications
@@ -7547,19 +7553,29 @@ async function sendChangeNotifications(change, notifyDepts){
     results.push({dept, ok});
   }
 
-  // Always also send to the printer — big header + the checked names/depts as a checklist
+  // Always also send to the printer — big header + checklist + who/when initiated
   if(isGmailConnected()){
     const subject = 'CHANGE TO JOB #'+jobNum+' — '+eventName;
     const header = 'CHANGE TO JOB #'+jobNum;
     const deptList = (notifyDepts||[]).length
       ? '\n\nApplies to:\n' + (notifyDepts||[]).map(d=>'\u2610 '+d).join('\n')
       : '';
+    const d   = change.ts ? new Date(change.ts) : new Date();
+    const dow = d.toLocaleDateString('en-US',{weekday:'long'}).toUpperCase();
+    const md  = d.toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit'});
+    const tm  = d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    const who = change.by || initiatorName();
+    const initiatedText = '\n\nCHANGE INITIATED...\nBy: '+who+'\nOn: '+dow+', '+md+' @ '+tm;
     const bodyText = msg + deptList;
-    const printBody = header + '\n' + '='.repeat(header.length) + '\n\n' + bodyText;
+    const printBody = header + '\n' + '='.repeat(header.length) + '\n\n' + bodyText + initiatedText;
     const htmlBody =
       '<div style="font-family:Arial,sans-serif">' +
       '<div style="font-size:28px;font-weight:bold;border-bottom:3px solid #000;padding-bottom:6px;margin-bottom:14px">'+header+'</div>' +
-      '<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap;margin:0">'+bodyText+'</pre></div>';
+      '<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap;margin:0">'+bodyText+'</pre>' +
+      '<div style="font-size:22px;font-weight:bold;border-top:2px solid #000;margin-top:20px;padding-top:10px">CHANGE INITIATED&hellip;</div>' +
+      '<div style="font-size:19px;margin-top:4px">By: <strong>'+who+'</strong></div>' +
+      '<div style="font-size:19px">On: '+dow+', '+md+' @ '+tm+'</div>' +
+      '</div>';
     await sendGmailEmail(PRINTER_EMAIL, subject, printBody, htmlBody);
   }
 
