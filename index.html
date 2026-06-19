@@ -3780,12 +3780,27 @@ const changeDepts = [
 
 function renderChanges(){
   purgeOldChangeLogs();
+  const weekDate = getWeekEndDate(currentWeekOffset);
+  const weekStr  = weekDate.toISOString().split('T')[0];
+  const months   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const wLabel   = months[weekDate.getUTCMonth()]+' '+weekDate.getUTCDate()+", '"+String(weekDate.getUTCFullYear()).slice(2);
+  const weekEventsC = events.filter(e=>(e.weekOf||'2026-05-31')===weekStr);
+  const weekJobs = new Set(weekEventsC.map(e=>e.job));
+  const weekChanges = changes.filter(c=>weekJobs.has(c.job));
   return `
-  <div class="section-header"><div class="section-title">Changes & updates log</div></div>
+  <div class="section-header">
+    <div class="section-title">Changes & updates log</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button onclick="changeWeek(-1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">\u2039</button>
+      <span style="font-size:13px;font-weight:600;color:var(--text)">${wLabel}</span>
+      <button onclick="changeWeek(1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">\u203a</button>
+      <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" style="padding:5px 12px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:12px;cursor:pointer">Current week</button>
+    </div>
+  </div>
   <div class="new-change-form">
     <div style="font-size:13px;font-weight:500;margin-bottom:10px;color:var(--text)">Log a new change</div>
     <div class="form-row">
-      <select id="newJob">${events.map(e=>`<option value="${e.job}">${displayJob(e.job)} — ${e.name}</option>`).join('')}</select>
+      <select id="newJob">${weekEventsC.length? weekEventsC.map(e=>`<option value="${e.job}">${displayJob(e.job)} — ${e.name}</option>`).join('') : '<option value="">No events this week</option>'}</select>
     </div>
     <div class="form-row"><textarea id="newDesc" placeholder="Describe the change..."></textarea></div>
     <div style="margin-bottom:10px">
@@ -3802,7 +3817,8 @@ function renderChanges(){
     </div>
     <div style="text-align:right"><button class="btn-save" onclick="addChange()">Log change</button></div>
   </div>
-  ${changes.map(c=>{
+  ${weekChanges.length? '' : '<div style="text-align:center;padding:2rem 0;color:var(--text3);font-size:13px">No changes logged for this week.</div>'}
+  ${weekChanges.map(c=>{
     const acks = c.acks || {};
     const ackedCount = Object.values(acks).filter(Boolean).length;
     const total = changeDepts.length;
@@ -3891,6 +3907,7 @@ function purgeOldChangeLogs(){
 
 function addChange(){
   const job=document.getElementById('newJob')?.value;
+  if(!job){ alert('Pick an event first. Switch to a week that has events using the arrows at the top.'); return; }
   const _n=new Date();
   const time=_n.toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit'})+' @ '+_n.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
   const desc=document.getElementById('newDesc')?.value;
