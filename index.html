@@ -3779,6 +3779,7 @@ const changeDepts = [
 ];
 
 function renderChanges(){
+  purgeOldChangeLogs();
   return `
   <div class="section-header"><div class="section-title">Changes & updates log</div></div>
   <div class="new-change-form">
@@ -3811,6 +3812,7 @@ function renderChanges(){
         <span class="change-time"><i class="ti ti-clock" style="font-size:13px;vertical-align:-1px"></i> ${c.time}</span>
         <span class="change-job-badge">${c.job}</span>
         <span style="font-size:11px;color:var(--text3);margin-left:auto">${ackedCount}/${total} acknowledged</span>
+        <button onclick="deleteChangeEntry('${c.id}')" title="Delete this change" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:14px;padding:2px;margin-left:8px"><i class="ti ti-trash"></i></button>
       </div>
       <div class="change-desc" style="margin-bottom:12px">${c.desc}</div>
       <div style="height:3px;background:var(--bg3);border-radius:2px;margin-bottom:10px;overflow:hidden">
@@ -3840,6 +3842,51 @@ function toggleAck(changeId, dept){
   if(!c) return;
   if(!c.acks) c.acks={};
   c.acks[dept] = !c.acks[dept]; _saveChange(c); render();
+}
+
+// Delete a single change-log entry (manual)
+async function deleteChangeEntry(id){
+  const c = changes.find(x=>x.id===id);
+  if(!c) return;
+  if(!confirm('Delete this change-log entry?\n\nThis can\u2019t be undone.')) return;
+  const idx = changes.findIndex(x=>x.id===id);
+  if(idx>=0) changes.splice(idx,1);
+  try{ await db.collection('changes').doc(id).delete(); }catch(e){ console.error(e); }
+  showToast('Change deleted');
+  render();
+}
+
+// Resolve an event's actual date (ms). Prefers the linked inquiry's event date,
+// falls back to the event's week-ending Sunday.
+function _eventDateMs(e){
+  let ds = '';
+  if(e.inquiryId){ const inq=inquiries.find(i=>i.id===e.inquiryId); if(inq && inq.eventDate) ds=inq.eventDate; }
+  if(!ds && e.id && String(e.id).indexOf('inq_')===0){ const inq=inquiries.find(i=>('inq_'+i.id)===e.id); if(inq && inq.eventDate) ds=inq.eventDate; }
+  if(!ds) ds = e.weekOf || '';
+  if(!ds) return null;
+  const d = new Date(ds+'T12:00:00Z');
+  return isNaN(d) ? null : d.getTime();
+}
+
+// Automatically remove change-log entries 10 days after their event has passed.
+// Entries whose event date can't be determined are kept (never auto-deleted).
+function purgeOldChangeLogs(){
+  if(!Array.isArray(changes) || !changes.length) return;
+  const now = Date.now();
+  const TEN_DAYS = 10*24*60*60*1000;
+  const remove = [];
+  changes.forEach(c=>{
+    const e = events.find(ev=>ev.job===c.job);
+    if(!e) return;                 // event not found → keep
+    const dt = _eventDateMs(e);
+    if(dt==null) return;           // unknown date → keep
+    if(now - dt > TEN_DAYS) remove.push(c.id);
+  });
+  remove.forEach(id=>{
+    const idx = changes.findIndex(x=>x.id===id);
+    if(idx>=0) changes.splice(idx,1);
+    db.collection('changes').doc(id).delete().catch(()=>{});
+  });
 }
 
 function addChange(){
@@ -6190,23 +6237,26 @@ function renderSettings(){
   </div>
 
   <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
-    <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">WhatsApp Notifications (Twilio)</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Credentials stored locally on your device only — never in the app code.</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:1rem">
-      <div class="modal-row" style="margin:0"><label style="font-size:11px">Account SID</label><input type="password" id="twilio-sid" placeholder="ACxxxxxxxx" value="${localStorage.getItem('twilioSID')||''}" onchange="localStorage.setItem('twilioSID',this.value)"></div>
-      <div class="modal-row" style="margin:0"><label style="font-size:11px">Auth Token</label><input type="password" id="twilio-token" placeholder="Auth token" value="${localStorage.getItem('twilioToken')||''}" onchange="localStorage.setItem('twilioToken',this.value)"></div>
-      <div class="modal-row" style="margin:0"><label style="font-size:11px">From number</label><input type="text" id="twilio-from" placeholder="+12012509487" value="${localStorage.getItem('twilioFrom')||''}" onchange="localStorage.setItem('twilioFrom',this.value)"></div>
-    </div>
+    <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Text (SMS) Notifications</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Change notices are texted to staff through your connected Gmail (events@thepremiercaterer.com). Pick each person's cell carrier so the text can reach them. Leave a carrier blank to skip that person.</div>
+    ${!isGmailConnected()?`<div class="banner" style="margin-bottom:1rem;background:var(--amber-bg);border:0.5px solid var(--amber-border)"><i class="ti ti-alert-triangle" style="font-size:16px;color:var(--amber-text);flex-shrink:0"></i><div class="banner-text" style="color:var(--amber-text)">Connect Gmail above first — texts send through it.</div></div>`:''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
       ${Object.entries(deptContacts).map(([dept,c])=>`
-      <div style="background:var(--bg2);border-radius:var(--radius);padding:8px 12px;display:flex;align-items:center;gap:8px">
-        <i class="ti ti-brand-whatsapp" style="font-size:14px;color:#25D366"></i>
+      <div style="background:var(--bg2);border-radius:var(--radius);padding:8px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <i class="ti ti-message-2" style="font-size:14px;color:var(--blue-mid)"></i>
         <span style="font-weight:500;color:var(--text)">${dept}</span>
-        <span style="color:var(--text3);margin-left:auto">${c.whatsapp}</span>
+        <span style="color:var(--text3)">${c.whatsapp}</span>
+        <select onchange="setDeptCarrier('${dept}',this.value)" style="margin-left:auto;font-size:11px;padding:3px 6px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text)">
+          <option value="">Carrier…</option>
+          ${Object.keys(carrierGateways).map(cn=>`<option value="${cn}" ${getDeptCarrier(dept)===cn?'selected':''}>${cn}</option>`).join('')}
+        </select>
       </div>`).join('')}
     </div>
     <div style="margin-top:.75rem;font-size:12px;color:var(--text3)">
       <i class="ti ti-printer" style="font-size:12px"></i> Change notices also print to: <strong>${PRINTER_EMAIL}</strong>
+    </div>
+    <div style="margin-top:.5rem;font-size:11px;color:var(--text3);line-height:1.6">
+      Texts via carrier email are free but delivery can vary by carrier. For guaranteed delivery later, a Twilio SMS number can be added.
     </div>
   </div>
 
@@ -7348,6 +7398,35 @@ const deptContacts = {
   'Barry':     { whatsapp: '+12018053672' },
 };
 
+// US carrier email-to-text gateways (text someone by emailing digits@gateway)
+const carrierGateways = {
+  'Verizon':        'vtext.com',
+  'AT&T':           'txt.att.net',
+  'T-Mobile':       'tmomail.net',
+  'Sprint':         'messaging.sprintpcs.com',
+  'Boost':          'sms.myboostmobile.com',
+  'Cricket':        'sms.cricketwireless.net',
+  'US Cellular':    'email.uscc.net',
+  'Metro by T-Mobile':'mymetropcs.com',
+  'Google Fi':      'msg.fi.google.com',
+  'Mint Mobile':    'tmomail.net',
+  'Visible':        'vtext.com',
+  'Xfinity Mobile': 'vtext.com',
+  'Consumer Cellular':'mailmymobile.net'
+};
+function getDeptCarrier(dept){ return localStorage.getItem('smsCarrier_'+dept)||''; }
+function setDeptCarrier(dept,val){ localStorage.setItem('smsCarrier_'+dept,val||''); showToast(val?(dept+': '+val+' ✓'):(dept+': carrier cleared')); }
+
+// Send a text by emailing the carrier's SMS gateway, via the working Gmail relay.
+async function sendTextViaEmail(number, carrier, body){
+  const gw = carrierGateways[carrier];
+  let digits = String(number||'').replace(/[^0-9]/g,'');
+  if(digits.length===11 && digits[0]==='1') digits = digits.slice(1); // strip US country code
+  if(!gw || digits.length<10) return false;
+  try{ return await sendGmailEmail(digits+'@'+gw, '', body, ''); }
+  catch(e){ return false; }
+}
+
 async function sendWhatsAppMessage(to, body){
   const url = 'https://api.twilio.com/2010-04-01/Accounts/'+getTwilioSID()+'/Messages.json';
   const params = new URLSearchParams({
@@ -7377,6 +7456,50 @@ async function sendWhatsAppMessage(to, body){
 }
 
 async function sendChangeNotifications(change, notifyDepts){
+  const e = events.find(x=>x.job===change.job);
+  const eventName = e ? e.name : change.job;
+  const eventDay  = e ? getFullEventDate(e) : '';
+  const jobNum    = e ? displayJob(e.job) : change.job;
+
+  // Concise message (texts are short — keep it tight)
+  const msg =
+    'PREMIER CATERERS — Change\n' +
+    'Job ' + jobNum + ' · ' + eventName + (eventDay ? ' · ' + eventDay : '') + '\n\n' +
+    (change.desc || change.text || '') + '\n\n' +
+    'Reply CONFIRMED to acknowledge.';
+
+  if(!isGmailConnected()){
+    showToast('Connect Gmail in Settings to send text notifications', 6000);
+    return [];
+  }
+
+  // Text each selected dept that has a number + carrier set
+  const results = [];
+  const noCarrier = [];
+  for(const dept of (notifyDepts||[])){
+    const contact = deptContacts[dept];
+    const carrier = getDeptCarrier(dept);
+    if(!contact?.whatsapp){ continue; }
+    if(!carrier){ noCarrier.push(dept); continue; }
+    const ok = await sendTextViaEmail(contact.whatsapp, carrier, msg);
+    results.push({dept, ok});
+  }
+
+  // Always also send to the printer
+  if(isGmailConnected()){
+    const subject = 'Change Notice — '+jobNum+' '+eventName;
+    await sendGmailEmail(PRINTER_EMAIL, subject, msg, '<pre style="font-family:Arial,sans-serif;font-size:14px">'+msg+'</pre>');
+  }
+
+  const sent   = results.filter(r=>r.ok).map(r=>r.dept).join(', ');
+  const failed = results.filter(r=>!r.ok).map(r=>r.dept).join(', ');
+  if(sent)   showToast('Text sent to: '+sent, 4000);
+  if(failed) showToast('Text failed: '+failed, 5000);
+  if(noCarrier.length) showToast('No carrier set for: '+noCarrier.join(', ')+' (Settings → Text Notifications)', 6000);
+  return results;
+}
+
+async function _unusedOldChangeNotifications(change, notifyDepts){
   // Build the WhatsApp message
   const e = events.find(x=>x.job===change.job);
   const eventName = e ? e.name : change.job;
