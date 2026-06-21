@@ -173,6 +173,8 @@
       <div class="mgr-head"><h2>Manager</h2><button class="btn-ghost" style="width:auto;padding:8px 12px" onclick="goPin()">Exit</button></div>
       <div class="tabs">
         <div class="tab on" id="tab-time" onclick="mgrTab('time')">Timesheet</div>
+        <div class="tab" id="tab-sched" onclick="mgrTab('sched')">Schedule</div>
+        <div class="tab" id="tab-report" onclick="mgrTab('report')">Reports</div>
         <div class="tab" id="tab-emp" onclick="mgrTab('emp')">Employees</div>
       </div>
       <div id="mgr-time">
@@ -183,11 +185,36 @@
         </div>
         <div id="timesheet"></div>
       </div>
+
+      <div id="mgr-sched" class="hide">
+        <div class="week-nav">
+          <button onclick="schedWeek(-1)">&lsaquo;</button>
+          <div class="lbl" id="schedWeekLbl"></div>
+          <button onclick="schedWeek(1)">&rsaquo;</button>
+        </div>
+        <p class="muted center" style="margin-bottom:12px">Type a start time in any cell to schedule that person. Commissary is the default — uncheck it to type a location. Leave blank = not scheduled. (Schedules are optional.)</p>
+        <div id="schedGrid" style="overflow-x:auto"></div>
+        <div class="msg" id="schedMsg"></div>
+      </div>
+
+      <div id="mgr-report" class="hide">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="field" style="margin-bottom:8px"><label>From date</label><input type="date" id="repFrom"></div>
+          <div class="field" style="margin-bottom:8px"><label>To date</label><input type="date" id="repTo"></div>
+        </div>
+        <div class="field"><label>Employee</label><select id="repEmp" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:10px;font-size:15px;background:#fff;color:var(--ink)"></select></div>
+        <button class="btn" style="background:var(--maroon);color:#fff" onclick="runReport()"><i class="ti ti-file-text"></i> Run report</button>
+        <button class="btn-ghost btn hide" id="repPrintBtn" style="margin-top:10px" onclick="printReport()"><i class="ti ti-printer"></i> Print / Save as PDF</button>
+        <div class="msg" id="repMsg"></div>
+        <div id="reportOut" style="margin-top:14px"></div>
+      </div>
+
       <div id="mgr-emp" class="hide">
         <div id="empList"></div>
         <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:14px">
           <div class="field"><label>Employee name</label><input id="newEmpName" placeholder="e.g. Edgar Ramirez"></div>
           <div class="field"><label>4-digit PIN</label><input id="newEmpPin" inputmode="numeric" maxlength="6" placeholder="e.g. 4821"></div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);margin-bottom:12px;cursor:pointer"><input type="checkbox" id="newEmpFT" style="width:17px;height:17px"> <b>Full time</b> &mdash; one-tap check-in, no photo, no clock-out (tracked as Worked / Did not work)</label>
           <button class="btn" style="background:var(--maroon);color:#fff" onclick="addEmployee()"><i class="ti ti-user-plus"></i> Add employee</button>
           <div class="msg" id="empMsg"></div>
         </div>
@@ -242,16 +269,18 @@ const firebaseConfig = {
   messagingSenderId: "471701398759",
   appId: "1:471701398759:web:559a7bee3b645ce545ee42"
 };
-let db, EMP, PUN, SET;
+let db, EMP, PUN, SET, SCH;
 const MANAGER_PIN = '736868';
+const FLAG_MINUTES = 5;   // clock-in this many minutes off from schedule gets a *
 
 let employees=[], commissary=null, pinEntry='', pending=null, camStream=null, mgrWeekOffset=0;
+let schedWeekOffset=0, schedData={}, schedKey='', _schedSaveT=null;
 
 window.addEventListener('load', async ()=>{
   setLang(lang);
   try{
     firebase.initializeApp(firebaseConfig);
-    db=firebase.firestore(); EMP=db.collection('tc_employees'); PUN=db.collection('tc_punches'); SET=db.collection('tc_settings');
+    db=firebase.firestore(); EMP=db.collection('tc_employees'); PUN=db.collection('tc_punches'); SET=db.collection('tc_settings'); SCH=db.collection('tc_schedules');
     buildKeypad(); tickClock(); setInterval(tickClock,1000);
     await loadEmployees(); await loadCommissary();
     document.getElementById('bootMsg').textContent='';
@@ -294,7 +323,32 @@ function submitPin(){
   const emp=employees.find(e=>e.pin===pinEntry && e.active!==false);
   if(!emp){ m.textContent=t('pinBad'); m.className='msg err'; pinEntry=''; renderDots(); return; }
   pinEntry=''; renderDots();
+  if(emp.fullTime){ fullTimeCheckIn(emp); return; }
   beginChoose({id:emp.id, name:emp.name, temp:false});
+}
+
+// Full-time (salaried): one tap marks them present for the day. No selfie, no clock-out.
+let _ftBusy=false;
+async function fullTimeCheckIn(emp){
+  if(_ftBusy) return; _ftBusy=true;
+  try{
+    // already checked in today? avoid duplicates
+    const dayStart=new Date(); dayStart.setHours(0,0,0,0);
+    try{
+      const snap=await PUN.where('empId','==',emp.id).where('ts','>=',dayStart.getTime()).limit(1).get();
+      if(!snap.empty){ const p=snap.docs[0].data(); showDone({id:emp.id,name:emp.name}, 'in', new Date(p.ts), p.locLabel||'', true); _ftBusy=false; return; }
+    }catch(e){ /* index may be needed; proceed to record anyway */ }
+    const loc=await getLocation();
+    const now=new Date();
+    await PUN.add({ empId:emp.id, empName:emp.name, fullTime:true, temp:false, type:'in',
+      ts:now.getTime(), iso:now.toISOString(), lat:loc?loc.lat:null, lng:loc?loc.lng:null,
+      locLabel:locLabel(loc), selfie:'', createdAt:now.getTime() });
+    showDone({id:emp.id,name:emp.name}, 'in', now, locLabel(loc), true);
+  }catch(e){
+    console.error(e);
+    const m=document.getElementById('pinMsg'); m.className='msg err'; m.textContent=t('saveErr');
+  }
+  _ftBusy=false;
 }
 function startTemp(){
   const name=prompt(t('tempPrompt'));
@@ -377,11 +431,12 @@ async function savePunch(emp,type,selfie,loc){
   await PUN.add(rec);
   showDone(emp,type,now,rec.locLabel);
 }
-function showDone(emp,type,when,label){
+function showDone(emp,type,when,label,ft){
   showScreen('done');
   const ic=document.getElementById('doneIc'); ic.className='ic '+type;
   ic.innerHTML = type==='in' ? '<i class="ti ti-login-2"></i>' : '<i class="ti ti-logout-2"></i>';
-  document.getElementById('doneTitle').textContent=(type==='in'?t('clockedIn'):t('clockedOut'))+', '+emp.name.split(' ')[0];
+  const titleKey = ft ? (lang==='es'?'Registrado':'Checked in') : (type==='in'?t('clockedIn'):t('clockedOut'));
+  document.getElementById('doneTitle').textContent=titleKey+', '+emp.name.split(' ')[0];
   document.getElementById('doneStamp').textContent=when.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
   document.getElementById('doneMeta').innerHTML=
     when.toLocaleDateString(lang==='es'?'es':'en-US',{weekday:'long',month:'long',day:'numeric'})+
@@ -395,18 +450,21 @@ function showScreen(name){ ['pin','choose','selfie','done','mgr'].forEach(s=>{ d
 // ---------- manager (English) ----------
 function openManager(){ const p=prompt('Manager PIN'); if(p===null)return; if(p!==MANAGER_PIN){alert('Incorrect PIN.');return;} showScreen('mgr'); mgrTab('time'); }
 function mgrTab(tb){
-  document.getElementById('tab-time').classList.toggle('on',tb==='time');
-  document.getElementById('tab-emp').classList.toggle('on',tb==='emp');
-  document.getElementById('mgr-time').classList.toggle('hide',tb!=='time');
-  document.getElementById('mgr-emp').classList.toggle('hide',tb!=='emp');
-  if(tb==='time') renderTimesheet(); if(tb==='emp') renderEmployees();
+  ['time','sched','report','emp'].forEach(x=>{
+    document.getElementById('tab-'+x).classList.toggle('on', x===tb);
+    document.getElementById('mgr-'+x).classList.toggle('hide', x!==tb);
+  });
+  if(tb==='time') renderTimesheet();
+  if(tb==='sched') renderSchedule();
+  if(tb==='report') initReport();
+  if(tb==='emp') renderEmployees();
 }
 function renderEmployees(){
   const el=document.getElementById('empList');
   if(!employees.length){ el.innerHTML='<p class="muted center">No employees yet. Add your first below.</p>'; }
   else{ el.innerHTML=employees.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(e=>`
     <div class="emp-row">
-      <span class="nm" style="${e.active===false?'color:var(--ink3);text-decoration:line-through':''}">${e.name}</span>
+      <span class="nm" style="${e.active===false?'color:var(--ink3);text-decoration:line-through':''}">${e.name}${e.fullTime?' <span style="font-size:10px;font-weight:700;color:var(--green);background:var(--green-bg);padding:1px 6px;border-radius:5px;vertical-align:1px">FT</span>':''}</span>
       <span class="pin">PIN ${e.pin}</span>
       <button onclick="toggleEmployee('${e.id}')" title="${e.active===false?'Reactivate':'Deactivate'}"><i class="ti ti-${e.active===false?'user-check':'user-off'}"></i></button>
       <button onclick="deleteEmployee('${e.id}')" title="Delete"><i class="ti ti-trash"></i></button>
@@ -422,8 +480,9 @@ async function addEmployee(){
   if(!name){ m.textContent='Enter a name.'; m.className='msg err'; return; }
   if(!/^\d{4,6}$/.test(pin)){ m.textContent='PIN must be 4–6 digits.'; m.className='msg err'; return; }
   if(employees.some(e=>e.pin===pin)){ m.textContent='That PIN is already used. Pick another.'; m.className='msg err'; return; }
-  try{ const ref=await EMP.add({name,pin,active:true,createdAt:Date.now()}); employees.push({id:ref.id,name,pin,active:true});
-    document.getElementById('newEmpName').value=''; document.getElementById('newEmpPin').value='';
+  const fullTime=document.getElementById('newEmpFT').checked;
+  try{ const ref=await EMP.add({name,pin,active:true,fullTime,createdAt:Date.now()}); employees.push({id:ref.id,name,pin,active:true,fullTime});
+    document.getElementById('newEmpName').value=''; document.getElementById('newEmpPin').value=''; document.getElementById('newEmpFT').checked=false;
     m.textContent=name+' added.'; m.className='msg ok'; renderEmployees();
   }catch(e){ m.textContent='Could not save. Check internet.'; m.className='msg err'; }
 }
@@ -453,9 +512,19 @@ async function renderTimesheet(){
   catch(e){ console.error(e); ts.innerHTML='<p class="muted center">Could not load timesheet.<br><span style="font-size:11px">If this is the first time, the database may need a one-time index — check the browser console for a link, or send Kenny a screenshot.</span></p>'; return; }
   if(!docs.length){ ts.innerHTML='<p class="muted center" style="padding:20px 0">No punches this week.</p>'; return; }
   const byEmp={};
-  docs.forEach(p=>{ (byEmp[p.empId]=byEmp[p.empId]||{name:p.empName,temp:p.temp,punches:[]}).punches.push(p); });
+  docs.forEach(p=>{ (byEmp[p.empId]=byEmp[p.empId]||{name:p.empName,temp:p.temp,fullTime:p.fullTime,punches:[]}).punches.push(p); });
   let html='';
   Object.values(byEmp).sort((a,b)=>a.name.localeCompare(b.name)).forEach(emp=>{
+    // Full-time: salaried check-ins — list them, no shift pairing, no hours
+    if(emp.fullTime){
+      const rows=emp.punches.slice().sort((a,b)=>a.ts-b.ts).map(p=>{
+        let loc=p.locLabel||'';
+        if(p.lat!=null&&p.lng!=null) loc=`<a href="https://www.google.com/maps?q=${p.lat},${p.lng}" target="_blank">${loc} <i class="ti ti-external-link" style="font-size:10px"></i></a>`;
+        return `<div class="shift"><div class="thumb" style="background:var(--green-bg);display:flex;align-items:center;justify-content:center;transform:none"><i class="ti ti-check" style="color:var(--green)"></i></div><div class="seg">${fmtD(p.ts)} &nbsp; checked in ${fmtT(p.ts)}${loc?`<br>${loc}`:''}</div><div class="dur" style="color:var(--green)">Worked</div></div>`;
+      }).join('');
+      html+=`<div class="emp-total"><div class="top"><span class="nm">${emp.name} <span class="tg" style="color:var(--green);background:var(--green-bg)">FULL TIME</span></span><span class="hrs" style="color:var(--green)">${emp.punches.length} day${emp.punches.length===1?'':'s'}</span></div>${rows}</div>`;
+      return;
+    }
     const shifts=[]; let open=null;
     emp.punches.forEach(p=>{ if(p.type==='in'){ if(open)shifts.push({inP:open,outP:null}); open=p; } else { if(open){shifts.push({inP:open,outP:p});open=null;} else shifts.push({inP:null,outP:p}); } });
     if(open) shifts.push({inP:open,outP:null});
@@ -477,6 +546,198 @@ async function renderTimesheet(){
   });
   ts.innerHTML=html;
 }
+// ===== SCHEDULE GRID =====
+function dkey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function weekKeyForDate(ms){ const d=new Date(ms); const w=new Date(d.getFullYear(),d.getMonth(),d.getDate()); w.setDate(w.getDate()-w.getDay()); return dkey(w); }
+function schedWeek(delta){ schedWeekOffset+=delta; renderSchedule(); }
+
+async function renderSchedule(){
+  const grid=document.getElementById('schedGrid');
+  const start=weekStart(schedWeekOffset);
+  schedKey=dkey(start);
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const ed=new Date(start); ed.setDate(ed.getDate()+6);
+  document.getElementById('schedWeekLbl').textContent=months[start.getMonth()]+' '+start.getDate()+' – '+months[ed.getMonth()]+' '+ed.getDate();
+  grid.innerHTML='<div class="spin"></div>';
+  try{ const d=await SCH.doc(schedKey).get(); schedData = d.exists ? (d.data().entries||{}) : {}; }
+  catch(e){ schedData={}; }
+
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const active=employees.filter(e=>e.active!==false).sort((a,b)=>a.name.localeCompare(b.name));
+  if(!active.length){ grid.innerHTML='<p class="muted center">Add employees first (Employees tab).</p>'; return; }
+
+  let html='<table style="border-collapse:collapse;font-size:12px;min-width:760px"><thead><tr>'
+    +'<th style="position:sticky;left:0;background:var(--card);padding:6px 8px;text-align:left;border-bottom:1px solid var(--line);min-width:110px">Employee</th>';
+  for(let i=0;i<7;i++){ const dd=new Date(start); dd.setDate(dd.getDate()+i);
+    html+=`<th style="padding:6px 6px;border-bottom:1px solid var(--line);min-width:108px;font-weight:700">${days[i]}<br><span class="muted" style="font-weight:500">${dd.getMonth()+1}/${dd.getDate()}</span></th>`; }
+  html+='</tr></thead><tbody>';
+
+  active.forEach(e=>{
+    html+=`<tr><td style="position:sticky;left:0;background:var(--card);padding:6px 8px;border-bottom:1px solid var(--line);font-weight:600">${e.name}</td>`;
+    for(let day=0;day<7;day++){
+      const key=e.id+'|'+day, cid=e.id+'_'+day;
+      const c=schedData[key]||{start:'',commissary:true,location:''};
+      const comm = c.commissary!==false;
+      html+=`<td style="padding:5px 5px;border-bottom:1px solid var(--line);vertical-align:top">
+        <input type="time" id="s_${cid}_t" value="${c.start||''}" onchange="schedSet('${key}','start',this.value)" style="width:100%;padding:5px;border:1px solid var(--line);border-radius:7px;font-size:12px;margin-bottom:4px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ink2);cursor:pointer"><input type="checkbox" id="s_${cid}_c" ${comm?'checked':''} onchange="schedToggleComm('${key}','${cid}',this.checked)"> Commissary</label>
+        <input type="text" id="s_${cid}_l" value="${(c.location||'').replace(/"/g,'&quot;')}" oninput="schedSet('${key}','location',this.value)" placeholder="location" class="${comm?'hide':''}" style="width:100%;padding:4px 6px;border:1px solid var(--line);border-radius:7px;font-size:11px;margin-top:4px">
+      </td>`;
+    }
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  grid.innerHTML=html;
+}
+function schedSet(key, field, value){
+  schedData[key]=schedData[key]||{start:'',commissary:true,location:''};
+  schedData[key][field]=value;
+  saveScheduleDebounced();
+}
+function schedToggleComm(key, cid, checked){
+  schedData[key]=schedData[key]||{start:'',commissary:true,location:''};
+  schedData[key].commissary=checked;
+  const loc=document.getElementById('s_'+cid+'_l');
+  if(loc) loc.classList.toggle('hide', checked);
+  saveScheduleDebounced();
+}
+function saveScheduleDebounced(){
+  const m=document.getElementById('schedMsg'); m.className='msg'; m.textContent='Saving…';
+  clearTimeout(_schedSaveT);
+  _schedSaveT=setTimeout(async()=>{
+    try{ await SCH.doc(schedKey).set({entries:schedData, updatedAt:Date.now()}); m.className='msg ok'; m.textContent='Schedule saved ✓'; setTimeout(()=>{m.textContent='';},1500); }
+    catch(e){ m.className='msg err'; m.textContent='Could not save schedule.'; }
+  }, 600);
+}
+
+// ===== REPORTS =====
+let _schedCache={};
+async function getWeekSched(weekKey){
+  if(_schedCache[weekKey]!==undefined) return _schedCache[weekKey];
+  try{ const d=await SCH.doc(weekKey).get(); _schedCache[weekKey]= d.exists?(d.data().entries||{}):{}; }
+  catch(e){ _schedCache[weekKey]={}; }
+  return _schedCache[weekKey];
+}
+function initReport(){
+  const sel=document.getElementById('repEmp');
+  sel.innerHTML='<option value="all">All employees</option>'+
+    employees.filter(e=>e.active!==false).sort((a,b)=>a.name.localeCompare(b.name)).map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+  if(!document.getElementById('repFrom').value){
+    const s=weekStart(0), n=new Date();
+    document.getElementById('repFrom').value=dkey(s);
+    document.getElementById('repTo').value=dkey(n);
+  }
+  document.getElementById('reportOut').innerHTML='';
+  document.getElementById('repPrintBtn').classList.add('hide');
+}
+async function runReport(){
+  const m=document.getElementById('repMsg'); m.className='msg'; m.textContent='';
+  const fromV=document.getElementById('repFrom').value, toV=document.getElementById('repTo').value;
+  const empFilter=document.getElementById('repEmp').value;
+  if(!fromV||!toV){ m.className='msg err'; m.textContent='Pick both dates.'; return; }
+  const fromMs=new Date(fromV+'T00:00:00').getTime();
+  const toMs=new Date(toV+'T23:59:59').getTime();
+  if(toMs<fromMs){ m.className='msg err'; m.textContent='"To" date is before "From" date.'; return; }
+  document.getElementById('reportOut').innerHTML='<div class="spin"></div>';
+  _schedCache={};
+  let docs=[];
+  try{ const s=await PUN.where('ts','>=',fromMs).where('ts','<=',toMs).orderBy('ts','asc').get(); docs=s.docs.map(d=>({id:d.id,...d.data()})); }
+  catch(e){ console.error(e); document.getElementById('reportOut').innerHTML='<p class="muted center">Could not load. The database may need a one-time index — check the browser console for a link.</p>'; return; }
+  if(empFilter!=='all') docs=docs.filter(p=>p.empId===empFilter);
+  if(!docs.length){ document.getElementById('reportOut').innerHTML='<p class="muted center" style="padding:18px 0">No punches in that range.</p>'; document.getElementById('repPrintBtn').classList.add('hide'); return; }
+
+  const byEmp={};
+  docs.forEach(p=>{ (byEmp[p.empId]=byEmp[p.empId]||{name:p.empName,temp:p.temp,punches:[]}).punches.push(p); });
+  // tag entries with the employee's full-time status, and make sure every active
+  // full-timer (matching the filter) appears even if they never checked in
+  employees.forEach(e=>{
+    if(empFilter!=='all' && e.id!==empFilter) return;
+    if(byEmp[e.id]) byEmp[e.id].fullTime = !!e.fullTime;
+    else if(e.fullTime && e.active!==false) byEmp[e.id]={name:e.name, temp:false, fullTime:true, punches:[]};
+  });
+
+  // list of calendar days in the range (for full-timer worked/not rows)
+  const rangeDays=[]; { let dc=new Date(fromV+'T00:00:00'); const de=new Date(toV+'T00:00:00'); while(dc<=de){ rangeDays.push(new Date(dc)); dc.setDate(dc.getDate()+1); } }
+  const dayFull = d => d.toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'});
+
+  let anyFlag=false, body='';
+  for(const [eid,emp] of Object.entries(byEmp).sort((a,b)=>a[1].name.localeCompare(b[1].name))){
+
+    // ----- FULL-TIME: every day Worked / Did not work, no hours -----
+    if(emp.fullTime){
+      let rows='';
+      for(const day of rangeDays){
+        const ds=new Date(day); ds.setHours(0,0,0,0); const de=new Date(day); de.setHours(23,59,59,999);
+        const today=emp.punches.filter(p=>p.ts>=ds.getTime() && p.ts<=de.getTime()).sort((a,b)=>a.ts-b.ts);
+        let cell;
+        if(today.length){
+          const first=today[0]; let flag='';
+          const sched=await getWeekSched(weekKeyForDate(first.ts));
+          const sc=sched[eid+'|'+new Date(first.ts).getDay()];
+          if(sc && sc.start){ const pr=sc.start.split(':').map(Number); const ind=new Date(first.ts); if(Math.abs((ind.getHours()*60+ind.getMinutes())-(pr[0]*60+pr[1]))>FLAG_MINUTES){ flag=' *'; anyFlag=true; } }
+          cell=`<span style="color:var(--green);font-weight:700">Worked</span> &nbsp;${fmtT(first.ts)}${flag}`;
+        } else {
+          cell=`<span style="color:var(--ink3)">Did not work</span>`;
+        }
+        rows+=`<tr><td style="padding:3px 8px">${dayFull(day)}</td><td style="padding:3px 8px">${cell}</td></tr>`;
+      }
+      body+=`<div style="margin-bottom:16px;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+        <div style="font-weight:700;margin-bottom:6px">${emp.name} <span style="font-size:10px;font-weight:700;color:var(--green);background:var(--green-bg);padding:1px 6px;border-radius:5px;vertical-align:1px">FULL TIME</span></div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="color:var(--ink3);text-align:left">
+          <th style="padding:3px 8px;font-weight:600">Day</th><th style="padding:3px 8px;font-weight:600">Status</th>
+        </tr></thead><tbody>${rows}</tbody></table>
+      </div>`;
+      continue;
+    }
+
+    // ----- HOURLY: shifts + hours (as before) -----
+    const shifts=[]; let open=null;
+    emp.punches.forEach(p=>{ if(p.type==='in'){ if(open)shifts.push({inP:open,outP:null}); open=p; } else { if(open){shifts.push({inP:open,outP:p});open=null;} else shifts.push({inP:null,outP:p}); } });
+    if(open) shifts.push({inP:open,outP:null});
+    let totalMs=0, rows='';
+    for(const s of shifts){
+      let flag='';
+      if(s.inP){
+        const sched=await getWeekSched(weekKeyForDate(s.inP.ts));
+        const cell=sched[s.inP.empId+'|'+new Date(s.inP.ts).getDay()];
+        if(cell && cell.start){
+          const parts=cell.start.split(':').map(Number);
+          const ind=new Date(s.inP.ts); const diff=Math.abs((ind.getHours()*60+ind.getMinutes())-(parts[0]*60+parts[1]));
+          if(diff>FLAG_MINUTES){ flag=' *'; anyFlag=true; }
+        }
+      }
+      const inT=s.inP?fmtT(s.inP.ts):'—', outT=s.outP?fmtT(s.outP.ts):'—';
+      const dlabel=s.inP?fmtD(s.inP.ts):(s.outP?fmtD(s.outP.ts):'');
+      let dur='';
+      if(s.inP&&s.outP){ const ms=s.outP.ts-s.inP.ts; totalMs+=ms; dur=fmtDur(ms); }
+      else if(s.inP){ dur='still in'; } else { dur='missing in'; }
+      const ref=s.inP||s.outP;
+      let loc=ref&&ref.locLabel?ref.locLabel:'';
+      if(ref&&ref.lat!=null&&ref.lng!=null) loc=`<a href="https://www.google.com/maps?q=${ref.lat},${ref.lng}" target="_blank">${loc}</a>`;
+      rows+=`<tr><td style="padding:3px 8px">${dlabel}</td><td style="padding:3px 8px">${inT}${flag}</td><td style="padding:3px 8px">${outT}</td><td style="padding:3px 8px">${loc}</td><td style="padding:3px 8px;text-align:right;font-weight:600">${dur}</td></tr>`;
+    }
+    body+=`<div style="margin-bottom:16px;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+      <div style="display:flex;justify-content:space-between;font-weight:700;margin-bottom:6px"><span>${emp.name.replace(' (temp)','')}${emp.temp?' (temp)':''}</span><span style="color:var(--maroon)">${fmtDur(totalMs)}</span></div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="color:var(--ink3);text-align:left">
+        <th style="padding:3px 8px;font-weight:600">Day</th><th style="padding:3px 8px;font-weight:600">In</th><th style="padding:3px 8px;font-weight:600">Out</th><th style="padding:3px 8px;font-weight:600">Location</th><th style="padding:3px 8px;text-align:right;font-weight:600">Hours</th>
+      </tr></thead><tbody>${rows}</tbody></table>
+    </div>`;
+  }
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const fd=new Date(fromV+'T00:00:00'), td=new Date(toV+'T00:00:00');
+  const head=`<div style="text-align:center;margin-bottom:14px"><div style="font-weight:800;font-size:16px;color:var(--maroon)">Premier Caterers — Hours Report</div>
+    <div class="muted">${months[fd.getMonth()]} ${fd.getDate()}, ${fd.getFullYear()} – ${months[td.getMonth()]} ${td.getDate()}, ${td.getFullYear()}</div></div>`;
+  const legend = anyFlag ? `<p class="muted" style="margin-top:6px">* = clocked in more than ${FLAG_MINUTES} minutes off the scheduled start time.</p>` : '';
+  document.getElementById('reportOut').innerHTML=head+body+legend;
+  document.getElementById('repPrintBtn').classList.remove('hide');
+}
+function printReport(){
+  const html=document.getElementById('reportOut').innerHTML;
+  const w=window.open('','_blank'); if(!w) return;
+  w.document.write('<html><head><title>Premier Caterers — Hours Report</title><style>body{font-family:Arial,sans-serif;max-width:760px;margin:20px auto;color:#222;padding:0 16px}table{width:100%;border-collapse:collapse}a{color:#8B1A1A}.muted{color:#888;font-size:12px}.spin{display:none}</style></head><body>'+html+'</body></html>');
+  w.document.close(); setTimeout(()=>{ w.focus(); w.print(); }, 300);
+}
+
 function viewSelfie(src){ const w=window.open('','_blank'); if(w) w.document.write('<body style="margin:0;background:#111"><img src="'+src+'" style="width:100%;transform:scaleX(-1)"></body>'); }
 function fmtT(ms){ return new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); }
 function fmtD(ms){ return new Date(ms).toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'}); }
