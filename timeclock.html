@@ -243,6 +243,14 @@
           <div class="msg" id="empMsg"></div>
         </div>
         <div style="border-top:1px solid var(--line);margin-top:16px;padding-top:14px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:8px">Departments</div>
+          <div id="deptChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+          <div style="display:flex;gap:8px">
+            <input id="newDeptName" placeholder="Add a department" style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-size:13px">
+            <button class="btn-ghost" style="width:auto;padding:9px 14px" onclick="addDepartment()">Add</button>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--line);margin-top:16px;padding-top:14px">
           <button class="btn-ghost btn" onclick="setCommissaryHere()"><i class="ti ti-map-pin"></i> Set commissary location to here</button>
           <p class="muted center" id="commStatus" style="margin-top:8px"></p>
         </div>
@@ -309,6 +317,8 @@ const FLAG_MINUTES = 5;   // clock-in this many minutes off from schedule gets a
 
 let employees=[], commissary=null, pinEntry='', pending=null, camStream=null, mgrWeekOffset=0;
 let schedWeekOffset=0, schedData={}, schedKey='', _schedSaveT=null;
+let departments=[];
+const DEFAULT_DEPTS=['Kitchen','Parve','Dairy','Equipment','Grocery','Waitstaff','Office','Delivery'];
 
 window.addEventListener('load', async ()=>{
   setLang(lang);
@@ -316,12 +326,17 @@ window.addEventListener('load', async ()=>{
     firebase.initializeApp(firebaseConfig);
     db=firebase.firestore(); EMP=db.collection('tc_employees'); PUN=db.collection('tc_punches'); SET=db.collection('tc_settings'); SCH=db.collection('tc_schedules');
     buildKeypad(); tickClock(); setInterval(tickClock,1000);
-    await loadEmployees(); await loadCommissary();
+    await loadEmployees(); await loadCommissary(); await loadDepartments();
     document.getElementById('bootMsg').textContent='';
   }catch(e){ console.error(e); document.getElementById('bootMsg').textContent='Could not connect. Check internet and refresh.'; }
 });
 async function loadEmployees(){ const s=await EMP.get(); employees=s.docs.map(d=>({id:d.id,...d.data()})); }
 async function loadCommissary(){ try{ const d=await SET.doc('commissary').get(); if(d.exists) commissary=d.data(); }catch(e){} }
+async function loadDepartments(){
+  try{ const d=await SET.doc('departments').get(); departments = (d.exists && Array.isArray(d.data().list)) ? d.data().list : DEFAULT_DEPTS.slice(); }
+  catch(e){ departments=DEFAULT_DEPTS.slice(); }
+}
+async function saveDepartments(){ try{ await SET.doc('departments').set({list:departments}); }catch(e){} }
 
 function tickClock(){
   const n=new Date();
@@ -540,8 +555,9 @@ function renderEmployees(){
   if(!employees.length){ el.innerHTML='<p class="muted center">No employees yet. Add your first below.</p>'; }
   else{ el.innerHTML=employees.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(e=>`
     <div class="emp-row">
-      <span class="nm" style="${e.active===false?'color:var(--ink3);text-decoration:line-through':''}">${e.name}${e.fullTime?' <span style="font-size:10px;font-weight:700;color:var(--green);background:var(--green-bg);padding:1px 6px;border-radius:5px;vertical-align:1px">FT</span>':''}</span>
+      <span class="nm" style="${e.active===false?'color:var(--ink3);text-decoration:line-through':''}">${e.name}${e.fullTime?' <span style="font-size:10px;font-weight:700;color:var(--green);background:var(--green-bg);padding:1px 6px;border-radius:5px;vertical-align:1px">FT</span>':''}${e.dept?`<br><span style="font-size:11px;color:var(--ink3);font-weight:500">${e.dept}</span>`:''}</span>
       <span class="pin">PIN ${e.pinSet===false?'<i class="ti ti-clock-hour-3" title="Not set yet"></i> '+e.pin:'••••'}</span>
+      <button onclick="openEmpEdit('${e.id}')" title="Edit details"><i class="ti ti-edit"></i></button>
       <button onclick="resetEmployeePin('${e.id}')" title="Reset PIN"><i class="ti ti-key"></i></button>
       <button onclick="toggleEmployee('${e.id}')" title="${e.active===false?'Reactivate':'Deactivate'}"><i class="ti ti-${e.active===false?'user-check':'user-off'}"></i></button>
       <button onclick="deleteEmployee('${e.id}')" title="Delete"><i class="ti ti-trash"></i></button>
@@ -549,6 +565,7 @@ function renderEmployees(){
   document.getElementById('commStatus').textContent = commissary
     ? 'Commissary location is set. Punches within ~250m are labeled "Commissary."'
     : 'Commissary location not set yet — punches show "Recorded" instead of Commissary/Off-site.';
+  renderDeptChips();
 }
 async function addEmployee(){
   const name=document.getElementById('newEmpName').value.trim();
@@ -574,6 +591,62 @@ async function resetEmployeePin(id){
   if(employees.some(x=>x.id!==id && (x.pin||'').toLowerCase()===v.toLowerCase())){ alert('That PIN is already used. Pick another.'); return; }
   try{ await EMP.doc(id).update({pin:v, pinSet:false}); e.pin=v; e.pinSet=false; renderEmployees(); alert(e.name+' can now use "First time? Set up your PIN" with: '+v); }
   catch(err){ alert('Could not reset. Check internet.'); }
+}
+
+// ----- departments -----
+function renderDeptChips(){
+  const el=document.getElementById('deptChips'); if(!el) return;
+  if(!departments.length){ el.innerHTML='<span class="muted">No departments yet.</span>'; return; }
+  el.innerHTML=departments.map(d=>`<span style="display:inline-flex;align-items:center;gap:5px;background:var(--bg);border:1px solid var(--line);border-radius:20px;padding:4px 6px 4px 11px;font-size:12px">${d}<button onclick="removeDepartment('${d.replace(/'/g,"\\'")}')" style="border:none;background:none;color:var(--ink3);cursor:pointer;font-size:13px;padding:0 2px">&times;</button></span>`).join('');
+}
+async function addDepartment(){
+  const inp=document.getElementById('newDeptName'); const v=(inp.value||'').trim();
+  if(!v) return;
+  if(departments.some(d=>d.toLowerCase()===v.toLowerCase())){ inp.value=''; return; }
+  departments.push(v); inp.value=''; renderDeptChips(); await saveDepartments();
+}
+async function removeDepartment(name){
+  if(!confirm('Remove department "'+name+'"? (Employees already in it keep the label until you change them.)')) return;
+  departments=departments.filter(d=>d!==name); renderDeptChips(); await saveDepartments();
+}
+
+// ----- employee edit (department, cell, email, address) -----
+function openEmpEdit(id){
+  const e=employees.find(x=>x.id===id); if(!e) return;
+  document.getElementById('empEditModal')?.remove();
+  const esc=s=>String(s==null?'':s).replace(/"/g,'&quot;');
+  const opts=['<option value="">— no department —</option>']
+    .concat(departments.map(d=>`<option value="${esc(d)}" ${e.dept===d?'selected':''}>${d}</option>`)).join('');
+  const m=document.createElement('div');
+  m.id='empEditModal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto';
+  m.innerHTML=`<div style="background:var(--card);border-radius:16px;padding:20px;width:100%;max-width:440px;margin:auto">
+    <div style="font-weight:700;font-size:16px;margin-bottom:14px">Edit — ${e.name}</div>
+    <div class="field"><label>Name</label><input id="ed-name" value="${esc(e.name)}"></div>
+    <div class="field"><label>Department</label><select id="ed-dept" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:10px;font-size:15px;background:#fff;color:var(--ink)">${opts}</select></div>
+    <div class="field"><label>Cell number</label><input id="ed-cell" inputmode="tel" value="${esc(e.cell)}" placeholder="(201) 555-1234"></div>
+    <div class="field"><label>Email</label><input id="ed-email" inputmode="email" value="${esc(e.email)}" placeholder="name@email.com"></div>
+    <div class="field"><label>Home address</label><input id="ed-addr" value="${esc(e.address)}" placeholder="Street, City, State"></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);margin-bottom:14px;cursor:pointer"><input type="checkbox" id="ed-ft" ${e.fullTime?'checked':''} style="width:17px;height:17px"> Full time</label>
+    <div style="display:flex;gap:8px">
+      <button class="btn-ghost btn" onclick="document.getElementById('empEditModal').remove()">Cancel</button>
+      <button class="btn" style="background:var(--maroon);color:#fff" onclick="saveEmpEdit('${e.id}')">Save</button>
+    </div>
+    <div class="msg" id="ed-msg"></div>
+  </div>`;
+  document.body.appendChild(m);
+}
+async function saveEmpEdit(id){
+  const e=employees.find(x=>x.id===id); if(!e) return;
+  const g=k=>{ const el=document.getElementById('ed-'+k); return el?(el.value||'').trim():''; };
+  const name=g('name'); if(!name){ document.getElementById('ed-msg').textContent='Name cannot be blank.'; document.getElementById('ed-msg').className='msg err'; return; }
+  const patch={ name, dept:g('dept'), cell:g('cell'), email:g('email'), address:g('addr'), fullTime:document.getElementById('ed-ft').checked };
+  try{
+    await EMP.doc(id).update(patch);
+    Object.assign(e, patch);
+    document.getElementById('empEditModal').remove();
+    renderEmployees();
+  }catch(err){ document.getElementById('ed-msg').textContent='Could not save. Check internet.'; document.getElementById('ed-msg').className='msg err'; }
 }
 async function deleteEmployee(id){ const e=employees.find(x=>x.id===id); if(!e)return;
   if(!confirm('Delete '+e.name+'? Their past punches stay in the timesheet. This only removes their PIN.'))return;
