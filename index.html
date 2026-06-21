@@ -223,6 +223,7 @@ async function _saveEvent(e){
 async function _saveChange(c){ try{ await db.collection('changes').doc(c.id).set(c); }catch(err){ console.error(err); } }
 async function _saveInquiry(i){
   try{
+    i.updatedAt = Date.now();   // for the pipeline "last updated" sort
     // SAFEGUARD: never let a save erase a card's existing menu list.
     // If the object being saved is missing menus/menuLink but the stored
     // record has them, carry the stored ones forward.
@@ -1674,6 +1675,14 @@ let selectedInqId = null;
 // ── Pipeline collapse state ──
 window._plColCollapsed = window._plColCollapsed || {};   // {columnKey: true}  collapse-all default per column
 window._plCardCollapsed = window._plCardCollapsed || {}; // {inqId: true|false} explicit per-card override
+window._plSort = window._plSort || {};                   // {columnKey: 'date'|'name'|'updated'}
+// Default: every column except the first ("New Inquiry") starts minimized
+if(!window._plColInit){
+  ['menu_sent','booked','month_out','two_weeks','this_week','past','lost'].forEach(k=>{
+    if(!(k in window._plColCollapsed)) window._plColCollapsed[k] = true;
+  });
+  window._plColInit = true;
+}
 // A booked inquiry counts as a "past event" once its event date is before today (UTC).
 function inqIsPast(inq){
   if(!inq || inq.stage!=='booked' || !inq.eventDate) return false;
@@ -1682,8 +1691,37 @@ function inqIsPast(inq){
   const n = new Date();
   return Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()) < Date.UTC(n.getUTCFullYear(),n.getUTCMonth(),n.getUTCDate());
 }
+function inqDaysUntil(inq){
+  if(!inq || !inq.eventDate) return null;
+  const d = new Date(inq.eventDate); if(isNaN(d.getTime())) return null;
+  const n = new Date();
+  const ms = Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()) - Date.UTC(n.getUTCFullYear(),n.getUTCMonth(),n.getUTCDate());
+  return Math.round(ms/86400000);
+}
+// Which booked sub-column an inquiry belongs to, by how far out its event is
+function plBookedBucket(inq){
+  if(inqIsPast(inq)) return 'past';
+  const d = inqDaysUntil(inq);
+  if(d===null) return 'booked';   // booked but no date yet
+  if(d<=7)  return 'this_week';
+  if(d<=14) return 'two_weeks';
+  if(d<=31) return 'month_out';
+  return 'booked';                // more than a month out
+}
+function plSortComparator(by){
+  return (a,b)=>{
+    if(by==='name'){ return (clientPrimary(a)||'').toLowerCase().localeCompare((clientPrimary(b)||'').toLowerCase()); }
+    if(by==='updated'){ return (b.updatedAt||0)-(a.updatedAt||0); } // most recently updated first
+    // default: by event date, soonest first, undated last
+    const da=a.eventDate||'', db2=b.eventDate||'';
+    if(!da && !db2) return 0;
+    if(!da) return 1;
+    if(!db2) return -1;
+    return da.localeCompare(db2);
+  };
+}
 function plColumnOf(inq){
-  if(inq.stage==='booked') return inqIsPast(inq) ? 'past' : 'booked';
+  if(inq.stage==='booked') return plBookedBucket(inq);
   return inq.stage;
 }
 function plCardCompact(inq, colKey){
@@ -1708,6 +1746,9 @@ function renderPipeline(){
     {key:'new',       label:'New Inquiry',     icon:'ti-mail',          cls:'stage-new'},
     {key:'menu_sent', label:'Menu Sent',       icon:'ti-file-text',     cls:'stage-menu_sent'},
     {key:'booked',    label:'Booked',          icon:'ti-circle-check',  cls:'stage-booked'},
+    {key:'month_out', label:'One Month Out',   icon:'ti-calendar-event',cls:'stage-booked'},
+    {key:'two_weeks', label:'2 Weeks Out',     icon:'ti-calendar-event',cls:'stage-booked'},
+    {key:'this_week', label:'This Week',        icon:'ti-calendar-star', cls:'stage-booked'},
     {key:'past',      label:'Past Events',     icon:'ti-calendar-check', cls:'stage-past'},
     {key:'lost',      label:'Lost / Declined', icon:'ti-circle-x',      cls:'stage-lost'},
   ];
@@ -1726,14 +1767,23 @@ function renderPipeline(){
   ${detailHtml}
   <div class="pipeline-cols">
   ${stages.map(s=>{
-    const cards = s.key==='booked' ? inquiries.filter(i=>i.stage==='booked' && !inqIsPast(i))
-                : s.key==='past'   ? inquiries.filter(i=>i.stage==='booked' &&  inqIsPast(i))
-                :                    inquiries.filter(i=>i.stage===s.key);
+    const bookedCols = {booked:1, month_out:1, two_weeks:1, this_week:1, past:1};
+    let cards = bookedCols[s.key]
+                ? inquiries.filter(i=>i.stage==='booked' && plBookedBucket(i)===s.key)
+                : inquiries.filter(i=>i.stage===s.key);
+    const sortBy = window._plSort[s.key] || 'date';
+    cards = cards.slice().sort(plSortComparator(sortBy));
+    const isBooked = (s.key==='booked'||s.key==='month_out'||s.key==='two_weeks'||s.key==='this_week');
     const colCompact = !!window._plColCollapsed[s.key];
     return `<div class="pipeline-col">
       <div class="pipeline-col-header">
         <div class="pipeline-col-title"><i class="ti ${s.icon}" style="font-size:14px"></i>${s.label}</div>
         <div style="display:flex;align-items:center;gap:6px">
+          ${cards.length?`<select onchange="window._plSort['${s.key}']=this.value;render()" title="Sort this column" style="font-size:10px;padding:2px 4px;border:0.5px solid var(--border2);border-radius:5px;background:var(--bg2);color:var(--text2);cursor:pointer;max-width:80px">
+            <option value="date" ${sortBy==='date'?'selected':''}>By date</option>
+            <option value="name" ${sortBy==='name'?'selected':''}>By name</option>
+            <option value="updated" ${sortBy==='updated'?'selected':''}>By updated</option>
+          </select>`:''}
           ${cards.length?`<button class="pl-col-toggle" onclick="togglePlColumn('${s.key}')" title="${colCompact?'Expand all cards':'Minimize all cards'}"><i class="ti ti-chevrons-${colCompact?'down':'up'}"></i></button>`:''}
           <span class="pipeline-count">${cards.length}</span>
         </div>
@@ -1768,8 +1818,8 @@ function renderPipeline(){
         ${role.canEdit ? `<div class="inq-actions">
           ${s.key==='new' ? `<button class="stage-btn stage-menu_sent" onclick="event.stopPropagation();moveInquiry('${inq.id}','menu_sent')">Mark menu sent</button>` : ''}
           ${s.key!=='new' && s.key!=='lost' && s.key!=='past' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();moveInquiry('${inq.id}','new')"><i class="ti ti-arrow-back-up" style="font-size:11px"></i> Move to new</button>` : ''}
-          ${s.key!=='booked'&&s.key!=='lost'&&s.key!=='past' ? `<button class="stage-btn stage-booked" onclick="event.stopPropagation();moveInquiry('${inq.id}','booked')">Book event</button>` : ''}
-          ${s.key==='booked'||s.key==='past' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">→ Go to event week</button>` : ''}
+          ${!isBooked && s.key!=='lost' && s.key!=='past' ? `<button class="stage-btn stage-booked" onclick="event.stopPropagation();moveInquiry('${inq.id}','booked')">Book event</button>` : ''}
+          ${isBooked || s.key==='past' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">→ Go to event week</button>` : ''}
           ${s.key!=='lost'&&s.key!=='past' ? `<button class="stage-btn" style="background:var(--amber-bg);color:var(--amber-text)" onclick="event.stopPropagation();markInquiryLost('${inq.id}')">Mark lost</button>` : ''}
           ${s.key==='lost' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();reviveInquiry('${inq.id}')"><i class="ti ti-arrow-back-up" style="font-size:12px"></i> Revive</button>` : ''}
           <button onclick="event.stopPropagation();deleteInquiry('${inq.id}')" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px;margin-left:auto"><i class="ti ti-trash"></i></button>
