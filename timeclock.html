@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Premier Caterers — Time Clock</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --maroon:#8B1A1A; --maroon-dark:#6f1414; --maroon-soft:#fbeaea;
+    --bg:#faf7f5; --card:#ffffff; --ink:#23201f; --ink2:#6b625f; --ink3:#9a908c;
+    --line:#ece5e1; --green:#1f8a4c; --green-bg:#e8f6ee; --amber:#b7791f; --amber-bg:#fdf3e3; --red:#c0392b;
+    --radius:16px; --shadow:0 6px 28px rgba(80,30,30,.10);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--ink);min-height:100vh;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:520px;margin:0 auto;padding:14px 16px 40px;min-height:100vh;display:flex;flex-direction:column}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:4px 0 8px}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand .logo{width:34px;height:34px;border-radius:9px;background:var(--maroon);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px}
+  .brand h1{font-size:16px;margin:0;font-weight:700;color:var(--maroon)}
+  .brand small{display:block;font-size:10px;color:var(--ink3);font-weight:600;letter-spacing:.05em;text-transform:uppercase}
+  .lang{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .lang button{border:none;background:#fff;padding:6px 11px;font-size:12px;font-weight:700;color:var(--ink2);cursor:pointer}
+  .lang button.on{background:var(--maroon);color:#fff}
+  .clock-now{text-align:center;margin:6px 0 14px}
+  .clock-now .time{font-size:38px;font-weight:800;letter-spacing:-1px;line-height:1}
+  .clock-now .date{font-size:13px;color:var(--ink2);margin-top:4px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px}
+  .lead{text-align:center;font-size:15px;color:var(--ink2);margin:0 0 14px}
+  .pin-dots{display:flex;gap:12px;justify-content:center;margin:6px 0 18px;min-height:18px}
+  .pin-dots .dot{width:14px;height:14px;border-radius:50%;background:var(--line);transition:.15s}
+  .pin-dots .dot.on{background:var(--maroon);transform:scale(1.05)}
+  .keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .key{height:62px;border:1px solid var(--line);background:#fff;border-radius:14px;font-size:24px;font-weight:600;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.1s;user-select:none}
+  .key:active{background:var(--maroon-soft);transform:scale(.97)}
+  .key.fn{font-size:14px;font-weight:600;color:var(--ink2)}
+  .key.enter{background:var(--maroon);color:#fff;border-color:var(--maroon)}
+  .key.enter:active{background:var(--maroon-dark)}
+  .msg{text-align:center;font-size:13px;min-height:18px;margin-top:12px}
+  .msg.err{color:var(--red)} .msg.ok{color:var(--green)}
+  .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:none;border-radius:14px;
+       font-size:18px;font-weight:700;padding:18px;cursor:pointer;transition:.12s}
+  .btn:active{transform:scale(.99)}
+  .btn-in{background:var(--green);color:#fff}
+  .btn-out{background:var(--maroon);color:#fff}
+  .btn-ghost{background:#fff;border:1px solid var(--line);color:var(--ink2);font-weight:600;font-size:15px;padding:13px}
+  .temp-link{text-align:center;margin-top:14px}
+  .temp-link button{background:none;border:none;color:var(--maroon);font-size:14px;font-weight:600;cursor:pointer;text-decoration:underline}
+  .footer-link{text-align:center;margin-top:auto;padding-top:22px}
+  .footer-link button{background:none;border:none;color:var(--ink3);font-size:12px;cursor:pointer;text-decoration:underline}
+  .cam-wrap{position:relative;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:3/4;margin-bottom:14px}
+  .cam-wrap video,.cam-wrap canvas,.cam-wrap img{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1)}
+  .who{text-align:center;margin-bottom:12px}
+  .who .name{font-size:22px;font-weight:800}
+  .who .act{display:inline-block;margin-top:6px;font-size:13px;font-weight:700;padding:4px 12px;border-radius:20px}
+  .who .act.in{background:var(--green-bg);color:var(--green)}
+  .who .act.out{background:var(--maroon-soft);color:var(--maroon)}
+  .hint{text-align:center;font-size:12px;color:var(--ink3);margin:-6px 0 14px}
+  .success{text-align:center;padding:14px 0}
+  .success .ic{width:84px;height:84px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:44px;color:#fff}
+  .success .ic.in{background:var(--green)} .success .ic.out{background:var(--maroon)}
+  .success h2{margin:0 0 6px;font-size:23px}
+  .success .stamp{font-size:30px;font-weight:800;margin:8px 0}
+  .success .meta{font-size:13px;color:var(--ink2);line-height:1.7}
+  .loc-pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:3px 10px;border-radius:20px;background:var(--bg);color:var(--ink2);border:1px solid var(--line)}
+  .mgr-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .mgr-head h2{margin:0;font-size:18px;color:var(--maroon)}
+  .tabs{display:flex;gap:8px;margin-bottom:16px}
+  .tab{flex:1;text-align:center;padding:10px;border-radius:10px;border:1px solid var(--line);background:#fff;font-size:13px;font-weight:600;color:var(--ink2);cursor:pointer}
+  .tab.on{background:var(--maroon);color:#fff;border-color:var(--maroon)}
+  .week-nav{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:14px}
+  .week-nav button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 12px;font-size:16px;cursor:pointer;color:var(--ink2)}
+  .week-nav .lbl{font-size:14px;font-weight:700;min-width:150px;text-align:center}
+  .emp-total{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+  .emp-total .top{display:flex;justify-content:space-between;align-items:center}
+  .emp-total .nm{font-weight:700;font-size:15px}
+  .emp-total .nm .tg{font-size:10px;font-weight:700;color:var(--amber);background:var(--amber-bg);padding:1px 6px;border-radius:5px;margin-left:6px;vertical-align:2px}
+  .emp-total .hrs{font-weight:800;font-size:16px;color:var(--maroon)}
+  .shift{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ink2);padding:7px 0;border-top:1px dashed var(--line)}
+  .shift .thumb{width:34px;height:34px;border-radius:7px;object-fit:cover;background:var(--line);flex-shrink:0;transform:scaleX(-1);cursor:pointer}
+  .shift .seg{flex:1;line-height:1.5}
+  .shift .seg a{color:var(--maroon);text-decoration:none}
+  .shift .dur{font-weight:700;color:var(--ink);white-space:nowrap}
+  .shift.open .dur{color:var(--amber)}
+  .emp-row{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:11px;padding:11px 13px;margin-bottom:9px}
+  .emp-row .nm{flex:1;font-weight:600}
+  .emp-row .pin{font-family:monospace;color:var(--ink2);font-size:13px;background:var(--bg);padding:2px 8px;border-radius:6px}
+  .emp-row button{border:none;background:none;cursor:pointer;color:var(--ink3);font-size:16px;padding:4px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:12px;color:var(--ink2);margin-bottom:5px;font-weight:600}
+  .field input{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:10px;font-size:15px;background:#fff;color:var(--ink)}
+  .hide{display:none!important}
+  .center{text-align:center}
+  .muted{color:var(--ink3);font-size:12px}
+  .spin{width:34px;height:34px;border:3px solid var(--maroon-soft);border-top-color:var(--maroon);border-radius:50%;animation:sp 1s linear infinite;margin:20px auto}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion:reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">P</div>
+      <div><h1>Premier Caterers</h1><small data-t="subtitle">Staff Time Clock</small></div>
+    </div>
+    <div class="lang">
+      <button id="lang-en" class="on" onclick="setLang('en')">EN</button>
+      <button id="lang-es" onclick="setLang('es')">ES</button>
+    </div>
+  </div>
+
+  <!-- ===== PIN SCREEN ===== -->
+  <div id="screen-pin">
+    <div class="clock-now"><div class="time" id="liveTime">--:--</div><div class="date" id="liveDate"></div></div>
+    <div class="card">
+      <p class="lead" data-t="enterPin">Enter your PIN</p>
+      <div class="pin-dots" id="pinDots"></div>
+      <div class="keypad" id="keypad"></div>
+      <div class="msg" id="pinMsg"></div>
+      <div class="temp-link"><button onclick="startTemp()" data-t="tempBtn">Temp staff — no PIN</button></div>
+    </div>
+    <div class="footer-link"><button onclick="openManager()" data-t="mgrAccess">Manager access</button></div>
+  </div>
+
+  <!-- ===== CHOOSE IN/OUT ===== -->
+  <div id="screen-choose" class="hide">
+    <div class="card">
+      <div class="who"><div class="name" id="chooseName"></div></div>
+      <p class="hint" id="chooseHint"></p>
+      <button class="btn btn-in" style="margin-bottom:12px" onclick="choose('in')"><i class="ti ti-login-2"></i> <span data-t="clockIn">Clock IN</span></button>
+      <button class="btn btn-out" onclick="choose('out')"><i class="ti ti-logout-2"></i> <span data-t="clockOut">Clock OUT</span></button>
+      <button class="btn-ghost btn" style="margin-top:14px" onclick="goPin()" data-t="cancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ===== SELFIE ===== -->
+  <div id="screen-selfie" class="hide">
+    <div class="card">
+      <div class="who"><div class="name" id="selfieName"></div><div id="selfieAct"></div></div>
+      <div class="cam-wrap"><video id="cam" autoplay playsinline muted></video><canvas id="snap" class="hide"></canvas></div>
+      <div id="camControls">
+        <button class="btn" id="captureBtn" style="background:var(--maroon);color:#fff" onclick="capturePhoto()"><i class="ti ti-camera"></i> <span data-t="takePhoto">Take photo &amp; clock</span></button>
+        <button class="btn-ghost btn" style="margin-top:10px" onclick="cancelPunch()" data-t="cancel">Cancel</button>
+      </div>
+      <div id="camError" class="hide">
+        <p class="center" style="color:var(--red);font-size:14px" data-t="camErr">Camera access is required to clock in or out. Please allow the camera and try again.</p>
+        <button class="btn-ghost btn" onclick="cancelPunch()" data-t="back">Back</button>
+      </div>
+      <div class="msg" id="selfieMsg"></div>
+    </div>
+  </div>
+
+  <!-- ===== SUCCESS ===== -->
+  <div id="screen-done" class="hide">
+    <div class="card success">
+      <div class="ic" id="doneIc"></div>
+      <h2 id="doneTitle"></h2>
+      <div class="stamp" id="doneStamp"></div>
+      <div class="meta" id="doneMeta"></div>
+      <button class="btn-ghost btn" style="margin-top:18px" onclick="goPin()" data-t="done">Done</button>
+    </div>
+  </div>
+
+  <!-- ===== MANAGER (English only) ===== -->
+  <div id="screen-mgr" class="hide">
+    <div class="card">
+      <div class="mgr-head"><h2>Manager</h2><button class="btn-ghost" style="width:auto;padding:8px 12px" onclick="goPin()">Exit</button></div>
+      <div class="tabs">
+        <div class="tab on" id="tab-time" onclick="mgrTab('time')">Timesheet</div>
+        <div class="tab" id="tab-emp" onclick="mgrTab('emp')">Employees</div>
+      </div>
+      <div id="mgr-time">
+        <div class="week-nav">
+          <button onclick="mgrWeek(-1)">&lsaquo;</button>
+          <div class="lbl" id="weekLbl"></div>
+          <button onclick="mgrWeek(1)">&rsaquo;</button>
+        </div>
+        <div id="timesheet"></div>
+      </div>
+      <div id="mgr-emp" class="hide">
+        <div id="empList"></div>
+        <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:14px">
+          <div class="field"><label>Employee name</label><input id="newEmpName" placeholder="e.g. Edgar Ramirez"></div>
+          <div class="field"><label>4-digit PIN</label><input id="newEmpPin" inputmode="numeric" maxlength="6" placeholder="e.g. 4821"></div>
+          <button class="btn" style="background:var(--maroon);color:#fff" onclick="addEmployee()"><i class="ti ti-user-plus"></i> Add employee</button>
+          <div class="msg" id="empMsg"></div>
+        </div>
+        <div style="border-top:1px solid var(--line);margin-top:16px;padding-top:14px">
+          <button class="btn-ghost btn" onclick="setCommissaryHere()"><i class="ti ti-map-pin"></i> Set commissary location to here</button>
+          <p class="muted center" id="commStatus" style="margin-top:8px"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bootMsg" class="center muted" style="padding:30px 0"></div>
+</div>
+
+<script>
+// ---------- translations (staff screens) ----------
+const T = {
+  en:{ subtitle:'Staff Time Clock', enterPin:'Enter your PIN', tempBtn:'Temp staff — no PIN',
+       mgrAccess:'Manager access', clockIn:'Clock IN', clockOut:'Clock OUT', cancel:'Cancel',
+       takePhoto:'Take photo & clock', camErr:'Camera access is required to clock in or out. Please allow the camera and try again.',
+       back:'Back', done:'Done', pinBad:'PIN not recognized. Try again or see a manager.',
+       chooseHintIn:"Looks like you're currently clocked out.", chooseHintOut:"Looks like you're currently clocked in.",
+       chooseHintNone:'Are you clocking in or out?', clockingIn:'Clocking IN', clockingOut:'Clocking OUT',
+       saving:'Saving…', saveErr:'Could not save — check internet and try again.',
+       tempPrompt:'Type your full name', clockedIn:'Clocked in', clockedOut:'Clocked out',
+       noLoc:'No location' },
+  es:{ subtitle:'Reloj de Personal', enterPin:'Ingrese su PIN', tempBtn:'Personal temporal — sin PIN',
+       mgrAccess:'Acceso de gerente', clockIn:'ENTRADA', clockOut:'SALIDA', cancel:'Cancelar',
+       takePhoto:'Tomar foto y marcar', camErr:'Se requiere acceso a la cámara para marcar entrada o salida. Por favor permita la cámara e intente de nuevo.',
+       back:'Atrás', done:'Listo', pinBad:'PIN no reconocido. Intente de nuevo o vea a un gerente.',
+       chooseHintIn:'Parece que está marcado como salida.', chooseHintOut:'Parece que está marcado como entrada.',
+       chooseHintNone:'¿Está marcando entrada o salida?', clockingIn:'Marcando ENTRADA', clockingOut:'Marcando SALIDA',
+       saving:'Guardando…', saveErr:'No se pudo guardar — revise el internet e intente de nuevo.',
+       tempPrompt:'Escriba su nombre completo', clockedIn:'Entrada registrada', clockedOut:'Salida registrada',
+       noLoc:'Sin ubicación' }
+};
+let lang = localStorage.getItem('tcLang') || 'en';
+function t(k){ return (T[lang]&&T[lang][k]) || T.en[k] || k; }
+function setLang(l){
+  lang=l; localStorage.setItem('tcLang',l);
+  document.getElementById('lang-en').classList.toggle('on', l==='en');
+  document.getElementById('lang-es').classList.toggle('on', l==='es');
+  document.querySelectorAll('[data-t]').forEach(el=>{ el.textContent = t(el.getAttribute('data-t')); });
+}
+
+// ---------- Firebase ----------
+const firebaseConfig = {
+  apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
+  authDomain: "premier-caterers-internal-app.firebaseapp.com",
+  projectId: "premier-caterers-internal-app",
+  storageBucket: "premier-caterers-internal-app.firebasestorage.app",
+  messagingSenderId: "471701398759",
+  appId: "1:471701398759:web:559a7bee3b645ce545ee42"
+};
+let db, EMP, PUN, SET;
+const MANAGER_PIN = '736868';
+
+let employees=[], commissary=null, pinEntry='', pending=null, camStream=null, mgrWeekOffset=0;
+
+window.addEventListener('load', async ()=>{
+  setLang(lang);
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db=firebase.firestore(); EMP=db.collection('tc_employees'); PUN=db.collection('tc_punches'); SET=db.collection('tc_settings');
+    buildKeypad(); tickClock(); setInterval(tickClock,1000);
+    await loadEmployees(); await loadCommissary();
+    document.getElementById('bootMsg').textContent='';
+  }catch(e){ console.error(e); document.getElementById('bootMsg').textContent='Could not connect. Check internet and refresh.'; }
+});
+async function loadEmployees(){ const s=await EMP.get(); employees=s.docs.map(d=>({id:d.id,...d.data()})); }
+async function loadCommissary(){ try{ const d=await SET.doc('commissary').get(); if(d.exists) commissary=d.data(); }catch(e){} }
+
+function tickClock(){
+  const n=new Date();
+  const lt=document.getElementById('liveTime'), ld=document.getElementById('liveDate');
+  if(lt) lt.textContent=n.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  if(ld) ld.textContent=n.toLocaleDateString(lang==='es'?'es':'en-US',{weekday:'long',month:'long',day:'numeric'});
+}
+
+// ---------- keypad ----------
+function buildKeypad(){
+  const kp=document.getElementById('keypad');
+  const keys=['1','2','3','4','5','6','7','8','9','clear','0','enter'];
+  kp.innerHTML=keys.map(k=>{
+    if(k==='clear') return `<button class="key fn" onclick="pinKey('clear')">&larr;</button>`;
+    if(k==='enter') return `<button class="key enter" onclick="pinKey('enter')"><i class="ti ti-arrow-right"></i></button>`;
+    return `<button class="key" onclick="pinKey('${k}')">${k}</button>`;
+  }).join('');
+  renderDots();
+}
+function pinKey(k){
+  const m=document.getElementById('pinMsg'); m.textContent=''; m.className='msg';
+  if(k==='clear'){ pinEntry=pinEntry.slice(0,-1); renderDots(); return; }
+  if(k==='enter'){ submitPin(); return; }
+  if(pinEntry.length<6){ pinEntry+=k; renderDots(); }
+  if(pinEntry.length>=4 && employees.some(e=>e.pin===pinEntry && e.active!==false)) submitPin();
+}
+function renderDots(){
+  const d=document.getElementById('pinDots'); const n=Math.max(4,pinEntry.length);
+  let h=''; for(let i=0;i<n;i++) h+=`<div class="dot ${i<pinEntry.length?'on':''}"></div>`; d.innerHTML=h;
+}
+function submitPin(){
+  const m=document.getElementById('pinMsg');
+  const emp=employees.find(e=>e.pin===pinEntry && e.active!==false);
+  if(!emp){ m.textContent=t('pinBad'); m.className='msg err'; pinEntry=''; renderDots(); return; }
+  pinEntry=''; renderDots();
+  beginChoose({id:emp.id, name:emp.name, temp:false});
+}
+function startTemp(){
+  const name=prompt(t('tempPrompt'));
+  if(!name || !name.trim()) return;
+  beginChoose({id:'temp_'+Date.now(), name:name.trim()+' (temp)', temp:true});
+}
+
+// ---------- choose IN/OUT (explicit, no guessing) ----------
+async function beginChoose(emp){
+  pending={emp, type:null};
+  document.getElementById('chooseName').textContent=emp.name;
+  // soft hint only (does NOT decide for them)
+  let hint=t('chooseHintNone');
+  if(!emp.temp){
+    try{
+      const snap=await PUN.where('empId','==',emp.id).orderBy('ts','desc').limit(1).get();
+      if(!snap.empty){ hint = snap.docs[0].data().type==='in' ? t('chooseHintOut') : t('chooseHintIn'); }
+    }catch(e){}
+  }
+  document.getElementById('chooseHint').textContent=hint;
+  showScreen('choose');
+}
+function choose(type){
+  pending.type=type;
+  showScreen('selfie');
+  document.getElementById('selfieName').textContent=pending.emp.name;
+  const act=document.getElementById('selfieAct');
+  act.className='act '+type;
+  act.textContent = type==='in' ? t('clockingIn') : t('clockingOut');
+  document.getElementById('selfieMsg').textContent='';
+  openCamera();
+}
+
+// ---------- camera ----------
+async function openCamera(){
+  const cam=document.getElementById('cam');
+  document.getElementById('camControls').classList.remove('hide');
+  document.getElementById('camError').classList.add('hide');
+  document.getElementById('snap').classList.add('hide'); cam.classList.remove('hide');
+  try{ camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false}); cam.srcObject=camStream; }
+  catch(e){ console.error(e); document.getElementById('camControls').classList.add('hide'); document.getElementById('camError').classList.remove('hide'); }
+}
+function stopCamera(){ if(camStream){ camStream.getTracks().forEach(x=>x.stop()); camStream=null; } }
+
+async function capturePhoto(){
+  const cam=document.getElementById('cam'), snap=document.getElementById('snap');
+  const W=360, H=Math.round(W*(cam.videoHeight||480)/(cam.videoWidth||360));
+  snap.width=W; snap.height=H; snap.getContext('2d').drawImage(cam,0,0,W,H);
+  const selfie=snap.toDataURL('image/jpeg',0.5);
+  stopCamera(); cam.classList.add('hide'); snap.classList.remove('hide');
+  document.getElementById('camControls').classList.add('hide');
+  const m=document.getElementById('selfieMsg'); m.className='msg'; m.innerHTML='<div class="spin"></div>'+t('saving');
+  const loc=await getLocation();
+  try{ await savePunch(pending.emp, pending.type, selfie, loc); }
+  catch(e){ console.error(e); m.className='msg err'; m.textContent=t('saveErr');
+    document.getElementById('camControls').classList.remove('hide'); cam.classList.remove('hide'); snap.classList.add('hide'); openCamera(); }
+}
+
+function getLocation(){
+  return new Promise(res=>{
+    if(!navigator.geolocation){ res(null); return; }
+    let done=false; const tm=setTimeout(()=>{ if(!done){done=true;res(null);} },6000);
+    navigator.geolocation.getCurrentPosition(
+      p=>{ if(done)return; done=true; clearTimeout(tm); res({lat:p.coords.latitude,lng:p.coords.longitude}); },
+      ()=>{ if(done)return; done=true; clearTimeout(tm); res(null); },
+      {enableHighAccuracy:true,timeout:5500,maximumAge:30000});
+  });
+}
+function haversine(a,b){ const R=6371000,r=x=>x*Math.PI/180;
+  const dLat=r(b.lat-a.lat),dLng=r(b.lng-a.lng);
+  const s=Math.sin(dLat/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s)); }
+function locLabel(loc){ if(!loc) return t('noLoc'); if(commissary){ return haversine(loc,commissary)<=250?'Commissary':'Off-site (event)'; } return 'Recorded'; }
+
+async function savePunch(emp,type,selfie,loc){
+  const now=new Date();
+  const rec={ empId:emp.id, empName:emp.name, temp:!!emp.temp, type,
+    ts:now.getTime(), iso:now.toISOString(),
+    lat:loc?loc.lat:null, lng:loc?loc.lng:null, locLabel:locLabel(loc), selfie, createdAt:now.getTime() };
+  await PUN.add(rec);
+  showDone(emp,type,now,rec.locLabel);
+}
+function showDone(emp,type,when,label){
+  showScreen('done');
+  const ic=document.getElementById('doneIc'); ic.className='ic '+type;
+  ic.innerHTML = type==='in' ? '<i class="ti ti-login-2"></i>' : '<i class="ti ti-logout-2"></i>';
+  document.getElementById('doneTitle').textContent=(type==='in'?t('clockedIn'):t('clockedOut'))+', '+emp.name.split(' ')[0];
+  document.getElementById('doneStamp').textContent=when.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  document.getElementById('doneMeta').innerHTML=
+    when.toLocaleDateString(lang==='es'?'es':'en-US',{weekday:'long',month:'long',day:'numeric'})+
+    '<br><span class="loc-pill"><i class="ti ti-map-pin" style="font-size:12px"></i> '+label+'</span>';
+  clearTimeout(window._dT); window._dT=setTimeout(goPin,6000);
+}
+function cancelPunch(){ stopCamera(); pending=null; goPin(); }
+function goPin(){ stopCamera(); pending=null; showScreen('pin'); }
+function showScreen(name){ ['pin','choose','selfie','done','mgr'].forEach(s=>{ document.getElementById('screen-'+s).classList.toggle('hide', s!==name); }); }
+
+// ---------- manager (English) ----------
+function openManager(){ const p=prompt('Manager PIN'); if(p===null)return; if(p!==MANAGER_PIN){alert('Incorrect PIN.');return;} showScreen('mgr'); mgrTab('time'); }
+function mgrTab(tb){
+  document.getElementById('tab-time').classList.toggle('on',tb==='time');
+  document.getElementById('tab-emp').classList.toggle('on',tb==='emp');
+  document.getElementById('mgr-time').classList.toggle('hide',tb!=='time');
+  document.getElementById('mgr-emp').classList.toggle('hide',tb!=='emp');
+  if(tb==='time') renderTimesheet(); if(tb==='emp') renderEmployees();
+}
+function renderEmployees(){
+  const el=document.getElementById('empList');
+  if(!employees.length){ el.innerHTML='<p class="muted center">No employees yet. Add your first below.</p>'; }
+  else{ el.innerHTML=employees.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(e=>`
+    <div class="emp-row">
+      <span class="nm" style="${e.active===false?'color:var(--ink3);text-decoration:line-through':''}">${e.name}</span>
+      <span class="pin">PIN ${e.pin}</span>
+      <button onclick="toggleEmployee('${e.id}')" title="${e.active===false?'Reactivate':'Deactivate'}"><i class="ti ti-${e.active===false?'user-check':'user-off'}"></i></button>
+      <button onclick="deleteEmployee('${e.id}')" title="Delete"><i class="ti ti-trash"></i></button>
+    </div>`).join(''); }
+  document.getElementById('commStatus').textContent = commissary
+    ? 'Commissary location is set. Punches within ~250m are labeled "Commissary."'
+    : 'Commissary location not set yet — punches show "Recorded" instead of Commissary/Off-site.';
+}
+async function addEmployee(){
+  const name=document.getElementById('newEmpName').value.trim();
+  const pin=document.getElementById('newEmpPin').value.trim();
+  const m=document.getElementById('empMsg'); m.className='msg';
+  if(!name){ m.textContent='Enter a name.'; m.className='msg err'; return; }
+  if(!/^\d{4,6}$/.test(pin)){ m.textContent='PIN must be 4–6 digits.'; m.className='msg err'; return; }
+  if(employees.some(e=>e.pin===pin)){ m.textContent='That PIN is already used. Pick another.'; m.className='msg err'; return; }
+  try{ const ref=await EMP.add({name,pin,active:true,createdAt:Date.now()}); employees.push({id:ref.id,name,pin,active:true});
+    document.getElementById('newEmpName').value=''; document.getElementById('newEmpPin').value='';
+    m.textContent=name+' added.'; m.className='msg ok'; renderEmployees();
+  }catch(e){ m.textContent='Could not save. Check internet.'; m.className='msg err'; }
+}
+async function toggleEmployee(id){ const e=employees.find(x=>x.id===id); if(!e)return; e.active=e.active===false; await EMP.doc(id).update({active:e.active}); renderEmployees(); }
+async function deleteEmployee(id){ const e=employees.find(x=>x.id===id); if(!e)return;
+  if(!confirm('Delete '+e.name+'? Their past punches stay in the timesheet. This only removes their PIN.'))return;
+  await EMP.doc(id).delete(); employees=employees.filter(x=>x.id!==id); renderEmployees(); }
+async function setCommissaryHere(){
+  const cs=document.getElementById('commStatus'); cs.textContent='Getting current location…';
+  const loc=await getLocation();
+  if(!loc){ cs.textContent='Could not get location. Allow location access and try again (while standing in the commissary).'; return; }
+  commissary={lat:loc.lat,lng:loc.lng};
+  try{ await SET.doc('commissary').set(commissary); cs.textContent='Commissary location saved ✓'; }catch(e){ cs.textContent='Could not save location.'; }
+}
+
+// ---------- timesheet ----------
+function weekStart(off){ const n=new Date(); const d=new Date(n.getFullYear(),n.getMonth(),n.getDate()); d.setDate(d.getDate()-d.getDay()+off*7); d.setHours(0,0,0,0); return d; }
+function mgrWeek(delta){ mgrWeekOffset+=delta; renderTimesheet(); }
+async function renderTimesheet(){
+  const ts=document.getElementById('timesheet'); ts.innerHTML='<div class="spin"></div>';
+  const start=weekStart(mgrWeekOffset), end=new Date(start); end.setDate(end.getDate()+7);
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const ed=new Date(end); ed.setDate(ed.getDate()-1);
+  document.getElementById('weekLbl').textContent=months[start.getMonth()]+' '+start.getDate()+' – '+months[ed.getMonth()]+' '+ed.getDate();
+  let docs=[];
+  try{ const s=await PUN.where('ts','>=',start.getTime()).where('ts','<',end.getTime()).orderBy('ts','asc').get(); docs=s.docs.map(d=>({id:d.id,...d.data()})); }
+  catch(e){ console.error(e); ts.innerHTML='<p class="muted center">Could not load timesheet.<br><span style="font-size:11px">If this is the first time, the database may need a one-time index — check the browser console for a link, or send Kenny a screenshot.</span></p>'; return; }
+  if(!docs.length){ ts.innerHTML='<p class="muted center" style="padding:20px 0">No punches this week.</p>'; return; }
+  const byEmp={};
+  docs.forEach(p=>{ (byEmp[p.empId]=byEmp[p.empId]||{name:p.empName,temp:p.temp,punches:[]}).punches.push(p); });
+  let html='';
+  Object.values(byEmp).sort((a,b)=>a.name.localeCompare(b.name)).forEach(emp=>{
+    const shifts=[]; let open=null;
+    emp.punches.forEach(p=>{ if(p.type==='in'){ if(open)shifts.push({inP:open,outP:null}); open=p; } else { if(open){shifts.push({inP:open,outP:p});open=null;} else shifts.push({inP:null,outP:p}); } });
+    if(open) shifts.push({inP:open,outP:null});
+    let totalMs=0;
+    const rows=shifts.map(s=>{
+      const inT=s.inP?fmtT(s.inP.ts):'—', outT=s.outP?fmtT(s.outP.ts):'—';
+      const inD=s.inP?fmtD(s.inP.ts):(s.outP?fmtD(s.outP.ts):'');
+      let dur='',cls='';
+      if(s.inP&&s.outP){ const ms=s.outP.ts-s.inP.ts; totalMs+=ms; dur=fmtDur(ms); }
+      else if(s.inP&&!s.outP){ dur='still in'; cls='open'; }
+      else { dur='missing in'; cls='open'; }
+      const ref=s.inP||s.outP;
+      const thumb=ref&&ref.selfie?`<img class="thumb" src="${ref.selfie}" onclick="viewSelfie(this.src)">`:'<div class="thumb"></div>';
+      let loc=ref&&ref.locLabel?ref.locLabel:'';
+      if(ref&&ref.lat!=null&&ref.lng!=null){ loc=`<a href="https://www.google.com/maps?q=${ref.lat},${ref.lng}" target="_blank">${loc} <i class="ti ti-external-link" style="font-size:10px"></i></a>`; }
+      return `<div class="shift ${cls}">${thumb}<div class="seg">${inD} &nbsp; ${inT} → ${outT}${loc?`<br>${loc}`:''}</div><div class="dur">${dur}</div></div>`;
+    }).join('');
+    html+=`<div class="emp-total"><div class="top"><span class="nm">${emp.name.replace(' (temp)','')}${emp.temp?'<span class="tg">TEMP</span>':''}</span><span class="hrs">${fmtDur(totalMs)}</span></div>${rows}</div>`;
+  });
+  ts.innerHTML=html;
+}
+function viewSelfie(src){ const w=window.open('','_blank'); if(w) w.document.write('<body style="margin:0;background:#111"><img src="'+src+'" style="width:100%;transform:scaleX(-1)"></body>'); }
+function fmtT(ms){ return new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); }
+function fmtD(ms){ return new Date(ms).toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'}); }
+function fmtDur(ms){ if(ms<=0)return '0h 0m'; const m=Math.round(ms/60000),h=Math.floor(m/60),mm=m%60; return h+'h '+mm+'m'; }
+</script>
+</body>
+</html>
