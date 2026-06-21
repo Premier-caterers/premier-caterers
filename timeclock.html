@@ -124,8 +124,32 @@
       <div class="keypad" id="keypad"></div>
       <div class="msg" id="pinMsg"></div>
       <div class="temp-link"><button onclick="startTemp()" data-t="tempBtn">Temp staff — no PIN</button></div>
+      <div class="temp-link" style="margin-top:8px"><button onclick="startFirstTime()" data-t="firstTime">First time? Set up your PIN</button></div>
     </div>
     <div class="footer-link"><button onclick="openManager()" data-t="mgrAccess">Manager access</button></div>
+  </div>
+
+  <!-- ===== FIRST-TIME: enter assigned (letter) PIN ===== -->
+  <div id="screen-setup" class="hide">
+    <div class="card">
+      <p class="lead" data-t="setupLead">Enter the PIN your manager gave you</p>
+      <div class="field"><input id="setupPin" autocapitalize="off" autocomplete="off" placeholder="e.g. Bob1234" style="text-align:center;font-size:18px"></div>
+      <button class="btn" style="background:var(--maroon);color:#fff" onclick="setupCheck()"><i class="ti ti-arrow-right"></i> <span data-t="continue">Continue</span></button>
+      <button class="btn-ghost btn" style="margin-top:10px" onclick="goPin()" data-t="cancel">Cancel</button>
+      <div class="msg" id="setupMsg"></div>
+    </div>
+  </div>
+
+  <!-- ===== CHOOSE A NEW NUMERIC PIN (forced first login + resets) ===== -->
+  <div id="screen-newpin" class="hide">
+    <div class="card">
+      <div class="who"><div class="name" id="newpinName"></div></div>
+      <p class="lead" id="newpinLead" data-t="newPinLead">Choose your own PIN (numbers only)</p>
+      <div class="field"><input id="newPin1" inputmode="numeric" maxlength="6" placeholder="New PIN (4–6 digits)" style="text-align:center;font-size:20px;letter-spacing:4px"></div>
+      <div class="field"><input id="newPin2" inputmode="numeric" maxlength="6" placeholder="Re-enter new PIN" style="text-align:center;font-size:20px;letter-spacing:4px"></div>
+      <button class="btn" style="background:var(--green);color:#fff" onclick="saveNewPin()"><i class="ti ti-check"></i> <span data-t="savePin">Save my PIN</span></button>
+      <div class="msg" id="newpinMsg"></div>
+    </div>
   </div>
 
   <!-- ===== CHOOSE IN/OUT ===== -->
@@ -213,7 +237,7 @@
         <div id="empList"></div>
         <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:14px">
           <div class="field"><label>Employee name</label><input id="newEmpName" placeholder="e.g. Edgar Ramirez"></div>
-          <div class="field"><label>4-digit PIN</label><input id="newEmpPin" inputmode="numeric" maxlength="6" placeholder="e.g. 4821"></div>
+          <div class="field"><label>Starting PIN <span style="color:var(--ink3);font-weight:400">(letters OK, e.g. Bob1234 — they'll set their own number PIN on first login)</span></label><input id="newEmpPin" autocapitalize="off" autocomplete="off" maxlength="12" placeholder="e.g. Bob1234"></div>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);margin-bottom:12px;cursor:pointer"><input type="checkbox" id="newEmpFT" style="width:17px;height:17px"> <b>Full time</b> &mdash; one-tap check-in, no photo, no clock-out (tracked as Worked / Did not work)</label>
           <button class="btn" style="background:var(--maroon);color:#fff" onclick="addEmployee()"><i class="ti ti-user-plus"></i> Add employee</button>
           <div class="msg" id="empMsg"></div>
@@ -240,7 +264,12 @@ const T = {
        chooseHintNone:'Are you clocking in or out?', clockingIn:'Clocking IN', clockingOut:'Clocking OUT',
        saving:'Saving…', saveErr:'Could not save — check internet and try again.',
        tempPrompt:'Type your full name', clockedIn:'Clocked in', clockedOut:'Clocked out',
-       noLoc:'No location' },
+       noLoc:'No location',
+       firstTime:'First time? Set up your PIN', setupLead:'Enter the PIN your manager gave you',
+       continue:'Continue', newPinLead:'Choose your own PIN (numbers only)', savePin:'Save my PIN',
+       setupBad:'PIN not found. Check with your manager.', alreadySet:'You already set your PIN — just use the keypad.',
+       pinDigits:'PIN must be 4–6 numbers.', pinMatch:'The two PINs do not match.', pinTaken:'That PIN is taken. Pick another.',
+       welcome:'Welcome' },
   es:{ subtitle:'Reloj de Personal', enterPin:'Ingrese su PIN', tempBtn:'Personal temporal — sin PIN',
        mgrAccess:'Acceso de gerente', clockIn:'ENTRADA', clockOut:'SALIDA', cancel:'Cancelar',
        takePhoto:'Tomar foto y marcar', camErr:'Se requiere acceso a la cámara para marcar entrada o salida. Por favor permita la cámara e intente de nuevo.',
@@ -249,7 +278,12 @@ const T = {
        chooseHintNone:'¿Está marcando entrada o salida?', clockingIn:'Marcando ENTRADA', clockingOut:'Marcando SALIDA',
        saving:'Guardando…', saveErr:'No se pudo guardar — revise el internet e intente de nuevo.',
        tempPrompt:'Escriba su nombre completo', clockedIn:'Entrada registrada', clockedOut:'Salida registrada',
-       noLoc:'Sin ubicación' }
+       noLoc:'Sin ubicación',
+       firstTime:'¿Primera vez? Configure su PIN', setupLead:'Ingrese el PIN que le dio su gerente',
+       continue:'Continuar', newPinLead:'Elija su propio PIN (solo números)', savePin:'Guardar mi PIN',
+       setupBad:'PIN no encontrado. Consulte con su gerente.', alreadySet:'Ya configuró su PIN — use el teclado.',
+       pinDigits:'El PIN debe tener 4–6 números.', pinMatch:'Los dos PIN no coinciden.', pinTaken:'Ese PIN ya está en uso. Elija otro.',
+       welcome:'Bienvenido' }
 };
 let lang = localStorage.getItem('tcLang') || 'en';
 function t(k){ return (T[lang]&&T[lang][k]) || T.en[k] || k; }
@@ -323,8 +357,50 @@ function submitPin(){
   const emp=employees.find(e=>e.pin===pinEntry && e.active!==false);
   if(!emp){ m.textContent=t('pinBad'); m.className='msg err'; pinEntry=''; renderDots(); return; }
   pinEntry=''; renderDots();
+  if(emp.pinSet!==true){ startNewPin(emp); return; }   // first login → must set their own numeric PIN
   if(emp.fullTime){ fullTimeCheckIn(emp); return; }
   beginChoose({id:emp.id, name:emp.name, temp:false});
+}
+
+// ----- first-time setup (assigned letter PIN -> set own numeric PIN) -----
+function startFirstTime(){
+  document.getElementById('setupPin').value='';
+  document.getElementById('setupMsg').textContent='';
+  showScreen('setup');
+  setTimeout(()=>document.getElementById('setupPin').focus(),100);
+}
+function setupCheck(){
+  const m=document.getElementById('setupMsg'); m.className='msg';
+  const v=(document.getElementById('setupPin').value||'').trim();
+  if(!v){ return; }
+  const emp=employees.find(e=>(e.pin||'').toLowerCase()===v.toLowerCase() && e.active!==false);
+  if(!emp){ m.textContent=t('setupBad'); m.className='msg err'; return; }
+  if(emp.pinSet===true){ m.textContent=t('alreadySet'); m.className='msg err'; return; }
+  startNewPin(emp);
+}
+function startNewPin(emp){
+  window._newPinEmp=emp;
+  document.getElementById('newpinName').textContent=t('welcome')+', '+emp.name.replace(' (temp)','').split(' ')[0];
+  document.getElementById('newPin1').value=''; document.getElementById('newPin2').value='';
+  document.getElementById('newpinMsg').textContent='';
+  showScreen('newpin');
+  setTimeout(()=>document.getElementById('newPin1').focus(),100);
+}
+async function saveNewPin(){
+  const emp=window._newPinEmp; if(!emp) return;
+  const m=document.getElementById('newpinMsg'); m.className='msg';
+  const p1=(document.getElementById('newPin1').value||'').trim();
+  const p2=(document.getElementById('newPin2').value||'').trim();
+  if(!/^\d{4,6}$/.test(p1)){ m.textContent=t('pinDigits'); m.className='msg err'; return; }
+  if(p1!==p2){ m.textContent=t('pinMatch'); m.className='msg err'; return; }
+  if(employees.some(e=>e.id!==emp.id && e.pin===p1)){ m.textContent=t('pinTaken'); m.className='msg err'; return; }
+  try{
+    await EMP.doc(emp.id).update({pin:p1, pinSet:true});
+    emp.pin=p1; emp.pinSet=true;
+    window._newPinEmp=null;
+    goPin();
+    const pm=document.getElementById('pinMsg'); pm.className='msg ok'; pm.textContent='✓ '+t('savePin'); setTimeout(()=>{pm.textContent='';},2500);
+  }catch(e){ m.textContent=t('saveErr'); m.className='msg err'; }
 }
 
 // Full-time (salaried): one tap marks them present for the day. No selfie, no clock-out.
@@ -445,7 +521,7 @@ function showDone(emp,type,when,label,ft){
 }
 function cancelPunch(){ stopCamera(); pending=null; goPin(); }
 function goPin(){ stopCamera(); pending=null; showScreen('pin'); }
-function showScreen(name){ ['pin','choose','selfie','done','mgr'].forEach(s=>{ document.getElementById('screen-'+s).classList.toggle('hide', s!==name); }); }
+function showScreen(name){ ['pin','setup','newpin','choose','selfie','done','mgr'].forEach(s=>{ document.getElementById('screen-'+s).classList.toggle('hide', s!==name); }); }
 
 // ---------- manager (English) ----------
 function openManager(){ const p=prompt('Manager PIN'); if(p===null)return; if(p!==MANAGER_PIN){alert('Incorrect PIN.');return;} showScreen('mgr'); mgrTab('time'); }
@@ -465,7 +541,8 @@ function renderEmployees(){
   else{ el.innerHTML=employees.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(e=>`
     <div class="emp-row">
       <span class="nm" style="${e.active===false?'color:var(--ink3);text-decoration:line-through':''}">${e.name}${e.fullTime?' <span style="font-size:10px;font-weight:700;color:var(--green);background:var(--green-bg);padding:1px 6px;border-radius:5px;vertical-align:1px">FT</span>':''}</span>
-      <span class="pin">PIN ${e.pin}</span>
+      <span class="pin">PIN ${e.pinSet===false?'<i class="ti ti-clock-hour-3" title="Not set yet"></i> '+e.pin:'••••'}</span>
+      <button onclick="resetEmployeePin('${e.id}')" title="Reset PIN"><i class="ti ti-key"></i></button>
       <button onclick="toggleEmployee('${e.id}')" title="${e.active===false?'Reactivate':'Deactivate'}"><i class="ti ti-${e.active===false?'user-check':'user-off'}"></i></button>
       <button onclick="deleteEmployee('${e.id}')" title="Delete"><i class="ti ti-trash"></i></button>
     </div>`).join(''); }
@@ -478,15 +555,26 @@ async function addEmployee(){
   const pin=document.getElementById('newEmpPin').value.trim();
   const m=document.getElementById('empMsg'); m.className='msg';
   if(!name){ m.textContent='Enter a name.'; m.className='msg err'; return; }
-  if(!/^\d{4,6}$/.test(pin)){ m.textContent='PIN must be 4–6 digits.'; m.className='msg err'; return; }
-  if(employees.some(e=>e.pin===pin)){ m.textContent='That PIN is already used. Pick another.'; m.className='msg err'; return; }
+  if(!/^[A-Za-z0-9]{4,12}$/.test(pin)){ m.textContent='PIN must be 4–12 letters or numbers.'; m.className='msg err'; return; }
+  if(employees.some(e=>(e.pin||'').toLowerCase()===pin.toLowerCase())){ m.textContent='That PIN is already used. Pick another.'; m.className='msg err'; return; }
   const fullTime=document.getElementById('newEmpFT').checked;
-  try{ const ref=await EMP.add({name,pin,active:true,fullTime,createdAt:Date.now()}); employees.push({id:ref.id,name,pin,active:true,fullTime});
+  try{ const ref=await EMP.add({name,pin,active:true,fullTime,pinSet:false,createdAt:Date.now()}); employees.push({id:ref.id,name,pin,active:true,fullTime,pinSet:false});
     document.getElementById('newEmpName').value=''; document.getElementById('newEmpPin').value=''; document.getElementById('newEmpFT').checked=false;
     m.textContent=name+' added.'; m.className='msg ok'; renderEmployees();
   }catch(e){ m.textContent='Could not save. Check internet.'; m.className='msg err'; }
 }
 async function toggleEmployee(id){ const e=employees.find(x=>x.id===id); if(!e)return; e.active=e.active===false; await EMP.doc(id).update({active:e.active}); renderEmployees(); }
+async function resetEmployeePin(id){
+  const e=employees.find(x=>x.id===id); if(!e) return;
+  const suggest=(e.name.split(' ')[0]||'Temp')+'1234';
+  const tmp=prompt('Set a temporary PIN for '+e.name+'.\nThey will choose their own number PIN on next login.\nLetters OK (e.g. '+suggest+'):', suggest);
+  if(!tmp) return;
+  const v=tmp.trim();
+  if(!/^[A-Za-z0-9]{4,12}$/.test(v)){ alert('PIN must be 4–12 letters or numbers.'); return; }
+  if(employees.some(x=>x.id!==id && (x.pin||'').toLowerCase()===v.toLowerCase())){ alert('That PIN is already used. Pick another.'); return; }
+  try{ await EMP.doc(id).update({pin:v, pinSet:false}); e.pin=v; e.pinSet=false; renderEmployees(); alert(e.name+' can now use "First time? Set up your PIN" with: '+v); }
+  catch(err){ alert('Could not reset. Check internet.'); }
+}
 async function deleteEmployee(id){ const e=employees.find(x=>x.id===id); if(!e)return;
   if(!confirm('Delete '+e.name+'? Their past punches stay in the timesheet. This only removes their PIN.'))return;
   await EMP.doc(id).delete(); employees=employees.filter(x=>x.id!==id); renderEmployees(); }
