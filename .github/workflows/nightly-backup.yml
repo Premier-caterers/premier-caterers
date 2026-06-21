@@ -1,26 +1,30 @@
 # Premier Caterers — Nightly Backup
-# Saves a dated copy of index.html and grocery.html into the backups/ folder
-# every night at 3:00 AM Eastern (year-round), writes a factual summary next
-# to each, and deletes backups older than 60 days.
+# Saves a dated copy of index.html and grocery.html into the backups/ folder,
+# writes a factual summary next to each, and deletes backups older than 60 days.
 #
 # This file lives at: .github/workflows/nightly-backup.yml
 # It does NOT touch your live app code. It only adds files under backups/.
+#
+# NOTE: GitHub's scheduler is in UTC and is often late/imprecise, so instead of
+# trying to hit an exact 3 AM, we simply run once a day (early Eastern morning)
+# and back up whenever GitHub actually fires. A backup at an odd hour still
+# protects you; the important thing is that it runs every day.
 
 name: Nightly Backup
 
 on:
-  # GitHub's scheduler runs in UTC and has no daylight-saving awareness, so we
-  # fire at BOTH 07:00 and 08:00 UTC and let the guard step below run the
-  # backup only when it is actually 3 AM in New York. That lands on 3 AM
-  # Eastern every day, summer and winter.
   schedule:
-    - cron: '0 7 * * *'   # 3 AM Eastern during daylight time (EDT)
-    - cron: '0 8 * * *'   # 3 AM Eastern during standard time (EST)
+    - cron: '0 7 * * *'   # ~3 AM Eastern (daylight) — may run later if GitHub is busy
   # Lets you also run it by hand from the Actions tab to test it.
   workflow_dispatch:
 
 permissions:
   contents: write   # allows the job to commit the backup files
+
+# If two runs ever overlap, let the newer one proceed cleanly.
+concurrency:
+  group: nightly-backup
+  cancel-in-progress: false
 
 jobs:
   backup:
@@ -29,26 +33,7 @@ jobs:
       - name: Get the repository
         uses: actions/checkout@v4
 
-      - name: Only continue if it is 3 AM Eastern (skip the wrong scheduled run)
-        id: gate
-        run: |
-          # Manual runs (workflow_dispatch) always proceed.
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual run — proceeding."
-            echo "go=yes" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          HOUR=$(TZ=America/New_York date +%H)
-          if [ "$HOUR" = "03" ]; then
-            echo "It is 3 AM Eastern — proceeding."
-            echo "go=yes" >> "$GITHUB_OUTPUT"
-          else
-            echo "Eastern hour is $HOUR, not 03 — skipping this run."
-            echo "go=no" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Make the backups and a summary for each
-        if: steps.gate.outputs.go == 'yes'
         run: |
           set -e
           mkdir -p backups
@@ -96,7 +81,6 @@ jobs:
           backup_one "grocery.html"
 
       - name: Delete backups older than 60 days
-        if: steps.gate.outputs.go == 'yes'
         run: |
           CUTOFF=$(date -d '60 days ago' +%Y%m%d)
           shopt -s nullglob
@@ -112,7 +96,6 @@ jobs:
           done
 
       - name: Save the backups to the repository
-        if: steps.gate.outputs.go == 'yes'
         run: |
           git config user.name "Premier Backup Bot"
           git config user.email "actions@github.com"
