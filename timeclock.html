@@ -123,7 +123,6 @@
       <div class="pin-dots" id="pinDots"></div>
       <div class="keypad" id="keypad"></div>
       <div class="msg" id="pinMsg"></div>
-      <div class="temp-link"><button onclick="startTemp()" data-t="tempBtn">Temp staff — no PIN</button></div>
       <div class="temp-link" style="margin-top:8px"><button onclick="startFirstTime()" data-t="firstTime">First time? Set up your PIN</button></div>
     </div>
     <div class="footer-link"><button onclick="openManager()" data-t="mgrAccess">Manager access</button></div>
@@ -440,11 +439,6 @@ async function fullTimeCheckIn(emp){
     const m=document.getElementById('pinMsg'); m.className='msg err'; m.textContent=t('saveErr');
   }
   _ftBusy=false;
-}
-function startTemp(){
-  const name=prompt(t('tempPrompt'));
-  if(!name || !name.trim()) return;
-  beginChoose({id:'temp_'+Date.now(), name:name.trim()+' (temp)', temp:true});
 }
 
 // ---------- choose IN/OUT (explicit, no guessing) ----------
