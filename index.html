@@ -1766,7 +1766,7 @@ function renderPipeline(){
     ${role.canEdit ? `<button class="add-btn" onclick="openAddInquiryModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add inquiry</button>` : ''}
   </div>
   ${detailHtml}
-  <div class="pipeline-cols">
+  <div class="pipeline-cols" style="display:flex;flex-wrap:nowrap;gap:12px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch">
   ${stages.map(s=>{
     const bookedCols = {booked:1, month_out:1, two_weeks:1, this_week:1, past:1};
     let cards = bookedCols[s.key]
@@ -1776,7 +1776,7 @@ function renderPipeline(){
     cards = cards.slice().sort(plSortComparator(sortBy));
     const isBooked = (s.key==='booked'||s.key==='month_out'||s.key==='two_weeks'||s.key==='this_week');
     const colCompact = !!window._plColCollapsed[s.key];
-    return `<div class="pipeline-col">
+    return `<div class="pipeline-col" style="flex:0 0 300px;min-width:300px">
       <div class="pipeline-col-header">
         <div class="pipeline-col-title"><i class="ti ${s.icon}" style="font-size:14px"></i>${s.label}</div>
         <div style="display:flex;align-items:center;gap:6px">
