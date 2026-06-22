@@ -4857,12 +4857,17 @@ function getFullEventDate(e){
   return fullDay;
 }
 function calcInvoiceTotals(inv){
-  const subtotal = inv.lines.reduce((s,l)=>s+(parseFloat(l.qty||0)*parseFloat(l.price||0)),0);
+  const amt = l => parseFloat(l.qty||0)*parseFloat(l.price||0);
+  const subtotal = inv.lines.reduce((s,l)=>s+amt(l),0);
   const logRate = inv.logisticsRate !== undefined ? parseFloat(inv.logisticsRate) : LOGISTICS_RATE;
-  const logistics = subtotal * logRate;
-  const taxBase = subtotal + logistics;
-  const tax = inv.taxExempt ? 0 : taxBase * TAX_RATE;
-  const grand = taxBase + tax;
+  const logistics = inv.lines.reduce((s,l)=>s+(l.noLog?0:amt(l)),0) * logRate;
+  let tax = 0;
+  if(!inv.taxExempt){
+    const taxableGoods = inv.lines.reduce((s,l)=>s+(l.noTax?0:amt(l)),0);
+    const taxableLogistics = inv.lines.reduce((s,l)=>s+((l.noTax||l.noLog)?0:amt(l)),0) * logRate;
+    tax = (taxableGoods + taxableLogistics) * TAX_RATE;
+  }
+  const grand = subtotal + logistics + tax;
   const balance = grand - parseFloat(inv.deposit||0);
   return {subtotal, logistics, tax, grand, balance, logRate};
 }
@@ -4898,7 +4903,7 @@ function renderInvoices(){
     const grand = tots ? tots.grand : 0;
     const deposit = inv ? parseFloat(inv.deposit||0) : 0;
     const balance = tots ? tots.balance : 0;
-    const isPaid = status==='paid';
+    const isPaid = status==='paid' && balance <= 0.01;
     const hasBalance = !isPaid && balance > 0.01;
     const statusLabels = {none:'No quote',quote:'Quote',approved:'Approved',invoice:'Invoice open',paid:'Paid'};
     const fullDate = getFullEventDate(e);
@@ -5026,7 +5031,7 @@ function renderInvoiceDetail(){
     <div class="detail-header">
       <div class="detail-title">
         ${isInvoice?'Invoice':'Quote'} — ${displayJob(e.job)} ${e.name}
-        <span style="font-size:12px;font-weight:400;padding:3px 10px;border-radius:8px;margin-left:8px;${inv.status==='paid'?'background:var(--green-bg);color:var(--green-text)':inv.status==='invoice'?'background:var(--purple-bg);color:var(--purple-text)':inv.status==='approved'?'background:var(--blue-bg);color:var(--blue-text)':'background:var(--amber-bg);color:var(--amber-text)'}">${inv.status.charAt(0).toUpperCase()+inv.status.slice(1)}</span>
+        <span style="font-size:12px;font-weight:400;padding:3px 10px;border-radius:8px;margin-left:8px;${(inv.status==='paid'&&calcInvoiceTotals(inv).balance>0.01)?'background:var(--amber-bg);color:var(--amber-text)':inv.status==='paid'?'background:var(--green-bg);color:var(--green-text)':inv.status==='invoice'?'background:var(--purple-bg);color:var(--purple-text)':inv.status==='approved'?'background:var(--blue-bg);color:var(--blue-text)':'background:var(--amber-bg);color:var(--amber-text)'}">${(inv.status==='paid'&&calcInvoiceTotals(inv).balance>0.01)?'Balance due':inv.status.charAt(0).toUpperCase()+inv.status.slice(1)}</span>
         ${changes.some(c=>c.job===e.job&&(c.notifyDepts||changeDepts).includes('Invoice')&&!(c.acks||{})['Invoice'])?'<span style="margin-left:8px;padding:3px 10px;border-radius:8px;background:var(--amber-bg);color:var(--amber-text);font-size:12px;font-weight:600;border:1.5px solid var(--amber-text)">⚠ CHANGE ORDER PENDING</span>':''}
       </div>
       <div class="detail-actions">
@@ -5035,6 +5040,7 @@ function renderInvoiceDetail(){
         ${inv.status==='invoice'&&!inv._editOverride?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--amber-text)" onclick="unlockInvoiceEdit('${eid}')"><i class="ti ti-pencil" style="font-size:12px"></i> Edit invoice</button>`:''}
         ${inv.status==='invoice'&&inv._editOverride?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--green-text)" onclick="openPaymentModal('${eid}')">Record payment</button>`:''}
         ${inv.status==='invoice'&&!inv._editOverride?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--green-text)" onclick="openPaymentModal('${eid}')">Record payment</button>`:''}
+        ${inv.status==='paid'&&calcInvoiceTotals(inv).balance>0.01?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--green-text)" onclick="openPaymentModal('${eid}')"><i class="ti ti-cash" style="font-size:12px"></i> Record payment</button>`:''}
         ${inv.status==='paid'&&!inv._editOverride?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--amber-text)" onclick="unlockInvoiceEdit('${eid}')"><i class="ti ti-pencil" style="font-size:12px"></i> Edit invoice</button>`:''}
         ${inv.status==='paid'&&inv._editOverride?`<button style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);cursor:pointer" onclick="lockInvoiceEdit('${eid}')">Lock edits</button>`:''}
         <button class="icon-btn" onclick="printInvoice('${eid}')" title="Print"><i class="ti ti-printer"></i></button>
@@ -5070,6 +5076,10 @@ function renderInvoiceDetail(){
           <td style="padding:8px 10px">
             <div style="font-size:11px;color:var(--text3);margin-bottom:2px">${line.category}</div>
             ${canEdit?`<input type="text" value="${line.description}" onchange="updateInvoiceLine('${eid}',${i},'description',this.value)" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:`<div>${line.description}</div>`}
+            ${canEdit?`<div style="display:flex;gap:5px;margin-top:5px">
+              <button onclick="toggleInvoiceLineFlag('${eid}',${i},'noTax')" title="${line.noTax?'Tax removed from this line — click to apply tax':'Tax applied — click to remove from this line'}" style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;cursor:pointer;border:0.5px solid ${line.noTax?'#e05c5c':'var(--border2)'};background:${line.noTax?'var(--amber-bg,#fdf3e3)':'transparent'};color:${line.noTax?'#b7791f':'var(--text3)'}">${line.noTax?'✕ No tax':'Tax'}</button>
+              <button onclick="toggleInvoiceLineFlag('${eid}',${i},'noLog')" title="${line.noLog?'Logistics removed from this line — click to apply':'Logistics applied — click to remove from this line'}" style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;cursor:pointer;border:0.5px solid ${line.noLog?'#e05c5c':'var(--border2)'};background:${line.noLog?'var(--amber-bg,#fdf3e3)':'transparent'};color:${line.noLog?'#b7791f':'var(--text3)'}">${line.noLog?'✕ No logistics':'Logistics'}</button>
+            </div>`:`${(line.noTax||line.noLog)?`<div style="font-size:10px;color:var(--text3);margin-top:3px">${[line.noTax?'no tax':'',line.noLog?'no logistics':''].filter(Boolean).join(' · ')}</div>`:''}`}
           </td>
           <td style="padding:8px 10px;text-align:center">
             ${canEdit?`<input type="number" value="${line.qty}" min="0" onchange="updateInvoiceLine('${eid}',${i},'qty',this.value)" style="${inpStyle};width:70px">`:line.qty}
@@ -5152,6 +5162,14 @@ function renderInvoiceDetail(){
 function updateInvoiceLine(eid,idx,field,val){
   if(!invoices[eid]) return;
   invoices[eid].lines[idx][field] = field==='description' ? val : parseFloat(val)||0;
+  renderInvoiceDetail();
+}
+
+function toggleInvoiceLineFlag(eid,idx,flag){
+  if(!invoices[eid] || !invoices[eid].lines[idx]) return;
+  const line = invoices[eid].lines[idx];
+  line[flag] = !line[flag];
+  _saveInvoice(eid, invoices[eid]);
   renderInvoiceDetail();
 }
 
@@ -5555,8 +5573,10 @@ function buildInvoiceHTML(eid){
     inv.lines.map(l=>{
       const tot = parseFloat(l.qty||0)*parseFloat(l.price||0);
       if(!tot && !l.price) return '';
-      return '<tr><td><span class="cat">'+l.category+'</span>'+l.description+'</td><td class="c">'+l.qty+'</td><td class="r">$'+parseFloat(l.price||0).toFixed(2)+'</td><td class="r">$'+tot.toFixed(2)+'</td></tr>';
+      const marks = (l.noTax?'†':'')+(l.noLog?'‡':'');
+      return '<tr><td><span class="cat">'+l.category+'</span>'+l.description+(marks?' <sup style="color:#888">'+marks+'</sup>':'')+'</td><td class="c">'+l.qty+'</td><td class="r">$'+parseFloat(l.price||0).toFixed(2)+'</td><td class="r">$'+tot.toFixed(2)+'</td></tr>';
     }).join('')+
+    ((inv.lines.some(l=>l.noTax)||inv.lines.some(l=>l.noLog))?'<tr><td colspan="4" style="font-size:10px;color:#888;padding-top:6px;border:none">'+(inv.lines.some(l=>l.noTax)?'† not subject to sales tax&nbsp;&nbsp;':'')+(inv.lines.some(l=>l.noLog)?'‡ no logistics fee':'')+'</td></tr>':'')+
     '</tbody></table>'+
     '<div class="totals"><div class="totals-inner">'+
       '<div class="tot-row"><span>Subtotal</span><span>$'+tots.subtotal.toFixed(2)+'</span></div>'+
