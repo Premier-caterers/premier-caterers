@@ -62,7 +62,8 @@
   .grow input{border:1px solid transparent;border-radius:5px;font-size:11.5px;padding:1px 4px;background:transparent;font-family:inherit;color:var(--ink)}
   .grow input:hover,.grow input:focus{border-color:var(--line);background:#fff;outline:none}
   .grow .qty input{width:44px;text-align:right}.grow .ven input{width:60px;text-align:right;color:var(--ink3)}
-  .grow .del{opacity:0;cursor:pointer;color:var(--ink3);font-size:13px;border:none;background:none}
+  .grow .del{opacity:0;cursor:pointer;color:var(--ink3);font-size:13px;border:none;background:none;padding:0 1px}
+  .grow .del:hover{color:var(--maroon)}
   .grow:hover .del{opacity:1}
   .empty{padding:30px 16px;text-align:center;color:var(--ink3);font-size:13px}
   .addrow{font-size:11px;color:var(--maroon);cursor:pointer;padding:2px 0 4px;display:inline-block}
@@ -307,10 +308,19 @@ function slug(s){ return (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'').slice(0
 async function loadEvents(){
   events = [];
   try{
+    const today = new Date(); today.setHours(0,0,0,0);
+    const cutoff = new Date(today.getTime() - 2*24*60*60*1000); // include events from 2 days ago (current week tail)
+    const cutStr = cutoff.toISOString().split('T')[0];
     const snap = await EVENTS.get();
-    snap.forEach(d=>{ const e=d.data(); events.push(e); });
-    // sort by weekOf desc then job
-    events.sort((a,b)=>String(b.weekOf||'').localeCompare(String(a.weekOf||'')) || String(a.job||'').localeCompare(String(b.job||'')));
+    snap.forEach(d=>{
+      const e=d.data();
+      // Keep only events whose date OR week-ending is today/future (hide past). If no date, keep.
+      const keyDate = e.eventDate || e.weekOf || '';
+      if(keyDate && keyDate < cutStr) return; // skip past
+      events.push(e);
+    });
+    // sort soonest first (ascending by date/week)
+    events.sort((a,b)=>String(a.eventDate||a.weekOf||'').localeCompare(String(b.eventDate||b.weekOf||'')) || String(a.job||'').localeCompare(String(b.job||'')));
   }catch(e){ console.warn('events load failed',e); }
   const sel = document.getElementById('evSelect');
   sel.innerHTML = '<option value="">— pick an event —</option>' + events.map(e=>{
@@ -394,6 +404,28 @@ function setOv(sid,ri,f,v){ overrides[ovK(sid,ri,f)]=v; }
 function getOv(sid,ri,f,d){ const k=ovK(sid,ri,f); return overrides[k]!==undefined?overrides[k]:d; }
 function delRow(sid,ri){ overrides[ovK(sid,ri,'_del')]=true; renderKitchen(); }
 function isDel(sid,ri){ return overrides[ovK(sid,ri,'_del')]===true; }
+// manual extra rows added on this event, per section
+function extraKey(sid){ return sid+'|_extra'; }
+function getExtras(sid){ return overrides[extraKey(sid)] || []; }
+function addExtraRow(sid){
+  const arr = getExtras(sid).slice();
+  arr.push(['X','','','']);
+  overrides[extraKey(sid)] = arr;
+  renderKitchen();
+}
+function setExtra(sid,ei,f,v){
+  const arr = getExtras(sid).slice();
+  if(!arr[ei]) return;
+  const map={c:0,it:1,q:2,v:3};
+  arr[ei][map[f]] = v;
+  overrides[extraKey(sid)] = arr;
+}
+function delExtra(sid,ei){
+  const arr = getExtras(sid).slice();
+  arr.splice(ei,1);
+  overrides[extraKey(sid)] = arr;
+  renderKitchen();
+}
 
 function renderKitchen(){
   const host=document.getElementById('kitchen');
@@ -417,7 +449,21 @@ function renderKitchen(){
            `<span class="it">${esc(r[1])}</span>`+
            `<span class="qty"><input value="${qty}" onchange="setOv('${s.id}',${ri},'q',this.value)"></span>`+
            `<span class="ven"><input value="${ven}" onchange="setOv('${s.id}',${ri},'v',this.value)"></span>`+
-           `<button class="del no-print" title="remove" onclick="delRow('${s.id}',${ri})"><i class="ti ti-x"></i></button></div>`;
+           `<button class="del no-print" title="remove" onclick="delRow('${s.id}',${ri})"><i class="ti ti-x"></i></button>`+
+           `<button class="del no-print" title="add a row here" onclick="addExtraRow('${s.id}')"><i class="ti ti-plus"></i></button></div>`;
+      });
+      // manual extra rows for this event
+      getExtras(s.id).forEach((er,ei)=>{
+        rowcount++;
+        const ecode=(er[0]||'X').toUpperCase();
+        h+=`<div class="grow"><select class="no-print" style="width:34px;padding:0 2px;font-size:10px;border:1px solid var(--line);border-radius:4px" onchange="setExtra('${s.id}',${ei},'c',this.value)">`+
+           ['X','P','M','D'].map(c=>`<option ${ecode===c?'selected':''}>${c}</option>`).join('')+`</select>`+
+           `<span class="code c${ecode} print-only" style="display:none">${ecode}</span>`+
+           `<span class="it"><input value="${esc(er[1])}" placeholder="new item" style="width:100%" onchange="setExtra('${s.id}',${ei},'it',this.value)"></span>`+
+           `<span class="qty"><input value="${esc(er[2])}" placeholder="qty" onchange="setExtra('${s.id}',${ei},'q',this.value)"></span>`+
+           `<span class="ven"><input value="${esc(er[3])}" placeholder="vendor" onchange="setExtra('${s.id}',${ei},'v',this.value)"></span>`+
+           `<button class="del no-print" title="remove" onclick="delExtra('${s.id}',${ei})"><i class="ti ti-x"></i></button>`+
+           `<button class="del no-print" title="add a row here" onclick="addExtraRow('${s.id}')"><i class="ti ti-plus"></i></button></div>`;
       });
       h+='</div></div>';
     });
@@ -445,6 +491,14 @@ function buildSavedRows(){
           dept:s.dept, section:cleanName(s),
           code:(getOv(s.id,ri,'c',(r[0]||'X'))).toUpperCase(),
           item:r[1], qty:getOv(s.id,ri,'q',r[2]), vendor:getOv(s.id,ri,'v',r[3])
+        });
+      });
+      getExtras(s.id).forEach(er=>{
+        if(!er[1] || !er[1].trim()) return;
+        out.push({
+          dept:s.dept, section:cleanName(s),
+          code:(er[0]||'X').toUpperCase(),
+          item:er[1].trim(), qty:(er[2]||'').trim(), vendor:(er[3]||'').trim()
         });
       });
     });
@@ -608,28 +662,87 @@ async function saveNewItem(){
   renderLib(); renderPicker();
 }
 
-// ============ Print ============
+// ============ Print (clean standalone documents) ============
+function evHeader(ev){
+  const num = ev.num ? '#'+ev.num+'  ' : '';
+  let h = `<div style="border-bottom:2px solid #8B1A1A;padding-bottom:8px;margin-bottom:14px">`+
+          `<div style="font-size:20px;font-weight:700;color:#8B1A1A">${num}${esc(ev.name||'Event')}</div>`+
+          `<div style="font-size:12px;color:#555;margin-top:3px">`+
+          [ev.typeLabel||library[curType]&&library[curType].label, ev.weekOf?('W/E '+fmtMD(ev.weekOf)):'', ev.guests?('Guests: '+esc(ev.guests)):'']
+            .filter(Boolean).join(' &nbsp;·&nbsp; ')+
+          `</div></div>`;
+  return h;
+}
 function printKitchen(){
-  if(!chosen.size){ toast('Nothing to print'); return; }
-  showTab('build'); window.print();
+  if(!chosen.size){ toast('Tick items first'); return; }
+  const ev=currentEventObj()||{};
+  const rows=buildSavedRows();   // already grouped in dept order, includes extras
+  if(!rows.length){ toast('Nothing to print'); return; }
+  const codeColor={P:['#fdf3e3','#9a6a00'],M:['#fbe3e3','#a32d2d'],X:['#f1efe8','#6b625f'],D:['#e6f1fb','#185fa5']};
+  // group rows by section, preserving order
+  const groups=[]; const idx={};
+  rows.forEach(r=>{
+    const key=r.dept+'||'+r.section;
+    if(idx[key]===undefined){ idx[key]=groups.length; groups.push({dept:r.dept,section:r.section,rows:[]}); }
+    groups[idx[key]].rows.push(r);
+  });
+  let body='';
+  let lastDept='';
+  groups.forEach(g=>{
+    if(g.dept!==lastDept){ body+=`<div style="background:#f3ece9;color:#8B1A1A;font-weight:700;font-size:12px;text-transform:capitalize;padding:4px 8px;margin-top:8px">${esc(g.dept)}</div>`; lastDept=g.dept; }
+    const groc = g.rows.map(r=>{
+      const c=(r.code||'X').toUpperCase(); const col=codeColor[c]||codeColor.X;
+      return `<div style="display:flex;gap:6px;font-size:11.5px;padding:1px 0;align-items:center">`+
+             `<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:16px;border-radius:3px;font-size:9px;font-weight:700;background:${col[0]};color:${col[1]}">${c}</span>`+
+             `<span style="flex:1">${esc(r.item)}</span>`+
+             `<span style="width:42px;text-align:right">${esc(r.qty)}</span>`+
+             `<span style="width:60px;text-align:right;color:#999">${esc(r.vendor)}</span></div>`;
+    }).join('');
+    if(layoutB){
+      body+=`<div style="border-top:1px solid #eee;padding:5px 8px"><div style="font-weight:600;font-size:12.5px;margin-bottom:2px">${esc(g.section)}</div>${groc}</div>`;
+    }else{
+      body+=`<div style="display:flex;border-top:1px solid #eee">`+
+            `<div style="flex:0 0 44%;padding:5px 8px;font-size:12.5px;border-right:1px solid #eee">${esc(g.section)}</div>`+
+            `<div style="flex:1;padding:4px 8px">${groc}</div></div>`;
+    }
+  });
+  const doc=`<div style="font-family:-apple-system,Arial,sans-serif;max-width:760px;margin:0 auto;padding:24px;color:#23201f">`+
+            evHeader(ev)+`<div style="font-size:13px;font-weight:700;margin-bottom:4px">Kitchen copy</div>`+body+`</div>`;
+  openPrint(doc, (ev.num?('#'+ev.num+' '):'')+'Kitchen copy');
 }
 function printClientMenu(){
-  // Clean menu: the chosen item names only, by department, NO grocery
   const list=secList(); const picked=list.filter(s=>chosen.has(s.id));
   if(!picked.length){ toast('Tick items first'); return; }
   const ev=currentEventObj()||{};
-  let h=`<div style="font-family:Georgia,serif;max-width:680px;margin:0 auto;padding:30px">`;
-  h+=`<h2 style="text-align:center;color:#8B1A1A">${esc(ev.name||'Menu')}</h2>`;
-  if(ev.guests) h+=`<p style="text-align:center;color:#666">Guest count: ${esc(ev.guests)}</p>`;
+  let body='';
   deptOrder(list).forEach(d=>{
     const secs=picked.filter(s=>s.dept===d); if(!secs.length) return;
-    h+=`<h3 style="border-bottom:1px solid #ccc;text-transform:capitalize;margin-top:22px">${esc(d)}</h3>`;
-    secs.forEach(s=>{ h+=`<div style="margin:4px 0">${esc(cleanName(s))}</div>`; });
+    body+=`<div style="font-weight:700;text-transform:capitalize;border-bottom:1px solid #ccc;margin-top:18px;padding-bottom:2px;color:#8B1A1A">${esc(d)}</div>`;
+    secs.forEach(s=>{ body+=`<div style="margin:3px 0;font-size:14px">${esc(cleanName(s))}</div>`; });
   });
-  h+='</div>';
-  const w=window.open('','_blank'); w.document.write('<html><head><title>'+esc(ev.name||'Menu')+'</title></head><body>'+h+'</body></html>'); w.document.close(); w.print();
+  const doc=`<div style="font-family:Georgia,'Times New Roman',serif;max-width:680px;margin:0 auto;padding:30px;color:#23201f">`+
+            `<h2 style="text-align:center;color:#8B1A1A;margin-bottom:4px">${esc(ev.name||'Menu')}</h2>`+
+            (ev.guests?`<p style="text-align:center;color:#666;margin-top:0">Guest count: ${esc(ev.guests)}</p>`:'')+
+            body+`</div>`;
+  openPrint(doc, (ev.name||'Menu'));
 }
-function printWeekly(){ showTab('week'); window.print(); }
+function openPrint(innerHtml, title){
+  const w=window.open('','_blank');
+  if(!w){ toast('Allow pop-ups to print'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title></head><body>${innerHtml}</body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(()=>{ w.print(); }, 350);
+}
+function printWeekly(){
+  const out=document.getElementById('weeklyOut').innerHTML;
+  if(!out || out.indexOf('empty')>-1){ toast('Build the weekly list first'); return; }
+  const meta=document.getElementById('weekMeta').textContent||'';
+  const doc=`<div style="font-family:-apple-system,Arial,sans-serif;max-width:760px;margin:0 auto;padding:24px;color:#23201f">`+
+            `<h2 style="color:#8B1A1A;border-bottom:2px solid #8B1A1A;padding-bottom:6px">Weekly purchasing list</h2>`+
+            `<p style="color:#555;font-size:12px;margin-top:4px">${esc(meta)}</p>`+out+`</div>`;
+  openPrint(doc, 'Weekly order');
+}
 
 // ============ Tabs ============
 function showTab(t){
