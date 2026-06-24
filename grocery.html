@@ -179,7 +179,7 @@
       <div style="padding:13px 15px" class="row">
         <button class="btn btn-primary" onclick="saveGrocery()"><i class="ti ti-device-floppy"></i> Save this event's grocery</button>
         <button class="btn btn-ghost" onclick="printKitchen()"><i class="ti ti-printer"></i> Print kitchen copy</button>
-        <button class="btn btn-ghost" onclick="printClientMenu()"><i class="ti ti-file-text"></i> Print clean client menu</button>
+        <button class="btn btn-ghost" onclick="printClientMenu()"><i class="ti ti-external-link"></i> Open client menu (Google Doc)</button>
         <span class="muted" id="saveState" style="font-size:12px"></span>
       </div>
     </div>
@@ -1102,20 +1102,15 @@ function printKitchen(){
   openPrint(doc, (ev.num?('#'+ev.num+' '):'')+'Kitchen copy');
 }
 function printClientMenu(){
-  const list=secList(); const picked=list.filter(s=>chosen.has(s.id));
-  if(!picked.length){ toast('Tick items first'); return; }
   const ev=currentEventObj()||{};
-  let body='';
-  deptOrder(list).forEach(d=>{
-    const secs=picked.filter(s=>s.dept===d); if(!secs.length) return;
-    body+=`<div style="font-weight:700;text-transform:capitalize;border-bottom:1px solid #ccc;margin-top:18px;padding-bottom:2px;color:#8B1A1A">${esc(d)}</div>`;
-    secs.forEach(s=>{ body+=`<div style="margin:3px 0;font-size:14px">${esc(cleanName(s))}</div>`; });
-  });
-  const doc=`<div style="font-family:Georgia,'Times New Roman',serif;max-width:680px;margin:0 auto;padding:30px;color:#23201f">`+
-            `<h2 style="text-align:center;color:#8B1A1A;margin-bottom:4px">${esc(ev.name||'Menu')}</h2>`+
-            (ev.guests?`<p style="text-align:center;color:#666;margin-top:0">Guest count: ${esc(ev.guests)}</p>`:'')+
-            body+`</div>`;
-  openPrint(doc, (ev.name||'Menu'));
+  const link = ev.menuLink || ev.pdfMenuLink || '';
+  if(!link){
+    toast('No menu link saved on this event — add one in the main app');
+    return;
+  }
+  // The real client menu is the Google Doc itself (no groceries on it).
+  // Open it so you can print or share the true formatted menu.
+  window.open(link, '_blank');
 }
 function openPrint(innerHtml, title){
   const w=window.open('','_blank');
