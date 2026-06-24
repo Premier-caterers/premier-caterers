@@ -1897,6 +1897,7 @@ function renderInqDetail(inq, role){
               : `<div style="font-size:12px;color:var(--text3)">No menu generated yet</div>`}
           <div style="margin-top:2px">
             <button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-link" style="font-size:14px"></i>${(Array.isArray(inq.menus)&&inq.menus.length)||inq.menuLink?'Add another link':'Attach menu manually'}</button>
+            <button onclick="openTemplatePicker('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-left:6px"><i class="ti ti-file-plus" style="font-size:14px"></i>Create menu from template</button>
           </div>
           </div>
         </div>
@@ -2225,6 +2226,81 @@ async function attachInqMenu(id){
   await _saveInquiry(inq);
   showToast('Menu added ✓');
   render();
+}
+
+// ── Manually create a menu from a CHOSEN template ─────────────
+// Mirrors the TEMPLATES list in MenuAutomation.gs. Keep in sync if templates change.
+const MENU_TEMPLATES = [
+  { num:1,  name:'Drop off catering worksheet' },
+  { num:2,  name:'Sample breakfast menu' },
+  { num:3,  name:'Sample buffet menus' },
+  { num:4,  name:'Sample brunch menu' },
+  { num:5,  name:'Conference menu template' },
+  { num:6,  name:'Bris menu' },
+  { num:7,  name:'Sample wedding template' },
+  { num:8,  name:'Shabbos meals and kiddush' },
+  { num:9,  name:'Sample engagement party' },
+  { num:10, name:'Sample shalosh seudah' }
+];
+function openTemplatePicker(id){
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq){ return; }
+  const scriptUrl = localStorage.getItem('scriptUrl');
+  if(!scriptUrl){ alert('No Apps Script URL is saved in Settings, so menus can’t be created automatically. You can still paste a link manually.'); return; }
+  const opts = MENU_TEMPLATES.map(t=>`<option value="${t.num}">${esc(t.name)}</option>`).join('');
+  const wrap = document.createElement('div');
+  wrap.id = 'tmplPickerOverlay';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+  wrap.innerHTML = `<div style="background:var(--bg);border-radius:14px;max-width:430px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3)">
+    <div style="font-weight:700;font-size:15px;margin-bottom:4px">Create a menu from a template</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Pick which template to use for <b>${esc(((inq.firstName||'')+' '+(inq.lastName||'')).trim()||inq.organization||'this client')}</b>. The client's info fills in automatically.</div>
+    <label style="font-size:12px;color:var(--text2);font-weight:600;display:block;margin-bottom:4px">Template</label>
+    <select id="tmplPickSelect" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border2);border-radius:9px;background:var(--bg2);color:var(--text);margin-bottom:16px">${opts}</select>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeTemplatePicker()" style="font-size:13px;padding:8px 14px;border:0.5px solid var(--border2);border-radius:9px;background:transparent;color:var(--text2);cursor:pointer">Cancel</button>
+      <button id="tmplPickGo" onclick="createMenuFromTemplate('${inq.id}')" style="font-size:13px;padding:8px 16px;border:none;border-radius:9px;background:var(--maroon,#8B1A1A);color:#fff;cursor:pointer;font-weight:600">Create menu</button>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+  wrap.addEventListener('click', e=>{ if(e.target===wrap) closeTemplatePicker(); });
+}
+function closeTemplatePicker(){ const o=document.getElementById('tmplPickerOverlay'); if(o) o.remove(); }
+async function createMenuFromTemplate(id){
+  const inq = inquiries.find(x=>x.id===id); if(!inq) return;
+  const scriptUrl = localStorage.getItem('scriptUrl'); if(!scriptUrl){ closeTemplatePicker(); return; }
+  const sel = document.getElementById('tmplPickSelect'); if(!sel) return;
+  const num = sel.value;
+  const tmplName = (MENU_TEMPLATES.find(t=>String(t.num)===String(num))||{}).name || 'Menu';
+  const goBtn = document.getElementById('tmplPickGo');
+  if(goBtn){ goBtn.disabled=true; goBtn.textContent='Creating…'; }
+  // Build client fields to fill the template
+  const params = new URLSearchParams({
+    action:'copyOneTemplate', templateNum:num,
+    organization: inq.organization||'', firstName: inq.firstName||'', lastName: inq.lastName||'',
+    eventType: inq.eventType||'', eventDate: inq.eventDate||'', shabbos: inq.shabbos||'No',
+    guests: inq.guests||inq.guestCount||'', venue: inq.venue||'', venueLocation: inq.venueLocation||inq.addr||'',
+    email: inq.email||'', phone: inq.phone||'', plannerName: inq.plannerName||'',
+    eventName: (((inq.organization||'').trim()||((inq.firstName||'')+' '+(inq.lastName||'')).trim())+' '+(inq.eventType||'')).trim(),
+    questions: inq.questions||inq.comments||''
+  });
+  try{
+    const r = await fetch(scriptUrl+'?'+params.toString());
+    const d = await r.json();
+    if(!d || !d.success || !d.url){ throw new Error(d && d.error ? d.error : 'No menu returned'); }
+    if(!Array.isArray(inq.menus)) inq.menus = [];
+    if(inq.menus.length===0 && inq.menuLink){
+      inq.menus.push({ name:'Menu', url:inq.menuLink, fileId:(inq.menuLink.match(/[-\w]{25,}/)||[''])[0] });
+    }
+    inq.menus.push({ name:d.name||tmplName, url:d.url, fileId:d.fileId||'' });
+    inq.menuLink = inq.menus[0].url;
+    await _saveInquiry(inq);
+    closeTemplatePicker();
+    showToast('Menu created from '+(d.name||tmplName)+' ✓');
+    render();
+  }catch(err){
+    if(goBtn){ goBtn.disabled=false; goBtn.textContent='Create menu'; }
+    alert('Could not create the menu: '+err.message+'\n\nThe Apps Script may need redeploying with the new version (Deploy → Manage deployments → new version).');
+  }
 }
 
 // Convert a Google Docs/Sheets/Drive link into a PDF export URL (always latest version)
