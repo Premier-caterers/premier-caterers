@@ -4835,6 +4835,77 @@ function getDefaultInvoice(e){
   };
 }
 
+// ============================================================
+// MULTI-INVOICE PER EVENT (safe additive layer)
+// The primary invoice stays at invoices[eventId] (unchanged, zero risk).
+// Extra invoices live at invoices[eventId+'__b'], '__c', etc.
+// A "slot" is the storage key. invoiceSlotsForEvent() returns them in order.
+// ============================================================
+function isExtraSlot(key){ return key.indexOf('__')>-1; }
+function baseEventIdOf(key){ return isExtraSlot(key) ? key.split('__')[0] : key; }
+function slotLetterIndex(key){
+  // primary = 0 (a), __b = 1, __c = 2 ...
+  if(!isExtraSlot(key)) return 0;
+  const suf = key.split('__')[1];
+  return (suf.charCodeAt(0) - 97); // 'b'->1
+}
+function invoiceSlotsForEvent(evId){
+  // Returns array of storage keys for this event's invoices, ordered: primary first, then __b, __c...
+  const keys = Object.keys(invoices).filter(k=>baseEventIdOf(k)===evId && invoices[k]);
+  keys.sort((a,b)=>slotLetterIndex(a)-slotLetterIndex(b));
+  return keys;
+}
+function invoiceCountForEvent(evId){ return invoiceSlotsForEvent(evId).length; }
+function nextExtraSlotKey(evId){
+  // find first free letter from 'b' onward
+  const used = new Set(invoiceSlotsForEvent(evId).map(slotLetterIndex));
+  let i=1; while(used.has(i)) i++;
+  return evId+'__'+String.fromCharCode(97+i);
+}
+// Display label for an invoice slot: '#8' if only one, '#8a'/'#8b' if multiple.
+function invoiceDisplayLabel(evId, slotKey){
+  const e = events.find(x=>x.id===evId);
+  const baseNum = e ? displayJob(e.job) : '#?';
+  const slots = invoiceSlotsForEvent(evId);
+  if(slots.length<=1) return baseNum;            // single -> no letter
+  const idx = slotLetterIndex(slotKey);
+  return baseNum + String.fromCharCode(97+idx);  // 0->a,1->b
+}
+function invoiceSlotName(slotKey){
+  const inv = invoices[slotKey];
+  return (inv && inv.invLabel) ? inv.invLabel : '';
+}
+function addInvoiceToEvent(evId){
+  const e = events.find(x=>x.id===evId);
+  if(!e) return null;
+  const key = nextExtraSlotKey(evId);
+  const inv = getDefaultInvoice(e);
+  inv._slot = key;
+  invoices[key] = inv;
+  _saveInvoice(key, inv);
+  return key;
+}
+async function deleteInvoiceSlot(slotKey){
+  if(!isExtraSlot(slotKey)){ alert('The first invoice on an event cannot be deleted here.'); return; }
+  if(!confirm('Delete this invoice? This cannot be undone.')) return;
+  try{ await invoicesCol.doc(slotKey).delete(); }catch(e){}
+  delete invoices[slotKey];
+  // switch back to primary
+  const evId = baseEventIdOf(slotKey);
+  activeInvoiceId = evId;
+  renderInvoiceDetail();
+  render();
+}
+function renameInvoiceSlot(slotKey){
+  const cur = invoices[slotKey] ? (invoices[slotKey].invLabel||'') : '';
+  const name = prompt('Label for this invoice (e.g. Food, Valet, Extras):', cur);
+  if(name===null) return;
+  invoices[slotKey].invLabel = name.trim();
+  _saveInvoice(slotKey, invoices[slotKey]);
+  renderInvoiceDetail();
+  render();
+}
+
 
 function getFullEventDate(e){
   const dayFull = {
@@ -4897,7 +4968,14 @@ function renderInvoices(){
   }
 
   function buildRow(e){
-    const inv = invoices[e.id];
+    const slots = invoiceSlotsForEvent(e.id);
+    // If the event has 0 or 1 invoice, render exactly one row (unchanged behavior).
+    if(slots.length<=1){ return buildRowForSlot(e, slots[0]||e.id, false); }
+    // Multiple: render a row per slot with letter labels.
+    return slots.map(k=>buildRowForSlot(e, k, true)).join('');
+  }
+  function buildRowForSlot(e, slotKey, multi){
+    const inv = invoices[slotKey];
     const status = inv?.status||'none';
     const tots = inv ? calcInvoiceTotals(inv) : null;
     const grand = tots ? tots.grand : 0;
@@ -4917,9 +4995,12 @@ function renderInvoices(){
     const statusText = isPaid?'PAID':hasBalance?'BALANCE DUE':(statusLabels[status]||'—');
     const overdueHtml = overdue ? '<span class="overdue-dot" title="Overdue 30+ days"></span>' : '';
     const changeHtml = hasUnackedChange ? '<span title="Change order pending" style="font-size:13px;color:var(--amber-text)">⚠</span>' : '';
-    return '<div onclick="openInvoice(\''+e.id+'\')" style="display:grid;grid-template-columns:130px 1fr 110px 100px 110px 90px 30px;gap:8px;align-items:center;padding:9px 14px;border-bottom:0.5px solid var(--border);cursor:pointer;font-size:13px;transition:background .1s" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
+    const jobLabel = multi ? invoiceDisplayLabel(e.id, slotKey) : displayJob(e.job);
+    const nm = invoiceSlotName(slotKey);
+    const nmHtml = (multi && nm) ? ' <span style="font-size:11px;color:var(--text3);font-weight:400">'+nm+'</span>' : '';
+    return '<div onclick="openInvoice(\''+slotKey+'\')" style="display:grid;grid-template-columns:130px 1fr 110px 100px 110px 90px 30px;gap:8px;align-items:center;padding:9px 14px;border-bottom:0.5px solid var(--border);cursor:pointer;font-size:13px;transition:background .1s" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
       + '<span style="color:var(--text3);font-size:12px">'+fullDate+'</span>'
-      + '<span style="font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+displayJob(e.job)+' · '+e.name+'</span>'
+      + '<span style="font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+jobLabel+' · '+e.name+nmHtml+'</span>'
       + '<span style="text-align:right;color:var(--text)">'+(grand>0?'$'+grand.toFixed(2):'—')+'</span>'
       + '<span style="text-align:right;color:var(--text2)">'+(deposit>0?'$'+deposit.toFixed(2):'—')+'</span>'
       + '<span style="text-align:right;color:var(--text)">'+(tots?'$'+balance.toFixed(2):'—')+'</span>'
@@ -4977,7 +5058,7 @@ let activeInvoiceId = null;
 
 function openInvoice(eid){
   activeInvoiceId = eid;
-  const e = events.find(x=>x.id===eid);
+  const e = events.find(x=>x.id===baseEventIdOf(eid));
   if(!e) return;
   if(!invoices[eid]){
     invoices[eid] = getDefaultInvoice(e);
@@ -5011,7 +5092,7 @@ function lockInvoiceEdit(eid){
 
 function renderInvoiceDetail(){
   const eid = activeInvoiceId;
-  const e = events.find(x=>x.id===eid);
+  const e = events.find(x=>x.id===baseEventIdOf(eid));
   const inv = invoices[eid];
   if(!e||!inv) return;
   const el = document.getElementById('invoiceDetail');
@@ -5028,9 +5109,34 @@ function renderInvoiceDetail(){
   const inpStyle = 'background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);font-family:inherit;width:100%;text-align:right';
 
   el.innerHTML = `<div class="detail-panel">
+    ${(function(){
+      const evId = baseEventIdOf(eid);
+      const slots = invoiceSlotsForEvent(evId);
+      if(slots.length<=1 && !isExtraSlot(eid)){
+        // single invoice: show just an "add invoice" affordance, no switcher tabs
+        return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <button onclick="addInvoiceToEvent('${evId}');" style="font-size:12px;padding:5px 11px;border-radius:var(--radius);border:1px dashed var(--border2);background:transparent;color:var(--text2);cursor:pointer"><i class="ti ti-plus"></i> Add another invoice</button>
+        </div>`;
+      }
+      // multiple: show switcher tabs
+      const tabs = slots.map(k=>{
+        const on = (k===eid) || (!isExtraSlot(eid) && k===evId && eid===evId);
+        const lbl = invoiceDisplayLabel(evId,k);
+        const nm = invoiceSlotName(k);
+        return `<button onclick="activeInvoiceId='${k}';renderInvoiceDetail()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;font-size:13px;cursor:pointer;border:0.5px solid ${k===eid?'transparent':'var(--border2)'};background:${k===eid?'var(--text)':'var(--bg2)'};color:${k===eid?'#fff':'var(--text2)'}">${lbl}${nm?(' · '+nm):''}</button>`;
+      }).join('');
+      return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:0.5px solid var(--border)">
+        ${tabs}
+        <button onclick="addInvoiceToEvent('${evId}');" style="font-size:12px;padding:6px 11px;border-radius:8px;border:1px dashed var(--border2);background:transparent;color:var(--text2);cursor:pointer"><i class="ti ti-plus"></i> Add invoice</button>
+        <span style="margin-left:auto;display:flex;gap:4px">
+          <button onclick="renameInvoiceSlot('${eid}')" class="icon-btn" title="Rename this invoice"><i class="ti ti-pencil"></i></button>
+          ${isExtraSlot(eid)?`<button onclick="deleteInvoiceSlot('${eid}')" class="icon-btn" title="Delete this invoice"><i class="ti ti-trash"></i></button>`:''}
+        </span>
+      </div>`;
+    })()}
     <div class="detail-header">
       <div class="detail-title">
-        ${isInvoice?'Invoice':'Quote'} — ${displayJob(e.job)} ${e.name}
+        ${isInvoice?'Invoice':'Quote'} — ${invoiceDisplayLabel(baseEventIdOf(eid),eid)} ${e.name}${invoiceSlotName(eid)?(' <span style="font-size:13px;color:var(--text3)">· '+invoiceSlotName(eid)+'</span>'):''}
         <span style="font-size:12px;font-weight:400;padding:3px 10px;border-radius:8px;margin-left:8px;${(inv.status==='paid'&&calcInvoiceTotals(inv).balance>0.01)?'background:var(--amber-bg);color:var(--amber-text)':inv.status==='paid'?'background:var(--green-bg);color:var(--green-text)':inv.status==='invoice'?'background:var(--purple-bg);color:var(--purple-text)':inv.status==='approved'?'background:var(--blue-bg);color:var(--blue-text)':'background:var(--amber-bg);color:var(--amber-text)'}">${(inv.status==='paid'&&calcInvoiceTotals(inv).balance>0.01)?'Balance due':inv.status.charAt(0).toUpperCase()+inv.status.slice(1)}</span>
         ${changes.some(c=>c.job===e.job&&(c.notifyDepts||changeDepts).includes('Invoice')&&!(c.acks||{})['Invoice'])?'<span style="margin-left:8px;padding:3px 10px;border-radius:8px;background:var(--amber-bg);color:var(--amber-text);font-size:12px;font-weight:600;border:1.5px solid var(--amber-text)">⚠ CHANGE ORDER PENDING</span>':''}
       </div>
@@ -5246,7 +5352,7 @@ function duplicateInvoiceLine(eid, idx){
 function removeInvoiceLine(eid, idx){
   if(!invoices[eid] || !Array.isArray(invoices[eid].lines) || !invoices[eid].lines[idx]) return;
   const line = invoices[eid].lines[idx];
-  const e = events.find(x=>x.id===eid);
+  const e = events.find(x=>x.id===baseEventIdOf(eid));
   const who = e ? (displayJob(e.job)+' '+e.name) : eid;
   const label = (line.desc||line.description||line.category||'Line item') + ' — ' + who;
   moveToTrash('invoiceLine', label, line, {eid, idx});
@@ -5346,7 +5452,7 @@ function toggleTaxExempt(eid){
 }
 
 function attachMenuToInvoice(eid){
-  const e = events.find(x=>x.id===eid);
+  const e = events.find(x=>x.id===baseEventIdOf(eid));
   if(!e) return;
   if(!invoices[eid]) return;
 
@@ -5388,7 +5494,7 @@ function attachMenuToInvoice(eid){
 async function saveMenuAttach(eid){
   const url = document.getElementById('menuAttachInput')?.value?.trim();
   if(!url) return;
-  const e = events.find(x=>x.id===eid);
+  const e = events.find(x=>x.id===baseEventIdOf(eid));
   if(e){ e.menuLink = url; await _saveEvent(e); }
   if(invoices[eid]){ invoices[eid].menuLink = url; }
   document.getElementById('menuAttachModal')?.remove();
@@ -5501,7 +5607,7 @@ async function confirmPayment(eid){
 async function markPaid(eid){ openPaymentModal(eid); }
 
 function downloadInvoice(eid){
-  const e = events.find(x=>x.id===eid);
+  const e = events.find(x=>x.id===baseEventIdOf(eid));
   const inv = invoices[eid];
   if(!e||!inv) return;
   const html = buildInvoiceHTML(eid);
@@ -5520,7 +5626,7 @@ function printInvoice(eid){
 }
 
 function buildInvoiceHTML(eid){
-  const e = events.find(x=>x.id===eid);
+  const e = events.find(x=>x.id===baseEventIdOf(eid));
   const inv = invoices[eid];
   if(!e||!inv) return '';
   const tots = calcInvoiceTotals(inv);
@@ -5556,7 +5662,7 @@ function buildInvoiceHTML(eid){
       '<div class="doc-type">'+docType+'</div>'+
     '</div>'+
     '<div class="meta">'+
-      '<div><strong>'+docType+' #</strong>'+e.job+'</div>'+
+      '<div><strong>'+docType+' #</strong>'+invoiceDisplayLabel(baseEventIdOf(eid),eid).replace(/^#/,'')+(invoiceSlotName(eid)?(' — '+invoiceSlotName(eid)):'')+'</div>'+
       '<div><strong>Date</strong>'+now+'</div>'+
       '<div><strong>Client</strong>'+e.name+(e.contactName?'<br><span style="font-size:11px;color:#666;font-weight:400">Attn: '+e.contactName+'</span>':'')+'</div>'+
       '<div><strong>Event type</strong>'+e.typeLabel+'</div>'+
@@ -7264,7 +7370,7 @@ async function markAsRead(id){
 
 // ── SEND INVOICE EMAIL ──
 function openSendInvoiceEmail(eid){
-  const e = events.find(x=>x.id===eid);
+  const e = events.find(x=>x.id===baseEventIdOf(eid));
   const inv = invoices[eid];
   if(!e||!inv) return;
   if(!isGmailConnected()){ alert('Please connect Gmail first in Settings.'); showView('settings'); return; }
