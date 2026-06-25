@@ -245,6 +245,7 @@ async function _saveInquiry(i){
         }
       }catch(e){ /* if the read fails, fall through and save as-is */ }
     }
+    try{ _stripTemplateMenus(i); }catch(e){}
     await ref.set(i);
   }catch(err){ console.error(err); }
 }
@@ -344,6 +345,7 @@ function startFirebaseListeners(){
   changesCol.onSnapshot( snap=>{ changes=snap.docs.map(d=>d.data()).sort((a,b)=>(b.time||'').localeCompare(a.time||'')); if(currentView==='changes') render(); });
   inquiriesCol.onSnapshot( snap=>{
     inquiries=snap.docs.map(d=>d.data());
+    try{ _cleanInquiryMenus(inquiries); }catch(e){}
     try{ _actDetectNewInquiries(inquiries); inquiries.forEach(q=>{ _actPrevInq[q.id]=JSON.parse(JSON.stringify(q)); }); }catch(e){}
     updatePipelineBadge();
     if(_pendingCardId){
@@ -2573,6 +2575,44 @@ function _actDetectNewInquiries(list){
       const nm = ((q.firstName||'')+' '+(q.lastName||'')).trim() || q.organization || q.eventName || 'New client';
       logActivity(id,'inquiry','Inquiry received \u2014 '+nm+(q.eventType?(' ('+q.eventType+')'):''), {fixedId:'act_'+id+'_created', source:q.source||''});
     }
+  });
+}
+
+/* ---- #4 fix: never keep the raw, uncustomized TEMPLATE linked on a card.
+   The automation sometimes leaves the template original attached next to the
+   real customized copy. Customized copies always get a NEW file id; the template
+   keeps its known id — so we strip only menus that point at a known template. */
+const PC_TEMPLATE_IDS = [
+  '1ohJr6bpoL56OD8TriPd0oib86YjZ6aL0_iDGQzz3gXQ',
+  '19FKDgMrefka9PTaIvHSwMZ2-r6BpD8j4N0MK_KgI3yw',
+  '11qnF5WWfEI_roywzr7llS55amy14HTqoE_ciFhYLKMA',
+  '1JENSh6SDKOKVV7t_iB3Zx1MVV61LW6Qrbh6iIQDeI0Q',
+  '1VO7waNuW5QcQtKvybdfhMMs5uuqPo9zg4c0PmyVcWoU',
+  '1Eel6oK7fAYHJXxCTpAc7XaxMxGfxSfmJO2NZlKOkCVs',
+  '1UQUOr1WYnrWQXXGuRElV1Q_TMCrZKKROUWduUNMzk50',
+  '1awA0dSMnBXPexbo-jBTSPL7geAvYQXX-l0wMhnZDZwA',
+  '1tsAmWUCMUFkJ5VB4PsFFbARM0mSvUmtdGh64iOaC_48',
+  '1bYfbtUTbpuICMw7gkfGzIZfUDfaUGKGkL0tzpLBIcac'
+];
+function _isTemplateUrl(url){ if(!url) return false; for(var i=0;i<PC_TEMPLATE_IDS.length;i++){ if(String(url).indexOf(PC_TEMPLATE_IDS[i])>=0) return true; } return false; }
+function _isTemplateMenu(m){ if(!m) return false; if(m.fileId && PC_TEMPLATE_IDS.indexOf(m.fileId)>=0) return true; return _isTemplateUrl(m.url||''); }
+function _stripTemplateMenus(q){
+  if(!q) return false;
+  var changed=false;
+  if(Array.isArray(q.menus)){
+    var before=q.menus.length;
+    q.menus=q.menus.filter(function(m){ return !_isTemplateMenu(m); });
+    if(q.menus.length!==before) changed=true;
+  }
+  if(q.menuLink && _isTemplateUrl(q.menuLink)){ q.menuLink=(q.menus&&q.menus[0]?q.menus[0].url:''); changed=true; }
+  return changed;
+}
+// Clean existing/new records: strip template menus in memory and persist the fix.
+// (Raw set bypasses _saveInquiry's menu-safeguard so the strip can't be undone.)
+function _cleanInquiryMenus(list){
+  if(!Array.isArray(list)) return;
+  list.forEach(function(q){
+    try{ if(_stripTemplateMenus(q) && typeof inquiriesCol!=='undefined' && inquiriesCol){ inquiriesCol.doc(q.id).set(q); } }catch(e){}
   });
 }
 
