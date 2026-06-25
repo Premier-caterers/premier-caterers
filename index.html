@@ -2536,6 +2536,7 @@ const _ACT_META = {
   stage:      {icon:'ti-arrow-badge-right',color:'#b45309'},
   payment:    {icon:'ti-cash',             color:'#16a34a'},
   edit:       {icon:'ti-pencil',           color:'#9333ea'},
+  task:       {icon:'ti-checkbox',         color:'#B0894B'},
   note:       {icon:'ti-note',             color:'#6b7280'}
 };
 
@@ -2625,7 +2626,8 @@ function openActivityLog(inqId){
   m.id='activityLogModal';
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px';
   m.innerHTML =
-    '<div style="background:var(--bg);border-radius:14px;max-width:640px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">'
+    '<style>@media(max-width:760px){#activityLogModal .act-split{flex-direction:column!important}#activityLogModal #activityAiPanel{width:auto!important;border-left:none!important;border-top:0.5px solid var(--border2)!important}}</style>'
+    + '<div style="background:var(--bg);border-radius:14px;max-width:940px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">'
     + '<div style="background:#8B1A1A;padding:15px 20px;display:flex;align-items:center;justify-content:space-between">'
     +   '<div style="color:#fff"><div style="font-size:16px;font-weight:600">Activity log</div><div style="font-size:12px;opacity:.85">'+_actEsc(nm)+'</div></div>'
     +   '<button onclick="closeActivityLog()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:18px;line-height:1">\u00d7</button>'
@@ -2634,11 +2636,15 @@ function openActivityLog(inqId){
     +   '<button onclick="addActivityNote()" style="font-size:12px;padding:7px 14px;border:none;border-radius:8px;background:var(--green-text);color:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-plus"></i>Log a note / call</button>'
     +   '<button onclick="loadClientEmails(false)" id="actLoadEmailsBtn" style="font-size:12px;padding:7px 14px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-mail-search"></i>Pull client emails</button>'
     + '</div>'
-    + '<div id="activityLogBody" style="padding:14px 18px;overflow-y:auto;flex:1"></div>'
+    + '<div class="act-split" style="display:flex;flex:1;min-height:0">'
+    +   '<div id="activityLogBody" style="flex:1;min-width:0;padding:14px 18px;overflow-y:auto"></div>'
+    +   '<div id="activityAiPanel" style="width:330px;flex-shrink:0;padding:15px 16px;overflow-y:auto;border-left:0.5px solid var(--border2);background:var(--bg2)"></div>'
+    + '</div>'
     + '</div>';
   m.addEventListener('click', e=>{ if(e.target===m) closeActivityLog(); });
   document.body.appendChild(m);
   renderActivityLogBody();
+  renderAiPanel();
   if(inq && inq.email){ loadClientEmails(true); }   // auto-pull quietly if possible
 }
 function closeActivityLog(){ _actOpenInqId=null; document.getElementById('activityLogModal')?.remove(); }
@@ -2656,6 +2662,8 @@ function renderActivityLogBody(){
   body.innerHTML = items.map(a=>{
     const meta=_ACT_META[a.type]||_ACT_META.note;
     const who = a.userName ? ('<span style="color:var(--text3)"> \u00b7 '+_actEsc(a.userName)+'</span>') : '';
+    let detail = _actEsc(a.detail);
+    if(a.type==='task'){ detail = (a.done?'\u2713 ':'\u25af ')+detail + (a.done&&a.doneBy?(' \u2014 '+_actEsc(a.doneBy)):''); }
     let extra='';
     if(a.type==='email_sent' && a.meta && a.meta.to){
       extra='<a href="https://mail.google.com/mail/u/0/#search/'+encodeURIComponent('to:'+a.meta.to)+'" target="_blank" style="font-size:11px;color:var(--blue-text);text-decoration:none;display:inline-flex;align-items:center;gap:3px;margin-top:3px"><i class="ti ti-external-link" style="font-size:12px"></i>View in Gmail</a>';
@@ -2665,7 +2673,7 @@ function renderActivityLogBody(){
     return '<div style="display:flex;gap:11px;padding:9px 0;border-bottom:0.5px solid var(--border2)">'
       + '<div style="flex-shrink:0;width:28px;height:28px;border-radius:8px;background:'+meta.color+'1a;display:flex;align-items:center;justify-content:center"><i class="ti '+meta.icon+'" style="font-size:15px;color:'+meta.color+'"></i></div>'
       + '<div style="flex:1;min-width:0">'
-      +   '<div style="font-size:13px;color:var(--text);line-height:1.4">'+_actEsc(a.detail)+'</div>'
+      +   '<div style="font-size:13px;color:var(--text);line-height:1.4">'+detail+'</div>'
       +   '<div style="font-size:11px;color:var(--text3);margin-top:1px">'+_actFmt(a._t||a.ts)+who+'</div>'
       +   extra
       + '</div></div>';
@@ -2813,6 +2821,93 @@ function _actOnSaveInvoice(eid, inv){
     _actPrevInv[eid]=JSON.parse(JSON.stringify(inv||{}));
   }catch(err){}
 }
+
+/* ---- #1: AI summary + action items (right panel of the activity log) ---- */
+function _actTaskId(inqId, text){
+  var h=0, s=String(inqId)+'|'+String(text); for(var i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))|0; }
+  return 'task_'+String(inqId)+'_'+(h>>>0).toString(36);
+}
+function _actAddTask(inqId, text){
+  text=String(text||'').trim(); if(!text) return;
+  var id=_actTaskId(inqId,text);
+  if(activityLog.find(function(a){return a.id===id;})) return;   // already exists — no duplicate
+  var entry={ id:id, inquiryId:String(inqId), type:'task', detail:text, done:false,
+              user:authUser||'', userName:'', ts:Date.now(), meta:{ ai:true } };
+  activityLog.push(entry);
+  try{ if(activityCol) activityCol.doc(id).set(entry); }catch(e){}
+}
+function toggleTask(taskId){
+  var t=activityLog.find(function(a){return a.id===taskId;}); if(!t) return;
+  t.done=!t.done;
+  if(t.done){ t.doneBy=_actUserName(); t.doneAt=Date.now(); } else { t.doneBy=''; t.doneAt=0; }
+  try{ if(activityCol) activityCol.doc(taskId).set(t); }catch(e){}
+  renderAiPanel(); renderActivityLogBody();
+}
+function _actTaskRow(t){
+  return '<div onclick="toggleTask(\''+t.id+'\')" style="display:flex;align-items:flex-start;gap:9px;padding:6px 0;cursor:pointer">'
+    + '<div style="width:17px;height:17px;border-radius:5px;border:1.5px solid #B0894B;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;'+(t.done?'background:#B0894B':'')+'">'+(t.done?'<span style="color:#fff;font-size:11px;line-height:1">\u2713</span>':'')+'</div>'
+    + '<div style="flex:1;min-width:0">'
+    +   '<div style="font-size:12.5px;line-height:1.35;color:'+(t.done?'var(--text3)':'var(--text)')+';'+(t.done?'text-decoration:line-through':'')+'">'+_actEsc(t.detail)+'</div>'
+    +   (t.done&&t.doneBy?'<div style="font-size:10.5px;color:var(--text3);margin-top:1px">'+_actEsc(t.doneBy)+' \u00b7 '+_actFmt(t.doneAt)+'</div>':'')
+    + '</div></div>';
+}
+function renderAiPanel(msg){
+  var panel=document.getElementById('activityAiPanel'); if(!panel) return;
+  var id=_actOpenInqId;
+  var inq=(typeof _findInq==='function')?_findInq(id):inquiries.find(function(x){return String(x.id)===String(id);});
+  var tasks=activityLog.filter(function(a){return String(a.inquiryId)===String(id) && a.type==='task';});
+  var open=tasks.filter(function(t){return !t.done;}), done=tasks.filter(function(t){return t.done;});
+  var hasSummary = inq && inq.aiSummary && inq.aiSummary.text;
+  var html='';
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+    + '<div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px"><i class="ti ti-sparkles" style="color:#B0894B"></i>AI summary</div>'
+    + '<button id="aiSumBtn" onclick="summarizeClient(true)" style="font-size:11px;padding:5px 10px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-refresh"></i>'+(hasSummary?'Refresh':'Generate')+'</button>'
+    + '</div>';
+  if(msg){
+    html+='<div style="font-size:12.5px;color:var(--text3);padding:8px 0;line-height:1.5">'+_actEsc(msg)+'</div>';
+  } else if(hasSummary){
+    html+='<div style="font-size:12.5px;line-height:1.55;color:var(--text);background:var(--bg);border:0.5px solid var(--border2);border-radius:9px;padding:11px 12px">'+_actEsc(inq.aiSummary.text)+'</div>';
+    html+='<div style="font-size:10.5px;color:var(--text3);margin-top:5px">Generated '+_actFmt(inq.aiSummary.ts)+(inq.aiSummary.by?(' \u00b7 '+_actEsc(inq.aiSummary.by)):'')+'</div>';
+  } else {
+    html+='<div style="font-size:12.5px;color:var(--text3);padding:6px 0 2px;line-height:1.5">Have Claude read the full email thread with this client and pull out the key points and to-dos. Click <b>Generate</b>.</div>';
+  }
+  html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin:16px 0 6px">Action items</div>';
+  if(!tasks.length){
+    html+='<div style="font-size:12px;color:var(--text3)">None yet. They\u2019ll appear here when Claude finds things to act on.</div>';
+  } else {
+    html+=open.map(_actTaskRow).join('');
+    if(done.length){ html+='<div style="font-size:10.5px;color:var(--text3);margin:12px 0 4px;text-transform:uppercase;letter-spacing:.06em">Completed</div>'+done.map(_actTaskRow).join(''); }
+  }
+  panel.innerHTML=html;
+}
+async function summarizeClient(force){
+  var id=_actOpenInqId; if(!id) return;
+  var inq=(typeof _findInq==='function')?_findInq(id):inquiries.find(function(x){return String(x.id)===String(id);});
+  var email=inq&&inq.email?inq.email.trim():'';
+  if(!email){ renderAiPanel('No email address on file for this client, so there\u2019s nothing to summarize yet.'); return; }
+  if(inq.aiSummary && !force){ renderAiPanel(); return; }
+  var relay=(typeof gmailRelayUrl==='function')?gmailRelayUrl():(localStorage.getItem('scriptUrl')||'');
+  if(!relay){ renderAiPanel('Connect the Apps Script URL in Settings first.'); return; }
+  var btn=document.getElementById('aiSumBtn'); if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i>Reading\u2026'; }
+  renderAiPanel('Claude is reading the email thread\u2026');
+  try{
+    var url=relay+(relay.indexOf('?')>=0?'&':'?')+'action=aiSummarizeClient&email='+encodeURIComponent(email)
+      +'&name='+encodeURIComponent(((inq.firstName||'')+' '+(inq.lastName||'')).trim());
+    var r=await fetch(url);
+    var d=await r.json();
+    if(!d.ok) throw new Error(d.error||'AI returned an error');
+    inq.aiSummary={ text:d.summary||'', ts:Date.now(), by:_actUserName() };
+    await _saveInquiry(inq);
+    (d.tasks||[]).forEach(function(t){ _actAddTask(id, t); });
+    renderAiPanel(); renderActivityLogBody();
+  }catch(e){
+    renderAiPanel('Could not generate summary: '+e.message);
+  }finally{
+    var b=document.getElementById('aiSumBtn'); if(b){ b.disabled=false; b.innerHTML='<i class="ti ti-refresh"></i>Refresh'; }
+  }
+}
+window.toggleTask        = toggleTask;
+window.summarizeClient   = summarizeClient;
 
 window.openActivityLog   = openActivityLog;
 window.closeActivityLog  = closeActivityLog;
