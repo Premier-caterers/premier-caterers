@@ -214,6 +214,7 @@ function showToast(msg,dur=2000){
 async function _saveEvent(e){ 
   try{ 
     if(!db) throw new Error('Database not connected yet');
+    _actOnSaveEvent(e);
     await db.collection('events').doc(e.id).set(e); 
     showToast('Saved ✓'); 
   }catch(err){ 
@@ -224,6 +225,7 @@ async function _saveEvent(e){
 async function _saveChange(c){ try{ await db.collection('changes').doc(c.id).set(c); }catch(err){ console.error(err); } }
 async function _saveInquiry(i){
   try{
+    _actOnSaveInquiry(i);
     i.updatedAt = Date.now();   // for the pipeline "last updated" sort
     // SAFEGUARD: never let a save erase a card's existing menu list.
     // If the object being saved is missing menus/menuLink but the stored
@@ -261,6 +263,7 @@ function autoSaveVenue(name, addr){
 
 async function _saveInvoice(eid,inv){
   try{
+    _actOnSaveInvoice(eid,inv);
     await invoicesCol.doc(eid).set({...inv,ts:Date.now()});
     const inqId = eid.startsWith('inq_') ? eid.slice(4) : eid;
     const inq = inquiries.find(x=>x.id===inqId);
@@ -337,10 +340,11 @@ async function emptyTrash(){
 
 
 function startFirebaseListeners(){
-  eventsCol.onSnapshot( snap=>{ const first=events.length===0; events=snap.docs.map(d=>d.data()); if(first||currentView==='events'||currentView==='home') render(); });
+  eventsCol.onSnapshot( snap=>{ const first=events.length===0; events=snap.docs.map(d=>d.data()); try{ events.forEach(ev=>{ if(ev&&String(ev.id).indexOf('inq_')===0) _actPrevEv[ev.id]=JSON.parse(JSON.stringify(ev)); }); }catch(e){} if(first||currentView==='events'||currentView==='home') render(); });
   changesCol.onSnapshot( snap=>{ changes=snap.docs.map(d=>d.data()).sort((a,b)=>(b.time||'').localeCompare(a.time||'')); if(currentView==='changes') render(); });
   inquiriesCol.onSnapshot( snap=>{
     inquiries=snap.docs.map(d=>d.data());
+    try{ _actDetectNewInquiries(inquiries); inquiries.forEach(q=>{ _actPrevInq[q.id]=JSON.parse(JSON.stringify(q)); }); }catch(e){}
     updatePipelineBadge();
     if(_pendingCardId){
       const found = inquiries.find(x=>x.id===_pendingCardId);
@@ -356,11 +360,13 @@ function startFirebaseListeners(){
   });
   checklistCol.onSnapshot( snap=>{ checklists={}; snap.docs.forEach(d=>{ checklists[d.id]=d.data().items||[]; }); if(currentView==='checklists'||currentView==='home') render(); updateBadge(); });
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
-  invoicesCol.onSnapshot( snap=>{ invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); }); if(currentView==='invoices') render(); });
+  invoicesCol.onSnapshot( snap=>{ invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); }); try{ Object.keys(invoices).forEach(k=>{ _actPrevInv[k]=JSON.parse(JSON.stringify(invoices[k])); }); }catch(e){} if(currentView==='invoices') render(); });
   venuesCol.onSnapshot( snap=>{ venues=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='venues') render(); });
   trashCol.onSnapshot( snap=>{ trash=snap.docs.map(d=>d.data()); purgeOldTrash(); if(currentView==='trash') render(); });
   groceryStationsCol.onSnapshot( snap=>{ groceryStations=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='grocery') render(); });
   groceryListsCol.onSnapshot( snap=>{ groceryLists={}; snap.docs.forEach(d=>{ groceryLists[d.id]=d.data(); }); if(currentView==='grocery') render(); });
+  activityCol = db.collection('activity');
+  activityCol.onSnapshot( snap=>{ activityLog=snap.docs.map(d=>d.data()); if(_actOpenInqId) renderActivityLogBody(); });
 }
 
 async function seedIfEmpty(){
@@ -1863,6 +1869,7 @@ function renderInqDetail(inq, role){
           <div class="detail-block-title">Status</div>
           <div class="drow"><span class="dkey">Stage</span><span class="dval"><span class="stage-btn stage-${inq.stage}">${stageName}</span></span></div>
           ${rows('Submitted', inq.submittedAt)}
+          <div style="margin-top:10px"><button onclick="openActivityLog('${inq.id}')" style="font-size:12px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-history" style="font-size:15px"></i>Activity log${_actCountFor(inq.id)?(' \u00b7 '+_actCountFor(inq.id)):''}</button></div>
         </div>
       </div>
       <div>
@@ -2045,7 +2052,7 @@ async function convertEstimateToInvoice(id){  const inq=_findInq(id); if(!inq) r
   let e=events.find(x=>x.id===evId);
   if(!e){
     if(!confirm('This will book '+((inq.firstName||'')+' '+(inq.lastName||'')).trim()+', create their event, and turn this estimate into an invoice. Continue?')) return;
-    inq.stage='booked'; await _saveInquiry(inq);
+    inq.stage='booked'; logActivity(inq.id,'stage','Marked Booked (estimate \u2192 invoice)',{stage:'booked'}); await _saveInquiry(inq);
     createEventFromInquiry(inq);
     e=events.find(x=>x.id===evId);
   }
@@ -2224,6 +2231,7 @@ async function attachInqMenu(id){
   inq.menus.push({ name:'Menu (added manually)', url:trimmed, fileId:(trimmed.match(/[-\w]{25,}/)||[''])[0] });
   inq.menuLink = inq.menus[0].url;
   await _saveInquiry(inq);
+  logActivity(inq.id,'menu','Menu link added manually',{url:trimmed});
   showToast('Menu added ✓');
   render();
 }
@@ -2295,6 +2303,7 @@ async function createMenuFromTemplate(id){
     inq.menus.push({ name:d.name||tmplName, url:d.url, fileId:d.fileId||'' });
     inq.menuLink = inq.menus[0].url;
     await _saveInquiry(inq);
+    logActivity(inq.id,'menu','Menu created from template: '+(d.name||tmplName),{menuUrl:d.url,menuName:(d.name||tmplName)});
     closeTemplatePicker();
     showToast('Menu created from '+(d.name||tmplName)+' ✓');
     render();
@@ -2346,6 +2355,7 @@ async function deleteInqMenu(id, idx){
   inq.menus.splice(idx,1);
   inq.menuLink = inq.menus.length ? inq.menus[0].url : '';
   await _saveInquiry(inq);
+  logActivity(inq.id,'menu','Menu removed: '+(m.name||'menu'),{});
   render();
 
   // Then trash the Drive file via Apps Script
@@ -2467,6 +2477,7 @@ async function confirmSendMenuEmail(){
   const htmlBody = '<div style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap;line-height:1.6">'+body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1">$1</a>')+'</div>';
   const ok = await sendGmailEmail(to, subject, body, htmlBody, attachments);
   if(ok){
+    try{ if(typeof _menuEmailInqId!=='undefined' && _menuEmailInqId) logActivity(_menuEmailInqId,'email_sent','Menu emailed to '+to+(attachments&&attachments.length>1?' (with estimate attached)':''),{to:to,subject:subject}); }catch(e){}
     document.getElementById('sendEmailModal')?.remove();
   } else {
     if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-send" style="font-size:13px"></i> Send'; }
@@ -2478,6 +2489,7 @@ function moveInquiry(id, stage){
   if(!inq) return;
   const prevStage = inq.stage;
   inq.stage=stage;
+  if(prevStage!==stage) logActivity(inq.id,'stage',_actStageLabel(prevStage)+' \u2192 '+_actStageLabel(stage),{prevStage:prevStage,stage:stage});
   _saveInquiry(inq);
   // Google Calendar sync (runs through Apps Script as your account)
   if(stage==='menu_sent' && prevStage!=='booked'){ gcalMenuSent(inq); }
@@ -2491,6 +2503,282 @@ function moveInquiry(id, stage){
   }
   render(); updatePipelineBadge();
 }
+
+/* ============================================================
+   CLIENT ACTIVITY LOG  — per-inquiry timeline, manual notes,
+   and pulled Gmail replies. (Added 2026-06-25)
+   ============================================================ */
+let activityLog = [];
+let activityCol = null;
+let _actOpenInqId = null;
+let _actInqSeeded = false;
+const _actKnownInq = new Set();
+let _actEmailsCache = {};   // inquiryId -> array of pulled-email entries
+
+function _actStageLabel(s){
+  return ({new:'New Inquiry', menu_sent:'Menu Sent', booked:'Booked', lost:'Lost / Declined'})[s] || (s||'\u2014');
+}
+function _actUserName(){
+  const map = { owner:'Kenny', kenny:'Kenny', shelley:'Shelley', josh:'Josh', kitchen:'Kitchen', barry:'Barry', mashgiach:'Barry' };
+  return map[authUser] || (authUser ? (authUser.charAt(0).toUpperCase()+authUser.slice(1)) : 'Someone');
+}
+function _actCountFor(id){ id=String(id); return activityLog.filter(a=>String(a.inquiryId)===id).length; }
+function _actEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _actFmt(ts){ try{ return new Date(ts).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } }
+
+const _ACT_META = {
+  inquiry:    {icon:'ti-inbox',            color:'#8B1A1A'},
+  menu:       {icon:'ti-file-text',        color:'#2563eb'},
+  email_sent: {icon:'ti-mail-forward',     color:'#0d9488'},
+  email_in:   {icon:'ti-mail-down',        color:'#7c3aed'},
+  stage:      {icon:'ti-arrow-badge-right',color:'#b45309'},
+  payment:    {icon:'ti-cash',             color:'#16a34a'},
+  edit:       {icon:'ti-pencil',           color:'#9333ea'},
+  note:       {icon:'ti-note',             color:'#6b7280'}
+};
+
+// Write an activity entry to Firestore (optimistic local update first).
+async function logActivity(inquiryId, type, detail, meta){
+  if(!inquiryId) return;
+  meta = meta || {};
+  const fixedId = meta.fixedId; if(fixedId) delete meta.fixedId;
+  const entry = {
+    id: fixedId || ('act_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)),
+    inquiryId: String(inquiryId),
+    type: type || 'note',
+    detail: detail || '',
+    user: authUser || '',
+    userName: _actUserName(),
+    ts: Date.now(),
+    meta: meta
+  };
+  try{
+    if(!activityCol && typeof db!=='undefined' && db) activityCol = db.collection('activity');
+    const i = activityLog.findIndex(x=>x.id===entry.id);
+    if(i>=0) activityLog[i]=entry; else activityLog.push(entry);
+    if(_actOpenInqId===String(inquiryId)) renderActivityLogBody();
+    if(activityCol) await activityCol.doc(entry.id).set(entry);
+  }catch(err){ console.error('logActivity error', err); }
+}
+
+// Detect brand-new inquiries arriving (any source) and log "received" once.
+// Idempotent doc id (act_<id>_created) means multiple open tabs can't double-log.
+function _actDetectNewInquiries(list){
+  if(!Array.isArray(list)) return;
+  if(!_actInqSeeded){ list.forEach(q=>_actKnownInq.add(String(q.id))); _actInqSeeded=true; return; }
+  list.forEach(q=>{
+    const id=String(q.id);
+    if(!_actKnownInq.has(id)){
+      _actKnownInq.add(id);
+      const nm = ((q.firstName||'')+' '+(q.lastName||'')).trim() || q.organization || q.eventName || 'New client';
+      logActivity(id,'inquiry','Inquiry received \u2014 '+nm+(q.eventType?(' ('+q.eventType+')'):''), {fixedId:'act_'+id+'_created', source:q.source||''});
+    }
+  });
+}
+
+function openActivityLog(inqId){
+  _actOpenInqId = String(inqId);
+  const inq = (typeof _findInq==='function') ? _findInq(inqId) : inquiries.find(x=>String(x.id)===String(inqId));
+  const nm = inq ? (((inq.firstName||'')+' '+(inq.lastName||'')).trim() || inq.organization || inq.eventName || 'Client') : 'Client';
+  document.getElementById('activityLogModal')?.remove();
+  const m=document.createElement('div');
+  m.id='activityLogModal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px';
+  m.innerHTML =
+    '<div style="background:var(--bg);border-radius:14px;max-width:640px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">'
+    + '<div style="background:#8B1A1A;padding:15px 20px;display:flex;align-items:center;justify-content:space-between">'
+    +   '<div style="color:#fff"><div style="font-size:16px;font-weight:600">Activity log</div><div style="font-size:12px;opacity:.85">'+_actEsc(nm)+'</div></div>'
+    +   '<button onclick="closeActivityLog()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:18px;line-height:1">\u00d7</button>'
+    + '</div>'
+    + '<div style="padding:12px 16px;border-bottom:0.5px solid var(--border2);display:flex;gap:8px;flex-wrap:wrap">'
+    +   '<button onclick="addActivityNote()" style="font-size:12px;padding:7px 14px;border:none;border-radius:8px;background:var(--green-text);color:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-plus"></i>Log a note / call</button>'
+    +   '<button onclick="loadClientEmails(false)" id="actLoadEmailsBtn" style="font-size:12px;padding:7px 14px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-mail-search"></i>Pull client emails</button>'
+    + '</div>'
+    + '<div id="activityLogBody" style="padding:14px 18px;overflow-y:auto;flex:1"></div>'
+    + '</div>';
+  m.addEventListener('click', e=>{ if(e.target===m) closeActivityLog(); });
+  document.body.appendChild(m);
+  renderActivityLogBody();
+  if(inq && inq.email){ loadClientEmails(true); }   // auto-pull quietly if possible
+}
+function closeActivityLog(){ _actOpenInqId=null; document.getElementById('activityLogModal')?.remove(); }
+
+function renderActivityLogBody(){
+  const body=document.getElementById('activityLogBody'); if(!body) return;
+  const id=_actOpenInqId;
+  let items = activityLog.filter(a=>String(a.inquiryId)===id).map(a=>({...a,_t:a.ts}));
+  items = items.concat(_actEmailsCache[id]||[]);
+  items.sort((a,b)=>(b._t||b.ts||0)-(a._t||a.ts||0));
+  if(!items.length){
+    body.innerHTML='<div style="text-align:center;color:var(--text3);font-size:13px;padding:30px 6px;line-height:1.5">Nothing logged yet.<br>Actions you take on this client \u2014 menus, sends, status changes, payments \u2014 appear here automatically. Use \u201cLog a note / call\u201d to add your own.</div>';
+    return;
+  }
+  body.innerHTML = items.map(a=>{
+    const meta=_ACT_META[a.type]||_ACT_META.note;
+    const who = a.userName ? ('<span style="color:var(--text3)"> \u00b7 '+_actEsc(a.userName)+'</span>') : '';
+    let extra='';
+    if(a.type==='email_sent' && a.meta && a.meta.to){
+      extra='<a href="https://mail.google.com/mail/u/0/#search/'+encodeURIComponent('to:'+a.meta.to)+'" target="_blank" style="font-size:11px;color:var(--blue-text);text-decoration:none;display:inline-flex;align-items:center;gap:3px;margin-top:3px"><i class="ti ti-external-link" style="font-size:12px"></i>View in Gmail</a>';
+    } else if(a.type==='email_in' && a.meta && a.meta.link){
+      extra='<a href="'+a.meta.link+'" target="_blank" style="font-size:11px;color:var(--blue-text);text-decoration:none;display:inline-flex;align-items:center;gap:3px;margin-top:3px"><i class="ti ti-external-link" style="font-size:12px"></i>Open in Gmail</a>';
+    }
+    return '<div style="display:flex;gap:11px;padding:9px 0;border-bottom:0.5px solid var(--border2)">'
+      + '<div style="flex-shrink:0;width:28px;height:28px;border-radius:8px;background:'+meta.color+'1a;display:flex;align-items:center;justify-content:center"><i class="ti '+meta.icon+'" style="font-size:15px;color:'+meta.color+'"></i></div>'
+      + '<div style="flex:1;min-width:0">'
+      +   '<div style="font-size:13px;color:var(--text);line-height:1.4">'+_actEsc(a.detail)+'</div>'
+      +   '<div style="font-size:11px;color:var(--text3);margin-top:1px">'+_actFmt(a._t||a.ts)+who+'</div>'
+      +   extra
+      + '</div></div>';
+  }).join('');
+}
+
+function addActivityNote(){
+  const wrap=document.getElementById('activityLogBody'); if(!wrap) return;
+  if(document.getElementById('actNoteForm')){ document.getElementById('actNoteInput')?.focus(); return; }
+  const f=document.createElement('div');
+  f.id='actNoteForm';
+  f.style.cssText='background:var(--bg2);border:0.5px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:12px';
+  f.innerHTML =
+    '<textarea id="actNoteInput" placeholder="Phone call, conversation, anything to remember\u2026" style="width:100%;min-height:70px;border:0.5px solid var(--border2);border-radius:8px;padding:9px;font-size:13px;font-family:inherit;resize:vertical;background:var(--bg);color:var(--text);box-sizing:border-box"></textarea>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:9px">'
+    +   '<button onclick="document.getElementById(\'actNoteForm\').remove()" style="font-size:12px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text2);cursor:pointer">Cancel</button>'
+    +   '<button onclick="submitActivityNote()" style="font-size:12px;padding:6px 15px;border:none;border-radius:7px;background:var(--green-text);color:#fff;cursor:pointer">Save note</button>'
+    + '</div>';
+  wrap.prepend(f);
+  document.getElementById('actNoteInput')?.focus();
+}
+function submitActivityNote(){
+  const t=(document.getElementById('actNoteInput')?.value||'').trim();
+  if(!t){ document.getElementById('actNoteForm')?.remove(); return; }
+  logActivity(_actOpenInqId,'note',t,{});
+  document.getElementById('actNoteForm')?.remove();
+}
+
+// Pull the Gmail conversation with this client via the existing Apps Script relay.
+async function loadClientEmails(silent){
+  const id=_actOpenInqId; if(!id) return;
+  const inq = (typeof _findInq==='function') ? _findInq(id) : inquiries.find(x=>String(x.id)===String(id));
+  const email = inq && inq.email ? inq.email.trim() : '';
+  const btn=document.getElementById('actLoadEmailsBtn');
+  if(!email){ if(!silent) alert('No email address on file for this client.'); return; }
+  const relay = (typeof gmailRelayUrl==='function') ? gmailRelayUrl() : (localStorage.getItem('scriptUrl')||'');
+  if(!relay){ if(!silent) alert('Connect the Apps Script URL in Settings to pull emails.'); return; }
+  if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i>Pulling\u2026'; }
+  try{
+    const q = encodeURIComponent('from:'+email+' OR to:'+email);
+    const r = await fetch(relay+(relay.indexOf('?')>=0?'&':'?')+'action=gmailList&max=25&q='+q);
+    const d = await r.json();
+    const msgs = (d && d.ok && Array.isArray(d.messages)) ? d.messages : [];
+    _actEmailsCache[id] = msgs.map(mm=>{
+      const inbound = (mm.from||'').toLowerCase().indexOf(email.toLowerCase())>=0;
+      const t = mm.date ? new Date(mm.date).getTime() : Date.now();
+      return {
+        id:'email_'+mm.id, inquiryId:id,
+        type: inbound ? 'email_in' : 'email_sent',
+        detail: (inbound?'Email from client: ':'Email to client: ')+(mm.subject||'(no subject)')+(mm.snippet?(' \u2014 '+mm.snippet):''),
+        userName:'', ts:t, _t:t,
+        meta:{ link:'https://mail.google.com/mail/u/0/#all/'+mm.threadId, to:email }
+      };
+    });
+    renderActivityLogBody();
+  }catch(e){
+    if(!silent) alert('Could not pull emails: '+e.message);
+  }finally{
+    if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-mail-search"></i>Pull client emails'; }
+  }
+}
+
+/* ---- comprehensive edit logging, driven by the save layer ----
+   Any change to an inquiry / its event / its invoice is captured here,
+   debounced 6s so typing doesn't flood the timeline. ---- */
+let _actPrevInq = {};
+let _actPrevEv  = {};
+let _actPrevInv = {};
+let _actSuppressInvoice = false;
+const _actPending = {};
+
+const _ACT_FIELDS_INQ = {
+  firstName:'first name', lastName:'last name', organization:'organization',
+  eventType:'event type', eventDate:'event date', guestCount:'guest count',
+  venueName:'venue', venueLocation:'venue location', phone:'phone', email:'email',
+  plannerName:'planner', comments:'notes', shabbos:'Shabbos', cuisine:'cuisine',
+  meatDairy:'meat/dairy', referredBy:'referred by', howFound:'how found'
+};
+const _ACT_FIELDS_EV = {
+  eventDate:'date', day:'day', weekOf:'week-of', name:'client name', eventType:'type',
+  venueName:'venue', venueAddr:'venue address', addr:'venue address', guestCount:'guests',
+  mashgiachNames:'mashgiach', notes:'notes', staff:'staff', captain:'captain'
+};
+
+function _actChanged(a,b){
+  if((a && typeof a==='object') || (b && typeof b==='object')) return JSON.stringify(a==null?null:a)!==JSON.stringify(b==null?null:b);
+  return String(a==null?'':a)!==String(b==null?'':b);
+}
+function _actDiffFields(prev, next, map){
+  const out=[];
+  for(const k in map){
+    if(!_actChanged(prev?prev[k]:undefined, next?next[k]:undefined)) continue;
+    const b = next ? next[k] : undefined;
+    if(b && typeof b==='object'){ out.push(map[k]+' updated'); }
+    else { const bv=(b==null||b==='')?'':String(b); out.push(bv ? (map[k]+' \u2192 '+(bv.length>44?bv.slice(0,44)+'\u2026':bv)) : (map[k]+' cleared')); }
+  }
+  return out;
+}
+function _actQueueEdit(inquiryId, prefix, labels){
+  if(!inquiryId || !labels || !labels.length) return;
+  const key=prefix+':'+inquiryId;
+  let p=_actPending[key];
+  if(!p) p=_actPending[key]={labels:[],timer:null};
+  labels.forEach(l=>{ if(p.labels.indexOf(l)<0) p.labels.push(l); });
+  clearTimeout(p.timer);
+  p.timer=setTimeout(()=>{ const arr=p.labels.slice(); delete _actPending[key]; if(arr.length) logActivity(inquiryId,'edit',prefix+' updated \u2014 '+arr.join('; '),{}); }, 6000);
+}
+function _actOnSaveInquiry(i){
+  try{
+    const prev=_actPrevInq[i.id];
+    if(prev){
+      const labels=_actDiffFields(prev,i,_ACT_FIELDS_INQ);
+      if(_actChanged(prev.estimate,i.estimate)) labels.push('estimate updated');
+      if(labels.length) _actQueueEdit(i.id,'Details',labels);
+    }
+    _actPrevInq[i.id]=JSON.parse(JSON.stringify(i));
+  }catch(e){}
+}
+function _actOnSaveEvent(e){
+  try{
+    if(!e || !e.id || String(e.id).indexOf('inq_')!==0) return;
+    const inqId=String(e.id).slice(4);
+    const prev=_actPrevEv[e.id];
+    if(prev){ const labels=_actDiffFields(prev,e,_ACT_FIELDS_EV); if(labels.length) _actQueueEdit(inqId,'Event',labels); }
+    _actPrevEv[e.id]=JSON.parse(JSON.stringify(e));
+  }catch(err){}
+}
+function _actOnSaveInvoice(eid, inv){
+  try{
+    const bid=(typeof baseEventIdOf==='function')?baseEventIdOf(eid):eid;
+    if(String(bid).indexOf('inq_')!==0) return;
+    const inqId=String(bid).slice(4);
+    const prev=_actPrevInv[eid];
+    if(_actSuppressInvoice){ _actPrevInv[eid]=JSON.parse(JSON.stringify(inv||{})); return; }
+    if(!prev){ logActivity(inqId,'payment','Invoice created',{}); _actPrevInv[eid]=JSON.parse(JSON.stringify(inv||{})); return; }
+    const labels=[];
+    const g0=(typeof calcInvoiceTotals==='function')?calcInvoiceTotals(prev).grand:null;
+    const g1=(typeof calcInvoiceTotals==='function')?calcInvoiceTotals(inv).grand:null;
+    if(g0!=null && g1!=null && Math.abs(g0-g1)>0.001) labels.push('total \u2192 $'+g1.toFixed(2));
+    else if(_actChanged(prev.lines, inv.lines)) labels.push('line items changed');
+    if(_actChanged(prev.taxExempt, inv.taxExempt)) labels.push('tax-exempt '+(inv.taxExempt?'on':'off'));
+    if(_actChanged(prev.notes, inv.notes)) labels.push('notes updated');
+    if(_actChanged(prev.status, inv.status)) labels.push('status \u2192 '+inv.status);
+    if(labels.length) _actQueueEdit(inqId,'Invoice',labels);
+    _actPrevInv[eid]=JSON.parse(JSON.stringify(inv||{}));
+  }catch(err){}
+}
+
+window.openActivityLog   = openActivityLog;
+window.closeActivityLog  = closeActivityLog;
+window.addActivityNote   = addActivityNote;
+window.submitActivityNote= submitActivityNote;
+window.loadClientEmails  = loadClientEmails;
 
 
 function formatEventDay(e){
@@ -2839,6 +3127,7 @@ function markInquiryLost(id){
   if(!confirm('Mark '+nm+' as Lost / Declined?\n\nIt stays in the pipeline for future reference. If it had a booked event, that event stays on the calendar but turns yellow as a flag.')) return;
   const wasBooked = inq.stage==='booked';
   inq.stage='lost';
+  logActivity(inq.id,'stage','Marked Lost / Declined',{stage:'lost'});
   _saveInquiry(inq);
   // If there's an event for this inquiry, flag it lost (recolor) rather than remove it
   const ev = events.find(x=>x.id==='inq_'+inq.id);
@@ -2852,6 +3141,7 @@ function reviveInquiry(id){
   const inq = inquiries.find(x=>x.id===id);
   if(!inq) return;
   inq.stage='new';
+  logActivity(inq.id,'stage','Reopened \u2014 back to New',{stage:'new'});
   _saveInquiry(inq);
   // Un-flag the event color if one exists
   const ev = events.find(x=>x.id==='inq_'+inq.id);
@@ -5675,7 +5965,10 @@ async function confirmPayment(eid){
   invoices[eid].lastPaymentAmount = amount;
   invoices[eid].paymentMethod = method;
   invoices[eid].checkNumber = method==='Check' ? checkNum : '';
+  _actSuppressInvoice=true;
   await _saveInvoice(eid, invoices[eid]);
+  _actSuppressInvoice=false;
+  try{ var _bid=baseEventIdOf(eid); var _inqId=(_bid&&_bid.indexOf('inq_')===0)?_bid.slice(4):_bid; logActivity(_inqId,'payment','Payment recorded: $'+amount.toFixed(2)+' ('+method+(method==='Check'&&checkNum?(' #'+checkNum):'')+') \u2014 balance now $'+Math.max(0,newBalance).toFixed(2),{amount:amount,method:method,balance:Math.max(0,newBalance)}); }catch(e){}
   document.getElementById('paymentModal')?.remove();
   renderInvoiceDetail();
   render();
