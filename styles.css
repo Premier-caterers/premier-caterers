@@ -466,3 +466,22 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .hub-drawer .inq-detail.hub{flex:1;min-height:0;overflow-y:auto;margin:0;border:none;border-radius:0;box-shadow:none}
 .hub-drawer .hub-head{position:sticky;top:0;z-index:2}
 @media(max-width:680px){.hub-drawer{width:100vw;max-width:100vw}}
+
+/* ════════════════ STAGE 3c · HUB AI SUMMARY CARD ════════════════ */
+.hub-ai{background:linear-gradient(180deg,var(--brass-tint),var(--bg));border:1px solid #E7D4AE;border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow-card)}
+.hub-ai-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;gap:10px}
+.hub-ai-title{font-family:'Fraunces',Georgia,serif;font-size:15px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:7px}
+.hub-ai-title .ti{color:var(--brass-deep)}
+.hub-ai-gen{font-size:11px;padding:5px 11px;border:1px solid var(--brass);border-radius:7px;background:var(--bg);color:var(--brass-deep);cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:inherit;font-weight:600;white-space:nowrap}
+.hub-ai-gen:hover{background:var(--brass-tint)}
+.hub-ai-gen:disabled{opacity:.6;cursor:default}
+.hub-ai-text{font-size:12.5px;line-height:1.55;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:11px 12px;white-space:pre-wrap}
+.hub-ai-meta{font-size:10.5px;color:var(--text3);margin-top:5px}
+.hub-ai-msg{font-size:12.5px;color:var(--text2);line-height:1.5;padding:4px 0}
+.hub-ai-sec{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin:15px 0 4px}
+.hub-ai-done-h{font-size:10.5px;color:var(--text3);margin:11px 0 2px;text-transform:uppercase;letter-spacing:.06em}
+.hub-ai-add{display:flex;gap:7px;margin-top:12px}
+.hub-ai-add input{flex:1;font-size:12.5px;padding:7px 10px;border:1px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);font-family:inherit}
+.hub-ai-add input:focus{outline:none;border-color:var(--brass)}
+.hub-ai-add button{font-size:12px;padding:7px 14px;border:none;border-radius:7px;background:var(--maroon);color:#fff;cursor:pointer;font-family:inherit;font-weight:600}
+.hub-ai-add button:hover{background:var(--maroon-deep)}
