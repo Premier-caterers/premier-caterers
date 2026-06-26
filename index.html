@@ -1968,6 +1968,7 @@ function renderInqDetail(inq, role){
         ${fact('Venue', inq.venueName)}
         ${fact('Party planner', inq.plannerName)}
       </div>
+      ${hubAiCard(inq)}
       <div class="hub-grid2">
         <div>
           <div class="hub-sec">Menu <span class="rule"></span></div>
@@ -2924,6 +2925,7 @@ function toggleTask(taskId){
   if(t.done){ t.doneBy=_actUserName(); t.doneAt=Date.now(); } else { t.doneBy=''; t.doneAt=0; }
   try{ if(activityCol) activityCol.doc(taskId).set(t); }catch(e){}
   renderAiPanel(); renderActivityLogBody();
+  try{ if(typeof selectedInqId!=='undefined' && selectedInqId && typeof syncHubDrawer==='function') syncHubDrawer(); }catch(e){}
 }
 function _actTaskRow(t){
   return '<div onclick="toggleTask(\''+t.id+'\')" style="display:flex;align-items:flex-start;gap:9px;padding:6px 0;cursor:pointer">'
@@ -2988,8 +2990,61 @@ async function summarizeClient(force){
     var b=document.getElementById('aiSumBtn'); if(b){ b.disabled=false; b.innerHTML='<i class="ti ti-refresh"></i>Refresh'; }
   }
 }
+function hubAiCard(inq){
+  var tasks=activityLog.filter(function(a){return String(a.inquiryId)===String(inq.id) && a.type==='task';});
+  var open=tasks.filter(function(t){return !t.done;}), done=tasks.filter(function(t){return t.done;});
+  var has = inq.aiSummary && inq.aiSummary.text;
+  var sum = has
+    ? '<div class="hub-ai-text">'+_actEsc(inq.aiSummary.text)+'</div><div class="hub-ai-meta">Generated '+_actFmt(inq.aiSummary.ts)+(inq.aiSummary.by?(' \u00b7 '+_actEsc(inq.aiSummary.by)):'')+'</div>'
+    : '<div class="hub-ai-msg">Have Claude read the full email thread with this client and pull out the key points and to-dos. Needs an email address on file.</div>';
+  var items = !tasks.length
+    ? '<div style="font-size:12px;color:var(--text3)">No action items yet \u2014 generate a summary and Claude will add anything it finds.</div>'
+    : open.map(_actTaskRow).join('') + (done.length?'<div class="hub-ai-done-h">Completed</div>'+done.map(_actTaskRow).join(''):'');
+  return '<div class="hub-ai">'
+    + '<div class="hub-ai-head"><div class="hub-ai-title"><i class="ti ti-sparkles"></i>AI summary</div>'
+    +   '<button id="hubAiBtn" onclick="hubSummarize(\''+inq.id+'\')" class="hub-ai-gen"><i class="ti ti-refresh"></i>'+(has?'Refresh':'Generate')+'</button></div>'
+    + '<div id="hubAiBody">'+sum+'</div>'
+    + '<div class="hub-ai-sec">Action items</div>'
+    + '<div>'+items+'</div>'
+    + '<div class="hub-ai-add"><input id="hubTaskInput" type="text" placeholder="Add an action item\u2026" onkeydown="if(event.key===\'Enter\'){hubAddTask(\''+inq.id+'\')}"><button onclick="hubAddTask(\''+inq.id+'\')">Add</button></div>'
+    + '</div>';
+}
+async function hubSummarize(inqId){
+  var inq=_findInq(inqId); if(!inq) return;
+  var body=document.getElementById('hubAiBody');
+  var email=inq.email?inq.email.trim():'';
+  if(!email){ if(body) body.innerHTML='<div class="hub-ai-msg">No email address on file for this client, so there\u2019s nothing to summarize yet.</div>'; return; }
+  var relay=(typeof gmailRelayUrl==='function')?gmailRelayUrl():(localStorage.getItem('scriptUrl')||'');
+  if(!relay){ if(body) body.innerHTML='<div class="hub-ai-msg">Connect the Apps Script URL in Settings first.</div>'; return; }
+  var btn=document.getElementById('hubAiBtn'); if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i>Reading\u2026'; }
+  if(body) body.innerHTML='<div class="hub-ai-msg">Claude is reading the email thread\u2026</div>';
+  try{
+    var url=relay+(relay.indexOf('?')>=0?'&':'?')+'action=aiSummarizeClient&email='+encodeURIComponent(email)
+      +'&name='+encodeURIComponent(((inq.firstName||'')+' '+(inq.lastName||'')).trim());
+    var r=await fetch(url);
+    var d=await r.json();
+    if(!d.ok) throw new Error(d.error||'AI returned an error');
+    inq.aiSummary={ text:d.summary||'', ts:Date.now(), by:_actUserName() };
+    await _saveInquiry(inq);
+    (d.tasks||[]).forEach(function(t){ _actAddTask(inqId, t); });
+    try{ if(typeof renderAiPanel==='function') renderAiPanel(); if(typeof renderActivityLogBody==='function') renderActivityLogBody(); }catch(e){}
+    render();
+  }catch(e){
+    if(body) body.innerHTML='<div class="hub-ai-msg">Could not generate summary: '+_actEsc(e.message)+'</div>';
+    var b=document.getElementById('hubAiBtn'); if(b){ b.disabled=false; b.innerHTML='<i class="ti ti-refresh"></i>Refresh'; }
+  }
+}
+function hubAddTask(inqId){
+  var el=document.getElementById('hubTaskInput'); if(!el) return;
+  var v=el.value.trim(); if(!v) return;
+  _actAddTask(inqId, v); el.value='';
+  try{ if(typeof renderAiPanel==='function') renderAiPanel(); }catch(e){}
+  render();
+}
 window.toggleTask        = toggleTask;
 window.summarizeClient   = summarizeClient;
+window.hubSummarize      = hubSummarize;
+window.hubAddTask        = hubAddTask;
 
 window.openActivityLog   = openActivityLog;
 window.closeActivityLog  = closeActivityLog;
