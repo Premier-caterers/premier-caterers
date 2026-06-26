@@ -725,6 +725,7 @@ function render(){
       _banner.style.display='none';
     }
   }
+  syncHubDrawer();
 }
 
 // ── WEEKLY COVER SHEET ──
@@ -1789,19 +1790,12 @@ function renderPipeline(){
     <div class="pl-stat"><div class="k">This week</div><div class="v">${sWeek}</div></div>
   </div>`;
 
-  let detailHtml = '';
-  if(selectedInqId){
-    const inqSel = inquiries.find(x=>x.id===selectedInqId);
-    if(inqSel) detailHtml = renderInqDetail(inqSel, role);
-  }
-
   let h = `
   <div class="section-header">
     <div class="section-title">Client Pipeline</div>
     ${role.canEdit ? `<button class="add-btn" onclick="openAddInquiryModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add inquiry</button>` : ''}
   </div>
   ${statHtml}
-  ${detailHtml}
   <div class="pipeline-cols" style="display:flex;flex-wrap:nowrap;gap:12px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch">
   ${stages.map(s=>{
     const bookedCols = {booked:1, month_out:1, two_weeks:1, this_week:1, past:1};
@@ -2280,16 +2274,31 @@ function formatDate(d){
 function selectInquiry(id){
   selectedInqId = selectedInqId===id ? null : id;
   render();
-  if(selectedInqId){
-    setTimeout(()=>{
-      const d = document.querySelector('.inq-detail');
-      if(d) d.scrollIntoView({behavior:'smooth', block:'start'});
-      else document.getElementById('mainArea')?.scrollTo({top:0, behavior:'smooth'});
-    }, 50);
-  }
 }
 
 function closeInqDetail(){ selectedInqId=null; render(); }
+
+function syncHubDrawer(){
+  const dr=document.getElementById('hubDrawer'), sc=document.getElementById('hubScrim');
+  if(!dr||!sc) return;
+  const inq = (currentView==='pipeline' && selectedInqId) ? inquiries.find(x=>x.id===selectedInqId) : null;
+  if(inq){
+    const role=roles[currentRole];
+    try{ dr.innerHTML = renderInqDetail(inq, role); }
+    catch(err){ dr.innerHTML = '<div style="padding:2rem;color:#b00;font:13px monospace">Hub error: '+(err&&err.message||err)+'</div>'; }
+    dr.setAttribute('aria-hidden','false');
+    requestAnimationFrame(()=>{ dr.classList.add('show'); sc.classList.add('show'); });
+    if(_estimateOpenId===inq.id){
+      requestAnimationFrame(()=>{ try{ initLineSortable('estLinesBody-'+_estimateOpenId, (from,to)=>reorderEstimateLine(_estimateOpenId, from, to)); }catch(e){} });
+    }
+  } else {
+    dr.classList.remove('show'); sc.classList.remove('show');
+    dr.setAttribute('aria-hidden','true');
+  }
+}
+document.addEventListener('keydown', function(e){
+  if(e.key==='Escape' && selectedInqId && currentView==='pipeline' && !document.getElementById('activityLogModal')){ closeInqDetail(); }
+});
 
 async function attachInqMenu(id){
   const inq = inquiries.find(x=>x.id===id);
@@ -8738,5 +8747,7 @@ updateWeekLabel();
   }catch(e){}
 })();
 </script>
+<div class="hub-scrim" id="hubScrim" onclick="closeInqDetail()"></div>
+<aside class="hub-drawer" id="hubDrawer" aria-hidden="true"></aside>
 </body>
 </html>
