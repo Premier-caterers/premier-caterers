@@ -1,28 +1,36 @@
 
 
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#fff;--bg2:#f7f7f5;--bg3:#f0f0ec;
-  --text:#1a1a18;--text2:#6b6b65;--text3:#9a9a94;
-  --border:rgba(0,0,0,0.12);--border2:rgba(0,0,0,0.22);
-  --blue-bg:#E6F1FB;--blue-text:#0C447C;--blue-mid:#185FA5;--blue-border:#B5D4F4;
-  --amber-bg:#FAEEDA;--amber-text:#633806;--amber-border:#FAC775;
-  --green-bg:#EAF3DE;--green-text:#27500A;--green-border:#97C459;
-  --teal-bg:#E1F5EE;--teal-text:#085041;
-  --purple-bg:#EEEDFE;--purple-text:#3C3489;
-  --coral-bg:#FAECE7;--coral-text:#712B13;
-  --radius:8px;--radius-lg:12px;
+  --bg:#FFFFFF;--bg2:#FCFAF6;--bg3:#F7F3EC;
+  --text:#2B2420;--text2:#6B6058;--text3:#9A8E84;
+  --border:#EAE2D6;--border2:#DDD3C4;
+  --maroon:#8B1A1A;--maroon-deep:#6E1414;--maroon-tint:#F3E4E2;
+  --brass:#B0894B;--brass-deep:#8C6B36;--brass-tint:#F6EEDF;
+  /* primary/active accent family (was blue) → now maroon brand */
+  --blue-bg:#F3E4E2;--blue-text:#6E1414;--blue-mid:#8B1A1A;--blue-border:#E3C9C7;
+  --amber-bg:#FBF1DC;--amber-text:#7A4E0A;--amber-border:#E8C98A;
+  --green-bg:#E4F1EA;--green-text:#216B47;--green-border:#9BCBB2;
+  --teal-bg:#E1F1EC;--teal-text:#0B5345;
+  --purple-bg:#EFEAF2;--purple-text:#5B3A6B;
+  --coral-bg:#F6E8E2;--coral-text:#8A4A33;
+  --radius:9px;--radius-lg:14px;
 }
 @media(prefers-color-scheme:dark){:root{
-  --bg:#1e1e1c;--bg2:#282826;--bg3:#323230;
-  --text:#f0f0ec;--text2:#a0a09a;--text3:#68685e;
-  --border:rgba(255,255,255,0.1);--border2:rgba(255,255,255,0.2);
-  --blue-bg:#042C53;--blue-text:#B5D4F4;--blue-mid:#378ADD;--blue-border:#0C447C;
-  --amber-bg:#412402;--amber-text:#FAC775;--amber-border:#633806;
-  --green-bg:#173404;--green-text:#C0DD97;--green-border:#3B6D11;
-  --teal-bg:#04342C;--teal-text:#9FE1CB;
-  --purple-bg:#26215C;--purple-text:#CECBF6;
-  --coral-bg:#4A1B0C;--coral-text:#F5C4B3;
+  /* Approved concept is a warm light identity (no dark variant yet);
+     mirror the light palette so the design renders the same on dark-mode devices. */
+  --bg:#FFFFFF;--bg2:#FCFAF6;--bg3:#F7F3EC;
+  --text:#2B2420;--text2:#6B6058;--text3:#9A8E84;
+  --border:#EAE2D6;--border2:#DDD3C4;
+  --maroon:#8B1A1A;--maroon-deep:#6E1414;--maroon-tint:#F3E4E2;
+  --brass:#B0894B;--brass-deep:#8C6B36;--brass-tint:#F6EEDF;
+  --blue-bg:#F3E4E2;--blue-text:#6E1414;--blue-mid:#8B1A1A;--blue-border:#E3C9C7;
+  --amber-bg:#FBF1DC;--amber-text:#7A4E0A;--amber-border:#E8C98A;
+  --green-bg:#E4F1EA;--green-text:#216B47;--green-border:#9BCBB2;
+  --teal-bg:#E1F1EC;--teal-text:#0B5345;
+  --purple-bg:#EFEAF2;--purple-text:#5B3A6B;
+  --coral-bg:#F6E8E2;--coral-text:#8A4A33;
 }}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg3);color:var(--text);font-size:15px;line-height:1.5;min-height:100vh}
 button{font-family:inherit;cursor:pointer}
@@ -369,3 +377,8 @@ a{color:var(--blue-mid);text-decoration:none}
 .home-row-more{justify-content:center;color:var(--blue-mid);font-size:12px;font-weight:500}
 .home-empty{padding:1.6rem;text-align:center;color:var(--text3);font-size:13px}
 @media(max-width:760px){.home-boxes{grid-template-columns:1fr}}
+
+/* ── Concept typography (Stage 1): Inter body + Fraunces display ── */
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+.brand,.section-title,.client-name,.stat-n,.home-greeting,.home-box-head,.inq-event-name{font-family:'Fraunces',Georgia,serif;letter-spacing:.1px}
+.stat-n{font-weight:600}
