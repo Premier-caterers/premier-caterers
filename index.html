@@ -2197,10 +2197,17 @@ function _scopeCssForPdf(css, scopeSel){
 // hidden iframe and open the print dialog; the document's title becomes the
 // suggested filename, and "Save as PDF" is the destination to choose.
 function downloadHtmlAsPdf(html, filenameBase){
-  const fname = (filenameBase || 'document').replace(/[^a-z0-9_\-]/gi,'_');
+  const fname = (filenameBase || 'document').replace(/[\/\\:*?"<>|]/g,'-').replace(/\s+/g,' ').trim();
+  const _prevTitle = document.title;
+  const _restoreTitle = function(){ document.title = _prevTitle; };
   try{
     if(typeof showToast==='function') showToast('Opening PDF — choose "Save as PDF"');
-    // Give the document a title so the saved-PDF filename is sensible
+    // Browsers use the TOP document's title for an iframe-print filename, so set it here
+    // (and restore it once printing finishes). This is what names the saved PDF.
+    document.title = fname;
+    try{ window.addEventListener('afterprint', _restoreTitle, {once:true}); }catch(e){}
+    setTimeout(_restoreTitle, 60000);
+    // Give the embedded document a matching title too
     const titledHtml = /<title>/i.test(html)
       ? html.replace(/<title>[\s\S]*?<\/title>/i, '<title>'+fname+'</title>')
       : html.replace(/<head>/i, '<head><title>'+fname+'</title>');
@@ -2222,6 +2229,7 @@ function downloadHtmlAsPdf(html, filenameBase){
     f.onload = function(){ setTimeout(go, 250); };
     setTimeout(go, 600); // fallback: written docs don't always fire onload
   }catch(err){
+    _restoreTitle();
     console.error('PDF (print) failed:', err);
     try{
       const w=window.open('','_blank');
@@ -6248,14 +6256,24 @@ async function confirmPayment(eid){
 
 async function markPaid(eid){ openPaymentModal(eid); }
 
+function invoiceFileName(eid){
+  const e = events.find(x=>x.id===baseEventIdOf(eid));
+  const inv = invoices[eid];
+  if(!e||!inv) return 'Invoice';
+  const isInvoice = inv.status==='invoice'||inv.status==='paid';
+  const docWord = isInvoice ? 'INVOICE' : 'ESTIMATE';
+  let dateBit='';
+  if(e.eventDate){ const p=String(e.eventDate).split('-'); if(p.length===3) dateBit=' ('+parseInt(p[1],10)+'-'+parseInt(p[2],10)+'-'+p[0].slice(-2)+')'; }
+  const num = invoiceDisplayLabel(baseEventIdOf(eid), eid);   // includes '#'
+  const typ = e.typeLabel ? (' '+e.typeLabel) : '';
+  return (e.name||'Client')+typ+dateBit+' - '+docWord+' '+num;
+}
 function downloadInvoice(eid){
   const e = events.find(x=>x.id===baseEventIdOf(eid));
   const inv = invoices[eid];
   if(!e||!inv) return;
   const html = buildInvoiceHTML(eid);
-  const isInvoice = inv.status==='invoice'||inv.status==='paid';
-  const docType = isInvoice ? 'Invoice' : 'Quote';
-  downloadHtmlAsPdf(html, docType+'_'+e.name.replace(/[^a-z0-9]/gi,'_')+'_'+e.job);
+  downloadHtmlAsPdf(html, invoiceFileName(eid));
 }
 
 function printInvoice(eid){
@@ -6273,10 +6291,10 @@ function buildInvoiceHTML(eid){
   if(!e||!inv) return '';
   const tots = calcInvoiceTotals(inv);
   const isInvoice = inv.status==='invoice'||inv.status==='paid';
-  const docType = isInvoice ? 'INVOICE' : 'QUOTE';
+  const docType = isInvoice ? 'INVOICE' : 'ESTIMATE';
   const now = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
 
-  const html = '<!DOCTYPE html><html><head><title>'+docType+' — '+e.name+'</title><style>'+
+  const html = '<!DOCTYPE html><html><head><title>'+invoiceFileName(eid)+'</title><style>'+
     '*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:14px;color:#000;padding:40px 50px;max-width:780px;margin:0 auto}'+
     '.logo{font-size:22px;font-weight:900;letter-spacing:.05em;margin-bottom:4px}'+
     '.logo span{color:#8B1A1A}'+
@@ -8029,7 +8047,7 @@ function openSendInvoiceEmail(eid){
   if(toEmail && !inv.clientEmail){ inv.clientEmail = toEmail; }
   const tots = calcInvoiceTotals(inv);
   const isInvoice = inv.status==='invoice'||inv.status==='paid';
-  const docType = isInvoice ? 'Invoice' : 'Quote';
+  const docType = isInvoice ? 'Invoice' : 'Estimate';
   const defaultSubject = docType+' from Premier Caterers — '+e.name;
   const defaultBody = 'Dear '+e.name+',\n\nPlease find your '+docType.toLowerCase()+' attached below.\n\nEvent: '+getFullEventDate(e)+'\nTotal: $'+tots.grand.toFixed(2)+(tots.balance>0?'\nBalance due: $'+tots.balance.toFixed(2):'\nStatus: Paid in full')+'\n\nThank you for choosing Premier Caterers!\n\nBest regards,\nPremier Caterers\nevents@thepremiercaterer.com\nthepremiercaterer.com';
   const m = document.createElement('div');
