@@ -1749,18 +1749,45 @@ function togglePlCard(inqId){
   render();
 }
 
+function plDaysUntil(d){
+  if(!d) return null;
+  const t=new Date(d); if(isNaN(t.getTime())) return null;
+  const now=new Date(); now.setHours(0,0,0,0); t.setHours(0,0,0,0);
+  return Math.round((t-now)/86400000);
+}
+function plCardFoot(inq){
+  const dd = plDaysUntil(inq.eventDate);
+  const hasMenu = (Array.isArray(inq.menus)&&inq.menus.length) || inq.menuLink;
+  let cd=''; if(dd!==null){ cd = dd>1?`in ${dd} days` : dd===1?'tomorrow' : dd===0?'today' : `${Math.abs(dd)} days ago`; }
+  const soon = dd!==null && dd>=0 && dd<=7;
+  if(!cd && !hasMenu) return '';
+  return `<div class="inq-foot">
+    <span class="inq-countdown ${soon?'soon':''}">${cd}</span>
+    <span class="inq-signals">${hasMenu?`<span class="inq-signal has-menu"><i class="ti ti-file-check" style="font-size:12px"></i>menu</span>`:''}</span>
+  </div>`;
+}
 function renderPipeline(){
   const role = roles[currentRole];
   const stages = [
-    {key:'new',       label:'New Inquiry',     icon:'ti-mail',          cls:'stage-new'},
-    {key:'menu_sent', label:'Menu Sent',       icon:'ti-file-text',     cls:'stage-menu_sent'},
-    {key:'booked',    label:'Booked',          icon:'ti-circle-check',  cls:'stage-booked'},
-    {key:'month_out', label:'One Month Out',   icon:'ti-calendar-event',cls:'stage-booked'},
-    {key:'two_weeks', label:'2 Weeks Out',     icon:'ti-calendar-event',cls:'stage-booked'},
-    {key:'this_week', label:'This Week',        icon:'ti-calendar-star', cls:'stage-booked'},
-    {key:'past',      label:'Past Events',     icon:'ti-calendar-check', cls:'stage-past'},
-    {key:'lost',      label:'Lost / Declined', icon:'ti-circle-x',      cls:'stage-lost'},
+    {key:'new',       label:'New Inquiry',     icon:'ti-mail',          cls:'stage-new',      pcls:'pcol-new'},
+    {key:'menu_sent', label:'Menu Sent',       icon:'ti-file-text',     cls:'stage-menu_sent',pcls:'pcol-menu'},
+    {key:'booked',    label:'Booked',          icon:'ti-circle-check',  cls:'stage-booked',   pcls:'pcol-booked'},
+    {key:'month_out', label:'One Month Out',   icon:'ti-calendar-event',cls:'stage-booked',   pcls:'pcol-booked'},
+    {key:'two_weeks', label:'2 Weeks Out',     icon:'ti-calendar-event',cls:'stage-booked',   pcls:'pcol-booked'},
+    {key:'this_week', label:'This Week',        icon:'ti-calendar-star', cls:'stage-booked',   pcls:'pcol-booked'},
+    {key:'past',      label:'Past Events',     icon:'ti-calendar-check', cls:'stage-past',     pcls:'pcol-past'},
+    {key:'lost',      label:'Lost / Declined', icon:'ti-circle-x',      cls:'stage-lost',     pcls:'pcol-lost'},
   ];
+  const sNew = inquiries.filter(i=>i.stage==='new').length;
+  const sMenu = inquiries.filter(i=>i.stage==='menu_sent').length;
+  const sBooked = inquiries.filter(i=>i.stage==='booked').length;
+  const sWeek = inquiries.filter(i=>i.stage==='booked' && plBookedBucket(i)==='this_week').length;
+  const statHtml = `<div class="pl-stats">
+    <div class="pl-stat"><div class="k">New leads</div><div class="v">${sNew}</div></div>
+    <div class="pl-stat"><div class="k">Menu sent</div><div class="v">${sMenu}</div></div>
+    <div class="pl-stat accent"><div class="k">Booked</div><div class="v">${sBooked}</div></div>
+    <div class="pl-stat"><div class="k">This week</div><div class="v">${sWeek}</div></div>
+  </div>`;
 
   let detailHtml = '';
   if(selectedInqId){
@@ -1773,6 +1800,7 @@ function renderPipeline(){
     <div class="section-title">Client Pipeline</div>
     ${role.canEdit ? `<button class="add-btn" onclick="openAddInquiryModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add inquiry</button>` : ''}
   </div>
+  ${statHtml}
   ${detailHtml}
   <div class="pipeline-cols" style="display:flex;flex-wrap:nowrap;gap:12px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch">
   ${stages.map(s=>{
@@ -1784,7 +1812,7 @@ function renderPipeline(){
     cards = cards.slice().sort(plSortComparator(sortBy));
     const isBooked = (s.key==='booked'||s.key==='month_out'||s.key==='two_weeks'||s.key==='this_week');
     const colCompact = !!window._plColCollapsed[s.key];
-    return `<div class="pipeline-col" style="flex:0 0 300px;min-width:300px">
+    return `<div class="pipeline-col ${s.pcls||''}" style="flex:0 0 300px;min-width:300px">
       <div class="pipeline-col-header">
         <div class="pipeline-col-title"><i class="ti ${s.icon}" style="font-size:14px"></i>${s.label}</div>
         <div style="display:flex;align-items:center;gap:6px">
@@ -1824,6 +1852,7 @@ function renderPipeline(){
           ${inq.phone ? `<span><i class="ti ti-phone" style="font-size:11px"></i>${inq.phone}</span>` : ''}
           ${inq.email ? `<span><i class="ti ti-mail" style="font-size:11px"></i>${inq.email}</span>` : ''}
         </div>
+        ${plCardFoot(inq)}
         ${role.canEdit ? `<div class="inq-actions">
           ${s.key==='new' ? `<button class="stage-btn stage-menu_sent" onclick="event.stopPropagation();moveInquiry('${inq.id}','menu_sent')">Mark menu sent</button>` : ''}
           ${s.key!=='new' && s.key!=='lost' && s.key!=='past' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();moveInquiry('${inq.id}','new')"><i class="ti ti-arrow-back-up" style="font-size:11px"></i> Move to new</button>` : ''}
@@ -1835,6 +1864,7 @@ function renderPipeline(){
         </div>` : ''}
       </div>`;
       }).join('')}
+      ${role.canEdit?`<button class="pcol-add" onclick="openAddInquiryModal()"><i class="ti ti-plus" style="font-size:13px"></i> Add inquiry</button>`:''}
     </div>`;
   }).join('')}
   </div>`;
@@ -6198,6 +6228,7 @@ function buildInvoiceHTML(eid){
       '<div class="tot-row balance"><span>Balance due</span><span>$'+tots.balance.toFixed(2)+'</span></div>'+
     '</div></div>'+
     (inv.notes?'<div class="notes"><strong>Notes:</strong> '+inv.notes+'</div>':'')+
+    (!isInvoice ? '<div style="margin:20px 0;padding:14px 16px;border:1.5px solid #8B1A1A;border-radius:6px;background:#fdf8f8;font-size:10px;color:#555;line-height:1.7;text-align:center"><strong style="color:#8B1A1A;font-size:11px">ESTIMATE DISCLAIMER</strong><br>THIS IS AN ESTIMATE. FINAL FOOD COST AND LABOR COSTS TO BE DETERMINED AFTER FINAL MENU, GUEST COUNT, EVENT DETAILS AND LOGISTICS ARE DETERMINED.<br>STAFF GRATUITIES ARE NOT INCLUDED IN THIS ESTIMATE.</div>' : '')+
     '<div class="footer">Premier Caterers · Kosher supervision provided by the OU and the PCK · thepremiercaterer.com · Thank you for your business!</div>'+
     '</body></html>';
 
