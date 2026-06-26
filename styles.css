@@ -382,3 +382,44 @@ a{color:var(--blue-mid);text-decoration:none}
 body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .brand,.section-title,.client-name,.stat-n,.home-greeting,.home-box-head,.inq-event-name{font-family:'Fraunces',Georgia,serif;letter-spacing:.1px}
 .stat-n{font-weight:600}
+
+/* ════════════════ STAGE 2 · PIPELINE BOARD (concept) ════════════════ */
+:root{
+  --st-new:#5E7186;--st-menu:#C2872A;--st-booked:#2E7D5B;--st-past:#8A7E72;--st-lost:#A38C84;
+  --shadow-card:0 1px 2px rgba(43,36,32,.04),0 4px 14px rgba(43,36,32,.06);
+  --shadow-card-h:0 8px 26px rgba(43,36,32,.13);
+}
+/* stat strip */
+.pl-stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1.1rem}
+.pl-stat{flex:1;min-width:138px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:13px 16px;box-shadow:var(--shadow-card)}
+.pl-stat .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--text3);font-weight:600}
+.pl-stat .v{font-family:'Fraunces',Georgia,serif;font-size:25px;font-weight:600;margin-top:4px;line-height:1;color:var(--text)}
+.pl-stat.accent .v{color:var(--brass-deep)}
+/* columns become transparent lanes; cards float on the canvas */
+.pipeline-col{background:transparent;padding:.25rem .15rem;min-height:120px}
+.pipeline-col-header{padding:.1rem .35rem .65rem}
+.pipeline-col-title{font-weight:700;font-size:12.5px;letter-spacing:.01em}
+.pipeline-col-title::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--col-accent,var(--st-new));flex-shrink:0;margin-right:2px}
+.pipeline-count{background:var(--bg);border:1px solid var(--border);color:var(--text2);font-weight:600}
+/* per-stage accent — the column carries a pcol-* class, cards inherit --col-accent */
+.pcol-new{--col-accent:var(--st-new)} .pcol-menu{--col-accent:var(--st-menu)}
+.pcol-booked{--col-accent:var(--st-booked)} .pcol-past{--col-accent:var(--st-past)}
+.pcol-lost{--col-accent:var(--st-lost)}
+/* cards */
+.inq-card{position:relative;overflow:hidden;box-shadow:var(--shadow-card);border:1px solid var(--border);transition:transform .16s,box-shadow .16s,border-color .16s}
+.inq-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--col-accent,var(--st-new))}
+.inq-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-card-h);border-color:var(--border2)}
+.inq-card.selected{border:1.5px solid var(--maroon);box-shadow:var(--shadow-card-h)}
+.inq-card .inq-name{font-size:15.5px}
+.inq-event-name{font-style:normal;color:var(--text2);font-family:'Fraunces',Georgia,serif}
+.inq-meta .ti{color:var(--text3)}
+/* card footer: countdown + hub-at-a-glance signals */
+.inq-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;padding-top:9px;border-top:1px dashed var(--border2)}
+.inq-countdown{font-size:11.5px;font-weight:700;color:var(--col-accent,var(--st-new))}
+.inq-countdown.soon{color:var(--maroon)}
+.inq-signals{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2)}
+.inq-signal{display:inline-flex;align-items:center;gap:3px}
+.inq-signal.has-menu{color:var(--st-booked);font-weight:600}
+/* dashed add at column foot */
+.pcol-add{width:100%;border:1.5px dashed var(--border2);background:transparent;color:var(--text3);border-radius:var(--radius-lg);padding:9px;font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s;font-family:inherit;margin-top:2px;display:inline-flex;align-items:center;justify-content:center;gap:5px}
+.pcol-add:hover{border-color:var(--maroon);color:var(--maroon);background:var(--maroon-tint)}
