@@ -1872,88 +1872,131 @@ function renderPipeline(){
   return h;
 }
 
+function hubTimeline(inq, limit){
+  const id=String(inq.id);
+  let items = activityLog.filter(a=>String(a.inquiryId)===id).map(a=>({...a,_t:a.ts}));
+  try{ if(typeof _actEmailsCache!=='undefined' && _actEmailsCache[id]) items = items.concat(_actEmailsCache[id]); }catch(e){}
+  items.sort((a,b)=>(b._t||b.ts||0)-(a._t||a.ts||0));
+  if(!items.length) return `<div style="font-size:12px;color:var(--text3);padding:6px 0;line-height:1.5">No activity yet — menus, sends, status changes and payments will show up here automatically.</div>`;
+  const shown = items.slice(0, limit||6);
+  const esc = (typeof _actEsc==='function')?_actEsc:(x=>x==null?'':String(x));
+  const fmt = (typeof _actFmt==='function')?_actFmt:(x=>'');
+  const body = shown.map(a=>{
+    const meta=(typeof _ACT_META!=='undefined' && (_ACT_META[a.type]||_ACT_META.note)) || {color:'#8B1A1A',icon:'ti-point'};
+    let detail = esc(a.detail);
+    if(a.type==='task'){ detail = (a.done?'\u2713 ':'\u25af ')+detail; }
+    const who = a.userName ? (' \u00b7 '+esc(a.userName)) : '';
+    return `<div class="hub-tl-item">
+      <div class="hub-tl-ic" style="background:${meta.color}1a;color:${meta.color}"><i class="ti ${meta.icon}"></i></div>
+      <div class="hub-tl-body"><div class="t">${detail}</div><div class="m">${fmt(a._t||a.ts)}${who}</div></div>
+    </div>`;
+  }).join('');
+  const more = items.length>shown.length ? `<div style="font-size:11px;color:var(--text3);padding:7px 0 0">+${items.length-shown.length} more in the activity log</div>` : '';
+  return body + more;
+}
 function renderInqDetail(inq, role){
   const rows = (label,val) => val ? `<div class="drow"><span class="dkey">${label}</span><span class="dval">${val}</span></div>` : '';
+  const fact = (k,v) => v ? `<div class="hub-fact"><div class="k">${k}</div><div class="v">${v}</div></div>` : '';
   const stageName = {new:'New Inquiry', menu_sent:'Menu Sent', booked:'Booked'}[inq.stage]||inq.stage;
-  return `<div class="inq-detail">
-    <div class="detail-header">
-      <div class="detail-title">${clientPrimary(inq)||(inq.firstName+' '+inq.lastName)}${clientContact(inq)?` <span style="font-size:12px;font-weight:400;color:var(--text3)">· ${clientContact(inq)}</span>`:''}${inq.eventName?' — '+inq.eventName:''}</div>
-      <div class="detail-actions">
-        ${role.canEdit?`<button onclick="openEditInquiryModal('${inq.id}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-right:6px"><i class="ti ti-edit" style="font-size:14px"></i>Edit details</button>`:''}
-        ${role.canViewInvoices?`<button onclick="viewClientQuote('${inq.id}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-right:6px"><i class="ti ti-file-invoice" style="font-size:14px"></i>Quote / Invoice</button>`:''}
-        <button class="icon-btn" onclick="closeInqDetail()"><i class="ti ti-x"></i></button>
+  const name = clientPrimary(inq) || `${inq.firstName||''} ${inq.lastName||''}`.trim();
+  const contact = clientContact(inq);
+  const whenBits=[]; if(inq.eventDate) whenBits.push(formatDate(inq.eventDate)); if(inq.venueName) whenBits.push(inq.venueName); else if(inq.venueLocation) whenBits.push(inq.venueLocation);
+  const pillBits=[]; if(inq.guestCount) pillBits.push(inq.guestCount+' guests'); if(inq.meatDairy) pillBits.push(inq.meatDairy); if(inq.cuisine) pillBits.push(inq.cuisine);
+
+  let moneyHtml='';
+  if(role.canViewInvoices){
+    if(inq.estimate && Array.isArray(inq.estimate.lines) && inq.estimate.lines.length){
+      const t=calcInvoiceTotals(inq.estimate); const dep=parseFloat(inq.estimate.deposit||0);
+      const pct = t.grand>0 ? Math.max(0,Math.min(100, Math.round(dep/t.grand*100))) : 0;
+      const isInv = inq.estimate.status==='invoice'||inq.estimate.status==='paid';
+      moneyHtml = `<div class="hub-money">
+        <div class="hub-money-row"><span class="l">${isInv?'Invoice total':'Estimate total'}</span><span class="a">$${t.grand.toFixed(2)}</span></div>
+        <div class="hub-money-row"><span class="l">Deposit / paid</span><span class="a paid">$${dep.toFixed(2)}</span></div>
+        <div class="hub-paybar"><i style="width:${pct}%"></i></div>
+        <div class="hub-money-row" style="margin-bottom:0"><span class="l">Balance due</span><span class="a due">$${(t.grand-dep).toFixed(2)}</span></div>
+      </div>`;
+    } else {
+      moneyHtml = `<div class="hub-money" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <span style="font-size:12.5px;color:var(--text3)">No estimate started yet</span>
+        <button onclick="toggleEstimate('${inq.id}')" style="font-size:12px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;font-family:inherit">Start estimate</button>
+      </div>`;
+    }
+  }
+
+  const menuHtml = (Array.isArray(inq.menus) && inq.menus.length)
+    ? inq.menus.map((m,mi)=>`
+        <div style="border:0.5px solid var(--border2);border-radius:8px;padding:8px 10px;background:var(--bg2)">
+          <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:6px">${m.name||'Menu'}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px">
+            <a href="${m.url}" target="_blank" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--blue-border);border-radius:6px;background:var(--blue-bg);color:var(--blue-text);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-file-text" style="font-size:13px"></i>Open doc</a>
+            <a href="${menuPdfUrl(m.url)}" target="_blank" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-file-type-pdf" style="font-size:13px"></i>PDF</a>
+            <button onclick="downloadMenuPdf('${inq.id}',${mi})" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-download" style="font-size:13px"></i>Download PDF</button>
+            <button onclick="emailMenuPdf('${inq.id}',${mi})" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--green-border);border-radius:6px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-mail" style="font-size:13px"></i>Email PDF</button>
+            <button onclick="deleteInqMenu('${inq.id}',${mi})" title="Remove this menu" style="font-size:11px;padding:4px 9px;border:0.5px solid #e05c5c;border-radius:6px;background:var(--bg);color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-trash" style="font-size:13px"></i>Delete</button>
+          </div>
+        </div>`).join('')
+    : inq.menuLink
+      ? `<div style="border:0.5px solid var(--border2);border-radius:8px;padding:8px 10px;background:var(--bg2)">
+          <div style="display:flex;flex-wrap:wrap;gap:5px">
+            <a href="${inq.menuLink}" target="_blank" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--blue-border);border-radius:6px;background:var(--blue-bg);color:var(--blue-text);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-file-text" style="font-size:13px"></i>Open doc</a>
+            <a href="${menuPdfUrl(inq.menuLink)}" target="_blank" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-file-type-pdf" style="font-size:13px"></i>PDF</a>
+            <button onclick="emailMenuLink('${inq.id}')" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--green-border);border-radius:6px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-mail" style="font-size:13px"></i>Email PDF</button>
+          </div>
+        </div>`
+      : `<div style="font-size:12px;color:var(--text3)">No menu generated yet</div>`;
+
+  const refHtml = (inq.howFound||inq.referredBy||inq.eventAttended)
+    ? `<div class="hub-sec" style="margin-top:16px">Referral <span class="rule"></span></div>${rows('How found us', inq.howFound)}${rows('Referred by', inq.referredBy)}${rows('Event attended', inq.eventAttended)}`
+    : '';
+  const notesHtml = inq.comments
+    ? `<div class="hub-sec" style="margin-top:16px">Notes <span class="rule"></span></div><div style="font-size:13px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${inq.comments}</div>`
+    : '';
+
+  return `<div class="inq-detail hub">
+    <div class="hub-head">
+      <div class="hub-head-actions">
+        ${role.canEdit?`<button class="hub-hbtn" onclick="openEditInquiryModal('${inq.id}')"><i class="ti ti-edit"></i>Edit</button>`:''}
+        ${role.canViewInvoices?`<button class="hub-hbtn" onclick="viewClientQuote('${inq.id}')"><i class="ti ti-file-invoice"></i>Quote / Invoice</button>`:''}
+        <button class="hub-hbtn x" onclick="closeInqDetail()" title="Close">\u00d7</button>
       </div>
+      <div class="hub-eyebrow">${stageName}${contact?' \u00b7 '+contact:''}</div>
+      <div class="hub-name">${inq.eventName||name||'Event'}</div>
+      <div class="hub-when">${whenBits.join(' \u00b7 ')||'&nbsp;'}</div>
+      ${pillBits.length?`<div class="hub-pill"><span style="width:7px;height:7px;border-radius:50%;background:#fff;display:inline-block"></span>${pillBits.join(' \u00b7 ')}</div>`:''}
     </div>
-    <div class="detail-grid">
-      <div>
-        <div class="detail-block">
-          <div class="detail-block-title">Event info</div>
-          ${rows('Event name', inq.eventName)}
-          ${rows('Event type', inq.eventType)}
-          ${rows('Date', formatDate(inq.eventDate))}
-          ${rows('Guests', inq.guestCount)}
-          ${rows('Cuisine', inq.cuisine)}
-          ${rows('Meat / Dairy', inq.meatDairy)}
-          ${rows('Venue', inq.venueName)}
-          ${rows('Venue location', inq.venueLocation)}
-        </div>
-        <div class="detail-block">
-          <div class="detail-block-title">Status</div>
-          <div class="drow"><span class="dkey">Stage</span><span class="dval"><span class="stage-btn stage-${inq.stage}">${stageName}</span></span></div>
-          ${rows('Submitted', inq.submittedAt)}
-          <div style="margin-top:10px"><button onclick="openActivityLog('${inq.id}')" style="font-size:12px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-history" style="font-size:15px"></i>Activity log${_actCountFor(inq.id)?(' \u00b7 '+_actCountFor(inq.id)):''}</button></div>
-        </div>
+    <div class="hub-body">
+      ${moneyHtml}
+      <div class="hub-facts">
+        ${fact('Client', name)}
+        ${fact('Phone', inq.phone)}
+        ${fact('Email', inq.email)}
+        ${fact('Event type', inq.eventType)}
+        ${fact('Venue', inq.venueName)}
+        ${fact('Party planner', inq.plannerName)}
       </div>
-      <div>
-        <div class="detail-block">
-          <div class="detail-block-title">Contact</div>
-          ${rows('Phone', inq.phone)}
-          ${rows('Email', inq.email)}
-        </div>
-        <div class="detail-block">
-          <div class="detail-block-title">Menu</div>
+      <div class="hub-grid2">
+        <div>
+          <div class="hub-sec">Menu <span class="rule"></span></div>
           <div style="display:flex;flex-direction:column;gap:10px">
-          ${(Array.isArray(inq.menus) && inq.menus.length)
-            ? inq.menus.map((m,mi)=>`
-              <div style="border:0.5px solid var(--border2);border-radius:8px;padding:8px 10px;background:var(--bg2)">
-                <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:6px">${m.name||'Menu'}</div>
-                <div style="display:flex;flex-wrap:wrap;gap:5px">
-                  <a href="${m.url}" target="_blank" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--blue-border);border-radius:6px;background:var(--blue-bg);color:var(--blue-text);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-file-text" style="font-size:13px"></i>Open doc</a>
-                  <a href="${menuPdfUrl(m.url)}" target="_blank" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-file-type-pdf" style="font-size:13px"></i>PDF</a>
-                  <button onclick="downloadMenuPdf('${inq.id}',${mi})" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-download" style="font-size:13px"></i>Download PDF</button>
-                  <button onclick="emailMenuPdf('${inq.id}',${mi})" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--green-border);border-radius:6px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-mail" style="font-size:13px"></i>Email PDF</button>
-                  <button onclick="deleteInqMenu('${inq.id}',${mi})" title="Remove this menu" style="font-size:11px;padding:4px 9px;border:0.5px solid #e05c5c;border-radius:6px;background:var(--bg);color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-trash" style="font-size:13px"></i>Delete</button>
-                </div>
-              </div>`).join('')
-            : inq.menuLink
-              ? `<div style="border:0.5px solid var(--border2);border-radius:8px;padding:8px 10px;background:var(--bg2)">
-                  <div style="display:flex;flex-wrap:wrap;gap:5px">
-                    <a href="${inq.menuLink}" target="_blank" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--blue-border);border-radius:6px;background:var(--blue-bg);color:var(--blue-text);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-file-text" style="font-size:13px"></i>Open doc</a>
-                    <a href="${menuPdfUrl(inq.menuLink)}" target="_blank" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-file-type-pdf" style="font-size:13px"></i>PDF</a>
-                    <button onclick="emailMenuLink('${inq.id}')" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--green-border);border-radius:6px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-mail" style="font-size:13px"></i>Email PDF</button>
-                  </div>
-                </div>`
-              : `<div style="font-size:12px;color:var(--text3)">No menu generated yet</div>`}
-          <div style="margin-top:2px">
-            <button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-link" style="font-size:14px"></i>${(Array.isArray(inq.menus)&&inq.menus.length)||inq.menuLink?'Add another link':'Attach menu manually'}</button>
-            <button onclick="openTemplatePicker('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-left:6px"><i class="ti ti-file-plus" style="font-size:14px"></i>Create menu from template</button>
+            ${menuHtml}
+            <div style="margin-top:2px">
+              <button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:inherit"><i class="ti ti-link" style="font-size:14px"></i>${(Array.isArray(inq.menus)&&inq.menus.length)||inq.menuLink?'Add another link':'Attach menu manually'}</button>
+              <button onclick="openTemplatePicker('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-left:6px;font-family:inherit"><i class="ti ti-file-plus" style="font-size:14px"></i>Create menu from template</button>
+            </div>
           </div>
+          ${refHtml}
+          ${notesHtml}
+        </div>
+        <div>
+          <div class="hub-sec">Activity <span class="rule"></span></div>
+          ${hubTimeline(inq,6)}
+          <div style="margin-top:11px">
+            <button onclick="openActivityLog('${inq.id}')" style="font-size:12px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:inherit"><i class="ti ti-history" style="font-size:15px"></i>Full activity log${_actCountFor(inq.id)?(' \u00b7 '+_actCountFor(inq.id)):''}</button>
           </div>
-        </div>
-        <div class="detail-block">
-          <div class="detail-block-title">Referral</div>
-          ${rows('How found us', inq.howFound)}
-          ${rows('Referred by', inq.referredBy)}
-          ${rows('Event attended', inq.eventAttended)}
-          ${rows('Party planner', inq.plannerName)}
-        </div>
-        <div class="detail-block">
-          <div class="detail-block-title">Notes</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.6">${inq.comments||'—'}</div>
         </div>
       </div>
+      ${renderEstimateBlock(inq, role)}
     </div>
-    ${renderEstimateBlock(inq, role)}
   </div>`;
 }
 
