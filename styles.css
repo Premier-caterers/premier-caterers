@@ -423,3 +423,37 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 /* dashed add at column foot */
 .pcol-add{width:100%;border:1.5px dashed var(--border2);background:transparent;color:var(--text3);border-radius:var(--radius-lg);padding:9px;font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s;font-family:inherit;margin-top:2px;display:inline-flex;align-items:center;justify-content:center;gap:5px}
 .pcol-add:hover{border-color:var(--maroon);color:var(--maroon);background:var(--maroon-tint)}
+
+/* ════════════════ STAGE 3 · EVENT HUB ════════════════ */
+.inq-detail.hub{padding:0;overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow-card-h);border-radius:var(--radius-lg)}
+.hub-head{background:linear-gradient(135deg,var(--maroon),var(--maroon-deep));color:#fff;padding:18px 22px 16px;position:relative}
+.hub-eyebrow{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;opacity:.82;font-weight:600}
+.hub-name{font-family:'Fraunces',Georgia,serif;font-size:23px;font-weight:600;margin:3px 0 3px;line-height:1.12}
+.hub-when{font-size:12.5px;opacity:.9}
+.hub-pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);padding:3px 11px;border-radius:20px;font-size:11.5px;font-weight:600;margin-top:11px}
+.hub-head-actions{position:absolute;top:14px;right:14px;display:flex;gap:6px}
+.hub-hbtn{height:30px;padding:0 11px;border-radius:8px;background:rgba(255,255,255,.16);border:none;color:#fff;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:inherit}
+.hub-hbtn:hover{background:rgba(255,255,255,.28)}
+.hub-hbtn.x{width:30px;padding:0;justify-content:center;font-size:17px}
+.hub-body{padding:18px 22px 20px}
+.hub-facts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px}
+.hub-fact{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px}
+.hub-fact .k{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);font-weight:600}
+.hub-fact .v{font-size:13.5px;font-weight:600;color:var(--text);margin-top:2px;word-break:break-word}
+.hub-money{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow-card)}
+.hub-money-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
+.hub-money-row .l{font-size:12.5px;color:var(--text2)}
+.hub-money-row .a{font-family:'Fraunces',Georgia,serif;font-size:18px;font-weight:600;color:var(--text)}
+.hub-money-row .a.due{color:var(--maroon)}
+.hub-money-row .a.paid{color:var(--brass-deep)}
+.hub-paybar{height:8px;border-radius:5px;background:var(--border2);overflow:hidden;margin:2px 0 4px}
+.hub-paybar i{display:block;height:100%;background:linear-gradient(90deg,var(--brass),var(--brass-deep))}
+.hub-sec{font-family:'Fraunces',Georgia,serif;font-size:15px;font-weight:600;margin:0 0 10px;display:flex;align-items:center;gap:8px;color:var(--text)}
+.hub-sec .rule{flex:1;height:1px;background:var(--border)}
+.hub-tl-item{display:flex;gap:11px;padding:8px 0;border-bottom:1px solid var(--border)}
+.hub-tl-item:last-child{border-bottom:none}
+.hub-tl-ic{width:28px;height:28px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px}
+.hub-tl-body .t{font-size:13px;line-height:1.4;color:var(--text)}
+.hub-tl-body .m{font-size:11px;color:var(--text3);margin-top:1px}
+.hub-grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:760px){.hub-grid2{grid-template-columns:1fr}.hub-facts{grid-template-columns:1fr 1fr}}
