@@ -77,7 +77,29 @@ tbody tr:hover{background:var(--bg2)}
 .cmp-meta{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0;color:var(--text2);font-size:13px}
 .cmp-meta b{color:var(--text);font-family:'Fraunces',Georgia,serif}
 
-/* ── dashboard ── */
+/* ── alerts ── */
+.tab-badge{display:none;background:var(--maroon);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:5px;vertical-align:middle;letter-spacing:.02em}
+.tab-badge.show{display:inline-block}
+.alert-sec{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow)}
+.alert-sec-head{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--bg2)}
+.alert-sec-head .icn{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.alert-sec-head.sev-hi .icn{background:var(--maroon-tint);color:var(--maroon-deep)}
+.alert-sec-head.sev-md .icn{background:var(--brass-tint);color:var(--brass-deep)}
+.alert-sec-head.sev-lo .icn{background:var(--bg3);color:var(--text2)}
+.alert-sec-head .ttl{font-family:'Fraunces',Georgia,serif;font-size:15px;font-weight:600;color:var(--text);flex:1}
+.alert-sec-head .ttl .sub{font-size:11.5px;color:var(--text3);font-family:'Inter',sans-serif;font-weight:400;margin-top:1px}
+.alert-sec-head .count{font-family:'Fraunces',Georgia,serif;font-weight:600;color:var(--text2);font-size:13px}
+.alert-row{display:flex;align-items:center;gap:12px;padding:9px 16px;border-bottom:1px solid var(--border);font-size:13px}
+.alert-row:last-child{border-bottom:none}
+.alert-row .what{flex:1;min-width:0}
+.alert-row .what b{color:var(--text)}
+.alert-row .what .sub{font-size:11.5px;color:var(--text3);margin-top:1px}
+.alert-row .age{font-size:11.5px;color:var(--text3);min-width:80px;text-align:right}
+.alert-row .age.hi{color:var(--maroon);font-weight:600}
+.alert-row .age.md{color:var(--brass-deep);font-weight:600}
+.alert-row .fix{font-size:11.5px;padding:4px 10px;border:1px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;font-family:inherit}
+.alert-row .fix:hover{background:var(--bg3);color:var(--maroon);border-color:var(--maroon)}
+.alert-clean{background:var(--green-bg);border:1px solid #cfe6da;border-radius:var(--radius-lg);padding:18px 20px;color:var(--green-text);font-size:13.5px;text-align:center;font-weight:500}
 .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px}
 .dash-tile{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--shadow)}
 .dash-tile .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);font-weight:600}
@@ -227,6 +249,7 @@ tbody tr:hover{background:var(--bg2)}
 
   <div class="tabs">
     <button class="tab active" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
+    <button class="tab" data-view="alerts" onclick="showView('alerts')"><i class="ti ti-bell"></i> Alerts <span class="tab-badge" id="alertsBadge"></span></button>
     <button class="tab" data-view="orders" onclick="showView('orders')"><i class="ti ti-shopping-cart-plus"></i> Place Orders</button>
     <button class="tab" data-view="compare" onclick="showView('compare')">Compare Vendors</button>
     <button class="tab" data-view="items" onclick="showView('items')">All Items</button>
@@ -239,6 +262,11 @@ tbody tr:hover{background:var(--bg2)}
     <div class="view active" id="view-dashboard">
       <div class="row-head"><div class="title">Dashboard</div></div>
       <div id="dashBody"></div>
+    </div>
+
+    <div class="view" id="view-alerts">
+      <div class="row-head"><div class="title">Alerts</div><div class="muted" style="font-size:12.5px">Things worth your eye, by priority</div></div>
+      <div id="alertsBody"></div>
     </div>
 
     <div class="view" id="view-compare">
@@ -375,7 +403,7 @@ function startData(){
   db.collection('priceHistory').onSnapshot(s=>{ priceHistory=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
   startOrdersCollection();
 }
-function renderAll(){ renderDashboard(); renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); renderOrderPicker(); renderOrderHistory(); }
+function renderAll(){ renderDashboard(); renderAlerts(); renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); renderOrderPicker(); renderOrderHistory(); }
 
 function vendorName(id){ const v=vendors.find(x=>x.id===id); return v?v.name:'(unknown vendor)'; }
 function fmtMoney(n){ n=parseFloat(n); return isNaN(n)?'—':'$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -477,6 +505,131 @@ function renderCompare(){
       <td class="muted">${fmtDate(x.date)}</td>
     </tr>`).join('')+'</tbody></table></div>'+
     '<div class="hint" style="margin-top:10px">Unit cost = price ÷ pack size. Make sure items you’re comparing use the same unit (e.g. all per lb).</div>';
+}
+
+// ════════ ALERTS ════════
+function computeAlerts(){
+  const groups=ourProducts();
+  // 1. Stale (>=30 days)
+  const stale=[];
+  items.forEach(x=>{ const d=daysSince(lastQuoteDateOf(x)); if(d!=null && d>=30) stale.push({x,d}); });
+  stale.sort((a,b)=>b.d-a.d);
+
+  // 2. Single-source products (only 1 vendor carrying it) — backup-quote risk
+  const single=[];
+  groups.forEach(g=>{ const vendorSet=new Set(g.items.map(i=>i.vendorId)); if(vendorSet.size===1) single.push({g, vendorId:[...vendorSet][0]}); });
+
+  // 3. Dormant vendors (no quote in 60+ days, or never)
+  const dormant=[];
+  vendors.forEach(v=>{
+    const vItems=items.filter(i=>i.vendorId===v.id);
+    if(!vItems.length){ dormant.push({v, lastDays:null, reason:'no items yet'}); return; }
+    let newest=null;
+    vItems.forEach(i=>{ const d=lastQuoteDateOf(i); if(d && (!newest || d>newest)) newest=d; });
+    const age=newest?daysSince(newest):null;
+    if(age==null||age>=60) dormant.push({v, lastDays:age, reason:newest?('last quote '+age+' days ago'):'no dated quotes'});
+  });
+  dormant.sort((a,b)=>(b.lastDays||9999)-(a.lastDays||9999));
+
+  // 4. Unit mismatches — same product, vendors using different units
+  const unitMismatch=[];
+  groups.forEach(g=>{
+    const unitSet=new Set();
+    g.items.forEach(i=>{ if(i.unit) unitSet.add(String(i.unit).toLowerCase().trim()); });
+    if(unitSet.size>1) unitMismatch.push({g, units:[...unitSet]});
+  });
+
+  // 5. Missing data — items without price or pack size (can't compute unit cost)
+  const missing=items.filter(x=>{
+    const p=parseFloat(x.price), s=parseFloat(x.packSize);
+    return !(isFinite(p)&&p>0) || !(isFinite(s)&&s>0);
+  });
+
+  // 6. Likely duplicate product names — conservative: after lowercasing + stripping spaces/punct
+  const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const seen={};
+  groups.forEach(g=>{ const k=norm(g.name); if(!k) return; (seen[k]=seen[k]||[]).push(g); });
+  const dupes=Object.values(seen).filter(arr=>arr.length>1);
+
+  return { stale, single, dormant, unitMismatch, missing, dupes };
+}
+
+function renderAlerts(){
+  const a=computeAlerts();
+  const highCount = a.stale.length + a.unitMismatch.length + a.dormant.length;
+  const badge=document.getElementById('alertsBadge');
+  if(badge){ if(highCount){ badge.textContent=highCount; badge.classList.add('show'); } else { badge.classList.remove('show'); badge.textContent=''; } }
+
+  const body=document.getElementById('alertsBody'); if(!body) return;
+  if(!items.length && !vendors.length){
+    body.innerHTML='<div class="dash-empty">Once you have vendors and items, alerts will surface things worth your attention here.</div>'; return;
+  }
+  const totalIssues = a.stale.length + a.single.length + a.dormant.length + a.unitMismatch.length + a.missing.length + a.dupes.length;
+  if(!totalIssues){ body.innerHTML='<div class="alert-clean"><i class="ti ti-check" style="margin-right:6px"></i>All clear — no alerts right now. Nice work.</div>'; return; }
+
+  let html='';
+
+  if(a.stale.length){
+    html += '<div class="alert-sec"><div class="alert-sec-head sev-hi"><div class="icn"><i class="ti ti-clock-exclamation"></i></div><div class="ttl">Stale prices<div class="sub">Quoted 30+ days ago \u2014 likely time for a fresh quote</div></div><div class="count">'+a.stale.length+'</div></div>';
+    html += a.stale.slice(0,12).map(({x,d})=>`<div class="alert-row">
+      <div class="what"><b>${esc(x.ourName)}</b> <span class="muted">\u2014 ${esc(vendorName(x.vendorId))}</span><div class="sub">${esc(x.vendorItemName||'')} \u00b7 last quoted ${esc(fmtDate(lastQuoteDateOf(x)))}</div></div>
+      <div class="age ${d>=60?'hi':'md'}">${d} days</div>
+      <button class="fix" onclick="openNewQuote('${x.id}')"><i class="ti ti-arrow-up-right"></i> New quote</button>
+    </div>`).join('');
+    if(a.stale.length>12) html += '<div class="alert-row muted" style="justify-content:center">+'+(a.stale.length-12)+' more</div>';
+    html += '</div>';
+  }
+
+  if(a.unitMismatch.length){
+    html += '<div class="alert-sec"><div class="alert-sec-head sev-hi"><div class="icn"><i class="ti ti-alert-triangle"></i></div><div class="ttl">Unit mismatches<div class="sub">Same product, different units across vendors \u2014 unit cost comparison will be wrong</div></div><div class="count">'+a.unitMismatch.length+'</div></div>';
+    html += a.unitMismatch.map(({g,units})=>`<div class="alert-row">
+      <div class="what"><b>${esc(g.name)}</b><div class="sub">vendors using: ${units.map(u=>'<span class="chip cat">'+esc(u||'(none)')+'</span>').join(' ')}</div></div>
+      <button class="fix" onclick="compareProduct('${esc(g.key)}')">Compare \u2192</button>
+    </div>`).join('');
+    html += '</div>';
+  }
+
+  if(a.dormant.length){
+    html += '<div class="alert-sec"><div class="alert-sec-head sev-md"><div class="icn"><i class="ti ti-building-store"></i></div><div class="ttl">Dormant vendors<div class="sub">No fresh quotes in 60+ days \u2014 worth a call</div></div><div class="count">'+a.dormant.length+'</div></div>';
+    html += a.dormant.map(({v,lastDays,reason})=>`<div class="alert-row">
+      <div class="what"><b>${esc(v.name)}</b>${v.contact||v.rep?`<div class="sub">${esc(v.contact||v.rep)}${v.phone?(' \u00b7 '+esc(v.phone)):''}</div>`:''}</div>
+      <div class="age ${lastDays>=120?'hi':(lastDays>=60?'md':'')}">${lastDays!=null?lastDays+' days':esc(reason)}</div>
+      <button class="fix" onclick="openVendor('${v.id}')">Open</button>
+    </div>`).join('');
+    html += '</div>';
+  }
+
+  if(a.single.length){
+    html += '<div class="alert-sec"><div class="alert-sec-head sev-md"><div class="icn"><i class="ti ti-truck-loading"></i></div><div class="ttl">Single-source products<div class="sub">Only one vendor carries these \u2014 a backup quote reduces risk</div></div><div class="count">'+a.single.length+'</div></div>';
+    html += a.single.slice(0,20).map(({g,vendorId})=>`<div class="alert-row">
+      <div class="what"><b>${esc(g.name)}</b>${g.useFor?`<div class="sub">${esc(g.useFor)}</div>`:''}</div>
+      <div class="age">${esc(vendorName(vendorId))}</div>
+      <button class="fix" onclick="openItem()">Add item</button>
+    </div>`).join('');
+    if(a.single.length>20) html += '<div class="alert-row muted" style="justify-content:center">+'+(a.single.length-20)+' more</div>';
+    html += '</div>';
+  }
+
+  if(a.missing.length){
+    html += '<div class="alert-sec"><div class="alert-sec-head sev-lo"><div class="icn"><i class="ti ti-file-question"></i></div><div class="ttl">Items missing price or pack<div class="sub">Can\u2019t compute unit cost \u2014 won\u2019t appear in comparisons</div></div><div class="count">'+a.missing.length+'</div></div>';
+    html += a.missing.slice(0,12).map(x=>`<div class="alert-row">
+      <div class="what"><b>${esc(x.ourName||'(no name)')}</b> <span class="muted">\u2014 ${esc(vendorName(x.vendorId))}</span><div class="sub">${esc(x.vendorItemName||'')}</div></div>
+      <button class="fix" onclick="openItem('${x.id}')">Fix</button>
+    </div>`).join('');
+    if(a.missing.length>12) html += '<div class="alert-row muted" style="justify-content:center">+'+(a.missing.length-12)+' more</div>';
+    html += '</div>';
+  }
+
+  if(a.dupes.length){
+    html += '<div class="alert-sec"><div class="alert-sec-head sev-lo"><div class="icn"><i class="ti ti-copy"></i></div><div class="ttl">Likely duplicate product names<div class="sub">Names that look almost identical \u2014 may be the same product entered twice</div></div><div class="count">'+a.dupes.length+'</div></div>';
+    html += a.dupes.map(set=>`<div class="alert-row">
+      <div class="what"><b>Possible match</b><div class="sub">${set.map(g=>esc(g.name)+' ('+g.items.length+' items)').join(' \u2194 ')}</div></div>
+      <button class="fix" onclick="compareProduct('${esc(set[0].key)}')">Open first</button>
+    </div>`).join('');
+    html += '</div>';
+  }
+
+  body.innerHTML = html;
 }
 
 // ════════ DASHBOARD ════════
