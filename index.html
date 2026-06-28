@@ -1963,6 +1963,7 @@ function renderInqDetail(inq, role){
     <div class="hub-head">
       <div class="hub-head-actions">
         ${role.canEdit?`<button class="hub-hbtn" onclick="openEditInquiryModal('${inq.id}')"><i class="ti ti-edit"></i>Edit</button>`:''}
+        ${(role.canEdit && inq.email)?`<button class="hub-hbtn" onclick="openClientEmailModal('${inq.id}')" title="Email this client"><i class="ti ti-mail"></i>Email</button>`:''}
         ${role.canViewInvoices?`<button class="hub-hbtn" onclick="viewClientQuote('${inq.id}')"><i class="ti ti-file-invoice"></i>Quote / Invoice</button>`:''}
         <button class="hub-hbtn x" onclick="closeInqDetail()" title="Close">\u00d7</button>
       </div>
@@ -3877,6 +3878,134 @@ function openEditInquiryModal(id){
   </div>`;
   document.body.appendChild(m);
 }
+
+// ── Client email modal — open compose, pre-fill subject, attach files, send via existing relay, log it ──
+function _signatureHtmlFor(authUserKey){
+  const map = { owner:'Kenny', kenny:'Kenny', shelley:'Shelley', josh:'Josh', kitchen:'Kitchen Team', admin:'Premier Caterers' };
+  const sender = map[authUserKey] || 'Premier Caterers';
+  return [
+    '',
+    '— ',
+    sender,
+    'Premier Caterers',
+    '(201) 836-7700',
+    'thepremiercaterer.com'
+  ].join('\n');
+}
+function _signatureHtmlBlock(authUserKey){
+  const map = { owner:'Kenny', kenny:'Kenny', shelley:'Shelley', josh:'Josh', kitchen:'Kitchen Team', admin:'Premier Caterers' };
+  const sender = map[authUserKey] || 'Premier Caterers';
+  return '<br><br>—<br>'+sender+'<br>Premier Caterers<br>(201) 836-7700<br><a href="https://thepremiercaterer.com">thepremiercaterer.com</a>';
+}
+function _eventNameForSubject(inq){
+  // Prefer the event name; else "<client> <event type>"; else just client.
+  const name = (inq.eventName||'').trim();
+  if(name) return name;
+  const client = (inq.organization||'').trim() || ((inq.firstName||'')+' '+(inq.lastName||'')).trim();
+  const evt = (inq.eventType||'').trim();
+  return client + (evt?(' '+evt):'') || 'your event';
+}
+function _shortDateForSubject(d){
+  if(!d) return '';
+  const p=String(d).split('-'); if(p.length!==3) return d;
+  return parseInt(p[1],10)+'/'+parseInt(p[2],10)+'/'+p[0].slice(-2);
+}
+let _cliEmailAttachments = []; // [{filename, mime, base64, size}]
+function openClientEmailModal(inqId){
+  const inq=_findInq(inqId); if(!inq) return;
+  const to=(inq.email||'').trim();
+  if(!to){ alert('No email address on file for this client. Add one in Edit first.'); return; }
+  _cliEmailAttachments = [];
+  const datePart = _shortDateForSubject(inq.eventDate);
+  const subject = _eventNameForSubject(inq) + (datePart?(' ('+datePart+')'):'');
+  const m=document.createElement('div'); m.id='clientEmailModal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(43,36,32,.4);z-index:700;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto';
+  m.innerHTML = `<div style="background:var(--bg);border-radius:14px;width:100%;max-width:580px;box-shadow:0 20px 60px rgba(43,36,32,.3);overflow:hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+      <div style="font-family:'Fraunces',Georgia,serif;font-size:17px;font-weight:600;display:flex;align-items:center;gap:8px"><i class="ti ti-mail" style="color:var(--maroon)"></i>Email client</div>
+      <button onclick="document.getElementById('clientEmailModal').remove()" style="border:none;background:transparent;color:var(--text3);cursor:pointer;font-size:18px">&times;</button>
+    </div>
+    <div style="padding:18px 20px;max-height:70vh;overflow-y:auto">
+      <div style="margin-bottom:12px"><label style="display:block;font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:4px">To</label>
+        <input id="cem_to" value="${(to||'').replace(/"/g,'&quot;')}" style="width:100%;padding:9px 11px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:14px"></div>
+      <div style="margin-bottom:12px"><label style="display:block;font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:4px">Subject</label>
+        <input id="cem_subject" value="${subject.replace(/"/g,'&quot;')}" style="width:100%;padding:9px 11px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:inherit;font-size:14px"></div>
+      <div style="margin-bottom:12px"><label style="display:block;font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:4px">Message</label>
+        <textarea id="cem_body" placeholder="Type your message…" style="width:100%;min-height:180px;padding:11px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:inherit;font-size:14px;line-height:1.55;resize:vertical">${_signatureHtmlFor(authUser)}</textarea>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Your signature is pre-filled. The client will see this as a regular email from Premier Caterers. A copy goes to Kenny automatically.</div>
+      </div>
+      <div style="margin-bottom:6px">
+        <label style="display:block;font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:6px">Attachments</label>
+        <input id="cem_file_input" type="file" multiple style="display:none" onchange="_cemHandleFiles(this.files)">
+        <button type="button" onclick="document.getElementById('cem_file_input').click()" style="padding:7px 13px;border:1px dashed var(--border2);border-radius:8px;background:var(--bg2);color:var(--text2);cursor:pointer;font-family:inherit;font-size:12.5px;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-paperclip"></i>Add file(s)</button>
+        <div id="cem_attlist" style="margin-top:8px;display:flex;flex-direction:column;gap:5px"></div>
+      </div>
+    </div>
+    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--bg2)">
+      <button onclick="document.getElementById('clientEmailModal').remove()" style="padding:9px 15px;border:1px solid var(--border2);border-radius:9px;background:var(--bg2);color:var(--text2);font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
+      <button id="cem_send_btn" onclick="sendClientEmailFromModal('${inqId}')" style="padding:9px 18px;border:none;border-radius:9px;background:var(--maroon);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-send"></i>Send</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  setTimeout(()=>{ const ta=document.getElementById('cem_body'); if(ta){ ta.focus(); ta.setSelectionRange(0,0); } },80);
+}
+async function _cemHandleFiles(fileList){
+  if(!fileList || !fileList.length) return;
+  const TOTAL_MAX = 24*1024*1024; // soft cap ~24 MB total
+  let total = _cliEmailAttachments.reduce((s,a)=>s+(a.size||0),0);
+  for(const f of fileList){
+    if(total + f.size > TOTAL_MAX){ alert('Attachments are too large together (max ~24 MB).'); break; }
+    try{
+      const b64 = await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(',')[1]||''); fr.onerror=rej; fr.readAsDataURL(f); });
+      _cliEmailAttachments.push({ filename:f.name, mime:f.type||'application/octet-stream', base64:b64, size:f.size });
+      total += f.size;
+    }catch(e){ alert('Could not attach '+f.name+': '+e.message); }
+  }
+  _cemRenderAttList();
+  // reset the input so the same file can be re-picked if removed
+  const inp=document.getElementById('cem_file_input'); if(inp) inp.value='';
+}
+function _cemRemoveAtt(idx){ _cliEmailAttachments.splice(idx,1); _cemRenderAttList(); }
+function _cemRenderAttList(){
+  const el=document.getElementById('cem_attlist'); if(!el) return;
+  if(!_cliEmailAttachments.length){ el.innerHTML=''; return; }
+  const fmtSize = n => n<1024?n+' B':(n<1048576?(n/1024).toFixed(0)+' KB':(n/1048576).toFixed(1)+' MB');
+  el.innerHTML = _cliEmailAttachments.map((a,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:7px;font-size:12.5px"><i class="ti ti-file" style="color:var(--text3)"></i><span style="flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(a.filename||'file').replace(/</g,'&lt;')}</span><span style="color:var(--text3);font-size:11px">${fmtSize(a.size||0)}</span><button onclick="_cemRemoveAtt(${i})" style="border:none;background:transparent;color:var(--text3);cursor:pointer;font-size:14px" title="Remove">&times;</button></div>`).join('');
+}
+async function sendClientEmailFromModal(inqId){
+  const inq=_findInq(inqId); if(!inq) return;
+  const to = (document.getElementById('cem_to')||{}).value?.trim() || '';
+  const subject = (document.getElementById('cem_subject')||{}).value?.trim() || '';
+  const bodyText = (document.getElementById('cem_body')||{}).value || '';
+  if(!to){ alert('To address is empty.'); return; }
+  if(!subject){ if(!confirm('Subject is empty — send anyway?')) return; }
+  // Build HTML body from plain text so the client sees something cleanly formatted.
+  const escapeHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Strip the plain-text signature from the body before converting (we'll re-add an HTML signature block).
+  let bodyMinusSig = bodyText;
+  const sigStart = bodyMinusSig.lastIndexOf('\n— ');
+  if(sigStart >= 0) bodyMinusSig = bodyMinusSig.slice(0, sigStart);
+  const htmlBody = '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.55;color:#222">'+escapeHtml(bodyMinusSig).replace(/\n/g,'<br>')+_signatureHtmlBlock(authUser)+'</div>';
+  const btn=document.getElementById('cem_send_btn');
+  if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i>Sending…'; }
+  let ok=false;
+  try{
+    ok = await sendGmailEmail(to, subject, bodyText, htmlBody, _cliEmailAttachments);
+  }catch(e){ ok=false; alert('Could not send: '+(e&&e.message||e)); }
+  if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-send"></i>Send'; }
+  if(ok){
+    try{
+      const attBit = _cliEmailAttachments.length ? (' \u2014 '+_cliEmailAttachments.length+' attachment'+(_cliEmailAttachments.length>1?'s':'')) : '';
+      logActivity(inqId,'email_sent','Email to '+to+': '+subject+attBit, { to, subject, attachments: _cliEmailAttachments.map(a=>({filename:a.filename,size:a.size})) });
+    }catch(e){}
+    _cliEmailAttachments = [];
+    document.getElementById('clientEmailModal')?.remove();
+  }
+}
+window.openClientEmailModal = openClientEmailModal;
+window.sendClientEmailFromModal = sendClientEmailFromModal;
+window._cemHandleFiles = _cemHandleFiles;
+window._cemRemoveAtt = _cemRemoveAtt;
 
 function saveInquiryEdits(id){
   const inq = inquiries.find(x=>x.id===id);
