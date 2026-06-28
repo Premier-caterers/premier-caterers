@@ -2875,10 +2875,12 @@ const _actPending = {};
 
 const _ACT_FIELDS_INQ = {
   firstName:'first name', lastName:'last name', organization:'organization',
+  eventName:'event name',
   eventType:'event type', eventDate:'event date', guestCount:'guest count',
   venueName:'venue', venueLocation:'venue location', phone:'phone', email:'email',
   plannerName:'planner', comments:'notes', shabbos:'Shabbos', cuisine:'cuisine',
-  meatDairy:'meat/dairy', referredBy:'referred by', howFound:'how found'
+  meatDairy:'meat/dairy', referredBy:'referred by', howFound:'how found',
+  eventAttended:'event attended', stage:'stage'
 };
 const _ACT_FIELDS_EV = {
   eventDate:'date', day:'day', weekOf:'week-of', name:'client name', eventType:'type',
@@ -3564,6 +3566,7 @@ function deleteInquiry(id){
   if(!inq) return;
   const nm = ((inq.firstName||'')+' '+(inq.lastName||'')).trim() || inq.eventName || 'Inquiry';
   if(!confirm('Move this inquiry ('+nm+') to Trash?\n\nYou can restore it from the Trash section for 30 days.')) return;
+  try{ logActivity(inq.id,'stage','Moved to Trash by '+(_actUserName()||'user'),{action:'trash'}); }catch(e){}
   moveToTrash('inquiry', nm + (inq.eventType?' — '+inq.eventType:''), inq, {});
   inquiries = inquiries.filter(x=>x.id!==id); if(selectedInqId===id) selectedInqId=null;
   db.collection('inquiries').doc(id).delete();
@@ -3775,6 +3778,7 @@ function newEventForClient(key, mode){
   };
   inquiries.push(inq);
   _saveInquiry(inq);
+  try{ const nm = ((inq.firstName||'')+' '+(inq.lastName||'')).trim()||inq.eventName||'Inquiry'; logActivity(inq.id,'inquiry','Inquiry created manually \u2014 '+nm+(inq.eventType?(' ('+inq.eventType+')'):''), {source:'manual'}); }catch(e){}
   if(mode==='booked'){ createEventFromInquiry(inq); }
   showView('pipeline');
   selectInquiry(inq.id);
@@ -3877,6 +3881,9 @@ function openEditInquiryModal(id){
 function saveInquiryEdits(id){
   const inq = inquiries.find(x=>x.id===id);
   if(!inq) return;
+  // Snapshot the fields we care about BEFORE applying edits — we'll diff at the end and log.
+  const _prevSnap = {};
+  Object.keys(_ACT_FIELDS_INQ).forEach(k=>{ _prevSnap[k]=inq[k]; });
   const g = k => { const el=document.getElementById('ie-'+k); return el? (el.value||'').trim() : (inq[k]||''); };
   const wasBooked = inq.stage==='booked';
   inq.firstName=g('firstName'); inq.lastName=g('lastName'); inq.organization=g('organization');
@@ -3888,6 +3895,13 @@ function saveInquiryEdits(id){
   inq.comments=g('comments');
   const newStage=g('stage')||inq.stage;
   inq.stage=newStage;
+  // Log every field that actually changed (stage has its own dedicated log entry below, so exclude it from the diff).
+  try{
+    const diffMap = Object.assign({}, _ACT_FIELDS_INQ); delete diffMap.stage;
+    const labels = _actDiffFields(_prevSnap, inq, diffMap);
+    if(labels.length) _actQueueEdit(inq.id, 'Details', labels);
+    if(_prevSnap.stage !== newStage) logActivity(inq.id,'stage', _actStageLabel(_prevSnap.stage)+' \u2192 '+_actStageLabel(newStage), {prevStage:_prevSnap.stage, stage:newStage});
+  }catch(e){ console.warn('inquiry edit log skipped:', e); }
   _saveInquiry(inq);
 
   // Keep the linked This-Week event in sync (and create one if newly booked)
@@ -7307,6 +7321,7 @@ function addEvent(){
     };
     inquiries.push(inq);
     _saveInquiry(inq);
+    try{ const nm = ((inq.firstName||'')+' '+(inq.lastName||'')).trim()||inq.eventName||'Inquiry'; logActivity(inq.id,'inquiry','Inquiry created manually \u2014 '+nm+(inq.eventType?(' ('+inq.eventType+')'):''), {source:'manual_booked'}); }catch(e){}
     // Create the event on the correct W/E page (reuses the booking logic)
     createEventFromInquiry(inq);
     // Booked from the start → add to Google Calendar as blueberry
