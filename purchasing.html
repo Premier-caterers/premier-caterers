@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -244,6 +245,7 @@ tbody tr:hover{background:var(--bg2)}
     <div class="spacer"></div>
     <span class="who" id="whoBar"></span>
     <a class="tb-link" href="./index.html"><i class="ti ti-arrow-left"></i> Operations Hub</a>
+    <button class="tb-link" onclick="openOrdersSettings()" title="Orders relay setup"><i class="ti ti-settings"></i> Settings</button>
     <button class="tb-link" onclick="logout()"><i class="ti ti-logout"></i> Log out</button>
   </div>
 
@@ -843,6 +845,218 @@ function openHistory(itemId){
   <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
 }
 
+// ════════ ORDERS RELAY SETTINGS ════════
+// The orders@thepremiercaterer.com Apps Script URL lives in localStorage so each
+// browser/device can be pointed at the same deployment without hardcoding it.
+function getOrdersRelayUrl(){ try{ return localStorage.getItem('pcOrdersRelay')||''; }catch(e){ return ''; } }
+function setOrdersRelayUrl(url){ try{ localStorage.setItem('pcOrdersRelay', url||''); }catch(e){} }
+function openOrdersSettings(){
+  const cur=getOrdersRelayUrl();
+  openModal(`<div class="modal-head"><div class="h">Orders relay</div><button class="icon-btn" onclick="closeModal()"><i class="ti ti-x"></i></button></div>
+  <div class="modal-body">
+    <div class="hint" style="margin-bottom:10px">This is the orders@ Apps Script URL. When you send an order, the purchasing app calls this URL — vendor email + printer copy go out from <b>orders@thepremiercaterer.com</b>.</div>
+    <div class="fld"><label>Orders relay URL</label><input id="orl_url" value="${esc(cur)}" placeholder="https://script.google.com/macros/s/…/exec"></div>
+    <div class="fld"><button class="btn ghost" onclick="testOrdersRelay()" type="button"><i class="ti ti-plug-connected"></i> Test connection</button> <span id="orl_status" style="margin-left:8px;font-size:12.5px"></span></div>
+  </div>
+  <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveOrdersRelay()">Save</button></div>`);
+}
+async function testOrdersRelay(){
+  const url=(document.getElementById('orl_url')||{}).value?.trim()||'';
+  const st=document.getElementById('orl_status'); if(!st) return;
+  if(!url){ st.textContent='Paste the URL first.'; st.style.color='var(--maroon)'; return; }
+  st.textContent='Testing…'; st.style.color='var(--text3)';
+  try{
+    const r=await fetch(url);
+    const d=await r.json();
+    if(d.ok && d.as){ st.innerHTML='<span style="color:var(--green-text)">✓ Connected — runs as <b>'+esc(d.as)+'</b></span>'; }
+    else st.innerHTML='<span style="color:var(--maroon)">Reached the URL but the response looked wrong: '+esc(JSON.stringify(d).slice(0,80))+'</span>';
+  }catch(e){ st.innerHTML='<span style="color:var(--maroon)">Could not reach the URL: '+esc(e.message)+'</span>'; }
+}
+function saveOrdersRelay(){
+  const url=(document.getElementById('orl_url')||{}).value?.trim()||'';
+  setOrdersRelayUrl(url); closeModal(); toast('Orders relay saved');
+}
+
+// ════════ PRINTER-COPY PDF ════════
+// Generates a clean, plain-styled PDF using jsPDF. Includes prices and an
+// "ORDER PLACED" header. Returns base64 (no data: prefix), ready for the relay.
+function buildOrderPdfBase64(order){
+  const { jsPDF } = window.jspdf || {};
+  if(!jsPDF) throw new Error('PDF library not loaded yet — refresh and try again.');
+  const doc = new jsPDF({ unit:'pt', format:'letter' });
+  const W = doc.internal.pageSize.getWidth();
+  const M = 48;
+  let y = M;
+
+  // Big header
+  doc.setFont('helvetica','bold'); doc.setFontSize(22);
+  doc.text('ORDER PLACED', W/2, y, { align:'center' });
+  y += 18;
+  doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(110);
+  doc.text('Premier Caterers', W/2, y, { align:'center' });
+  y += 22;
+
+  // Meta block
+  doc.setTextColor(40); doc.setFontSize(11);
+  const placed = order.placedAt ? new Date(order.placedAt).toLocaleString() : '';
+  const need   = order.neededBy ? fmtDate(order.neededBy) : '—';
+  const lines = [
+    ['Vendor', order.vendorName || ''],
+    ['Vendor email', order.vendorEmail || ''],
+    ['Needed by', need],
+    ['Placed', placed],
+    ['Placed by', order.placedBy || '']
+  ];
+  doc.setFont('helvetica','bold'); doc.text('Order details', M, y); y+=4;
+  doc.setDrawColor(220); doc.line(M, y, W-M, y); y+=14;
+  doc.setFont('helvetica','normal');
+  lines.forEach(([k,v])=>{ if(!v) return; doc.setTextColor(120); doc.text(k+':', M, y); doc.setTextColor(40); doc.text(String(v), M+90, y); y+=15; });
+  y += 6;
+
+  // Table header
+  doc.setFont('helvetica','bold'); doc.setTextColor(40);
+  doc.text('Items', M, y); y+=4;
+  doc.line(M, y, W-M, y); y+=14;
+  const cols = { qty: M, item: M+50, code: W-260, pack: W-200, price: W-130, line: W-M };
+  doc.setFontSize(9); doc.setTextColor(120);
+  doc.text('Qty', cols.qty, y);
+  doc.text('Item', cols.item, y);
+  doc.text('Code', cols.code, y);
+  doc.text('Pack', cols.pack, y);
+  doc.text('Price', cols.price, y, {align:'right'});
+  doc.text('Line total', cols.line, y, {align:'right'});
+  y+=8; doc.line(M, y, W-M, y); y+=14;
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(30);
+  (order.lines||[]).forEach(L=>{
+    if(y > 720){ doc.addPage(); y = M; }
+    const pick = L.pick||{};
+    const pack = pick.packDesc || ((pick.packSize||'?')+' '+(pick.unit||''));
+    const itemName = pick.vendorItemName || L.productName || '';
+    // Wrap long item names
+    const wrapped = doc.splitTextToSize(itemName, cols.code - cols.item - 8);
+    doc.text(String(L.qty||''), cols.qty, y);
+    doc.text(wrapped, cols.item, y);
+    doc.setTextColor(120); doc.text(String(pick.vendorCode||'—'), cols.code, y);
+    doc.text(String(pack||''), cols.pack, y);
+    doc.setTextColor(30);
+    doc.text(fmtMoney(pick.price), cols.price, y, {align:'right'});
+    doc.setFont('helvetica','bold'); doc.text(fmtMoney(L.lineTotal), cols.line, y, {align:'right'}); doc.setFont('helvetica','normal');
+    const lineH = 14 * Math.max(1, wrapped.length);
+    y += lineH;
+  });
+  y+=4; doc.line(M, y, W-M, y); y+=18;
+  doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text('Total cases: '+(order.totalCases||0), M, y);
+  doc.text('Order total: '+fmtMoney(order.totalDollars||0), W-M, y, {align:'right'});
+
+  // Warning footer if minimum wasn't met
+  if(order.minWarning){
+    y+=20; doc.setFont('helvetica','italic'); doc.setFontSize(10); doc.setTextColor(170,30,30);
+    doc.text('Note: '+order.minWarning, M, y);
+  }
+
+  // Vendor-prices-shown disclaimer
+  y+=24; doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(140);
+  doc.text('Prices shown are our last quote on file. Vendor invoice prices apply on delivery.', M, y);
+
+  // Return base64 (jsPDF .output('datauristring') = "data:application/pdf;base64,...")
+  const dataUri = doc.output('datauristring');
+  const idx = dataUri.indexOf(',');
+  return idx>=0 ? dataUri.slice(idx+1) : dataUri;
+}
+
+function orderPdfFilename(order){
+  const v=(order.vendorName||'Order').replace(/[\/\\:*?"<>|]/g,'-').trim();
+  const stamp = order.placedAt ? new Date(order.placedAt) : new Date();
+  const d = (stamp.getMonth()+1)+'-'+stamp.getDate()+'-'+String(stamp.getFullYear()).slice(-2);
+  return v + ' Order ('+d+').pdf';
+}
+
+// ════════ SEND ORDERS (vendor email + printer copy) ════════
+async function sendOrderViaRelay(orderId){
+  const order = orders.find(o=>o.id===orderId);
+  if(!order){ alert('Order not found.'); return false; }
+  if(order.status==='sent'){ if(!confirm('This order was already sent. Send again?')) return false; }
+  const relay = getOrdersRelayUrl();
+  if(!relay){ alert('The orders relay URL isn’t set yet. Open Settings (top right) and paste the orders@ Apps Script URL.'); openOrdersSettings(); return false; }
+  if(!order.vendorEmail){ alert('No email address on file for this vendor. Open the vendor record and add one.'); return false; }
+
+  // Build the vendor-facing copy (no prices) — quantities, vendor item names, codes, packs only.
+  const escH=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const needBit = order.neededBy ? ' — needed by '+fmtDate(order.neededBy) : '';
+  const subject = 'Premier Caterers PO'+(needBit?(' '+needBit):'')+' — '+(order.vendorName||'');
+  // Plain-text body
+  const ptLines = (order.lines||[]).map(L=>{
+    const pick=L.pick||{}; const pack=pick.packDesc||((pick.packSize||'?')+' '+(pick.unit||''));
+    return '  '+L.qty+' × '+(pick.vendorItemName||L.productName)+(pick.vendorCode?' (#'+pick.vendorCode+')':'')+'  —  '+pack;
+  }).join('\n');
+  const greet = 'Hello'+(order.vendorName?(' '+order.vendorName):'')+',\n\nPlease confirm receipt of the following order';
+  const needLine = order.neededBy ? ('\nNeeded by: '+fmtDate(order.neededBy)) : '';
+  const plain = greet+':'+needLine+'\n\n'+ptLines+'\n\nThank you,\nPremier Caterers\nevents@thepremiercaterer.com';
+  // HTML body
+  const htmlLines = (order.lines||[]).map(L=>{
+    const pick=L.pick||{}; const pack=pick.packDesc||((pick.packSize||'?')+' '+(pick.unit||''));
+    return '<tr><td style="padding:4px 10px 4px 0;font-weight:600;white-space:nowrap">'+L.qty+'</td>'+
+           '<td style="padding:4px 10px">'+escH(pick.vendorItemName||L.productName)+'</td>'+
+           '<td style="padding:4px 10px;color:#666;white-space:nowrap">'+escH(pick.vendorCode||'')+'</td>'+
+           '<td style="padding:4px 0;color:#444">'+escH(pack)+'</td></tr>';
+  }).join('');
+  const html = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.55">'+
+    '<p>Hello'+(order.vendorName?(' '+escH(order.vendorName)):'')+',</p>'+
+    '<p>Please confirm receipt of the following order'+(order.neededBy?(' — <b>needed by '+escH(fmtDate(order.neededBy))+'</b>'):'')+':</p>'+
+    '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:8px 0 16px"><thead><tr style="text-align:left;color:#888;border-bottom:1px solid #ddd"><th style="padding:6px 10px 6px 0">Qty</th><th style="padding:6px 10px">Item</th><th style="padding:6px 10px">Code</th><th style="padding:6px 0">Pack</th></tr></thead><tbody>'+htmlLines+'</tbody></table>'+
+    '<p>Thank you,<br>Premier Caterers<br><a href="mailto:events@thepremiercaterer.com">events@thepremiercaterer.com</a></p></div>';
+
+  // Build PDF for the printer
+  let pdfBase64, pdfFilename;
+  try{
+    pdfBase64 = buildOrderPdfBase64(order);
+    pdfFilename = orderPdfFilename(order);
+  }catch(e){ alert('Could not build the printer PDF: '+e.message); return false; }
+
+  const payload = {
+    action: 'sendOrder',
+    vendorTo: order.vendorEmail,
+    vendorSubject: subject,
+    vendorBody: plain,
+    vendorHtml: html,
+    printerSubject: 'ORDER PLACED — '+(order.vendorName||'')+(order.neededBy?(' (needed '+fmtDate(order.neededBy)+')'):''),
+    pdfBase64: pdfBase64,
+    pdfFilename: pdfFilename
+  };
+
+  try{
+    const r = await fetch(relay, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error||'send failed');
+    const vOk = d.results && d.results.vendor && d.results.vendor.sent;
+    const pOk = d.results && d.results.printer && d.results.printer.sent;
+    // Update status on the order
+    await db.collection('orders').doc(orderId).set({
+      status: (vOk && pOk) ? 'sent' : 'partial',
+      sentAt: Date.now(),
+      sentBy: userLabel(),
+      lastSendResult: d.results || {}
+    }, {merge:true});
+    if(vOk && pOk) toast('Order sent ✓ (vendor + printer)');
+    else if(vOk)   toast('Vendor email sent — printer copy FAILED');
+    else if(pOk)   toast('Printer copy sent — vendor email FAILED');
+    else { alert('Both sends failed: '+JSON.stringify(d.results||d)); return false; }
+    return true;
+  }catch(e){ alert('Could not send via relay: '+e.message); return false; }
+}
+
+async function sendAllSavedOrders(){
+  // Send every just-confirmed order that's still 'saved' (created in the last few seconds by this user).
+  const recent = orders
+    .filter(o=>o.status==='saved' && (Date.now()-(o.placedAt||0) < 5*60*1000))
+    .sort((a,b)=>(a.placedAt||0)-(b.placedAt||0));
+  if(!recent.length){ alert('No fresh saved orders to send.'); return; }
+  for(const o of recent){ await sendOrderViaRelay(o.id); }
+  renderOrderHistory();
+}
+
 // ════════ ORDER BUILDER ════════
 // Cart shape: { [productKey]: { qty:number, vendorItemId:string, manual:boolean } }
 let orderCart = {};
@@ -1113,7 +1327,19 @@ async function confirmAndSaveOrders(){
     closeModal();
     toast('Orders saved ✓ ('+list.length+')');
     renderOrderPicker();
-    showView('orderhist');
+    // Offer to send them immediately if a relay is configured.
+    if(getOrdersRelayUrl()){
+      // small delay so Firestore listeners catch up with the just-written orders
+      setTimeout(async ()=>{
+        if(confirm('Saved '+list.length+' order'+(list.length===1?'':'s')+'. Send '+(list.length===1?'it':'them')+' now via orders@thepremiercaterer.com?')){
+          await sendAllSavedOrders();
+        }
+        showView('orderhist');
+      }, 600);
+    } else {
+      if(confirm('Saved. The orders relay URL isn’t set yet — open Settings to paste it?')){ openOrdersSettings(); }
+      else showView('orderhist');
+    }
   }catch(e){ alert('Could not save orders: '+e.message); }
 }
 
@@ -1146,7 +1372,9 @@ function openOrderView(id){
   (o.lines||[]).forEach(L=>{ const pack=(L.pick&&(L.pick.packDesc||((L.pick.packSize||'?')+' '+(L.pick.unit||''))))||'—';
     html += '<tr><td><b>'+L.qty+'</b></td><td>'+esc((L.pick&&L.pick.vendorItemName)||L.productName||'')+'</td><td class="muted">'+esc((L.pick&&L.pick.vendorCode)||'—')+'</td><td>'+esc(pack)+'</td><td style="text-align:right">'+fmtMoney(L.pick&&L.pick.price)+'</td><td style="text-align:right">'+fmtMoney(L.lineTotal)+'</td></tr>'; });
   html += '</tbody></table><div class="po-foot"><span class="muted">'+(o.minWarning?'<span style="color:var(--maroon)">'+esc(o.minWarning)+'</span>':'')+'</span><span class="gt">Total: '+fmtMoney(o.totalDollars||0)+'</span></div>';
-  html += '</div><div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Close</button></div>';
+  html += '</div><div class="modal-foot">'+
+    (canEdit()&&o.vendorEmail?`<button class="btn" onclick="sendOrderViaRelay('${o.id}').then(()=>{closeModal();renderOrderHistory();})"><i class="ti ti-send"></i> ${o.status==='sent'?'Resend':'Send order'}</button>`:'')+
+    '<button class="btn ghost" onclick="closeModal()">Close</button></div>';
   openModal(html);
 }
 function reorderFromHistory(id){
