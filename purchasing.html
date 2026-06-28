@@ -898,10 +898,16 @@ function startRepliesData(){
 }
 
 function _replyOrderId(r){
-  // PO tag in subject or original subject — script puts a known field on the row.
   if(r.orderId) return r.orderId;
-  const m = String(r.subject||'').match(/\[PO-([A-Za-z0-9_-]+)\]/);
-  return m ? m[1] : '';
+  // Try the new human-readable form first: PO-1001-260630-CHEFS
+  const m1 = String(r.subject||'').match(/\bPO-\d+-\d+-[A-Z0-9]+\b/);
+  if(m1){
+    const ord = orders.find(o => o.poNumber === m1[0]);
+    if(ord) return ord.id;
+  }
+  // Legacy bracket form: [PO-firestoreId]
+  const m2 = String(r.subject||'').match(/\[PO-([A-Za-z0-9_-]+)\]/);
+  return m2 ? m2[1] : '';
 }
 
 async function checkReplies(manual){
@@ -926,6 +932,18 @@ async function checkReplies(manual){
       if(!rep.messageId) return;
       const exists = vendorReplies.find(x=>x.messageId===rep.messageId);
       if(exists) return;
+      // Resolve orderId: prefer rep.orderId from the script; else look for
+      // PO-1001-260630-CHEFS in the subject and map to an order with that
+      // poNumber; else legacy [PO-firestoreId] bracket tag.
+      let resolvedOrderId = rep.orderId || '';
+      if(!resolvedOrderId){
+        const m1 = String(rep.subject||'').match(/\bPO-\d+-\d+-[A-Z0-9]+\b/);
+        if(m1){ const ord = orders.find(o => o.poNumber === m1[0]); if(ord) resolvedOrderId = ord.id; }
+      }
+      if(!resolvedOrderId){
+        const m2 = String(rep.subject||'').match(/\[PO-([A-Za-z0-9_-]+)\]/);
+        if(m2) resolvedOrderId = m2[1];
+      }
       const ref = db.collection('vendorReplies').doc(rep.messageId);
       const docData = {
         messageId: rep.messageId,
@@ -935,7 +953,7 @@ async function checkReplies(manual){
         snippet: rep.snippet||'',
         body: rep.body||'',
         receivedAt: rep.receivedAt || Date.now(),
-        orderId: rep.orderId || ( (String(rep.subject||'').match(/\[PO-([A-Za-z0-9_-]+)\]/)||[])[1] || '' ),
+        orderId: resolvedOrderId,
         aiStatus: rep.aiStatus || 'unclear',     // confirmed | issue | question | unclear
         aiSummary: rep.aiSummary || '',
         status: 'unread',                        // overall status the user sets
@@ -1032,7 +1050,7 @@ function renderReplies(){
       </div>
       ${r.aiSummary?`<div class="reply-summary"><b>Claude:</b> ${esc(r.aiSummary)}</div>`:''}
       <div class="reply-body">
-        ${r.subject?`<div class="reply-subject">${esc(r.subject.replace(/\s*\[PO-[^\]]+\]\s*/g,' '))}</div>`:''}
+        ${r.subject?`<div class="reply-subject">${esc(r.subject.replace(/\s*\[PO-[^\]]+\]\s*/g,' ').replace(/\s*PO-\d+-\d+-[A-Z0-9]+\s*/g,' ').trim())}</div>`:''}
         <div class="reply-snippet">${esc(r.body||r.snippet||'(no body)').slice(0,2000)}</div>
       </div>
       <div class="reply-actions">
@@ -1102,7 +1120,13 @@ function buildOrderPdfBase64(order){
   y += 18;
   doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(110);
   doc.text('Premier Caterers', W/2, y, { align:'center' });
-  y += 22;
+  y += 14;
+  if(order.poNumber){
+    doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(40);
+    doc.text(order.poNumber, W/2, y, { align:'center' });
+    y += 10;
+  }
+  y += 12;
 
   // Meta block
   doc.setTextColor(40); doc.setFontSize(11);
@@ -1193,10 +1217,10 @@ async function sendOrderViaRelay(orderId){
   // Build the vendor-facing copy (no prices) — quantities, vendor item names, codes, packs only.
   const escH=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const needBit = order.neededBy ? ' — needed by '+fmtDate(order.neededBy) : '';
-  // Hidden PO tag at the end of the subject — vendors won't notice it but reply
-  // threads keep it so we can match incoming replies back to this order.
-  const poTag = ' [PO-'+orderId+']';
-  const subject = 'Premier Caterers PO'+(needBit?(' '+needBit):'')+' — '+(order.vendorName||'')+poTag;
+  // Use the human-readable PO number as the matching tag too. If for any
+  // reason it's missing (very old test orders), fall back to the bracket form.
+  const poId = order.poNumber || ('PO-'+orderId);
+  const subject = poId+(needBit?(' '+needBit):'')+' — '+(order.vendorName||'')+' (Premier Caterers)';
   // Plain-text body
   const ptLines = (order.lines||[]).map(L=>{
     const pick=L.pick||{}; const pack=pick.packDesc||((pick.packSize||'?')+' '+(pick.unit||''));
@@ -1232,7 +1256,7 @@ async function sendOrderViaRelay(orderId){
     vendorSubject: subject,
     vendorBody: plain,
     vendorHtml: html,
-    printerSubject: 'ORDER PLACED — '+(order.vendorName||'')+(order.neededBy?(' (needed '+fmtDate(order.neededBy)+')'):''),
+    printerSubject: 'ORDER PLACED — '+poId+' — '+(order.vendorName||'')+(order.neededBy?(' (needed '+fmtDate(order.neededBy)+')'):''),
     pdfBase64: pdfBase64,
     pdfFilename: pdfFilename
   };
@@ -1268,6 +1292,54 @@ async function sendAllSavedOrders(){
   renderOrderHistory();
 }
 
+// ════════ PO NUMBER (human-readable order identifier) ════════
+// Format: PO-1001-260630-CHEFS  (sequence-date-vendor short code)
+// Sequence is a global counter living at meta/counters; never resets.
+function vendorShortCode(name){
+  return String(name||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,5) || 'VENDR';
+}
+function formatPoNumber(seq, placedAt, vendorName){
+  const d = placedAt ? new Date(placedAt) : new Date();
+  const yy = String(d.getFullYear()).slice(-2);
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return 'PO-'+seq+'-'+yy+mm+dd+'-'+vendorShortCode(vendorName);
+}
+// Atomically reserve the next sequence number (1001+).
+async function nextPoSeq(){
+  const ref = db.collection('meta').doc('counters');
+  return db.runTransaction(async tx=>{
+    const snap = await tx.get(ref);
+    let cur = (snap.exists && typeof snap.data().poSeq === 'number') ? snap.data().poSeq : 1000;
+    cur = cur + 1;
+    tx.set(ref, { poSeq: cur }, { merge:true });
+    return cur;
+  });
+}
+
+// One-time backfill: any order without poNumber gets one assigned, in the
+// order it was placed. Bumps the counter so future orders continue from there.
+let _renumberRan = false;
+async function backfillPoNumbersOnce(){
+  if(_renumberRan) return; _renumberRan = true;
+  try{
+    const needs = orders.filter(o=>!o.poNumber).sort((a,b)=>(a.placedAt||0)-(b.placedAt||0));
+    if(!needs.length) return;
+    const ref = db.collection('meta').doc('counters');
+    await db.runTransaction(async tx=>{
+      const snap = await tx.get(ref);
+      let cur = (snap.exists && typeof snap.data().poSeq === 'number') ? snap.data().poSeq : 1000;
+      for(const o of needs){
+        cur = cur + 1;
+        const poNumber = formatPoNumber(cur, o.placedAt||Date.now(), o.vendorName||'');
+        tx.set(db.collection('orders').doc(o.id), { poNumber, poSeq:cur }, { merge:true });
+      }
+      tx.set(ref, { poSeq: cur }, { merge:true });
+    });
+    console.log('Backfilled PO numbers for', needs.length, 'order(s)');
+  }catch(e){ console.warn('PO backfill skipped:', e); _renumberRan = false; }
+}
+
 // ════════ ORDER BUILDER ════════
 // Cart shape: { [productKey]: { qty:number, vendorItemId:string, manual:boolean } }
 let orderCart = {};
@@ -1275,7 +1347,7 @@ let orders = []; // history
 
 function startOrdersCollection(){
   // separate listener so it doesn't block main data
-  try{ db.collection('orders').onSnapshot(s=>{ orders=s.docs.map(d=>({id:d.id,...d.data()})); renderOrderHistory(); }); }catch(e){}
+  try{ db.collection('orders').onSnapshot(s=>{ orders=s.docs.map(d=>({id:d.id,...d.data()})); backfillPoNumbersOnce(); renderOrderHistory(); }); }catch(e){}
 }
 // cheapest vendor item for a product group (by unit cost; null if none determinable)
 function cheapestItem(g){
@@ -1512,10 +1584,17 @@ async function confirmAndSaveOrders(){
   const batch = db.batch();
   const stamp = Date.now();
   try{
-    list.forEach(b=>{
+    // Allocate one sequence number per order, then build the batch with poNumber attached.
+    const seqs = [];
+    for(let i=0;i<list.length;i++){ seqs.push(await nextPoSeq()); }
+    list.forEach((b, idx)=>{
       const v=vendors.find(x=>x.id===b.vendorId)||{};
       const ref = db.collection('orders').doc();
+      const seq = seqs[idx];
+      const poNumber = formatPoNumber(seq, stamp, v.name||'');
       batch.set(ref, {
+        poNumber: poNumber,
+        poSeq: seq,
         vendorId: b.vendorId,
         vendorName: v.name||'',
         vendorEmail: v.email||'',
@@ -1526,7 +1605,7 @@ async function confirmAndSaveOrders(){
         minType: v.minType||'none',
         minAmount: v.minAmount||0,
         minWarning: minimumWarning(v,b),
-        status: 'saved',           // future: 'sent' once email plumbing lands
+        status: 'saved',
         sendAttempts: [],
         placedBy: userLabel(),
         placedAt: stamp,
@@ -1559,8 +1638,9 @@ function renderOrderHistory(){
   const el=document.getElementById('orderHistBody'); if(!el) return;
   if(!orders.length){ el.innerHTML='<div class="dash-empty">No orders saved yet. Build a cart on the Place Orders tab and confirm to see them here.</div>'; return; }
   const sorted=orders.slice().sort((a,b)=>(b.placedAt||0)-(a.placedAt||0));
-  el.innerHTML = '<div class="card"><table><thead><tr><th>Placed</th><th>Vendor</th><th>Lines</th><th>Cases</th><th>Total</th><th>Needed by</th><th>Status</th><th>By</th><th></th></tr></thead><tbody>'+
+  el.innerHTML = '<div class="card"><table><thead><tr><th>PO #</th><th>Placed</th><th>Vendor</th><th>Lines</th><th>Cases</th><th>Total</th><th>Needed by</th><th>Status</th><th>By</th><th></th></tr></thead><tbody>'+
     sorted.map(o=>{ const when = o.placedAt?new Date(o.placedAt).toLocaleString():''; return `<tr>
+      <td><b>${esc(o.poNumber||'—')}</b></td>
       <td class="muted">${esc(when)}</td>
       <td><b>${esc(o.vendorName||'')}</b></td>
       <td>${(o.lines||[]).length}</td>
@@ -1574,7 +1654,7 @@ function renderOrderHistory(){
 }
 function openOrderView(id){
   const o=orders.find(x=>x.id===id); if(!o) return;
-  let html='<div class="modal-head"><div class="h">Order — '+esc(o.vendorName||'')+'</div><button class="icon-btn" onclick="closeModal()"><i class="ti ti-x"></i></button></div><div class="modal-body">';
+  let html='<div class="modal-head"><div class="h">'+(o.poNumber?esc(o.poNumber)+' — ':'Order — ')+esc(o.vendorName||'')+'</div><button class="icon-btn" onclick="closeModal()"><i class="ti ti-x"></i></button></div><div class="modal-body">';
   html += '<div class="po-meta"><span>Placed: <b>'+(o.placedAt?new Date(o.placedAt).toLocaleString():'')+'</b></span>';
   if(o.placedBy) html += '<span>By: <b>'+esc(o.placedBy)+'</b></span>';
   if(o.neededBy) html += '<span>Needed by: <b>'+fmtDate(o.neededBy)+'</b></span>';
