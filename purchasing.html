@@ -127,6 +127,30 @@ tbody tr:hover{background:var(--bg2)}
 .reply-unmatched{background:var(--brass-tint);color:var(--brass-deep);font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}
 .reply-summary{font-size:12.5px;color:var(--text2);background:var(--brass-tint);padding:8px 12px;border-radius:8px;margin:0 15px 10px;border-left:3px solid var(--brass)}
 .reply-summary b{color:var(--brass-deep)}
+
+/* ── bulk add items grid ── */
+.bulk-modal{max-width:1080px !important}
+.bulk-vendor{padding:14px 20px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.bulk-vendor select{padding:8px 11px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);min-width:200px}
+.bulk-hint{font-size:11.5px;color:var(--text3);padding:10px 20px 0}
+.bulk-grid-wrap{padding:10px 20px 14px;overflow-x:auto}
+.bulk-grid{width:100%;border-collapse:collapse;font-size:12.5px}
+.bulk-grid th{position:sticky;top:0;background:var(--bg2);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:600;padding:7px 6px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+.bulk-grid th.req::after{content:' *';color:var(--maroon)}
+.bulk-grid td{padding:0;border-bottom:1px solid var(--border)}
+.bulk-grid td input{width:100%;border:none;background:transparent;padding:8px 7px;font-size:12.5px;font-family:inherit;color:var(--text);min-width:80px}
+.bulk-grid td input:focus{outline:2px solid var(--maroon);outline-offset:-2px;background:var(--bg2)}
+.bulk-grid td input.err{background:#fdebe9}
+.bulk-grid tr.err{background:#fef5f4}
+.bulk-grid td.del{width:36px;text-align:center;color:var(--text3)}
+.bulk-grid td.del button{border:none;background:transparent;cursor:pointer;color:var(--text3);font-size:14px;padding:6px}
+.bulk-grid td.del button:hover{color:var(--maroon)}
+.bulk-grid td.num{width:80px}
+.bulk-grid td.date{width:120px}
+.bulk-actions{padding:12px 20px;display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--bg2);border-top:1px solid var(--border);flex-wrap:wrap}
+.bulk-actions .left{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.bulk-status{font-size:12px;color:var(--text3)}
+.bulk-status.err{color:var(--maroon);font-weight:600}
 .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px}
 .dash-tile{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--shadow)}
 .dash-tile .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);font-weight:600}
@@ -308,6 +332,7 @@ tbody tr:hover{background:var(--bg2)}
       <div class="row-head">
         <div class="title">All Items</div>
         <div class="search"><i class="ti ti-search"></i><input id="iSearch" placeholder="Search your name, vendor, vendor item, code…" oninput="renderItems()"></div>
+        <button class="btn ghost" id="bulkAddBtn" onclick="openBulkAdd()"><i class="ti ti-table"></i> Bulk add</button>
         <button class="btn" id="addItemBtn" onclick="openItem()"><i class="ti ti-plus"></i> Add item</button>
       </div>
       <div class="card"><div id="itemsTable"></div></div>
@@ -425,7 +450,7 @@ function finishLogin(u){
 }
 function logout(){ try{ localStorage.removeItem('pcSession'); }catch(e){} showLogin(); }
 function tryResumeSession(){ try{ const s=JSON.parse(localStorage.getItem('pcSession')||'null'); if(s&&s.user&&(s.user==='owner'||roles[loginRoleFor(s.user)])){ finishLogin(s.user); return true; } }catch(e){} return false; }
-function applyEditPerms(){ const show=canEdit(); ['addItemBtn','addVendorBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=show?'inline-flex':'none'; }); }
+function applyEditPerms(){ const show=canEdit(); ['addItemBtn','addVendorBtn','bulkAddBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=show?'inline-flex':'none'; }); }
 
 // ════════ DATA ════════
 // items collection: each doc = one product as a specific vendor sells it.
@@ -1696,6 +1721,198 @@ function val(id){ const e=document.getElementById(id); return e?e.value.trim():'
 const CATEGORIES=['','Meat','Fish','Dairy','Bakery','Frozen','Produce','Dry Goods','Beverages','Cleaning Supplies','Paper Products','Smallwares','Linen','Other'];
 
 // Vendor item
+// ════════ BULK ADD ITEMS ════════
+// One vendor, many items at once. Grid you can type into directly or paste
+// into from a spreadsheet. Validation runs on save and flags any row that's
+// missing required fields. Valid rows commit in a single Firestore batch.
+const BULK_COLS = [
+  { key:'ourName',        label:'Our product name', req:true,  cls:'' },
+  { key:'useFor',         label:'Use for',          req:false, cls:'' },
+  { key:'category',       label:'Category',         req:false, cls:'' },
+  { key:'unit',           label:'Our unit',         req:true,  cls:'' },
+  { key:'vendorItemName', label:'Vendor item',      req:false, cls:'' },
+  { key:'vendorCode',     label:'Vendor code',      req:false, cls:'' },
+  { key:'packDesc',       label:'Pack desc',        req:false, cls:'' },
+  { key:'packSize',       label:'Pack size',        req:true,  cls:'num' },
+  { key:'price',          label:'Pack price',       req:true,  cls:'num' },
+  { key:'date',           label:'Date',             req:false, cls:'date' },
+  { key:'notes',          label:'Notes',            req:false, cls:'' }
+];
+function openBulkAdd(){
+  if(!canEdit()) return;
+  if(!vendors.length){ alert('Add at least one vendor first (Vendors tab).'); return; }
+  const vOpts = vendors.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))
+    .map(v=>`<option value="${v.id}">${esc(v.name)}</option>`).join('');
+  const ths = BULK_COLS.map(c=>`<th class="${c.req?'req':''}">${esc(c.label)}</th>`).join('')+'<th></th>';
+  const blankRow = '<tr>'+BULK_COLS.map(c=>`<td class="${c.cls}"><input data-k="${c.key}" type="${c.cls==='num'?'number':(c.cls==='date'?'date':'text')}" ${c.cls==='num'?'step="any"':''} ></td>`).join('')+'<td class="del"><button onclick="this.closest(\'tr\').remove();updateBulkStatus()" title="Remove row"><i class="ti ti-x"></i></button></td></tr>';
+  const startingRows = Array.from({length:8}).map(()=>blankRow).join('');
+
+  // Build the modal directly (skipping openModal's max-width) so we can be wider.
+  const mb=document.getElementById('modalBg'), m=document.getElementById('modal');
+  m.style.maxWidth='1080px';
+  m.innerHTML = `<div class="modal-head"><div class="h">Bulk add items</div><button class="icon-btn" onclick="closeBulkAdd()"><i class="ti ti-x"></i></button></div>
+  <div class="bulk-vendor">
+    <label style="font-size:12px;color:var(--text2);font-weight:600">Vendor *</label>
+    <select id="bulkVendor">${vOpts}</select>
+    <span style="font-size:12px;color:var(--text3)">All items below will be saved as this vendor's.</span>
+  </div>
+  <div class="bulk-hint">Type in rows or paste a block from a spreadsheet (tab-separated). Each row becomes one item. Required: <b>Our product name</b>, <b>Our unit</b>, <b>Pack size</b>, <b>Pack price</b>.</div>
+  <div class="bulk-grid-wrap"><table class="bulk-grid"><thead><tr>${ths}</tr></thead><tbody id="bulkBody">${startingRows}</tbody></table></div>
+  <div class="bulk-actions">
+    <div class="left">
+      <button class="btn ghost" onclick="bulkAddRows(5)"><i class="ti ti-plus"></i> Add 5 rows</button>
+      <button class="btn ghost" onclick="bulkClear()"><i class="ti ti-eraser"></i> Clear all</button>
+      <span class="bulk-status" id="bulkStatus">Ready</span>
+    </div>
+    <div>
+      <button class="btn ghost" onclick="closeBulkAdd()">Cancel</button>
+      <button class="btn" onclick="bulkSave()"><i class="ti ti-device-floppy"></i> Save all</button>
+    </div>
+  </div>`;
+  mb.classList.add('show');
+  // Wire paste handler — paste tab-separated rows into a starting cell to fill across.
+  const body = document.getElementById('bulkBody');
+  body.addEventListener('paste', onBulkPaste);
+  // Live status as user types
+  body.addEventListener('input', updateBulkStatus);
+  setTimeout(()=>{ const first=body.querySelector('input'); if(first) first.focus(); },80);
+}
+function closeBulkAdd(){
+  document.getElementById('modalBg').classList.remove('show');
+  const m=document.getElementById('modal'); m.style.maxWidth=''; m.innerHTML='';
+}
+function bulkAddRows(n){
+  const body=document.getElementById('bulkBody'); if(!body) return;
+  for(let i=0;i<n;i++){
+    const row=document.createElement('tr');
+    row.innerHTML = BULK_COLS.map(c=>`<td class="${c.cls}"><input data-k="${c.key}" type="${c.cls==='num'?'number':(c.cls==='date'?'date':'text')}" ${c.cls==='num'?'step="any"':''} ></td>`).join('')+'<td class="del"><button onclick="this.closest(\'tr\').remove();updateBulkStatus()" title="Remove row"><i class="ti ti-x"></i></button></td>';
+    body.appendChild(row);
+  }
+  updateBulkStatus();
+}
+function bulkClear(){
+  if(!confirm('Clear every row in the grid?')) return;
+  const body=document.getElementById('bulkBody'); if(!body) return;
+  body.querySelectorAll('input').forEach(i=>{ i.value=''; i.classList.remove('err'); });
+  body.querySelectorAll('tr').forEach(tr=>tr.classList.remove('err'));
+  updateBulkStatus();
+}
+
+// Paste handler: if the user pastes a block of TSV (Excel/Sheets copy) into a
+// cell, expand it across columns and down rows from the focused cell.
+function onBulkPaste(e){
+  const txt=(e.clipboardData||window.clipboardData).getData('text');
+  if(!txt) return;
+  // Only intercept if the paste actually looks like multiple cells / rows
+  if(txt.indexOf('\t')<0 && txt.indexOf('\n')<0) return;
+  e.preventDefault();
+  const target=e.target;
+  if(!target.matches('input')) return;
+  const startTr = target.closest('tr');
+  const startTd = target.closest('td');
+  const startTdIdx = Array.prototype.indexOf.call(startTr.children, startTd);
+  const tbody=startTr.parentNode;
+  // Split into rows
+  const rows = txt.replace(/\r/g,'').split('\n').filter(r=>r.length);
+  rows.forEach((rowText, ri)=>{
+    const cells = rowText.split('\t');
+    // Ensure a target row exists
+    let tr = tbody.children[ Array.prototype.indexOf.call(tbody.children, startTr) + ri ];
+    if(!tr){ bulkAddRows(1); tr = tbody.lastElementChild; }
+    cells.forEach((val, ci)=>{
+      const tdIdx = startTdIdx + ci;
+      const td = tr.children[tdIdx]; if(!td || !td.querySelector('input')) return;
+      td.querySelector('input').value = val.trim();
+    });
+  });
+  updateBulkStatus();
+}
+
+function readBulkRow(tr){
+  const out={};
+  tr.querySelectorAll('input').forEach(i=>{ out[i.dataset.k] = (i.value||'').trim(); });
+  return out;
+}
+function rowIsEmpty(r){ return BULK_COLS.every(c=>!r[c.key]); }
+function rowMissing(r){
+  const missing=[];
+  BULK_COLS.filter(c=>c.req).forEach(c=>{ if(!r[c.key]) missing.push(c.label); });
+  // numeric sanity
+  if(r.packSize && !(parseFloat(r.packSize)>0)) missing.push('Pack size (must be > 0)');
+  if(r.price && !(parseFloat(r.price)>0)) missing.push('Pack price (must be > 0)');
+  return missing;
+}
+function updateBulkStatus(){
+  const body=document.getElementById('bulkBody'); const st=document.getElementById('bulkStatus');
+  if(!body||!st) return;
+  let filled=0, errs=0;
+  body.querySelectorAll('tr').forEach(tr=>{
+    tr.classList.remove('err'); tr.querySelectorAll('input').forEach(i=>i.classList.remove('err'));
+    const r=readBulkRow(tr); if(rowIsEmpty(r)) return;
+    filled++;
+    if(rowMissing(r).length) errs++;
+  });
+  if(!filled){ st.className='bulk-status'; st.textContent='Ready'; return; }
+  if(errs){ st.className='bulk-status err'; st.textContent=filled+' filled · '+errs+' need attention'; }
+  else { st.className='bulk-status'; st.textContent=filled+' ready to save ✓'; }
+}
+
+async function bulkSave(){
+  const vendorSel=document.getElementById('bulkVendor');
+  const vendorId = vendorSel ? vendorSel.value : '';
+  if(!vendorId){ alert('Pick a vendor.'); return; }
+  const body=document.getElementById('bulkBody'); if(!body) return;
+  const rows=Array.from(body.querySelectorAll('tr'));
+  const toSave=[]; let errCount=0;
+  rows.forEach(tr=>{
+    tr.classList.remove('err'); tr.querySelectorAll('input').forEach(i=>i.classList.remove('err'));
+    const r=readBulkRow(tr); if(rowIsEmpty(r)) return;
+    const miss=rowMissing(r);
+    if(miss.length){
+      tr.classList.add('err');
+      // mark the actual missing inputs
+      BULK_COLS.filter(c=>c.req).forEach(c=>{ if(!r[c.key]){ const inp=tr.querySelector('input[data-k="'+c.key+'"]'); if(inp) inp.classList.add('err'); } });
+      if(r.packSize && !(parseFloat(r.packSize)>0)){ const inp=tr.querySelector('input[data-k="packSize"]'); if(inp) inp.classList.add('err'); }
+      if(r.price && !(parseFloat(r.price)>0)){ const inp=tr.querySelector('input[data-k="price"]'); if(inp) inp.classList.add('err'); }
+      errCount++;
+      return;
+    }
+    toSave.push(r);
+  });
+  if(errCount){ document.getElementById('bulkStatus').textContent=errCount+' row'+(errCount===1?'':'s')+' need fixing — others ready'; document.getElementById('bulkStatus').className='bulk-status err'; }
+  if(!toSave.length){ if(!errCount) alert('No rows to save.'); return; }
+  if(errCount && !confirm('Save '+toSave.length+' valid row'+(toSave.length===1?'':'s')+' and skip the '+errCount+' with errors?')) return;
+  // Commit
+  const batch=db.batch(); const ts=Date.now();
+  toSave.forEach(r=>{
+    const ref=db.collection('vendorItems').doc();
+    batch.set(ref, {
+      vendorId,
+      ourName: r.ourName,
+      useFor:  r.useFor||'',
+      category: r.category||'',
+      unit:    r.unit,
+      vendorItemName: r.vendorItemName||'',
+      vendorCode:     r.vendorCode||'',
+      packDesc:       r.packDesc||'',
+      packSize: parseFloat(r.packSize),
+      price:    parseFloat(r.price),
+      date:     r.date||'',
+      notes:    r.notes||'',
+      createdAt: ts, updatedAt: ts
+    });
+  });
+  try{ await batch.commit(); toast('Saved '+toSave.length+' item'+(toSave.length===1?'':'s')+' ✓'); closeBulkAdd(); }
+  catch(e){ alert('Could not save: '+e.message); }
+}
+window.openBulkAdd = openBulkAdd;
+window.closeBulkAdd = closeBulkAdd;
+window.bulkAddRows = bulkAddRows;
+window.bulkClear = bulkClear;
+window.bulkSave = bulkSave;
+window.updateBulkStatus = updateBulkStatus;
+
+// ════════ Single-item edit/add ════════
 function openItem(id){
   if(!canEdit()) return;
   if(!vendors.length){ alert('Add at least one vendor first (Vendors tab).'); return; }
