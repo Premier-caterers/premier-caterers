@@ -77,6 +77,36 @@ tbody tr:hover{background:var(--bg2)}
 .cmp-meta{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0;color:var(--text2);font-size:13px}
 .cmp-meta b{color:var(--text);font-family:'Fraunces',Georgia,serif}
 
+/* ── dashboard ── */
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px}
+.dash-tile{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--shadow)}
+.dash-tile .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);font-weight:600}
+.dash-tile .v{font-family:'Fraunces',Georgia,serif;font-size:26px;font-weight:600;color:var(--text);margin-top:3px;line-height:1.1}
+.dash-tile .sub{font-size:11px;color:var(--text3);margin-top:3px}
+.dash-tile.warn .v{color:var(--brass-deep)}
+.dash-tile.alert .v{color:var(--maroon)}
+.dash-sec{margin-top:22px}
+.dash-sec-title{font-family:'Fraunces',Georgia,serif;font-size:17px;font-weight:600;margin-bottom:9px;display:flex;align-items:baseline;gap:9px}
+.dash-sec-title .note{font-size:11.5px;color:var(--text3);font-family:'Inter',sans-serif;font-weight:400}
+.change-up{color:#b1361a;font-weight:600}
+.change-down{color:var(--green-text);font-weight:600}
+.stale-30{color:var(--brass-deep);font-weight:600}
+.stale-60{color:var(--maroon);font-weight:600}
+.dash-empty{background:var(--bg2);border:1px dashed var(--border2);border-radius:9px;padding:14px;text-align:center;color:var(--text3);font-size:12.5px}
+
+/* ── history view ── */
+.hist-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border)}
+.hist-row:last-child{border-bottom:none}
+.hist-row .when{font-size:12px;color:var(--text3);min-width:90px}
+.hist-row .who{font-size:11px;color:var(--text3)}
+.hist-row .price{font-family:'Fraunces',Georgia,serif;font-weight:600}
+.hist-row .pack{font-size:11.5px;color:var(--text2)}
+.hist-current{background:var(--brass-tint);border-radius:7px;padding:9px 12px;margin:0 -12px 4px}
+
+/* small "new quote" button inside the item row */
+.btn-newq{padding:5px 10px;border:1px solid var(--green-text);background:var(--green-bg);color:var(--green-text);border-radius:7px;font-size:11.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-family:inherit}
+.btn-newq:hover{background:#d1e8dc}
+
 .modal-bg{position:fixed;inset:0;background:rgba(43,36,32,.4);z-index:200;display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
 .modal-bg.show{display:flex}
 .modal{background:var(--bg);border-radius:var(--radius-lg);width:100%;max-width:560px;box-shadow:0 20px 60px rgba(43,36,32,.3);overflow:hidden}
@@ -126,14 +156,20 @@ tbody tr:hover{background:var(--bg2)}
   </div>
 
   <div class="tabs">
-    <button class="tab active" data-view="compare" onclick="showView('compare')">Compare Vendors</button>
+    <button class="tab active" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
+    <button class="tab" data-view="compare" onclick="showView('compare')">Compare Vendors</button>
     <button class="tab" data-view="items" onclick="showView('items')">All Items</button>
     <button class="tab" data-view="products" onclick="showView('products')">Our Products</button>
     <button class="tab" data-view="vendors" onclick="showView('vendors')">Vendors</button>
   </div>
 
   <div class="wrap">
-    <div class="view active" id="view-compare">
+    <div class="view active" id="view-dashboard">
+      <div class="row-head"><div class="title">Dashboard</div></div>
+      <div id="dashBody"></div>
+    </div>
+
+    <div class="view" id="view-compare">
       <div class="row-head"><div class="title">Compare Vendors</div></div>
       <div class="cmp-pick"><select id="cmpProduct" onchange="renderCompare()"><option value="">Choose one of your products…</option></select></div>
       <div id="cmpResult"></div>
@@ -240,14 +276,17 @@ function applyEditPerms(){ const show=canEdit(); ['addItemBtn','addVendorBtn'].f
 // items collection: each doc = one product as a specific vendor sells it.
 //   ourName (what WE call it — the comparison key), useFor (what we use it for),
 //   vendorId, vendorItemName, vendorCode, packSize, unit, packDesc, price, date, category, notes
-let vendors=[], items=[];
+// priceHistory collection: archived prior prices when you record a new quote.
+//   {itemId, ourName, vendorId, packSize, unit, price, date, by, ts}
+let vendors=[], items=[], priceHistory=[];
 let _started=false;
 function startData(){
   if(_started) return; _started=true;
   db.collection('vendors').onSnapshot(s=>{ vendors=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
   db.collection('vendorItems').onSnapshot(s=>{ items=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
+  db.collection('priceHistory').onSnapshot(s=>{ priceHistory=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
 }
-function renderAll(){ renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); }
+function renderAll(){ renderDashboard(); renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); }
 
 function vendorName(id){ const v=vendors.find(x=>x.id===id); return v?v.name:'(unknown vendor)'; }
 function fmtMoney(n){ n=parseFloat(n); return isNaN(n)?'—':'$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -302,7 +341,7 @@ function renderItems(){
       <td>${packLabel(x)}</td>
       <td>${fmtMoney(x.price)}</td>
       <td class="unit-cost">${uc!=null?fmtMoney(uc)+'<span class="muted" style="font-weight:400">/'+esc(x.unit||'unit')+'</span>':'—'}</td>
-      ${canEdit()?`<td style="text-align:right"><button class="icon-btn" onclick="openItem('${x.id}')"><i class="ti ti-edit"></i></button></td>`:''}
+      ${canEdit()?`<td style="text-align:right;white-space:nowrap"><button class="btn-newq" onclick="openNewQuote('${x.id}')" title="Save current price as history and record a new one"><i class="ti ti-arrow-up-right"></i>New quote</button> <button class="icon-btn" onclick="openHistory('${x.id}')" title="Price history"><i class="ti ti-history"></i></button> <button class="icon-btn" onclick="openItem('${x.id}')" title="Edit (correct typo, no history)"><i class="ti ti-edit"></i></button></td>`:''}
     </tr>`;}).join('')+'</tbody></table>';
 }
 
@@ -349,6 +388,217 @@ function renderCompare(){
       <td class="muted">${fmtDate(x.date)}</td>
     </tr>`).join('')+'</tbody></table></div>'+
     '<div class="hint" style="margin-top:10px">Unit cost = price ÷ pack size. Make sure items you’re comparing use the same unit (e.g. all per lb).</div>';
+}
+
+// ════════ DASHBOARD ════════
+function daysSince(dateStr){
+  if(!dateStr) return null;
+  const p=String(dateStr).split('-'); if(p.length!==3) return null;
+  const d=new Date(parseInt(p[0],10), parseInt(p[1],10)-1, parseInt(p[2],10));
+  const ms=Date.now()-d.getTime(); if(isNaN(ms)||ms<0) return 0;
+  return Math.floor(ms/86400000);
+}
+function lastQuoteDateOf(x){
+  // best available "as-of" date: explicit date field, else when the record was touched
+  if(x.date) return x.date;
+  const ts=x.updatedAt||x.createdAt;
+  if(!ts) return '';
+  const d=new Date(ts); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function userLabel(){ return prettyName(authUser); }
+
+function renderDashboard(){
+  const el=document.getElementById('dashBody'); if(!el) return;
+  if(!items.length && !vendors.length){
+    el.innerHTML='<div class="dash-empty">Welcome. Add a few vendors and items, then this dashboard will show price changes, stale quotes, your best buys, and recent activity.</div>';
+    return;
+  }
+  const groups=ourProducts();
+  const vendorCount=vendors.length;
+  const productCount=groups.length;
+  const itemCount=items.length;
+  // staleness — based on each vendor item's "as-of" date
+  const stale30=[], stale60=[];
+  items.forEach(x=>{ const d=daysSince(lastQuoteDateOf(x)); if(d!=null){ if(d>=60) stale60.push({x,d}); else if(d>=30) stale30.push({x,d}); } });
+
+  // price changes — derive from priceHistory (last 30 days)
+  const cutoff=Date.now()-30*86400000;
+  const recent=priceHistory.filter(h=>(h.ts||0)>=cutoff && h.itemId);
+  // for each archived row, pair with the current item to compute change
+  const changes=[];
+  recent.forEach(h=>{
+    const cur=items.find(x=>x.id===h.itemId); if(!cur) return;
+    const oldUc=unitCost(h.price,h.packSize), newUc=unitCost(cur.price,cur.packSize);
+    if(oldUc==null||newUc==null||oldUc===0) return;
+    const pct=(newUc-oldUc)/oldUc*100;
+    changes.push({ ourName:cur.ourName, vendor:vendorName(cur.vendorId), oldUc, newUc, unit:cur.unit||'unit', pct, ts:h.ts });
+  });
+  changes.sort((a,b)=>Math.abs(b.pct)-Math.abs(a.pct));
+  const topChanges=changes.slice(0,6);
+
+  // best buys — lowest unit cost per product (where determinable)
+  const bestBuys=groups.map(g=>{
+    const costs=g.items.map(x=>({x,uc:unitCost(x.price,x.packSize)})).filter(z=>z.uc!=null);
+    if(!costs.length) return null;
+    costs.sort((a,b)=>a.uc-b.uc);
+    return { name:g.name, vendor:vendorName(costs[0].x.vendorId), uc:costs[0].uc, unit:g.items[0].unit||'unit', vendorCount:new Set(g.items.map(z=>z.vendorId)).size };
+  }).filter(Boolean).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,8);
+
+  // recent activity — last 10 items by updatedAt/createdAt
+  const recentItems=items.slice().sort((a,b)=>(b.updatedAt||b.createdAt||0)-(a.updatedAt||a.createdAt||0)).slice(0,10);
+
+  el.innerHTML =
+    // tiles
+    '<div class="dash-grid">'+
+      tile('Vendors', vendorCount)+
+      tile('Products you buy', productCount)+
+      tile('Vendor items', itemCount)+
+      tile('Stale 30+ days', stale30.length, stale30.length?'warn':'')+
+      tile('Stale 60+ days', stale60.length, stale60.length?'alert':'')+
+    '</div>'+
+
+    // price changes
+    '<div class="dash-sec"><div class="dash-sec-title">Price changes <span class="note">last 30 days</span></div>'+
+      (topChanges.length
+        ? '<div class="card"><table><thead><tr><th>Product</th><th>Vendor</th><th>Was</th><th>Now</th><th>Change</th></tr></thead><tbody>'+
+            topChanges.map(c=>`<tr>
+              <td><b>${esc(c.ourName)}</b></td>
+              <td>${esc(c.vendor)}</td>
+              <td class="muted">${fmtMoney(c.oldUc)}/${esc(c.unit)}</td>
+              <td class="unit-cost">${fmtMoney(c.newUc)}/${esc(c.unit)}</td>
+              <td class="${c.pct>=0?'change-up':'change-down'}">${(c.pct>=0?'+':'')+c.pct.toFixed(1)+'%'}</td>
+            </tr>`).join('')+'</tbody></table></div>'
+        : '<div class="dash-empty">No price changes recorded yet. Use “New quote” on an item to log a price update.</div>')+
+    '</div>'+
+
+    // stale prices
+    '<div class="dash-sec"><div class="dash-sec-title">Needs a fresh quote</div>'+
+      (stale30.length+stale60.length
+        ? '<div class="card"><table><thead><tr><th>Product</th><th>Vendor</th><th>Last quoted</th><th>Age</th></tr></thead><tbody>'+
+            stale60.concat(stale30).map(({x,d})=>`<tr>
+              <td><b>${esc(x.ourName)}</b></td>
+              <td>${esc(vendorName(x.vendorId))}</td>
+              <td class="muted">${fmtDate(lastQuoteDateOf(x))}</td>
+              <td class="${d>=60?'stale-60':'stale-30'}">${d} days</td>
+            </tr>`).join('')+'</tbody></table></div>'
+        : '<div class="dash-empty">All quotes are under 30 days old — looking good.</div>')+
+    '</div>'+
+
+    // best buys
+    '<div class="dash-sec"><div class="dash-sec-title">Best buys <span class="note">lowest unit cost per product</span></div>'+
+      (bestBuys.length
+        ? '<div class="card"><table><thead><tr><th>Product</th><th>Cheapest vendor</th><th>Unit cost</th><th>Vendors</th></tr></thead><tbody>'+
+            bestBuys.map(b=>`<tr style="cursor:pointer" onclick="compareProduct('${esc(normName(b.name))}')">
+              <td><b>${esc(b.name)}</b></td>
+              <td>${esc(b.vendor)}</td>
+              <td class="unit-cost">${fmtMoney(b.uc)}/${esc(b.unit)}</td>
+              <td>${b.vendorCount}</td>
+            </tr>`).join('')+'</tbody></table></div>'
+        : '<div class="dash-empty">Add items with pack size + price so unit costs can be compared.</div>')+
+    '</div>'+
+
+    // recent activity
+    '<div class="dash-sec"><div class="dash-sec-title">Recent activity</div>'+
+      (recentItems.length
+        ? '<div class="card"><table><thead><tr><th>When</th><th>Product</th><th>Vendor</th><th>Price</th></tr></thead><tbody>'+
+            recentItems.map(x=>{ const ts=x.updatedAt||x.createdAt||0; const when=ts?new Date(ts).toLocaleString():''; return `<tr>
+              <td class="muted">${esc(when)}</td>
+              <td><b>${esc(x.ourName)}</b></td>
+              <td>${esc(vendorName(x.vendorId))}</td>
+              <td>${fmtMoney(x.price)}</td>
+            </tr>`;}).join('')+'</tbody></table></div>'
+        : '<div class="dash-empty">No items yet.</div>')+
+    '</div>';
+}
+function tile(label,val,cls){
+  return `<div class="dash-tile ${cls||''}"><div class="k">${esc(label)}</div><div class="v">${val}</div></div>`;
+}
+
+// ════════ NEW PRICE QUOTE (archives old price, writes new) ════════
+function openNewQuote(itemId){
+  if(!canEdit()) return;
+  const x=items.find(q=>q.id===itemId); if(!x) return;
+  openModal(`<div class="modal-head"><div class="h">New price quote</div><button class="icon-btn" onclick="closeModal()"><i class="ti ti-x"></i></button></div>
+  <div class="modal-body">
+    <div class="hist-current">
+      <div class="sub" style="font-weight:600;color:var(--brass-deep)">Current price on file</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:3px">
+        <div><b>${esc(x.ourName)}</b> <span class="muted">— ${esc(vendorName(x.vendorId))}</span><div class="sub">${esc(x.vendorItemName||'')}${x.vendorCode?' · #'+esc(x.vendorCode):''}</div></div>
+        <div class="price">${fmtMoney(x.price)} <span class="muted" style="font-size:11px">/${esc(x.packSize||'?')} ${esc(x.unit||'')}</span></div>
+      </div>
+    </div>
+    <div class="hint" style="margin-bottom:10px">The current price will be saved as history. The new one becomes the active price.</div>
+    <div class="fld-row">
+      <div class="fld"><label>New pack size *</label><input id="nq_pack" type="number" step="any" value="${esc(x.packSize||'')}"><div class="hint">Usually unchanged.</div></div>
+      <div class="fld"><label>New pack price *</label><input id="nq_price" type="number" step="any" placeholder="e.g. 95.00"></div>
+    </div>
+    <div class="fld-row">
+      <div class="fld"><label>Date</label><input id="nq_date" type="date" value="${(new Date()).toISOString().slice(0,10)}"></div>
+      <div class="fld"><label>Notes (optional)</label><input id="nq_notes" placeholder="e.g. seasonal, holiday surcharge"></div>
+    </div>
+    <div class="hint" id="nq_uc"></div>
+    <div class="hint" id="nq_change" style="margin-top:4px"></div>
+  </div>
+  <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveNewQuote('${itemId}')">Save new quote</button></div>`);
+  const upd=()=>{
+    const np=parseFloat(val('nq_price')), nk=parseFloat(val('nq_pack'));
+    const newUc=unitCost(np,nk), oldUc=unitCost(x.price,x.packSize);
+    document.getElementById('nq_uc').innerHTML = newUc!=null?('New unit cost: <b>'+fmtMoney(newUc)+'/'+esc(x.unit||'unit')+'</b>'):'';
+    let c=''; if(newUc!=null&&oldUc!=null&&oldUc>0){ const pct=(newUc-oldUc)/oldUc*100; c='Change vs. last: <b class="'+(pct>=0?'change-up':'change-down')+'">'+(pct>=0?'+':'')+pct.toFixed(1)+'%</b>'; }
+    document.getElementById('nq_change').innerHTML=c;
+  };
+  ['nq_pack','nq_price'].forEach(i=>{ const e=document.getElementById(i); if(e) e.addEventListener('input',upd); });
+  setTimeout(()=>document.getElementById('nq_price').focus(),60);
+}
+async function saveNewQuote(itemId){
+  const x=items.find(q=>q.id===itemId); if(!x){ alert('Item not found.'); return; }
+  const pack=parseFloat(val('nq_pack')), price=parseFloat(val('nq_price'));
+  if(!isFinite(price)||price<=0){ alert('Enter the new pack price.'); return; }
+  if(!isFinite(pack)||pack<=0){ alert('Enter the pack size.'); return; }
+  // 1) archive current price to history
+  const histDoc={
+    itemId, ourName:x.ourName||'', vendorId:x.vendorId||'',
+    price: x.price||0, packSize: x.packSize||0, unit: x.unit||'',
+    packDesc: x.packDesc||'', vendorItemName: x.vendorItemName||'', vendorCode: x.vendorCode||'',
+    date: x.date||'', notes: x.notes||'',
+    archivedAt: Date.now(), archivedBy: userLabel(), ts: x.updatedAt||x.createdAt||Date.now()
+  };
+  try{
+    await db.collection('priceHistory').add(histDoc);
+    // 2) update current item with new price
+    await db.collection('vendorItems').doc(itemId).set({
+      price, packSize: pack,
+      date: val('nq_date')||x.date||'',
+      notes: val('nq_notes')||x.notes||'',
+      updatedAt: Date.now(), updatedBy: userLabel()
+    },{merge:true});
+    closeModal(); toast('New price recorded ✓');
+  }catch(e){ alert('Could not save: '+e.message); }
+}
+
+// ════════ HISTORY VIEW ════════
+function openHistory(itemId){
+  const x=items.find(q=>q.id===itemId); if(!x){ alert('Item not found.'); return; }
+  const hist=priceHistory.filter(h=>h.itemId===itemId).sort((a,b)=>(b.archivedAt||0)-(a.archivedAt||0));
+  const curUc=unitCost(x.price,x.packSize);
+  openModal(`<div class="modal-head"><div class="h">Price history</div><button class="icon-btn" onclick="closeModal()"><i class="ti ti-x"></i></button></div>
+  <div class="modal-body">
+    <div style="margin-bottom:10px"><b>${esc(x.ourName)}</b> <span class="muted">— ${esc(vendorName(x.vendorId))}</span><div class="sub">${esc(x.vendorItemName||'')}${x.vendorCode?' · #'+esc(x.vendorCode):''}</div></div>
+    <div class="hist-current">
+      <div class="sub" style="font-weight:600;color:var(--brass-deep)">Current</div>
+      <div class="hist-row" style="border:none;padding:5px 0 0">
+        <div><span class="when">${fmtDate(x.date)}</span> <span class="pack">${esc(x.packSize||'')} ${esc(x.unit||'')}</span></div>
+        <div class="price">${fmtMoney(x.price)} ${curUc!=null?'<span class="muted" style="font-size:11px">·'+fmtMoney(curUc)+'/'+esc(x.unit||'unit')+'</span>':''}</div>
+      </div>
+    </div>
+    ${hist.length
+      ? hist.map(h=>{ const uc=unitCost(h.price,h.packSize); return `<div class="hist-row">
+          <div><span class="when">${fmtDate(h.date)}</span> <span class="pack">${esc(h.packSize||'')} ${esc(h.unit||'')}</span>${h.archivedBy?'<div class="who">archived by '+esc(h.archivedBy)+'</div>':''}</div>
+          <div class="price">${fmtMoney(h.price)} ${uc!=null?'<span class="muted" style="font-size:11px">·'+fmtMoney(uc)+'/'+esc(h.unit||'unit')+'</span>':''}</div>
+        </div>`;}).join('')
+      : '<div class="dash-empty" style="margin-top:10px">No prior prices recorded yet for this item. Use “New quote” next time the vendor gives a price update — old prices will appear here.</div>'}
+  </div>
+  <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
 }
 
 // ════════ MODALS / CRUD ════════
