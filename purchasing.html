@@ -1275,7 +1275,7 @@ let orders = []; // history
 
 function startOrdersCollection(){
   // separate listener so it doesn't block main data
-  try{ db.collection('orders').onSnapshot(s=>{ orders=s.docs.map(d=>({id:d.id,...d.data()})); if(document.getElementById('view-orderhist')?.classList.contains('active')) renderOrderHistory(); }); }catch(e){}
+  try{ db.collection('orders').onSnapshot(s=>{ orders=s.docs.map(d=>({id:d.id,...d.data()})); renderOrderHistory(); }); }catch(e){}
 }
 // cheapest vendor item for a product group (by unit cost; null if none determinable)
 function cheapestItem(g){
