@@ -1009,6 +1009,89 @@ function startRepliesPolling(){
   setTimeout(tick, 2500);
 }
 
+// ── Reply to a vendor (from inside the app, via orders@ relay) ──
+function _replySignature(){
+  const sender = prettyName(authUser) || 'Premier Caterers';
+  return '\n\n— '+sender+'\nPremier Caterers\norders@thepremiercaterer.com\n(201) 836-7700';
+}
+function openReplyCompose(messageId){
+  if(!canEdit()) return;
+  const r = vendorReplies.find(x=>x.messageId===messageId);
+  if(!r){ alert('Reply not found.'); return; }
+  // Pull the vendor's actual email out of the "Name <addr@x.com>" From field.
+  const fromRaw = String(r.from||'').trim();
+  const m = fromRaw.match(/<([^>]+)>/);
+  const replyTo = m ? m[1].trim() : fromRaw;
+  const subj = String(r.subject||'');
+  const replySubj = /^Re:/i.test(subj) ? subj : ('Re: '+subj);
+
+  const mb=document.getElementById('modalBg'), mod=document.getElementById('modal');
+  mod.style.maxWidth='620px';
+  mod.innerHTML = `<div class="modal-head"><div class="h">Reply to vendor</div><button class="icon-btn" onclick="closeReplyCompose()"><i class="ti ti-x"></i></button></div>
+  <div class="modal-body">
+    <div class="fld"><label>To</label><input id="rc_to" value="${esc(replyTo)}"></div>
+    <div class="fld"><label>Subject</label><input id="rc_subj" value="${esc(replySubj)}"></div>
+    <div class="fld"><label>Message</label>
+      <textarea id="rc_body" style="min-height:160px" placeholder="Type your reply…">${esc(_replySignature())}</textarea>
+      <div class="hint">Sent from <b>orders@thepremiercaterer.com</b>. Keeps the same email thread so the vendor sees one continuous conversation.</div>
+    </div>
+    <div id="rc_status" class="bulk-status" style="margin-top:4px"></div>
+  </div>
+  <div class="modal-foot"><button class="btn ghost" onclick="closeReplyCompose()">Cancel</button><button class="btn" id="rc_send_btn" onclick="sendReplyToVendor('${messageId}')"><i class="ti ti-send"></i> Send</button></div>`;
+  mb.classList.add('show');
+  setTimeout(()=>{ const ta=document.getElementById('rc_body'); if(ta){ ta.focus(); ta.setSelectionRange(0,0); } },80);
+}
+function closeReplyCompose(){
+  document.getElementById('modalBg').classList.remove('show');
+  const m=document.getElementById('modal'); m.style.maxWidth=''; m.innerHTML='';
+}
+async function sendReplyToVendor(messageId){
+  const r = vendorReplies.find(x=>x.messageId===messageId);
+  if(!r){ alert('Reply not found.'); return; }
+  const to = (document.getElementById('rc_to')||{}).value?.trim() || '';
+  const subject = (document.getElementById('rc_subj')||{}).value?.trim() || '';
+  const body = (document.getElementById('rc_body')||{}).value || '';
+  if(!to){ alert('To address is empty.'); return; }
+  if(!body.trim()){ if(!confirm('Body is empty — send anyway?')) return; }
+  const relay = getOrdersRelayUrl();
+  if(!relay){ alert('Orders relay URL isn’t set yet. Open Settings to paste it.'); openOrdersSettings(); return; }
+  const btn = document.getElementById('rc_send_btn');
+  const st = document.getElementById('rc_status');
+  if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i> Sending…'; }
+  if(st){ st.className='bulk-status'; st.textContent='Sending via orders@…'; }
+  // Simple text->html conversion (preserve line breaks)
+  const escH=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const htmlBody = '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.55;color:#222">'+escH(body).replace(/\n/g,'<br>')+'</div>';
+  const payload = {
+    action: 'sendReply',
+    to: to,
+    subject: subject,
+    body: body,
+    htmlBody: htmlBody,
+    inReplyToMessageId: r.messageId || '',
+    threadId: r.threadId || ''
+  };
+  try{
+    const resp = await fetch(relay, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
+    const d = await resp.json();
+    if(!d.ok) throw new Error(d.error||'send failed');
+    // Mark the reply as 'replied' in Firestore
+    await db.collection('vendorReplies').doc(messageId).set({
+      repliedAt: Date.now(),
+      repliedBy: userLabel(),
+      replyBody: body
+    },{merge:true});
+    closeReplyCompose();
+    toast('Reply sent ✓');
+  }catch(e){
+    if(st){ st.className='bulk-status err'; st.textContent='Could not send: '+e.message; }
+    if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-send"></i> Send'; }
+  }
+}
+window.openReplyCompose = openReplyCompose;
+window.closeReplyCompose = closeReplyCompose;
+window.sendReplyToVendor = sendReplyToVendor;
+
 async function setReplyStatus(messageId, status){
   try{
     await db.collection('vendorReplies').doc(messageId).set({ status, statusBy:userLabel(), statusAt:Date.now() }, {merge:true});
@@ -1084,6 +1167,8 @@ function renderReplies(){
         ${pill('issue','Has issues','issue')}
         ${pill('question','Question','question')}
         ${pill('unclear','Unclear','unclear')}
+        ${canEdit()?`<button class="reply-pill" style="border-color:var(--maroon);color:var(--maroon)" onclick="openReplyCompose('${r.messageId}')"><i class="ti ti-corner-up-left" style="font-size:13px"></i> Reply</button>`:''}
+        ${r.repliedAt?`<span style="font-size:11px;color:var(--green-text);display:inline-flex;align-items:center;gap:4px;margin-left:6px"><i class="ti ti-check"></i> replied ${esc(new Date(r.repliedAt).toLocaleString())}</span>`:''}
         ${orderTag}
       </div>
     </div>`;
