@@ -431,7 +431,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .hub-name{font-family:'Fraunces',Georgia,serif;font-size:23px;font-weight:600;margin:3px 0 3px;line-height:1.12}
 .hub-when{font-size:12.5px;opacity:.9}
 .hub-pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);padding:3px 11px;border-radius:20px;font-size:11.5px;font-weight:600;margin-top:11px}
-.hub-head-actions{position:absolute;top:14px;right:14px;display:flex;gap:6px}
+.hub-head-actions{position:absolute;top:14px;right:14px;display:flex;gap:6px;z-index:5}
 .hub-hbtn{height:30px;padding:0 11px;border-radius:8px;background:rgba(255,255,255,.16);border:none;color:#fff;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:inherit}
 .hub-hbtn:hover{background:rgba(255,255,255,.28)}
 .hub-hbtn.x{width:30px;padding:0;justify-content:center;font-size:17px}
