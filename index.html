@@ -1838,7 +1838,7 @@ function renderPipeline(){
         const contact = clientContact(inq);
         const chev = `<button class="pl-card-toggle" onclick="event.stopPropagation();togglePlCard('${inq.id}')" title="${compact?'Expand':'Minimize'}"><i class="ti ti-chevron-${compact?'down':'up'}"></i></button>`;
         if(compact){
-          return `<div class="inq-card compact ${selectedInqId===inq.id?'selected':''}" ${plUnpaidFull(inq)?'style="border:1.5px solid #E0A82E"':''} onclick="selectInquiry('${inq.id}')">
+          return `<div class="inq-card compact ${selectedInqId===inq.id?'selected':''}" ${plUnpaidFull(inq)?'style="border:3px solid #FFC400"':''} onclick="selectInquiry('${inq.id}')">
             <div class="pl-card-head"><div class="inq-name">${nm}</div>${chev}</div>
             <div class="pl-compact-meta">
               ${inq.eventType ? `<span><i class="ti ti-tag" style="font-size:11px"></i>${inq.eventType}</span>` : ''}
@@ -1847,7 +1847,7 @@ function renderPipeline(){
           </div>`;
         }
         return `
-      <div class="inq-card ${selectedInqId===inq.id?'selected':''}" ${plUnpaidFull(inq)?'style="border:1.5px solid #E0A82E"':''} onclick="selectInquiry('${inq.id}')">
+      <div class="inq-card ${selectedInqId===inq.id?'selected':''}" ${plUnpaidFull(inq)?'style="border:3px solid #FFC400"':''} onclick="selectInquiry('${inq.id}')">
         <div class="pl-card-head"><div class="inq-name">${nm}</div>${chev}</div>
         ${contact ? `<div style="font-size:11px;color:var(--text3);margin:-2px 0 4px"><i class="ti ti-user" style="font-size:10px"></i> ${contact}</div>` : ''}
         ${inq.eventName ? `<div class="inq-event-name">${inq.eventName}</div>` : ''}
