@@ -101,6 +101,32 @@ tbody tr:hover{background:var(--bg2)}
 .alert-row .fix{font-size:11.5px;padding:4px 10px;border:1px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;font-family:inherit}
 .alert-row .fix:hover{background:var(--bg3);color:var(--maroon);border-color:var(--maroon)}
 .alert-clean{background:var(--green-bg);border:1px solid #cfe6da;border-radius:var(--radius-lg);padding:18px 20px;color:var(--green-text);font-size:13.5px;text-align:center;font-weight:500}
+
+/* ── vendor replies ── */
+.reply-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
+.reply-head{padding:11px 15px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.reply-head .vname{font-family:'Fraunces',Georgia,serif;font-weight:600;color:var(--text);font-size:15px;flex:1;min-width:140px}
+.reply-head .when{font-size:11.5px;color:var(--text3)}
+.reply-head .from{font-size:11.5px;color:var(--text3)}
+.reply-head .sugg{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:11px;border:1px solid var(--brass);background:var(--brass-tint);color:var(--brass-deep)}
+.reply-head .sugg i{font-size:13px}
+.reply-link{font-size:11.5px;color:var(--text2);text-decoration:underline dotted;cursor:pointer}
+.reply-link:hover{color:var(--maroon)}
+.reply-body{padding:12px 15px}
+.reply-subject{font-size:12.5px;color:var(--text2);margin-bottom:6px}
+.reply-snippet{font-size:13px;color:var(--text);line-height:1.55;white-space:pre-wrap;background:var(--bg2);border-left:3px solid var(--border2);padding:8px 12px;border-radius:0 6px 6px 0}
+.reply-actions{padding:10px 15px;border-top:1px solid var(--border);background:var(--bg2);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.reply-actions .lbl{font-size:11.5px;color:var(--text3);margin-right:4px}
+.reply-pill{font-size:11.5px;padding:5px 11px;border:1px solid var(--border2);border-radius:18px;background:var(--bg);color:var(--text2);cursor:pointer;font-family:inherit}
+.reply-pill:hover{border-color:var(--maroon);color:var(--maroon)}
+.reply-pill.active.confirmed{background:var(--green-bg);border-color:var(--green-text);color:var(--green-text);font-weight:600}
+.reply-pill.active.issue{background:var(--maroon-tint);border-color:var(--maroon);color:var(--maroon);font-weight:600}
+.reply-pill.active.question{background:var(--brass-tint);border-color:var(--brass-deep);color:var(--brass-deep);font-weight:600}
+.reply-pill.active.unclear{background:var(--bg3);border-color:var(--text3);color:var(--text2);font-weight:600}
+.reply-orderlink{margin-left:auto;font-size:11.5px}
+.reply-unmatched{background:var(--brass-tint);color:var(--brass-deep);font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}
+.reply-summary{font-size:12.5px;color:var(--text2);background:var(--brass-tint);padding:8px 12px;border-radius:8px;margin:0 15px 10px;border-left:3px solid var(--brass)}
+.reply-summary b{color:var(--brass-deep)}
 .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px}
 .dash-tile{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--shadow)}
 .dash-tile .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);font-weight:600}
@@ -257,6 +283,7 @@ tbody tr:hover{background:var(--bg2)}
     <button class="tab" data-view="items" onclick="showView('items')">All Items</button>
     <button class="tab" data-view="products" onclick="showView('products')">Our Products</button>
     <button class="tab" data-view="vendors" onclick="showView('vendors')">Vendors</button>
+    <button class="tab" data-view="replies" onclick="showView('replies')"><i class="ti ti-message-circle-2"></i> Vendor Replies <span class="tab-badge" id="repliesBadge"></span></button>
     <button class="tab" data-view="orderhist" onclick="showView('orderhist')">Order History</button>
   </div>
 
@@ -317,6 +344,16 @@ tbody tr:hover{background:var(--bg2)}
     <div class="view" id="view-orderhist">
       <div class="row-head"><div class="title">Order History</div></div>
       <div id="orderHistBody"></div>
+    </div>
+
+    <div class="view" id="view-replies">
+      <div class="row-head">
+        <div class="title">Vendor Replies</div>
+        <span class="muted" id="repliesUpdated" style="font-size:12px"></span>
+        <div style="flex:1"></div>
+        <button class="btn ghost" onclick="checkReplies(true)" id="checkRepliesBtn"><i class="ti ti-refresh"></i> Check now</button>
+      </div>
+      <div id="repliesBody"></div>
     </div>
   </div>
 </div>
@@ -404,8 +441,10 @@ function startData(){
   db.collection('vendorItems').onSnapshot(s=>{ items=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
   db.collection('priceHistory').onSnapshot(s=>{ priceHistory=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
   startOrdersCollection();
+  startRepliesData();
+  startRepliesPolling();
 }
-function renderAll(){ renderDashboard(); renderAlerts(); renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); renderOrderPicker(); renderOrderHistory(); }
+function renderAll(){ renderDashboard(); renderAlerts(); renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); renderOrderPicker(); renderOrderHistory(); renderReplies(); }
 
 function vendorName(id){ const v=vendors.find(x=>x.id===id); return v?v.name:'(unknown vendor)'; }
 function fmtMoney(n){ n=parseFloat(n); return isNaN(n)?'—':'$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -845,6 +884,175 @@ function openHistory(itemId){
   <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
 }
 
+// ════════ VENDOR REPLIES ════════
+// Each reply is a Firestore doc in 'vendorReplies'. Keyed by messageId so a
+// reply is only ever stored once. Status fields are set by humans (with help
+// from a Claude pre-fill that lives on the relay side).
+let vendorReplies = [];
+let _repliesPolling = false;
+let _repliesPollTimer = null;
+let _repliesLastFetched = 0;
+
+function startRepliesData(){
+  try{ db.collection('vendorReplies').onSnapshot(s=>{ vendorReplies = s.docs.map(d=>({id:d.id,...d.data()})); renderReplies(); }); }catch(e){}
+}
+
+function _replyOrderId(r){
+  // PO tag in subject or original subject — script puts a known field on the row.
+  if(r.orderId) return r.orderId;
+  const m = String(r.subject||'').match(/\[PO-([A-Za-z0-9_-]+)\]/);
+  return m ? m[1] : '';
+}
+
+async function checkReplies(manual){
+  const relay = getOrdersRelayUrl();
+  if(!relay){ if(manual) alert('The orders relay URL isn’t set yet. Open Settings to paste it.'); return; }
+  if(_repliesPolling) return;
+  _repliesPolling = true;
+  const btn=document.getElementById('checkRepliesBtn');
+  const upd=document.getElementById('repliesUpdated');
+  if(manual && btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i> Checking…'; }
+  try{
+    const sinceTs = _repliesLastFetched || 0;
+    const url = relay + (relay.indexOf('?')>=0?'&':'?') + 'action=fetchReplies&since=' + sinceTs;
+    const r = await fetch(url);
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error||'fetch failed');
+    const fresh = d.replies||[];
+    // Store anything new in Firestore (idempotent by messageId)
+    const batch = db.batch();
+    let added = 0;
+    fresh.forEach(rep=>{
+      if(!rep.messageId) return;
+      const exists = vendorReplies.find(x=>x.messageId===rep.messageId);
+      if(exists) return;
+      const ref = db.collection('vendorReplies').doc(rep.messageId);
+      const docData = {
+        messageId: rep.messageId,
+        threadId: rep.threadId||'',
+        from: rep.from||'',
+        subject: rep.subject||'',
+        snippet: rep.snippet||'',
+        body: rep.body||'',
+        receivedAt: rep.receivedAt || Date.now(),
+        orderId: rep.orderId || ( (String(rep.subject||'').match(/\[PO-([A-Za-z0-9_-]+)\]/)||[])[1] || '' ),
+        aiStatus: rep.aiStatus || 'unclear',     // confirmed | issue | question | unclear
+        aiSummary: rep.aiSummary || '',
+        status: 'unread',                        // overall status the user sets
+        addedAt: Date.now()
+      };
+      batch.set(ref, docData);
+      added++;
+    });
+    if(added) await batch.commit();
+    _repliesLastFetched = Date.now();
+    if(upd){ upd.textContent = 'Last checked: '+new Date().toLocaleTimeString()+(added?(' · '+added+' new'):''); }
+    if(manual && added===0) toast('No new replies');
+    else if(added) toast(added+' new reply'+(added===1?'':'s')+' ✓');
+  }catch(e){ if(manual) alert('Could not check replies: '+e.message); }
+  finally{
+    _repliesPolling = false;
+    if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-refresh"></i> Check now'; }
+  }
+}
+
+// Polling: every 2 minutes when the tab is visible. Paused when hidden.
+function startRepliesPolling(){
+  if(_repliesPollTimer) return;
+  const tick = ()=>{ if(document.visibilityState==='visible' && getOrdersRelayUrl()) checkReplies(false); };
+  _repliesPollTimer = setInterval(tick, 120000);
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') tick(); });
+  // initial check shortly after login
+  setTimeout(tick, 2500);
+}
+
+async function setReplyStatus(messageId, status){
+  try{
+    await db.collection('vendorReplies').doc(messageId).set({ status, statusBy:userLabel(), statusAt:Date.now() }, {merge:true});
+    // also propagate to the matching order
+    const r = vendorReplies.find(x=>x.messageId===messageId);
+    if(r && r.orderId){
+      const ord = orders.find(o=>o.id===r.orderId);
+      if(ord){
+        const orderStatus = status==='confirmed' ? 'confirmed'
+                         : status==='issue'     ? 'issue'
+                         : ord.status;
+        if(orderStatus !== ord.status){
+          await db.collection('orders').doc(r.orderId).set({ status:orderStatus, statusAt:Date.now(), statusBy:userLabel() }, {merge:true});
+        }
+      }
+    }
+    toast('Status saved');
+  }catch(e){ alert('Could not save status: '+e.message); }
+}
+
+async function manuallyMatchReply(messageId){
+  if(!orders.length){ alert('No saved orders to match against yet.'); return; }
+  const recent = orders.slice().sort((a,b)=>(b.placedAt||0)-(a.placedAt||0)).slice(0, 30);
+  const list = recent.map((o,i)=>{
+    const when = o.placedAt?new Date(o.placedAt).toLocaleDateString():'';
+    return (i+1)+'. '+o.vendorName+' — '+when+' ('+(o.lines||[]).length+' lines)';
+  }).join('\n');
+  const pick = prompt('Match this reply to which order?\n\n'+list+'\n\nEnter the number, or leave blank to cancel:');
+  const n = parseInt(pick,10);
+  if(!n || n<1 || n>recent.length) return;
+  const o = recent[n-1];
+  try{ await db.collection('vendorReplies').doc(messageId).set({orderId:o.id, matchedManually:true, matchedAt:Date.now()}, {merge:true}); toast('Matched ✓'); }
+  catch(e){ alert('Could not match: '+e.message); }
+}
+
+function renderReplies(){
+  // tab badge — unread count
+  const unread = vendorReplies.filter(r=>r.status==='unread').length;
+  const badge = document.getElementById('repliesBadge');
+  if(badge){ if(unread){ badge.textContent=unread; badge.classList.add('show'); } else { badge.classList.remove('show'); badge.textContent=''; } }
+
+  const body = document.getElementById('repliesBody'); if(!body) return;
+  if(!vendorReplies.length){
+    body.innerHTML = '<div class="dash-empty">No vendor replies yet. Once a vendor replies to an order, their message will show up here within a couple of minutes — Claude will read it and suggest whether it looks like a confirmation, an issue, or a question. You always get the final say.</div>';
+    return;
+  }
+  // Newest first
+  const list = vendorReplies.slice().sort((a,b)=>(b.receivedAt||0)-(a.receivedAt||0));
+  body.innerHTML = list.map(r=>{
+    const ord = r.orderId ? orders.find(o=>o.id===r.orderId) : null;
+    const sugg = r.aiStatus || 'unclear';
+    const suggIcon = sugg==='confirmed'?'ti-check' : sugg==='issue'?'ti-alert-triangle' : sugg==='question'?'ti-help' : 'ti-help-octagon';
+    const cur = r.status || 'unread';
+    const pill = (key, label, cls) => `<button class="reply-pill ${cur===key?'active '+cls:''}" onclick="setReplyStatus('${r.messageId}','${key}')">${label}</button>`;
+    const orderTag = ord
+      ? `<span class="reply-orderlink"><a class="reply-link" onclick="openOrderView('${ord.id}')">${esc(ord.vendorName||'Order')} \u2014 ${ord.placedAt?new Date(ord.placedAt).toLocaleDateString():''}</a></span>`
+      : `<span class="reply-orderlink"><span class="reply-unmatched">unmatched</span> <a class="reply-link" onclick="manuallyMatchReply('${r.messageId}')">match to order</a></span>`;
+    const when = r.receivedAt ? new Date(r.receivedAt).toLocaleString() : '';
+    return `<div class="reply-card">
+      <div class="reply-head">
+        <span class="vname">${esc((r.from||'').replace(/<[^>]+>/g,'').trim() || r.from || 'Vendor')}</span>
+        <span class="sugg"><i class="ti ${suggIcon}"></i>${esc(sugg)}</span>
+        <span class="when">${esc(when)}</span>
+      </div>
+      ${r.aiSummary?`<div class="reply-summary"><b>Claude:</b> ${esc(r.aiSummary)}</div>`:''}
+      <div class="reply-body">
+        ${r.subject?`<div class="reply-subject">${esc(r.subject.replace(/\s*\[PO-[^\]]+\]\s*/g,' '))}</div>`:''}
+        <div class="reply-snippet">${esc(r.body||r.snippet||'(no body)').slice(0,2000)}</div>
+      </div>
+      <div class="reply-actions">
+        <span class="lbl">Your call:</span>
+        ${pill('confirmed','Confirmed','confirmed')}
+        ${pill('issue','Has issues','issue')}
+        ${pill('question','Question','question')}
+        ${pill('unclear','Unclear','unclear')}
+        ${orderTag}
+      </div>
+    </div>`;
+  }).join('');
+  const upd=document.getElementById('repliesUpdated');
+  if(upd && _repliesLastFetched && !upd.textContent) upd.textContent = 'Last checked: '+new Date(_repliesLastFetched).toLocaleTimeString();
+}
+
+window.checkReplies = checkReplies;
+window.setReplyStatus = setReplyStatus;
+window.manuallyMatchReply = manuallyMatchReply;
+
 // ════════ ORDERS RELAY SETTINGS ════════
 // The orders@thepremiercaterer.com Apps Script URL lives in localStorage so each
 // browser/device can be pointed at the same deployment without hardcoding it.
@@ -985,7 +1193,10 @@ async function sendOrderViaRelay(orderId){
   // Build the vendor-facing copy (no prices) — quantities, vendor item names, codes, packs only.
   const escH=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const needBit = order.neededBy ? ' — needed by '+fmtDate(order.neededBy) : '';
-  const subject = 'Premier Caterers PO'+(needBit?(' '+needBit):'')+' — '+(order.vendorName||'');
+  // Hidden PO tag at the end of the subject — vendors won't notice it but reply
+  // threads keep it so we can match incoming replies back to this order.
+  const poTag = ' [PO-'+orderId+']';
+  const subject = 'Premier Caterers PO'+(needBit?(' '+needBit):'')+' — '+(order.vendorName||'')+poTag;
   // Plain-text body
   const ptLines = (order.lines||[]).map(L=>{
     const pick=L.pick||{}; const pack=pick.packDesc||((pick.packSize||'?')+' '+(pick.unit||''));
