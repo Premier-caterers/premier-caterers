@@ -1756,6 +1756,18 @@ function plDaysUntil(d){
   const now=new Date(); now.setHours(0,0,0,0); t.setHours(0,0,0,0);
   return Math.round((t-now)/86400000);
 }
+function plUnpaidFull(inq){
+  try{
+    const evId='inq_'+inq.id;
+    const slots = (typeof invoiceSlotsForEvent==='function') ? invoiceSlotsForEvent(evId) : (invoices[evId]?[evId]:[]);
+    for(const k of slots){
+      const inv=invoices[k]; if(!inv) continue;
+      const t=calcInvoiceTotals(inv);
+      if((inv.status==='invoice'||inv.status==='paid') && t.balance>0.01) return true;
+    }
+  }catch(e){}
+  return false;
+}
 function plCardFoot(inq){
   const dd = plDaysUntil(inq.eventDate);
   const hasMenu = (Array.isArray(inq.menus)&&inq.menus.length) || inq.menuLink;
@@ -1826,7 +1838,7 @@ function renderPipeline(){
         const contact = clientContact(inq);
         const chev = `<button class="pl-card-toggle" onclick="event.stopPropagation();togglePlCard('${inq.id}')" title="${compact?'Expand':'Minimize'}"><i class="ti ti-chevron-${compact?'down':'up'}"></i></button>`;
         if(compact){
-          return `<div class="inq-card compact ${selectedInqId===inq.id?'selected':''}" onclick="selectInquiry('${inq.id}')">
+          return `<div class="inq-card compact ${selectedInqId===inq.id?'selected':''}" ${plUnpaidFull(inq)?'style="border:1.5px solid #E0A82E"':''} onclick="selectInquiry('${inq.id}')">
             <div class="pl-card-head"><div class="inq-name">${nm}</div>${chev}</div>
             <div class="pl-compact-meta">
               ${inq.eventType ? `<span><i class="ti ti-tag" style="font-size:11px"></i>${inq.eventType}</span>` : ''}
@@ -1835,7 +1847,7 @@ function renderPipeline(){
           </div>`;
         }
         return `
-      <div class="inq-card ${selectedInqId===inq.id?'selected':''}" onclick="selectInquiry('${inq.id}')">
+      <div class="inq-card ${selectedInqId===inq.id?'selected':''}" ${plUnpaidFull(inq)?'style="border:1.5px solid #E0A82E"':''} onclick="selectInquiry('${inq.id}')">
         <div class="pl-card-head"><div class="inq-name">${nm}</div>${chev}</div>
         ${contact ? `<div style="font-size:11px;color:var(--text3);margin:-2px 0 4px"><i class="ti ti-user" style="font-size:10px"></i> ${contact}</div>` : ''}
         ${inq.eventName ? `<div class="inq-event-name">${inq.eventName}</div>` : ''}
@@ -2051,6 +2063,7 @@ function renderEstimateBlock(inq, role){
       <div class="detail-block-title" style="margin:0">Cost estimate</div>
       <button onclick="toggleEstimate('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-calculator" style="font-size:14px"></i>${has?(open?'Close':'Edit estimate'):'Build estimate'}</button>
       ${has?`<button onclick="convertEstimateToInvoice('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--green-border);border-radius:7px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-file-invoice" style="font-size:14px"></i>${bookedInvoiceExists?'Update invoice':'Convert to invoice'}</button>`:''}
+      ${has?`<button onclick="downloadEstimatePdf('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-download" style="font-size:14px"></i>Download PDF</button>`:''}
     </div>`;
   if(!open){
     let summary = '';
@@ -2238,6 +2251,29 @@ function downloadHtmlAsPdf(html, filenameBase){
     }catch(e){}
   }
 }
+function estimateFileName(inq){
+  const name = (inq.organization||'').trim() || ((inq.firstName||'')+' '+(inq.lastName||'')).trim() || inq.lastName || 'Client';
+  let dateBit=''; if(inq.eventDate){ const p=String(inq.eventDate).split('-'); if(p.length===3) dateBit=' ('+parseInt(p[1],10)+'-'+parseInt(p[2],10)+'-'+p[0].slice(-2)+')'; }
+  const typ = inq.eventType ? (' '+inq.eventType) : '';
+  return (name+typ+dateBit+' - ESTIMATE').replace(/[\/\\:*?"<>|]/g,'-').replace(/\s+/g,' ').trim();
+}
+async function downloadEstimatePdf(inqId){
+  const inq=_findInq(inqId); if(!inq) return;
+  ensureEstimate(inq);
+  if(!(inq.estimate && Array.isArray(inq.estimate.lines) && inq.estimate.lines.length)){ alert('Build the estimate first — add at least one line item.'); return; }
+  try{
+    if(typeof showToast==='function') showToast('Building estimate PDF…');
+    const b64 = await buildEstimatePdfBase64(inq);
+    const bin = atob(b64); const bytes = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+    const blob = new Blob([bytes], {type:'application/pdf'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download=estimateFileName(inq)+'.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+  }catch(e){ alert('Could not generate the estimate PDF: '+(e&&e.message||e)); }
+}
+window.downloadEstimatePdf = downloadEstimatePdf;
 async function buildEstimatePdfBase64(inq){
   await ensureJsPdf();
   const { jsPDF } = window.jspdf;
