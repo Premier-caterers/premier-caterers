@@ -107,6 +107,76 @@ tbody tr:hover{background:var(--bg2)}
 .btn-newq{padding:5px 10px;border:1px solid var(--green-text);background:var(--green-bg);color:var(--green-text);border-radius:7px;font-size:11.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-family:inherit}
 .btn-newq:hover{background:#d1e8dc}
 
+/* ── order builder ── */
+.orders-layout{display:grid;grid-template-columns:1fr 360px;gap:18px;align-items:start}
+@media(max-width:900px){.orders-layout{grid-template-columns:1fr}.orders-cart{position:static !important;max-height:none !important}}
+.orders-list{}
+.cat-group{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:12px;overflow:hidden;box-shadow:var(--shadow)}
+.cat-head{display:flex;justify-content:space-between;align-items:center;padding:11px 16px;background:var(--bg2);border-bottom:1px solid var(--border);cursor:pointer;font-family:'Fraunces',Georgia,serif;font-size:15px;font-weight:600;color:var(--text)}
+.cat-head .chev{transition:transform .15s;color:var(--text3)}
+.cat-group.collapsed .chev{transform:rotate(-90deg)}
+.cat-group.collapsed .cat-body{display:none}
+.cat-body{padding:4px 0}
+.op-row{display:grid;grid-template-columns:1fr 180px 110px 90px;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border)}
+.op-row:last-child{border-bottom:none}
+.op-row:hover{background:var(--bg2)}
+.op-prod{min-width:0}
+.op-prod b{display:block;font-weight:600;color:var(--text)}
+.op-prod .sub{font-size:11.5px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.op-vendor{font-size:12.5px;display:flex;flex-direction:column;gap:1px;min-width:0}
+.op-vendor .name{color:var(--text);font-weight:500;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+.op-vendor .name:hover{color:var(--maroon)}
+.op-vendor .cost{font-size:11px;color:var(--text3);font-family:'Fraunces',Georgia,serif}
+.op-vendor .tag{display:inline-block;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:1px 6px;border-radius:9px;margin-top:2px;width:fit-content}
+.op-vendor .tag.cheap{background:var(--green-bg);color:var(--green-text)}
+.op-vendor .tag.manual{background:var(--brass-tint);color:var(--brass-deep)}
+.op-vendor .tag.none{background:var(--bg3);color:var(--text3)}
+.op-pack{font-size:11.5px;color:var(--text2)}
+.op-qty input{width:70px;padding:7px 8px;border:1px solid var(--border2);border-radius:7px;text-align:center;font-size:13px}
+.op-qty input:focus{outline:none;border-color:var(--maroon)}
+.op-qty .conv{font-size:10.5px;color:var(--text3);text-align:right;margin-top:2px}
+@media(max-width:640px){.op-row{grid-template-columns:1fr 1fr;grid-template-areas:'prod qty' 'vend pack';row-gap:6px}.op-prod{grid-area:prod}.op-vendor{grid-area:vend}.op-pack{grid-area:pack}.op-qty{grid-area:qty;text-align:right}}
+
+/* sticky cart */
+.orders-cart{position:sticky;top:80px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);max-height:calc(100vh - 110px);display:flex;flex-direction:column}
+.cart-head{padding:12px 14px;border-bottom:1px solid var(--border);font-family:'Fraunces',Georgia,serif;font-size:15px;font-weight:600;display:flex;justify-content:space-between;align-items:baseline}
+.cart-head .count{font-size:11px;color:var(--text3);font-family:'Inter',sans-serif;font-weight:400}
+.cart-body{flex:1;overflow-y:auto;padding:6px 0}
+.cart-empty{text-align:center;color:var(--text3);font-size:12.5px;padding:30px 18px}
+.cart-vendor{padding:10px 14px;border-bottom:1px solid var(--border)}
+.cart-vendor:last-child{border-bottom:none}
+.cart-vendor .vh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.cart-vendor .vh .name{font-weight:600;color:var(--text)}
+.cart-vendor .vh .tot{font-family:'Fraunces',Georgia,serif;font-weight:600}
+.cart-vendor .vline{font-size:12px;color:var(--text2);padding:3px 0;display:flex;justify-content:space-between;gap:8px}
+.cart-vendor .vline .qn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cart-vendor .vline .px{color:var(--text3);font-size:11px;white-space:nowrap}
+.cart-vendor .warn{font-size:11px;color:var(--maroon);font-weight:600;margin-top:5px}
+.cart-foot{padding:12px 14px;border-top:1px solid var(--border);background:var(--bg2)}
+
+/* vendor-pick popover (override) */
+.vpop-bg{position:fixed;inset:0;z-index:300;display:none}
+.vpop-bg.show{display:block}
+.vpop{position:absolute;background:var(--bg);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 36px rgba(43,36,32,.25);min-width:240px;max-width:320px;overflow:hidden}
+.vpop .h{padding:9px 12px;border-bottom:1px solid var(--border);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);font-weight:600}
+.vpop-opt{padding:9px 12px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;font-size:13px;align-items:center}
+.vpop-opt:hover{background:var(--bg2)}
+.vpop-opt .vc{font-family:'Fraunces',Georgia,serif;font-weight:600;color:var(--text2)}
+.vpop-opt.cheapest .vc{color:var(--green-text)}
+
+/* review modal */
+.po-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:12px;padding:14px 16px}
+.po-card h4{font-family:'Fraunces',Georgia,serif;font-size:16px;font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;align-items:baseline}
+.po-card h4 .sm{font-size:11px;color:var(--text3);font-family:'Inter',sans-serif;font-weight:400}
+.po-meta{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--text2);margin-bottom:9px}
+.po-meta b{color:var(--text)}
+.po-card table{margin-top:5px}
+.po-card th,.po-card td{padding:6px 9px;font-size:12.5px}
+.po-foot{display:flex;justify-content:space-between;align-items:center;margin-top:9px;font-size:13px}
+.po-foot .gt{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:15px}
+.po-warn{background:var(--maroon-tint);color:var(--maroon-deep);font-size:12px;padding:7px 10px;border-radius:8px;margin-top:6px}
+.po-need input{padding:6px 9px;border:1px solid var(--border2);border-radius:7px;font-size:13px}
+
 .modal-bg{position:fixed;inset:0;background:rgba(43,36,32,.4);z-index:200;display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
 .modal-bg.show{display:flex}
 .modal{background:var(--bg);border-radius:var(--radius-lg);width:100%;max-width:560px;box-shadow:0 20px 60px rgba(43,36,32,.3);overflow:hidden}
@@ -157,10 +227,12 @@ tbody tr:hover{background:var(--bg2)}
 
   <div class="tabs">
     <button class="tab active" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
+    <button class="tab" data-view="orders" onclick="showView('orders')"><i class="ti ti-shopping-cart-plus"></i> Place Orders</button>
     <button class="tab" data-view="compare" onclick="showView('compare')">Compare Vendors</button>
     <button class="tab" data-view="items" onclick="showView('items')">All Items</button>
     <button class="tab" data-view="products" onclick="showView('products')">Our Products</button>
     <button class="tab" data-view="vendors" onclick="showView('vendors')">Vendors</button>
+    <button class="tab" data-view="orderhist" onclick="showView('orderhist')">Order History</button>
   </div>
 
   <div class="wrap">
@@ -199,6 +271,22 @@ tbody tr:hover{background:var(--bg2)}
         <button class="btn" id="addVendorBtn" onclick="openVendor()"><i class="ti ti-plus"></i> Add vendor</button>
       </div>
       <div class="card"><div id="vendorsTable"></div></div>
+    </div>
+
+    <div class="view" id="view-orders">
+      <div class="row-head"><div class="title">Place Orders</div>
+        <div class="search"><i class="ti ti-search"></i><input id="oSearch" placeholder="Search products…" oninput="renderOrderPicker()"></div>
+        <button class="btn ghost" onclick="clearOrderCart()" title="Clear all quantities"><i class="ti ti-trash"></i> Clear cart</button>
+      </div>
+      <div class="orders-layout">
+        <div class="orders-list" id="ordersList"></div>
+        <aside class="orders-cart" id="ordersCart"></aside>
+      </div>
+    </div>
+
+    <div class="view" id="view-orderhist">
+      <div class="row-head"><div class="title">Order History</div></div>
+      <div id="orderHistBody"></div>
     </div>
   </div>
 </div>
@@ -285,8 +373,9 @@ function startData(){
   db.collection('vendors').onSnapshot(s=>{ vendors=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
   db.collection('vendorItems').onSnapshot(s=>{ items=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
   db.collection('priceHistory').onSnapshot(s=>{ priceHistory=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
+  startOrdersCollection();
 }
-function renderAll(){ renderDashboard(); renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); }
+function renderAll(){ renderDashboard(); renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); renderOrderPicker(); renderOrderHistory(); }
 
 function vendorName(id){ const v=vendors.find(x=>x.id===id); return v?v.name:'(unknown vendor)'; }
 function fmtMoney(n){ n=parseFloat(n); return isNaN(n)?'—':'$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -601,6 +690,332 @@ function openHistory(itemId){
   <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
 }
 
+// ════════ ORDER BUILDER ════════
+// Cart shape: { [productKey]: { qty:number, vendorItemId:string, manual:boolean } }
+let orderCart = {};
+let orders = []; // history
+
+function startOrdersCollection(){
+  // separate listener so it doesn't block main data
+  try{ db.collection('orders').onSnapshot(s=>{ orders=s.docs.map(d=>({id:d.id,...d.data()})); if(document.getElementById('view-orderhist')?.classList.contains('active')) renderOrderHistory(); }); }catch(e){}
+}
+// cheapest vendor item for a product group (by unit cost; null if none determinable)
+function cheapestItem(g){
+  let best=null, bestUc=null;
+  g.items.forEach(x=>{ const uc=unitCost(x.price,x.packSize); if(uc==null) return; if(bestUc==null||uc<bestUc){ bestUc=uc; best=x; } });
+  return best;
+}
+function selectedVendorItem(g){
+  const sel = orderCart[g.key]?.vendorItemId;
+  if(sel){ const x=g.items.find(i=>i.id===sel); if(x) return x; }
+  return cheapestItem(g);
+}
+function isManualPick(g){ const sel=orderCart[g.key]; if(!sel||!sel.vendorItemId) return false; return !!sel.manual; }
+
+function renderOrderPicker(){
+  const list=document.getElementById('ordersList'); if(!list) return;
+  const q=((document.getElementById('oSearch')||{}).value||'').toLowerCase();
+  const groups=ourProducts().filter(g=>!q||g.name.toLowerCase().includes(q)||(g.useFor||'').toLowerCase().includes(q)||(g.category||'').toLowerCase().includes(q));
+  if(!groups.length){ list.innerHTML='<div class="dash-empty">No products yet — add items first so they can be ordered.</div>'; renderCart(); return; }
+  // group by category
+  const byCat={};
+  groups.forEach(g=>{ const c=g.category||'Uncategorized'; (byCat[c]=byCat[c]||[]).push(g); });
+  const cats=Object.keys(byCat).sort();
+  list.innerHTML = cats.map(c=>{
+    const rows=byCat[c].map(g=>{
+      const pick=selectedVendorItem(g);
+      const cur=orderCart[g.key];
+      const qty=cur?cur.qty:'';
+      let vendorBlock;
+      if(!pick){ vendorBlock=`<div class="op-vendor"><span class="name muted" onclick="openVendorPick(event,'${esc(g.key)}')">No price on file</span><span class="tag none">no quote</span></div>`; }
+      else{
+        const uc=unitCost(pick.price,pick.packSize);
+        const isMan=isManualPick(g);
+        const tagHtml = isMan ? '<span class="tag manual">manual</span>' : (g.items.length>1 ? '<span class="tag cheap">cheapest</span>' : '');
+        vendorBlock=`<div class="op-vendor"><span class="name" onclick="openVendorPick(event,'${esc(g.key)}')">${esc(vendorName(pick.vendorId))} <i class="ti ti-chevron-down" style="font-size:11px;opacity:.6"></i></span><span class="cost">${uc!=null?fmtMoney(uc)+'/'+esc(pick.unit||'unit'):'—'}</span>${tagHtml}</div>`;
+      }
+      const packTxt = pick ? (pick.packDesc || ((pick.packSize||'?')+' '+(pick.unit||''))) : '—';
+      const conv = (pick && qty && pick.packSize) ? `<div class="conv">${qty} × ${pick.packSize} ${esc(pick.unit||'')} = ${(parseFloat(qty)*parseFloat(pick.packSize)).toLocaleString()} ${esc(pick.unit||'')}</div>` : '';
+      return `<div class="op-row">
+        <div class="op-prod"><b>${esc(g.name)}</b>${g.useFor?`<div class="sub">${esc(g.useFor)}</div>`:''}</div>
+        ${vendorBlock}
+        <div class="op-pack">${esc(packTxt)}</div>
+        <div class="op-qty"><input type="number" min="0" step="any" value="${esc(qty)}" placeholder="cases" oninput="setQty('${esc(g.key)}', this.value)"><div class="op-conv-wrap">${conv}</div></div>
+      </div>`;
+    }).join('');
+    return `<div class="cat-group" data-cat="${esc(c)}"><div class="cat-head" onclick="this.parentNode.classList.toggle('collapsed')"><span>${esc(c)} <span style="color:var(--text3);font-weight:400;font-size:12px">· ${byCat[c].length}</span></span><i class="ti ti-chevron-down chev"></i></div><div class="cat-body">${rows}</div></div>`;
+  }).join('');
+  renderCart();
+}
+
+function setQty(key, v){
+  const n=parseFloat(v);
+  if(!v || isNaN(n) || n<=0){ if(orderCart[key]){ delete orderCart[key]; } } else {
+    orderCart[key]=orderCart[key]||{};
+    orderCart[key].qty=n;
+    if(!orderCart[key].vendorItemId){
+      const g=ourProducts().find(x=>x.key===key); const pick=g?cheapestItem(g):null;
+      if(pick){ orderCart[key].vendorItemId=pick.id; orderCart[key].manual=false; }
+    }
+  }
+  // update just the conversion text for this row + the cart — don't re-render the picker (would steal focus)
+  try{
+    const g=ourProducts().find(x=>x.key===key);
+    const pick=g?selectedVendorItem(g):null;
+    const inp=document.querySelector('input[oninput*="setQty(\''+key.replace(/'/g,"\\'")+'\'"]');
+    const wrap=inp?inp.parentNode.querySelector('.op-conv-wrap'):null;
+    if(wrap){
+      const qty=orderCart[key]?orderCart[key].qty:0;
+      wrap.innerHTML = (pick && qty && pick.packSize)
+        ? `<div class="conv">${qty} × ${pick.packSize} ${esc(pick.unit||'')} = ${(parseFloat(qty)*parseFloat(pick.packSize)).toLocaleString()} ${esc(pick.unit||'')}</div>` : '';
+    }
+  }catch(e){}
+  renderCart();
+}
+
+function clearOrderCart(){
+  if(!Object.keys(orderCart).length) return;
+  if(!confirm('Clear all quantities from the cart?')) return;
+  orderCart={}; renderOrderPicker();
+}
+
+function renderCart(){
+  const el=document.getElementById('ordersCart'); if(!el) return;
+  const keys=Object.keys(orderCart);
+  if(!keys.length){
+    el.innerHTML='<div class="cart-head">Cart <span class="count">empty</span></div><div class="cart-empty">Type a quantity beside any product on the left and it will appear here, grouped by vendor.</div>';
+    return;
+  }
+  const groups=ourProducts();
+  // bucket lines by vendor
+  const buckets={};
+  keys.forEach(k=>{
+    const g=groups.find(x=>x.key===k); if(!g) return;
+    const pick=selectedVendorItem(g); if(!pick){ buckets._novendor=buckets._novendor||[]; buckets._novendor.push({g,qty:orderCart[k].qty,pick:null}); return; }
+    const b=buckets[pick.vendorId]=buckets[pick.vendorId]||{ vendorId:pick.vendorId, lines:[], totalCases:0, totalDollars:0 };
+    const qty=orderCart[k].qty;
+    const lineTotal=(parseFloat(pick.price)||0)*qty;
+    b.lines.push({ g, qty, pick, lineTotal });
+    b.totalCases += qty;
+    b.totalDollars += lineTotal;
+  });
+  let html='<div class="cart-head">Cart <span class="count">'+keys.length+' line'+(keys.length===1?'':'s')+'</span></div><div class="cart-body">';
+  Object.values(buckets).forEach(b=>{
+    if(b.vendorId===undefined) return;
+    const v=vendors.find(x=>x.id===b.vendorId)||{};
+    const minWarn = minimumWarning(v, b);
+    html += '<div class="cart-vendor"><div class="vh"><span class="name">'+esc(v.name||'(vendor)')+'</span><span class="tot">'+fmtMoney(b.totalDollars)+'</span></div>';
+    b.lines.forEach(L=>{
+      html += '<div class="vline"><span class="qn">'+L.qty+' × '+esc(L.g.name)+'</span><span class="px">'+fmtMoney(L.lineTotal)+'</span></div>';
+    });
+    if(minWarn) html += '<div class="warn">'+esc(minWarn)+'</div>';
+    html += '</div>';
+  });
+  if(buckets._novendor && buckets._novendor.length){
+    html += '<div class="cart-vendor"><div class="vh"><span class="name" style="color:var(--maroon)">No vendor chosen</span></div>';
+    buckets._novendor.forEach(L=>{ html += '<div class="vline"><span class="qn">'+L.qty+' × '+esc(L.g.name)+'</span><span class="px muted">pick a vendor</span></div>'; });
+    html += '</div>';
+  }
+  html += '</div><div class="cart-foot"><button class="btn" style="width:100%" onclick="openReviewOrders()"><i class="ti ti-clipboard-check"></i> Review & build orders</button></div>';
+  el.innerHTML=html;
+}
+
+function minimumWarning(v, bucket){
+  const t=(v.minType||'none'), amt=parseFloat(v.minAmount||0);
+  if(t==='none' || !(amt>0)) return '';
+  if(t==='dollars' && bucket.totalDollars < amt) return 'Below minimum: $'+(amt-bucket.totalDollars).toFixed(2)+' short of $'+amt.toFixed(2)+' minimum';
+  if(t==='cases'   && bucket.totalCases   < amt) return 'Below minimum: '+(amt-bucket.totalCases)+' more cases needed (min '+amt+')';
+  return '';
+}
+
+// ── Vendor pick popover (override) ──
+let _vpopKey=null;
+function openVendorPick(evt,key){
+  if(evt){ evt.stopPropagation(); }
+  const g=ourProducts().find(x=>x.key===key); if(!g) return;
+  closeVendorPick();
+  _vpopKey=key;
+  const bg=document.createElement('div'); bg.className='vpop-bg show'; bg.onclick=closeVendorPick;
+  const pop=document.createElement('div'); pop.className='vpop';
+  const cheap=cheapestItem(g);
+  const items=g.items.slice().sort((a,b)=>{ const A=unitCost(a.price,a.packSize), B=unitCost(b.price,b.packSize); if(A==null) return 1; if(B==null) return -1; return A-B; });
+  pop.innerHTML = '<div class="h">Pick vendor for '+esc(g.name)+'</div>' + items.map(x=>{
+    const uc=unitCost(x.price,x.packSize);
+    const isCh=(cheap && x.id===cheap.id);
+    return '<div class="vpop-opt '+(isCh?'cheapest':'')+'" onclick="pickVendor(\''+esc(key)+'\',\''+x.id+'\')"><span><b>'+esc(vendorName(x.vendorId))+'</b><div class="sub">'+esc(x.vendorItemName||'—')+'</div></span><span class="vc">'+(uc!=null?fmtMoney(uc)+'/'+esc(x.unit||'u'):'—')+(isCh?' · cheapest':'')+'</span></div>';
+  }).join('');
+  document.body.appendChild(bg);
+  // anchor near the trigger
+  const r=evt.currentTarget.getBoundingClientRect();
+  pop.style.left=Math.min(window.innerWidth-340, r.left)+'px';
+  pop.style.top=(r.bottom+window.scrollY+6)+'px';
+  document.body.appendChild(pop);
+  pop.id='_vpopEl';
+}
+function closeVendorPick(){
+  document.querySelectorAll('.vpop-bg,#_vpopEl').forEach(n=>n.remove());
+  _vpopKey=null;
+}
+function pickVendor(key, vendorItemId){
+  const g=ourProducts().find(x=>x.key===key); if(!g){ closeVendorPick(); return; }
+  const cheap=cheapestItem(g);
+  const isManual = !(cheap && cheap.id===vendorItemId);
+  orderCart[key]=orderCart[key]||{};
+  orderCart[key].vendorItemId=vendorItemId;
+  orderCart[key].manual=isManual;
+  if(!orderCart[key].qty) orderCart[key].qty=1; // typing implied intent
+  closeVendorPick();
+  renderOrderPicker();
+}
+
+// ── Review & Build Orders ──
+function openReviewOrders(){
+  // bucket cart by vendor
+  const groups=ourProducts();
+  const buckets={};
+  Object.keys(orderCart).forEach(k=>{
+    const g=groups.find(x=>x.key===k); if(!g) return;
+    const pick=selectedVendorItem(g); if(!pick) return;
+    const b=buckets[pick.vendorId]=buckets[pick.vendorId]||{ vendorId:pick.vendorId, lines:[], totalCases:0, totalDollars:0 };
+    const qty=orderCart[k].qty;
+    const lineTotal=(parseFloat(pick.price)||0)*qty;
+    b.lines.push({ key:k, productName:g.name, useFor:g.useFor||'', qty, pick, lineTotal });
+    b.totalCases+=qty; b.totalDollars+=lineTotal;
+  });
+  const list=Object.values(buckets);
+  if(!list.length){ alert('Cart is empty.'); return; }
+  let html = '<div class="modal-head"><div class="h">Review orders</div><button class="icon-btn" onclick="closeModal()"><i class="ti ti-x"></i></button></div><div class="modal-body">';
+  html += '<div class="hint" style="margin-bottom:10px">One purchase order per vendor. Edit needed-by date if relevant, then confirm.</div>';
+  list.forEach((b,idx)=>{
+    const v=vendors.find(x=>x.id===b.vendorId)||{};
+    const warn=minimumWarning(v,b);
+    html += '<div class="po-card" data-vid="'+esc(b.vendorId)+'">';
+    html += '<h4>'+esc(v.name||'(vendor)')+' <span class="sm">'+b.lines.length+' line'+(b.lines.length===1?'':'s')+' · '+b.totalCases+' cases</span></h4>';
+    html += '<div class="po-meta">';
+    if(v.email) html += '<span>Email: <b>'+esc(v.email)+'</b></span>';
+    if(v.phone) html += '<span>Phone: <b>'+esc(v.phone)+'</b></span>';
+    if(v.deliveryDays) html += '<span>Delivery days: <b>'+esc(v.deliveryDays)+'</b></span>';
+    html += '<span class="po-need">Needed by: <input type="date" id="need_'+idx+'"></span>';
+    html += '</div>';
+    html += '<table><thead><tr><th>Qty</th><th>Item</th><th>Code</th><th>Pack</th><th style="text-align:right">Price</th><th style="text-align:right">Line total</th></tr></thead><tbody>';
+    b.lines.forEach(L=>{
+      const pack = L.pick.packDesc || ((L.pick.packSize||'?')+' '+(L.pick.unit||''));
+      html += '<tr><td><b>'+L.qty+'</b></td><td>'+esc(L.pick.vendorItemName||L.productName)+(L.useFor?'<div class="sub" style="font-size:11px;color:var(--text3)">'+esc(L.useFor)+'</div>':'')+'</td><td class="muted">'+esc(L.pick.vendorCode||'—')+'</td><td>'+esc(pack)+'</td><td style="text-align:right">'+fmtMoney(L.pick.price)+'</td><td style="text-align:right">'+fmtMoney(L.lineTotal)+'</td></tr>';
+    });
+    html += '</tbody></table>';
+    html += '<div class="po-foot"><span class="muted">Vendor sees quantities + their item names/codes only. The printer copy will include prices.</span><span class="gt">Total: '+fmtMoney(b.totalDollars)+'</span></div>';
+    if(warn) html += '<div class="po-warn">'+esc(warn)+'</div>';
+    html += '</div>';
+  });
+  html += '</div><div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Back to cart</button><button class="btn" onclick="confirmAndSaveOrders()"><i class="ti ti-check"></i> Confirm and save</button></div>';
+  openModal(html);
+}
+
+async function confirmAndSaveOrders(){
+  // re-bucket (in case user opened picker behind & changed) and capture needed-by dates from the modal
+  const groups=ourProducts();
+  const buckets={};
+  Object.keys(orderCart).forEach(k=>{
+    const g=groups.find(x=>x.key===k); if(!g) return;
+    const pick=selectedVendorItem(g); if(!pick) return;
+    const b=buckets[pick.vendorId]=buckets[pick.vendorId]||{ vendorId:pick.vendorId, lines:[], totalCases:0, totalDollars:0 };
+    const qty=orderCart[k].qty;
+    const lineTotal=(parseFloat(pick.price)||0)*qty;
+    b.lines.push({ productKey:k, productName:g.name, useFor:g.useFor||'', qty, lineTotal,
+      pick:{ id:pick.id, vendorItemName:pick.vendorItemName||'', vendorCode:pick.vendorCode||'', packDesc:pick.packDesc||'', packSize:pick.packSize||0, unit:pick.unit||'', price:pick.price||0 }
+    });
+    b.totalCases+=qty; b.totalDollars+=lineTotal;
+  });
+  const list=Object.values(buckets);
+  if(!list.length){ alert('Cart is empty.'); return; }
+  const cards=document.querySelectorAll('#modal .po-card');
+  const neededBy={};
+  cards.forEach(c=>{ const vid=c.getAttribute('data-vid'); const inp=c.querySelector('input[type="date"]'); if(vid && inp) neededBy[vid]=inp.value||''; });
+  const batch = db.batch();
+  const stamp = Date.now();
+  try{
+    list.forEach(b=>{
+      const v=vendors.find(x=>x.id===b.vendorId)||{};
+      const ref = db.collection('orders').doc();
+      batch.set(ref, {
+        vendorId: b.vendorId,
+        vendorName: v.name||'',
+        vendorEmail: v.email||'',
+        neededBy: neededBy[b.vendorId]||'',
+        lines: b.lines,
+        totalCases: b.totalCases,
+        totalDollars: b.totalDollars,
+        minType: v.minType||'none',
+        minAmount: v.minAmount||0,
+        minWarning: minimumWarning(v,b),
+        status: 'saved',           // future: 'sent' once email plumbing lands
+        sendAttempts: [],
+        placedBy: userLabel(),
+        placedAt: stamp,
+        createdAt: stamp
+      });
+    });
+    await batch.commit();
+    orderCart={};
+    closeModal();
+    toast('Orders saved ✓ ('+list.length+')');
+    renderOrderPicker();
+    showView('orderhist');
+  }catch(e){ alert('Could not save orders: '+e.message); }
+}
+
+// ── Order History ──
+function renderOrderHistory(){
+  const el=document.getElementById('orderHistBody'); if(!el) return;
+  if(!orders.length){ el.innerHTML='<div class="dash-empty">No orders saved yet. Build a cart on the Place Orders tab and confirm to see them here.</div>'; return; }
+  const sorted=orders.slice().sort((a,b)=>(b.placedAt||0)-(a.placedAt||0));
+  el.innerHTML = '<div class="card"><table><thead><tr><th>Placed</th><th>Vendor</th><th>Lines</th><th>Cases</th><th>Total</th><th>Needed by</th><th>Status</th><th>By</th><th></th></tr></thead><tbody>'+
+    sorted.map(o=>{ const when = o.placedAt?new Date(o.placedAt).toLocaleString():''; return `<tr>
+      <td class="muted">${esc(when)}</td>
+      <td><b>${esc(o.vendorName||'')}</b></td>
+      <td>${(o.lines||[]).length}</td>
+      <td>${o.totalCases||0}</td>
+      <td>${fmtMoney(o.totalDollars||0)}</td>
+      <td class="muted">${fmtDate(o.neededBy)}</td>
+      <td>${o.status==='sent'?'<span class="chip" style="background:var(--green-bg);color:var(--green-text)">Sent</span>':'<span class="chip cat">Saved</span>'}</td>
+      <td class="muted">${esc(o.placedBy||'')}</td>
+      <td style="text-align:right"><button class="icon-btn" onclick="openOrderView('${o.id}')"><i class="ti ti-eye"></i></button>${canEdit()?` <button class="icon-btn" onclick="reorderFromHistory('${o.id}')" title="Copy to cart"><i class="ti ti-refresh"></i></button>`:''}</td>
+    </tr>`;}).join('')+'</tbody></table></div>';
+}
+function openOrderView(id){
+  const o=orders.find(x=>x.id===id); if(!o) return;
+  let html='<div class="modal-head"><div class="h">Order — '+esc(o.vendorName||'')+'</div><button class="icon-btn" onclick="closeModal()"><i class="ti ti-x"></i></button></div><div class="modal-body">';
+  html += '<div class="po-meta"><span>Placed: <b>'+(o.placedAt?new Date(o.placedAt).toLocaleString():'')+'</b></span>';
+  if(o.placedBy) html += '<span>By: <b>'+esc(o.placedBy)+'</b></span>';
+  if(o.neededBy) html += '<span>Needed by: <b>'+fmtDate(o.neededBy)+'</b></span>';
+  html += '<span>Status: <b>'+esc(o.status||'saved')+'</b></span></div>';
+  html += '<table style="margin-top:8px"><thead><tr><th>Qty</th><th>Item</th><th>Code</th><th>Pack</th><th style="text-align:right">Price</th><th style="text-align:right">Line</th></tr></thead><tbody>';
+  (o.lines||[]).forEach(L=>{ const pack=(L.pick&&(L.pick.packDesc||((L.pick.packSize||'?')+' '+(L.pick.unit||''))))||'—';
+    html += '<tr><td><b>'+L.qty+'</b></td><td>'+esc((L.pick&&L.pick.vendorItemName)||L.productName||'')+'</td><td class="muted">'+esc((L.pick&&L.pick.vendorCode)||'—')+'</td><td>'+esc(pack)+'</td><td style="text-align:right">'+fmtMoney(L.pick&&L.pick.price)+'</td><td style="text-align:right">'+fmtMoney(L.lineTotal)+'</td></tr>'; });
+  html += '</tbody></table><div class="po-foot"><span class="muted">'+(o.minWarning?'<span style="color:var(--maroon)">'+esc(o.minWarning)+'</span>':'')+'</span><span class="gt">Total: '+fmtMoney(o.totalDollars||0)+'</span></div>';
+  html += '</div><div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Close</button></div>';
+  openModal(html);
+}
+function reorderFromHistory(id){
+  const o=orders.find(x=>x.id===id); if(!o) return;
+  if(Object.keys(orderCart).length && !confirm('This will add to your current cart. Continue?')) return;
+  const groups=ourProducts();
+  (o.lines||[]).forEach(L=>{
+    // try to match the product by key (productKey saved on the line)
+    const key = L.productKey || groups.find(g=>normName(g.name)===normName(L.productName))?.key;
+    if(!key) return;
+    orderCart[key]=orderCart[key]||{};
+    orderCart[key].qty = (orderCart[key].qty||0)+L.qty;
+    // Try to keep the same vendor item if it still exists
+    if(L.pick && L.pick.id){
+      const stillThere = items.find(x=>x.id===L.pick.id);
+      if(stillThere){ orderCart[key].vendorItemId=L.pick.id; const g=groups.find(g=>g.key===key); const cheap=g?cheapestItem(g):null; orderCart[key].manual = !(cheap && cheap.id===L.pick.id); }
+    }
+  });
+  toast('Copied to cart');
+  showView('orders');
+}
+
 // ════════ MODALS / CRUD ════════
 function closeModal(){ document.getElementById('modalBg').classList.remove('show'); document.getElementById('modal').innerHTML=''; }
 function openModal(html){ document.getElementById('modal').innerHTML=html; document.getElementById('modalBg').classList.add('show'); }
@@ -673,6 +1088,16 @@ function openVendor(id){
     <div class="fld-row"><div class="fld"><label>Contact person</label><input id="v_contact" value="${esc(v.contact||'')}"></div><div class="fld"><label>Sales rep</label><input id="v_rep" value="${esc(v.rep||'')}"></div></div>
     <div class="fld-row"><div class="fld"><label>Phone</label><input id="v_phone" value="${esc(v.phone||'')}"></div><div class="fld"><label>Email</label><input id="v_email" value="${esc(v.email||'')}"></div></div>
     <div class="fld-row"><div class="fld"><label>Payment terms</label><input id="v_terms" value="${esc(v.terms||'')}" placeholder="e.g. Net 30"></div><div class="fld"><label>Delivery days</label><input id="v_delivery" value="${esc(v.deliveryDays||'')}" placeholder="e.g. Mon, Thu"></div></div>
+    <div class="fld-row">
+      <div class="fld"><label>Minimum order</label>
+        <select id="v_mintype">
+          <option value="none" ${(v.minType||'none')==='none'?'selected':''}>None</option>
+          <option value="dollars" ${v.minType==='dollars'?'selected':''}>Dollar amount</option>
+          <option value="cases" ${v.minType==='cases'?'selected':''}>Number of cases</option>
+        </select>
+      </div>
+      <div class="fld"><label>Minimum amount</label><input id="v_minamt" type="number" step="any" value="${esc(v.minAmount||'')}" placeholder="e.g. 250 or 5"><div class="hint">$ for dollar minimums, count for case minimums.</div></div>
+    </div>
     <div class="fld"><label>Notes</label><textarea id="v_notes">${esc(v.notes||'')}</textarea></div>
   </div>
   <div class="modal-foot">${id?`<button class="btn ghost" onclick="deleteVendor('${id}')" style="margin-right:auto;color:#c0392b">Delete</button>`:''}<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveVendor('${id||''}')">Save</button></div>`);
@@ -680,7 +1105,7 @@ function openVendor(id){
 }
 async function saveVendor(id){
   const name=val('v_name'); if(!name){ alert('Vendor name is required.'); return; }
-  const data={ name, contact:val('v_contact'), rep:val('v_rep'), phone:val('v_phone'), email:val('v_email'), terms:val('v_terms'), deliveryDays:val('v_delivery'), notes:val('v_notes'), updatedAt:Date.now() };
+  const data={ name, contact:val('v_contact'), rep:val('v_rep'), phone:val('v_phone'), email:val('v_email'), terms:val('v_terms'), deliveryDays:val('v_delivery'), minType:val('v_mintype')||'none', minAmount:val('v_minamt')?parseFloat(val('v_minamt')):0, notes:val('v_notes'), updatedAt:Date.now() };
   try{ if(id){ await db.collection('vendors').doc(id).set(data,{merge:true}); } else { data.createdAt=Date.now(); await db.collection('vendors').add(data); } closeModal(); toast('Vendor saved ✓'); }
   catch(e){ alert('Could not save: '+e.message); }
 }
