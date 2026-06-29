@@ -71,6 +71,7 @@
     <button class="nav-item" id="nav-purchasing" onclick="window.open('https://premier-caterers.github.io/premier-caterers/purchasing.html','_blank')"><i class="ti ti-building-store"></i>Purchasing<i class="ti ti-external-link" style="font-size:11px;margin-left:4px;opacity:.6"></i></button>
     <button class="nav-item" id="nav-equipment" onclick="showView('equipment')"><i class="ti ti-tool"></i>Equipment</button>
     <button class="nav-item" id="nav-venues" onclick="showView('venues')"><i class="ti ti-building"></i>Venues</button>
+    <button class="nav-item" id="nav-roadmap" onclick="showView('roadmap')"><i class="ti ti-map-2"></i>Roadmap</button>
     <button class="nav-item" id="nav-email" onclick="showView('email')"><i class="ti ti-mail"></i>Email<span class="nav-badge" id="emailBadge" style="display:none">0</span></button>
     <div class="sidebar-label" id="setupLabel">Setup</div>
     <button class="nav-item" id="nav-trash" onclick="showView('trash')"><i class="ti ti-trash"></i>Trash<span class="nav-badge" id="trashBadge" style="display:none">0</span></button>
@@ -195,13 +196,14 @@ const firebaseConfig = {
 // db and collections initialized in _startApp() after Firebase SDK loads
 let storage;
 let db, eventsCol, changesCol, inquiriesCol, checklistCol, equipCol, invoicesCol, venuesCol, trashCol;
-let groceryStationsCol, groceryListsCol;
+let groceryStationsCol, groceryListsCol, roadmapCol;
 let groceryStations = []; // [{id, eventTypes:[], stationKey, label, items:[{name,code,qty,supplier,notes}]}]
 let groceryLists = {};    // {eventId: {items:[...], generated, lastModified}}
 let trash = [];
 let invoices = {}; // keyed by eventId
 let savedLineItems = JSON.parse(localStorage.getItem('savedLineItems')||'[]');
 let venues = []; // venues database
+let roadmap = []; // roadmap / feature backlog
 
 // Toast
 let _toastTimer;
@@ -252,6 +254,7 @@ async function _saveInquiry(i){
 }
 async function _saveChecklist(eid,items){ try{ await db.collection('checklists').doc(eid).set({items,ts:Date.now()}); }catch(err){ console.error(err); } }
 async function _saveVenue(v){ try{ await venuesCol.doc(v.id).set(v); }catch(err){ console.error(err); } }
+async function _saveRoadmap(r){ try{ await roadmapCol.doc(r.id).set(r); }catch(err){ console.error(err); } }
 
 function autoSaveVenue(name, addr){
   if(!name || !addr) return;
@@ -370,6 +373,9 @@ function startFirebaseListeners(){
   groceryListsCol.onSnapshot( snap=>{ groceryLists={}; snap.docs.forEach(d=>{ groceryLists[d.id]=d.data(); }); if(currentView==='grocery') render(); });
   activityCol = db.collection('activity');
   activityCol.onSnapshot( snap=>{ activityLog=snap.docs.map(d=>d.data()); if(_actOpenInqId) renderActivityLogBody(); });
+  roadmapCol = db.collection('roadmap');
+  roadmapCol.onSnapshot( snap=>{ roadmap=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='roadmap') render(); });
+  try{ seedRoadmapIfEmpty(); }catch(e){ console.warn('roadmap seed skipped:',e); }
 }
 
 async function seedIfEmpty(){
@@ -601,7 +607,7 @@ const roles = {
 };
 
 /* ===================== LOGIN / ACCESS CONTROL (added) ===================== */
-const ALL_SECTIONS = ['home','pipeline','clients','events','coversheet','schedule','checklists','changes','invoices','reports','grocery','equipment','venues','email','trash','settings'];
+const ALL_SECTIONS = ['home','pipeline','clients','events','coversheet','schedule','checklists','changes','invoices','reports','grocery','equipment','venues','roadmap','email','trash','settings'];
 const access = {
   admin:   ALL_SECTIONS.slice(),
   kenny:   ALL_SECTIONS.slice(),
@@ -794,6 +800,7 @@ function render(){
            currentView==='grocery'   ? renderGrocery()   :
            currentView==='equipment' ? renderEquipment() :
            currentView==='venues'    ? renderVenues()    :
+           currentView==='roadmap'   ? renderRoadmap()   :
            currentView==='trash'     ? renderTrash()     :
            currentView==='email'     ? '<div id="emailPlaceholder"></div>' :
            currentView==='settings'  ? renderSettings()  : '';
@@ -6892,6 +6899,220 @@ async function deleteVenue(id){
   showToast('Venue deleted');
   if(currentView==='venues') render();
 }
+
+/* ===================== ROADMAP ===================== */
+const ROADMAP_CATEGORIES = ['Documents','Client experience','Communication','Purchasing','Operations','Floor plans','Files','Other'];
+const ROADMAP_BUCKETS = [
+  {key:'building', label:'Building now', icon:'ti-hammer',      bg:'var(--blue-bg)',  text:'var(--blue-text)',  border:'var(--blue-mid)'},
+  {key:'next',     label:'Up next',      icon:'ti-arrow-right', bg:'var(--amber-bg)', text:'var(--amber-text)', border:'var(--amber-border)'},
+  {key:'later',    label:'Later',        icon:'ti-list',        bg:'var(--bg2)',      text:'var(--text2)',      border:'var(--border)'},
+  {key:'done',     label:'Shipped',      icon:'ti-circle-check',bg:'var(--green-bg)', text:'var(--green-text)', border:'var(--green-text)'},
+];
+
+function renderRoadmap(){
+  const canEdit = !!(roles[currentRole]||{}).canEdit;
+  const counts = {};
+  ROADMAP_BUCKETS.forEach(b=>counts[b.key]=roadmap.filter(r=>(r.status||'later')===b.key).length);
+
+  let h = `<div class="section-header">
+    <div class="section-title">Roadmap</div>
+    ${canEdit?`<button class="add-btn" onclick="openRoadmapModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add idea</button>`:''}
+  </div>
+  <div style="font-size:13px;color:var(--text3);margin:-6px 0 16px">What's built, what's being built, and everything planned. ${canEdit?'Change a status to move an item between columns.':''}</div>`;
+
+  // stat strip
+  h += `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">
+    ${ROADMAP_BUCKETS.map(b=>`<div style="flex:1;min-width:120px;background:${b.bg};border:0.5px solid ${b.border};border-radius:var(--radius-lg);padding:10px 14px">
+      <div style="font-size:22px;font-weight:700;color:${b.text};line-height:1">${counts[b.key]}</div>
+      <div style="font-size:11px;color:${b.text};text-transform:uppercase;letter-spacing:.05em;margin-top:3px"><i class="ti ${b.icon}" style="font-size:12px"></i> ${b.label}</div>
+    </div>`).join('')}
+  </div>`;
+
+  if(roadmap.length===0){
+    h += `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:2.5rem;text-align:center;color:var(--text2)">
+      <i class="ti ti-map-2" style="font-size:32px;margin-bottom:1rem;display:block;color:var(--text3)"></i>
+      <div style="font-size:15px;font-weight:500;margin-bottom:.5rem">No roadmap items yet</div>
+      <div style="font-size:13px;color:var(--text3)">${canEdit?'Click "Add idea" to capture the first one.':'Items will appear here as they are added.'}</div>
+    </div>`;
+    return h;
+  }
+
+  ROADMAP_BUCKETS.forEach(b=>{
+    const items = roadmap.filter(r=>(r.status||'later')===b.key)
+      .sort((a,b)=>(a.order||0)-(b.order||0) || (a.createdAtTs||0)-(b.createdAtTs||0));
+    if(items.length===0) return;
+    const isDone = b.key==='done';
+    h += `<div style="margin-bottom:22px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <i class="ti ${b.icon}" style="font-size:16px;color:${b.text}"></i>
+        <span style="font-size:14px;font-weight:600;color:var(--text)">${b.label}</span>
+        <span style="font-size:12px;color:var(--text3)">${items.length}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px">
+        ${items.map(r=>roadmapCard(r,b,canEdit,isDone)).join('')}
+      </div>
+    </div>`;
+  });
+  return h;
+}
+
+function roadmapCard(r,b,canEdit,isDone){
+  const statusSel = canEdit ? `<select onchange="setRoadmapStatus('${r.id}',this.value)" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 6px;border:0.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text2);cursor:pointer">
+      ${ROADMAP_BUCKETS.map(x=>`<option value="${x.key}" ${x.key===(r.status||'later')?'selected':''}>${x.label}</option>`).join('')}
+    </select>` : '';
+  const actions = canEdit ? `<div style="display:flex;gap:2px">
+      <button class="icon-btn" onclick="event.stopPropagation();editRoadmap('${r.id}')" title="Edit" style="width:26px;height:26px"><i class="ti ti-edit" style="font-size:14px"></i></button>
+      <button class="icon-btn" onclick="event.stopPropagation();deleteRoadmapItem('${r.id}')" title="Delete" style="width:26px;height:26px;color:#e05c5c"><i class="ti ti-trash" style="font-size:14px"></i></button>
+    </div>` : '';
+  return `<div class="event-card" style="border-left:3px solid ${b.border};${isDone?'opacity:.78':''}">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:5px">
+      <div style="font-size:14px;font-weight:600;color:var(--text);${isDone?'text-decoration:line-through;text-decoration-color:var(--text3)':''}">${esc(r.title||'(untitled)')}</div>
+      ${actions}
+    </div>
+    ${r.category?`<span style="display:inline-block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);background:var(--bg2);border:0.5px solid var(--border);border-radius:6px;padding:1px 7px;margin-bottom:6px">${esc(r.category)}</span>`:''}
+    ${r.detail?`<div style="font-size:12px;color:var(--text2);line-height:1.45;margin-bottom:8px">${esc(r.detail)}</div>`:''}
+    ${statusSel?`<div style="margin-top:4px">${statusSel}</div>`:''}
+  </div>`;
+}
+
+function openRoadmapModal(){
+  document.getElementById('roadmapModal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'roadmapModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
+  m.innerHTML = `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Add roadmap idea</div>
+    <div class="modal-row"><label>Title</label><input type="text" id="rm-title" placeholder="Short name for the feature"></div>
+    <div class="modal-row"><label>Category</label><select id="rm-category">${ROADMAP_CATEGORIES.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>
+    <div class="modal-row"><label>Status</label><select id="rm-status">${ROADMAP_BUCKETS.map(b=>`<option value="${b.key}" ${b.key==='later'?'selected':''}>${b.label}</option>`).join('')}</select></div>
+    <div class="modal-row"><label>Details (optional)</label><textarea id="rm-detail" placeholder="What it should do, decisions already made, etc." style="min-height:80px"></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem">
+      <button class="btn-cancel" onclick="document.getElementById('roadmapModal').remove()">Cancel</button>
+      <button class="btn-save" onclick="saveNewRoadmap()">Save idea</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  setTimeout(()=>document.getElementById('rm-title')?.focus(),50);
+}
+
+function saveNewRoadmap(){
+  const title = document.getElementById('rm-title')?.value?.trim();
+  if(!title){ alert('Please enter a title.'); return; }
+  const maxOrder = roadmap.reduce((mx,r)=>Math.max(mx, r.order||0), 0);
+  const r = {
+    id: 'rm_'+Date.now(),
+    title,
+    category: document.getElementById('rm-category')?.value || 'Other',
+    status: document.getElementById('rm-status')?.value || 'later',
+    detail: document.getElementById('rm-detail')?.value?.trim() || '',
+    order: maxOrder + 1,
+    createdAtTs: Date.now(),
+    createdAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+  };
+  roadmap.push(r);
+  _saveRoadmap(r);
+  document.getElementById('roadmapModal')?.remove();
+  showToast('Idea added ✓');
+  if(currentView==='roadmap') render();
+}
+
+function editRoadmap(id){
+  const r = roadmap.find(x=>x.id===id);
+  if(!r) return;
+  document.getElementById('roadmapModal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'roadmapModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
+  m.innerHTML = `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Edit roadmap idea</div>
+    <div class="modal-row"><label>Title</label><input type="text" id="rm-title" value="${(r.title||'').replace(/"/g,'&quot;')}"></div>
+    <div class="modal-row"><label>Category</label><select id="rm-category">${ROADMAP_CATEGORIES.map(c=>`<option value="${c}" ${c===r.category?'selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="modal-row"><label>Status</label><select id="rm-status">${ROADMAP_BUCKETS.map(b=>`<option value="${b.key}" ${b.key===(r.status||'later')?'selected':''}>${b.label}</option>`).join('')}</select></div>
+    <div class="modal-row"><label>Details (optional)</label><textarea id="rm-detail" style="min-height:80px">${r.detail||''}</textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem">
+      <button class="btn-cancel" onclick="document.getElementById('roadmapModal').remove()">Cancel</button>
+      <button class="btn-save" onclick="updateRoadmap('${id}')">Save changes</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+function updateRoadmap(id){
+  const r = roadmap.find(x=>x.id===id);
+  if(!r) return;
+  r.title = document.getElementById('rm-title')?.value?.trim() || r.title;
+  r.category = document.getElementById('rm-category')?.value || r.category;
+  r.status = document.getElementById('rm-status')?.value || r.status;
+  r.detail = document.getElementById('rm-detail')?.value?.trim() || '';
+  _saveRoadmap(r);
+  document.getElementById('roadmapModal')?.remove();
+  showToast('Idea updated ✓');
+  if(currentView==='roadmap') render();
+}
+
+function setRoadmapStatus(id, status){
+  const r = roadmap.find(x=>x.id===id);
+  if(!r) return;
+  r.status = status;
+  _saveRoadmap(r);
+  showToast('Moved to '+(ROADMAP_BUCKETS.find(b=>b.key===status)?.label||status));
+  if(currentView==='roadmap') render();
+}
+
+async function deleteRoadmapItem(id){
+  const r = roadmap.find(x=>x.id===id);
+  if(!confirm('Delete "'+(r?.title||'this item')+'" from the roadmap?')) return;
+  roadmap = roadmap.filter(x=>x.id!==id);
+  try{ await roadmapCol.doc(id).delete(); }catch(e){ console.error(e); }
+  showToast('Deleted');
+  if(currentView==='roadmap') render();
+}
+
+// Seed the roadmap once, from the locked decisions in the session summaries.
+async function seedRoadmapIfEmpty(){
+  if(!roadmapCol) return;
+  const snap = await roadmapCol.get();
+  if(!snap.empty) return;
+  const seed = [
+    {title:'Event numbering (YY-MMDD-NN)', category:'Operations', status:'done', detail:'Per-week event numbers based on the W/E Sunday date, with old numbers preserved for rollback.'},
+    {title:'Roadmap tab', category:'Operations', status:'done', detail:'This page — a living list of what is built, building, and planned.'},
+    {title:'Card + drawer redesign', category:'Operations', status:'next', detail:'New event card and slide-in drawer: document groups + Venue section, payment borders (dashed/solid, colorblind-safe), loud allergy banner, Contact Client button.'},
+    {title:'BEO (Banquet Event Order)', category:'Documents', status:'next', detail:'Single doc with shared header + stacked per-meal sections, adaptive paging, 3-state payment status, no dollar amounts.'},
+    {title:'Document footer rule (all PDFs)', category:'Documents', status:'next', detail:'Every generated document carries event #, doc type, revision counter, and date/time generated.'},
+    {title:'Text / WhatsApp in Contact Client', category:'Communication', status:'next', detail:'Email works today. Add SMS (pending A2P 10DLC) and WhatsApp (pending Meta approval).'},
+    {title:'Create event paperwork (combined PDF)', category:'Documents', status:'later', detail:'Pick documents + copies, combine into one PDF in order with section dividers, then download/print/email.'},
+    {title:'Contract document (e-signable)', category:'Documents', status:'later', detail:'Sent on booking, stored permanently, green checkmark when signed.'},
+    {title:'Equipment list (rebuild)', category:'Documents', status:'later', detail:'Current version needs significant work.'},
+    {title:'Grocery list (rebuild)', category:'Documents', status:'later', detail:'Current version needs significant work.'},
+    {title:'Final checklist document', category:'Documents', status:'later', detail:''},
+    {title:'Linen order form', category:'Documents', status:'later', detail:''},
+    {title:'Client portal', category:'Client experience', status:'later', detail:'Client-facing view of select docs, two-way chat thread, and notifications in both directions.'},
+    {title:'After-event: photos + survey', category:'Client experience', status:'later', detail:'Event photos and a post-event client survey.'},
+    {title:'Floor plan(s) + floor plan app link', category:'Floor plans', status:'later', detail:''},
+    {title:'Uploaded files section', category:'Files', status:'later', detail:'Insurance, client logo, buffet/table signs.'},
+    {title:'Saved per-user email signatures', category:'Communication', status:'later', detail:'Currently auto-generated.'},
+    {title:'Send client emails as kenny@ / shelley@', category:'Communication', status:'later', detail:'Client emails currently always send from events@.'},
+    {title:'Reports (price lists, etc.)', category:'Purchasing', status:'later', detail:'Current price list, lowest vendor by product, price changes this month, expired quotes, products missing prices.'},
+    {title:'Inventory management', category:'Purchasing', status:'later', detail:'Track what is actually on hand.'},
+    {title:'Recipe costing', category:'Purchasing', status:'later', detail:'Tie products to event menus.'},
+    {title:'Auto-PO from event menus', category:'Purchasing', status:'later', detail:'Generate purchase orders automatically from an event menu.'},
+    {title:'Dashboard recent activity expanded', category:'Purchasing', status:'later', detail:'Include orders and replies, not just items.'},
+    {title:'Alert snoozing', category:'Purchasing', status:'later', detail:''},
+    {title:'Prettier order PDF', category:'Purchasing', status:'later', detail:''},
+    {title:'Hub drawer remembers open client', category:'Operations', status:'later', detail:'Keep the open client across page reloads.'},
+    {title:'Fix Settings "Test events relay" message', category:'Operations', status:'later', detail:'It probes GET while parseInvoice is POST-only, so it wrongly reports parseInvoice as missing.'},
+  ];
+  const batch = db.batch();
+  const now = Date.now();
+  const today = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  seed.forEach((s,i)=>{
+    const id = 'rm_seed_'+i;
+    batch.set(roadmapCol.doc(id), {...s, order:i+1, createdAtTs:now+i, createdAt:today});
+  });
+  await batch.commit();
+  console.log('[roadmap] seeded '+seed.length+' items');
+}
+/* =================== END ROADMAP =================== */
 
 
 function showVenuePopup(eid){
