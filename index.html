@@ -674,6 +674,37 @@ async function renumberWeek(weekStr){
   }
 }
 
+// Click the pencil / number on a cover-sheet row to set THIS event's number.
+// Type just a number (2) or a number+letter for a sub-meal base (2a); it's
+// stored in the canonical YY-MMDD-NN form for the event's week. Updates both
+// `job` (screens) and `eventNumber` (paperwork). Warns on a duplicate but lets
+// you proceed if you mean it.
+function editJobNum(id){
+  const e = events.find(x => x.id === id);
+  if(!e) return;
+  if(!e.weekOf){ alert('Set an event date first — the app numbers events within their week, so it needs to know the date.'); return; }
+  const cur = parseSeqToken(seqFromAny(e.eventNumber || e.job));
+  const curStr = cur ? (cur.num + cur.letter) : '';
+  const input = prompt('Number for "' + (e.name || 'this event') + '"\n\nEnter just the number (e.g. 2). For a sub-meal base you can add a letter (e.g. 2a).', curStr);
+  if(input === null) return;                 // cancelled
+  const t = parseSeqToken(String(input).trim());
+  if(!t){ alert('Please enter a number like 2, or 2a.'); return; }
+  // Heads-up if another event the same week already uses this number.
+  const clash = events.find(x => {
+    if(x.id === id || (x.weekOf || '') !== e.weekOf) return false;
+    const tt = parseSeqToken(seqFromAny(x.eventNumber || x.job));
+    return tt && tt.num === t.num && tt.letter === t.letter;
+  });
+  if(clash && !confirm('Another event this week (' + (clash.name || 'unnamed') + ') already uses #' + String(t.num).padStart(2,'0') + t.letter + '.\n\nUse this number anyway?')) return;
+  const full = makeEventNumber(e.weekOf, t.num + t.letter);
+  if(!full){ alert('Could not build the number — is the event date valid?'); return; }
+  e.job = full; e.eventNumber = full;
+  _saveEvent(e);
+  render();
+  showToast('Event number set to ' + shortEventNumber(full) + ' \u2713');
+}
+window.editJobNum = editJobNum;
+
 const roles = {
   admin:   {canEdit:true, showStaff:true, showLinks:true, canViewInvoices:true,  canViewReports:true},
   kenny:   {canEdit:true, showStaff:true, showLinks:true, canViewInvoices:true,  canViewReports:true},
