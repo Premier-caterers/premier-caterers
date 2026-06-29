@@ -2200,6 +2200,31 @@ function drawerDocuments(inq, role){
     ${_docGroup('After the event', after)}`;
 }
 
+function _hubCard(title, inner){
+  if(!inner || !String(inner).trim()) return '';
+  return `<div style="background:var(--bg);border:0.5px solid var(--border2);border-radius:12px;padding:4px 14px 14px;margin-bottom:12px"><div class="hub-sec">${title} <span class="rule"></span></div>${inner}</div>`;
+}
+function _hubCardWrap(inner){
+  if(!inner || !String(inner).trim()) return '';
+  return `<div style="background:var(--bg);border:0.5px solid var(--border2);border-radius:12px;padding:4px 14px 14px;margin-bottom:12px">${inner}</div>`;
+}
+function _hubPayPill(inq, role){
+  if(!role.canViewInvoices) return '';
+  const est=inq.estimate;
+  if(!(est && Array.isArray(est.lines) && est.lines.length)) return '';
+  const t=calcInvoiceTotals(est); const dep=parseFloat(est.deposit||0); const bal=t.grand-dep;
+  const isInv=est.status==='invoice'||est.status==='paid';
+  let lbl, css;
+  if(t.grand>0 && bal<=0.01){ lbl='Paid in full'; css='color:var(--blue-text);background:var(--blue-bg);border:1.5px solid var(--blue-mid)'; }
+  else if(dep>0.01){ lbl='Partial \u2014 collect balance'; css='color:#854F0B;background:#FAEEDA;border:1.5px solid #BA7517'; }
+  else { lbl=isInv?'Not paid \u2014 collect':'Estimate \u2014 not paid'; css='color:#854F0B;background:#FAEEDA;border:1.5px dashed #BA7517'; }
+  return `<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:8px;padding:4px 10px;${css}"><i class="ti ti-circle-half-2" style="font-size:13px"></i>${lbl}</span>`;
+}
+function _hubChip(txt){
+  if(!txt) return '';
+  return `<span style="display:inline-flex;align-items:center;font-size:12px;color:var(--text2);background:var(--bg2);border:0.5px solid var(--border2);border-radius:20px;padding:4px 11px">${pcEsc(txt)}</span>`;
+}
+
 function renderInqDetail(inq, role){
   const rows = (label,val) => val ? `<div class="drow"><span class="dkey">${label}</span><span class="dval">${val}</span></div>` : '';
   const fact = (k,v) => v ? `<div class="hub-fact"><div class="k">${k}</div><div class="v">${v}</div></div>` : '';
@@ -2269,47 +2294,25 @@ function renderInqDetail(inq, role){
       <div class="hub-eyebrow">${stageName}${contact?' \u00b7 '+contact:''}</div>
       <div class="hub-name">${inq.eventName||name||'Event'}</div>
       <div class="hub-when">${whenBits.join(' \u00b7 ')||'&nbsp;'}</div>
-      ${pillBits.length?`<div class="hub-pill"><span style="width:7px;height:7px;border-radius:50%;background:#fff;display:inline-block"></span>${pillBits.join(' \u00b7 ')}</div>`:''}
     </div>
     <div class="hub-body">
       ${(()=>{ const a=inqAllergies(inq);
         if(a) return `<div title="Allergy alert" style="display:flex;align-items:center;gap:9px;background:#C81E1E;color:#fff;border-radius:9px;padding:10px 13px;margin-bottom:14px;font-weight:700;font-size:13.5px;line-height:1.35;box-shadow:0 1px 4px rgba(200,30,30,.4)"><i class="ti ti-alert-triangle" style="font-size:20px;flex-shrink:0"></i><span style="flex:1;min-width:0">ALLERGY ALERT: ${pcEsc(a)}</span>${role.canEdit?`<button onclick="editAllergies('${inq.id}')" title="Edit allergy note" style="background:rgba(255,255,255,.22);border:none;color:#fff;border-radius:6px;padding:4px 7px;cursor:pointer;flex-shrink:0"><i class="ti ti-edit" style="font-size:14px"></i></button>`:''}</div>`;
         if(role.canEdit) return `<button onclick="editAllergies('${inq.id}')" style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;padding:4px 10px;border:0.5px dashed #C81E1E;border-radius:7px;background:transparent;color:#C81E1E;cursor:pointer;margin-bottom:12px;font-family:inherit"><i class="ti ti-alert-triangle" style="font-size:13px"></i>Add allergy alert</button>`;
         return ''; })()}
-      ${moneyHtml}
-      <div class="hub-facts">
-        ${fact('Client', name)}
-        ${fact('Phone', inq.phone)}
-        ${fact('Email', inq.email)}
-        ${fact('Event type', inq.eventType)}
-        ${fact('Venue', inq.venueName)}
-        ${fact('Party planner', inq.plannerName)}
+      <div style="background:var(--bg);border:0.5px solid var(--border2);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:7px;align-items:center">
+        ${_hubPayPill(inq, role)}
+        ${_hubChip(inq.guestCount?inq.guestCount+' guests':'')}
+        ${_hubChip(inq.meatDairy)}
+        ${_hubChip(inq.eventDate?formatDate(inq.eventDate):'')}
+        ${_hubChip(inq.cuisine)}
       </div>
-      ${hubAiCard(inq)}
-      ${drawerVenue(inq)}
-      ${drawerDocuments(inq, role)}
-      <div class="hub-grid2">
-        <div>
-          <div class="hub-sec">Menu <span class="rule"></span></div>
-          <div style="display:flex;flex-direction:column;gap:10px">
-            ${menuHtml}
-            <div style="margin-top:2px">
-              <button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:inherit"><i class="ti ti-link" style="font-size:14px"></i>${(Array.isArray(inq.menus)&&inq.menus.length)||inq.menuLink?'Add another link':'Attach menu manually'}</button>
-              <button onclick="openTemplatePicker('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-left:6px;font-family:inherit"><i class="ti ti-file-plus" style="font-size:14px"></i>Create menu from template</button>
-            </div>
-          </div>
-          ${refHtml}
-          ${notesHtml}
-        </div>
-        <div>
-          <div class="hub-sec">Activity <span class="rule"></span></div>
-          ${hubTimeline(inq,6)}
-          <div style="margin-top:11px">
-            <button onclick="openActivityLog('${inq.id}')" style="font-size:12px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:inherit"><i class="ti ti-history" style="font-size:15px"></i>Full activity log${_actCountFor(inq.id)?(' \u00b7 '+_actCountFor(inq.id)):''}</button>
-          </div>
-        </div>
-      </div>
-      ${renderEstimateBlock(inq, role)}
+      ${_hubCardWrap(drawerDocuments(inq, role))}
+      ${role.canViewInvoices ? _hubCard('Money &amp; estimate', (moneyHtml||'') + renderEstimateBlock(inq, role)) : ''}
+      ${_hubCard('Menu', `<div style="display:flex;flex-direction:column;gap:10px">${menuHtml}<div style="margin-top:2px"><button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:inherit"><i class="ti ti-link" style="font-size:14px"></i>${(Array.isArray(inq.menus)&&inq.menus.length)||inq.menuLink?'Add another link':'Attach menu manually'}</button><button onclick="openTemplatePicker('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-left:6px;font-family:inherit"><i class="ti ti-file-plus" style="font-size:14px"></i>Create menu from template</button></div></div>`)}
+      ${_hubCardWrap(drawerVenue(inq))}
+      ${_hubCard('Details', `<div class="hub-facts">${fact('Client', name)}${fact('Phone', inq.phone)}${fact('Email', inq.email)}${fact('Event type', inq.eventType)}${fact('Party planner', inq.plannerName)}</div>${hubAiCard(inq)||''}${refHtml}${notesHtml}`)}
+      ${_hubCard('Activity', `${hubTimeline(inq,6)}<div style="margin-top:11px"><button onclick="openActivityLog('${inq.id}')" style="font-size:12px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:inherit"><i class="ti ti-history" style="font-size:15px"></i>Full activity log${_actCountFor(inq.id)?(' (' + _actCountFor(inq.id) + ')'):''}</button></div>`)}
     </div>
   </div>`;
 }
@@ -2676,6 +2679,8 @@ function syncHubDrawer(){
     // Preserve scroll position and active element across the re-render so editing an
     // estimate/invoice field doesn't bounce the drawer back to the top.
     const _prevScroll = dr.scrollTop || 0;
+    const _prevBody = dr.querySelector('.hub-body');
+    const _prevBodyScroll = _prevBody ? _prevBody.scrollTop : 0;
     const _activeEl = document.activeElement;
     let _activeMeta = null;
     if(_activeEl && dr.contains(_activeEl) && _activeEl.tagName){
@@ -2697,6 +2702,9 @@ function syncHubDrawer(){
     requestAnimationFrame(()=>{ dr.classList.add('show'); sc.classList.add('show'); });
     // Restore scroll first (cheap) — then refocus the equivalent input if we can find it.
     dr.scrollTop = _prevScroll;
+    const _newBody = dr.querySelector('.hub-body');
+    if(_newBody) _newBody.scrollTop = _prevBodyScroll;
+    requestAnimationFrame(()=>{ try{ dr.scrollTop = _prevScroll; const nb = dr.querySelector('.hub-body'); if(nb) nb.scrollTop = _prevBodyScroll; }catch(e){} });
     if(_activeMeta && _activeMeta.signature){
       try{
         let candidate = null;
