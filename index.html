@@ -2071,6 +2071,7 @@ function renderPipeline(){
           ${inq.email ? `<span><i class="ti ti-mail" style="font-size:11px"></i>${inq.email}</span>` : ''}
         </div>
         ${plCardFoot(inq)}
+        ${cardDocIcons(inq, role)}
         ${role.canEdit ? `<div class="inq-actions">
           ${s.key==='new' ? `<button class="stage-btn stage-menu_sent" onclick="event.stopPropagation();moveInquiry('${inq.id}','menu_sent')">Mark menu sent</button>` : ''}
           ${s.key!=='new' && s.key!=='lost' && s.key!=='past' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();moveInquiry('${inq.id}','new')"><i class="ti ti-arrow-back-up" style="font-size:11px"></i> Move to new</button>` : ''}
@@ -2113,6 +2114,92 @@ function hubTimeline(inq, limit){
   const more = items.length>shown.length ? `<div style="font-size:11px;color:var(--text3);padding:7px 0 0">+${items.length-shown.length} more in the activity log</div>` : '';
   return body + more;
 }
+// ── DOCUMENT LAUNCHERS (card icon row + drawer document groups) ──
+// Working features open the real tool; everything not built yet shows an amber
+// "coming soon" dot and a toast. Mirrors the roadmap.
+function openInqMenuQuick(id){
+  const inq=inquiries.find(x=>x.id===id); if(!inq) return;
+  const url = (Array.isArray(inq.menus)&&inq.menus[0]&&inq.menus[0].url) || inq.menuLink;
+  if(url){ window.open(url,'_blank'); }
+  else { selectInquiry(id); showToast('No menu yet — opening details'); }
+}
+function gotoVenue(id){ showView('venues'); setTimeout(()=>{ try{ openVenueDetail(id); document.getElementById('venueDetail')?.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} }, 120); }
+
+function cardDocIcons(inq, role){
+  const id = inq.id;
+  const ic = (icon,label,onclick,soon,show=true) => show?`<button onclick="event.stopPropagation();${onclick}" title="${label}${soon?' — coming soon':''}" style="position:relative;width:30px;height:30px;border:0.5px solid var(--border2);border-radius:7px;background:${soon?'var(--bg)':'var(--bg2)'};color:${soon?'var(--text3)':'var(--text2)'};cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><i class="ti ${icon}" style="font-size:15px"></i>${soon?'<span style="position:absolute;top:-3px;right:-3px;width:8px;height:8px;border-radius:50%;background:var(--amber-text);border:1.5px solid var(--bg)"></span>':''}</button>`:'';
+  const soon = `showToast('Coming soon')`;
+  return `<div style="display:flex;align-items:center;gap:6px;margin:8px 0 2px">
+    ${ic('ti-file-text','Menu(s)',`openInqMenuQuick('${id}')`,false)}
+    ${ic('ti-file-invoice','Estimate / Invoice',`viewClientQuote('${id}')`,false,role.canViewInvoices)}
+    ${ic('ti-tool','Equipment list',soon,true)}
+    ${ic('ti-shopping-cart','Grocery list',soon,true)}
+    ${ic('ti-checklist','Final checklist',soon,true)}
+    <button onclick="event.stopPropagation();selectInquiry('${id}')" title="Open full details" style="margin-left:auto;width:30px;height:30px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><i class="ti ti-chevron-right" style="font-size:16px"></i></button>
+  </div>`;
+}
+
+function _docBtn(label, icon, soon, onclick){
+  return `<button onclick="${soon?`showToast('Coming soon')`:onclick}" title="${label}${soon?' — coming soon':''}" style="position:relative;display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:7px 11px;border:0.5px solid var(--border2);border-radius:8px;background:${soon?'var(--bg)':'var(--bg2)'};color:${soon?'var(--text3)':'var(--text)'};cursor:pointer;font-family:inherit">
+    <i class="ti ${icon}" style="font-size:14px"></i>${label}
+    ${soon?'<span style="position:absolute;top:-4px;right:-4px;width:9px;height:9px;border-radius:50%;background:var(--amber-text);border:1.5px solid var(--bg)" title="Coming soon"></span>':''}
+  </button>`;
+}
+function _docGroup(title, btnsHtml){
+  if(!btnsHtml.replace(/\s/g,'')) return '';
+  return `<div style="margin-bottom:14px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:7px">${title}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:7px">${btnsHtml}</div>
+  </div>`;
+}
+function drawerVenue(inq){
+  const vname = inq.venueName||'';
+  const vaddr = inq.venueLocation||inq.addr||'';
+  if(!vname && !vaddr) return '';
+  let match=null;
+  try{ match = venues.find(v=> (vname && (v.name||'').toLowerCase()===vname.toLowerCase()) || (vaddr && (v.addr||'').toLowerCase()===vaddr.toLowerCase())); }catch(e){}
+  return `<div class="hub-sec">Venue <span class="rule"></span></div>
+   <div style="display:flex;align-items:flex-start;gap:9px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:9px;padding:10px 12px;margin-bottom:14px">
+     <i class="ti ti-building" style="font-size:18px;color:var(--text3);flex-shrink:0;margin-top:1px"></i>
+     <div style="flex:1;min-width:0">
+       <div style="font-size:13px;font-weight:600;color:var(--text)">${pcEsc(vname||vaddr)}</div>
+       ${vname&&vaddr?`<div style="font-size:12px;color:var(--text3);margin-top:2px"><i class="ti ti-map-pin" style="font-size:11px"></i> ${pcEsc(vaddr)}</div>`:''}
+       ${match?`<button onclick="gotoVenue('${match.id}')" style="font-size:11px;padding:3px 9px;margin-top:7px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);cursor:pointer"><i class="ti ti-external-link" style="font-size:11px"></i> Venue info page</button>`:''}
+     </div>
+   </div>`;
+}
+function drawerDocuments(inq, role){
+  const id=inq.id;
+  const docs = [
+    _docBtn('Menu(s)','ti-file-text',false,`openInqMenuQuick('${id}')`),
+    role.canViewInvoices?_docBtn('Estimate / Invoice','ti-file-invoice',false,`viewClientQuote('${id}')`):'',
+    _docBtn('Equipment list','ti-tool',true,''),
+    _docBtn('Grocery list','ti-shopping-cart',true,''),
+    _docBtn('Final checklist','ti-checklist',true,''),
+    _docBtn('Linen order form','ti-wash',true,''),
+    _docBtn('BEO','ti-clipboard-list',true,''),
+    _docBtn('Contract','ti-file-certificate',true,''),
+  ].join('');
+  const floor = [
+    _docBtn('Floor plan(s)','ti-layout-2',true,''),
+    _docBtn('Open floor plan app','ti-app-window',true,''),
+  ].join('');
+  const files = [
+    _docBtn('Insurance','ti-shield',true,''),
+    _docBtn('Client logo','ti-photo',true,''),
+    _docBtn('Buffet & table signs','ti-signature',true,''),
+  ].join('');
+  const after = [
+    _docBtn('Event photos','ti-camera',true,''),
+    _docBtn('Post-event survey','ti-message-2',true,''),
+  ].join('');
+  return `<div class="hub-sec">Event documents <span class="rule"></span></div>
+    ${_docGroup('Documents', docs)}
+    ${_docGroup('Floor plans', floor)}
+    ${_docGroup('Uploaded files', files)}
+    ${_docGroup('After the event', after)}`;
+}
+
 function renderInqDetail(inq, role){
   const rows = (label,val) => val ? `<div class="drow"><span class="dkey">${label}</span><span class="dval">${val}</span></div>` : '';
   const fact = (k,v) => v ? `<div class="hub-fact"><div class="k">${k}</div><div class="v">${v}</div></div>` : '';
@@ -2199,6 +2286,8 @@ function renderInqDetail(inq, role){
         ${fact('Party planner', inq.plannerName)}
       </div>
       ${hubAiCard(inq)}
+      ${drawerVenue(inq)}
+      ${drawerDocuments(inq, role)}
       <div class="hub-grid2">
         <div>
           <div class="hub-sec">Menu <span class="rule"></span></div>
