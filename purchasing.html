@@ -151,6 +151,31 @@ tbody tr:hover{background:var(--bg2)}
 .bulk-actions .left{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .bulk-status{font-size:12px;color:var(--text3)}
 .bulk-status.err{color:var(--maroon);font-weight:600}
+
+/* ── scan invoice ── */
+.scan-step{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:18px 20px;margin-bottom:14px}
+.scan-step h3{font-family:'Fraunces',Georgia,serif;font-size:16px;font-weight:600;margin-bottom:5px;color:var(--text)}
+.scan-step .desc{font-size:12.5px;color:var(--text3);margin-bottom:11px}
+.scan-drop{border:2px dashed var(--border2);border-radius:12px;padding:30px 20px;text-align:center;background:var(--bg2);cursor:pointer;transition:border-color .15s,background .15s}
+.scan-drop:hover,.scan-drop.over{border-color:var(--maroon);background:var(--maroon-tint)}
+.scan-drop .big{font-family:'Fraunces',Georgia,serif;font-size:17px;color:var(--text);margin-bottom:4px}
+.scan-drop .small{font-size:12px;color:var(--text3)}
+.scan-drop .icons{font-size:32px;color:var(--brass-deep);margin-bottom:6px}
+.scan-files{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.scan-file{display:flex;align-items:center;gap:9px;padding:7px 11px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12.5px}
+.scan-file .name{flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scan-file .size{color:var(--text3);font-size:11px}
+.scan-file button{border:none;background:transparent;color:var(--text3);cursor:pointer;font-size:14px;padding:4px}
+.scan-progress{display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--brass-tint);border:1px solid var(--brass);border-radius:9px;font-size:13px;color:var(--brass-deep)}
+.scan-progress .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--brass);border-top-color:transparent;border-radius:50%;animation:scanSpin 1s linear infinite}
+@keyframes scanSpin{to{transform:rotate(360deg)}}
+.scan-err{background:#fdebe9;border:1px solid var(--maroon);color:var(--maroon-deep);padding:11px 14px;border-radius:8px;font-size:13px;margin-top:8px}
+.match-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:11px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.match-pill.matched{background:var(--green-bg);color:var(--green-text)}
+.match-pill.new{background:var(--brass-tint);color:var(--brass-deep)}
+.match-pill.uncertain{background:#fdebe9;color:var(--maroon-deep)}
+.scan-meta{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--text2);padding:6px 0 12px;border-bottom:1px solid var(--border);margin-bottom:12px}
+.scan-meta b{color:var(--text);font-family:'Fraunces',Georgia,serif}
 .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px}
 .dash-tile{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--shadow)}
 .dash-tile .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);font-weight:600}
@@ -307,6 +332,7 @@ tbody tr:hover{background:var(--bg2)}
     <button class="tab" data-view="items" onclick="showView('items')">All Items</button>
     <button class="tab" data-view="products" onclick="showView('products')">Our Products</button>
     <button class="tab" data-view="vendors" onclick="showView('vendors')">Vendors</button>
+    <button class="tab" data-view="scan" onclick="showView('scan')"><i class="ti ti-scan"></i> Scan Invoice</button>
     <button class="tab" data-view="replies" onclick="showView('replies')"><i class="ti ti-message-circle-2"></i> Vendor Replies <span class="tab-badge" id="repliesBadge"></span></button>
     <button class="tab" data-view="orderhist" onclick="showView('orderhist')">Order History</button>
   </div>
@@ -353,6 +379,11 @@ tbody tr:hover{background:var(--bg2)}
         <button class="btn" id="addVendorBtn" onclick="openVendor()"><i class="ti ti-plus"></i> Add vendor</button>
       </div>
       <div class="card"><div id="vendorsTable"></div></div>
+    </div>
+
+    <div class="view" id="view-scan">
+      <div class="row-head"><div class="title">Scan Invoice</div></div>
+      <div id="scanBody"></div>
     </div>
 
     <div class="view" id="view-orders">
@@ -469,7 +500,7 @@ function startData(){
   startRepliesData();
   startRepliesPolling();
 }
-function renderAll(){ renderDashboard(); renderAlerts(); renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); renderOrderPicker(); renderOrderHistory(); renderReplies(); }
+function renderAll(){ renderDashboard(); renderAlerts(); renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); renderOrderPicker(); renderOrderHistory(); renderReplies(); renderScan(); }
 
 function vendorName(id){ const v=vendors.find(x=>x.id===id); return v?v.name:'(unknown vendor)'; }
 function fmtMoney(n){ n=parseFloat(n); return isNaN(n)?'—':'$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -495,6 +526,7 @@ function showView(v){
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('active', el.dataset.view===v));
   const el=document.getElementById('view-'+v); if(el) el.classList.add('active');
+  if(v==='scan') renderScan();
 }
 
 // ── Vendors ──
@@ -1181,18 +1213,298 @@ window.checkReplies = checkReplies;
 window.setReplyStatus = setReplyStatus;
 window.manuallyMatchReply = manuallyMatchReply;
 
+// ════════ SCAN INVOICE ════════
+// Workflow states: 'idle' (drop zone), 'scanning' (spinner), 'review' (grid + save).
+let _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', error:'' };
+
+function renderScan(){
+  const el=document.getElementById('scanBody'); if(!el) return;
+  if(_scanState.mode === 'scanning'){
+    el.innerHTML = '<div class="scan-step"><div class="scan-progress"><span class="spinner"></span> Claude is reading your invoice — this can take 10–30 seconds depending on the document size…</div></div>';
+    return;
+  }
+  if(_scanState.mode === 'review'){
+    renderScanReview(); return;
+  }
+  // idle
+  const filesHtml = _scanState.files.length ? '<div class="scan-files">'+_scanState.files.map((f,i)=>`<div class="scan-file"><i class="ti ti-file" style="color:var(--text3)"></i><span class="name">${esc(f.name)}</span><span class="size">${_fmtSize(f.size)}</span><button onclick="scanRemoveFile(${i})" title="Remove"><i class="ti ti-x"></i></button></div>`).join('')+'</div>' : '';
+  const errHtml = _scanState.error ? '<div class="scan-err">'+esc(_scanState.error)+'</div>' : '';
+  const canGo = _scanState.files.length && getEventsRelayUrl();
+  el.innerHTML = `<div class="scan-step">
+    <h3>1. Upload a vendor invoice or price sheet</h3>
+    <div class="desc">PDFs, photos (JPG/PNG), or screenshots. You can drop several files at once — they'll be combined into one review.</div>
+    <div class="scan-drop" id="scanDrop" onclick="document.getElementById('scanFileInput').click()">
+      <div class="icons"><i class="ti ti-upload"></i></div>
+      <div class="big">Click to choose files — or drag &amp; drop here</div>
+      <div class="small">From your phone, you can use your camera too.</div>
+    </div>
+    <input id="scanFileInput" type="file" accept="image/*,application/pdf" multiple capture="environment" style="display:none" onchange="scanHandleFiles(this.files)">
+    ${filesHtml}
+    ${errHtml}
+  </div>
+  <div class="scan-step">
+    <h3>2. Let Claude read it</h3>
+    <div class="desc">Claude will extract every line item — vendor item names, codes, packs, prices — and try to match them to products you already have.</div>
+    ${getEventsRelayUrl() ? '' : '<div class="scan-err">The Events relay URL isn\'t set yet. Open <b>Settings</b> (top bar) and paste the events@ Apps Script URL. That\'s the same URL the main Operations Hub uses.</div>'}
+    <button class="btn" ${canGo?'':'disabled style="opacity:.5;cursor:not-allowed"'} onclick="scanRunAI()"><i class="ti ti-sparkles"></i> Scan ${_scanState.files.length?('('+_scanState.files.length+' file'+(_scanState.files.length===1?'':'s')+')'):''}</button>
+  </div>
+  <div class="scan-step" style="background:var(--bg2);box-shadow:none">
+    <h3>3. Review and save</h3>
+    <div class="desc">Once Claude's done, you'll see a grid with every line — vendor matched, products matched, prices ready to save. You confirm or fix anything before it lands.</div>
+  </div>`;
+  // wire drag/drop
+  const dz=document.getElementById('scanDrop');
+  if(dz){
+    dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.classList.add('over'); });
+    dz.addEventListener('dragleave', ()=>dz.classList.remove('over'));
+    dz.addEventListener('drop', e=>{ e.preventDefault(); dz.classList.remove('over'); scanHandleFiles(e.dataTransfer.files); });
+  }
+}
+function _fmtSize(n){ return n<1024?n+' B':(n<1048576?(n/1024).toFixed(0)+' KB':(n/1048576).toFixed(1)+' MB'); }
+function scanRemoveFile(i){ _scanState.files.splice(i,1); renderScan(); }
+function scanHandleFiles(fileList){
+  if(!fileList || !fileList.length) return;
+  _scanState.error='';
+  const MAX = 20*1024*1024;
+  let total = _scanState.files.reduce((s,f)=>s+f.size,0);
+  for(const f of fileList){
+    if(total + f.size > MAX){ _scanState.error='Files too large together (max ~20 MB).'; break; }
+    _scanState.files.push(f); total += f.size;
+  }
+  renderScan();
+}
+async function _fileToBase64(f){
+  return await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(',')[1]||''); fr.onerror=rej; fr.readAsDataURL(f); });
+}
+
+async function scanRunAI(){
+  const relay = getEventsRelayUrl();
+  if(!relay){ _scanState.error='Set the Events relay URL in Settings first.'; renderScan(); return; }
+  if(!_scanState.files.length){ _scanState.error='Add at least one file.'; renderScan(); return; }
+  // Encode all files
+  _scanState.mode='scanning'; _scanState.error=''; renderScan();
+  try{
+    const encoded = [];
+    for(const f of _scanState.files){
+      const b64 = await _fileToBase64(f);
+      encoded.push({ filename:f.name, mime:f.type||'application/octet-stream', base64:b64 });
+    }
+    // Help Claude match against existing data
+    const knownVendors = vendors.map(v=>v.name).filter(Boolean);
+    const knownProducts = ourProducts().map(g=>({ name:g.name, unit:(g.items[0]&&g.items[0].unit)||'' }));
+    const payload = {
+      action: 'parseInvoice',
+      files: encoded,
+      knownVendors,
+      knownProducts
+    };
+    const r = await fetch(relay, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
+    const txt = await r.text();
+    let d; try{ d=JSON.parse(txt); }catch(e){ throw new Error('Got a non-JSON response from the events@ relay. First 120 chars: '+txt.slice(0,120)); }
+    if(!d.ok){ throw new Error(d.error||'Scan failed'); }
+    _scanState.parsed = d.result || {};
+    _scanState.vendorPick = _scanState.parsed.vendorId || '';
+    // If Claude named a vendor, try to match it to our list
+    if(!_scanState.vendorPick && _scanState.parsed.vendorName){
+      const guess = vendors.find(v=>normName(v.name)===normName(_scanState.parsed.vendorName));
+      if(guess) _scanState.vendorPick = guess.id;
+    }
+    _scanState.mode='review';
+    renderScan();
+  }catch(e){
+    _scanState.mode='idle'; _scanState.error='Scan failed: '+e.message; renderScan();
+  }
+}
+
+function renderScanReview(){
+  const el=document.getElementById('scanBody'); if(!el) return;
+  const p = _scanState.parsed || {};
+  const lines = p.lines || [];
+  const vOpts = vendors.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))
+    .map(v=>`<option value="${v.id}" ${_scanState.vendorPick===v.id?'selected':''}>${esc(v.name)}</option>`).join('');
+  const productList = ourProducts();
+  const productOpts = productList.map(g=>`<option value="${esc(g.key)}">${esc(g.name)}</option>`).join('');
+
+  // Header summary
+  const head = `<div class="scan-step">
+    <h3>Review what Claude found</h3>
+    <div class="scan-meta">
+      ${p.vendorName?`<span>Vendor on invoice: <b>${esc(p.vendorName)}</b></span>`:''}
+      ${p.invoiceDate?`<span>Date: <b>${esc(p.invoiceDate)}</b></span>`:''}
+      ${p.invoiceNumber?`<span>Invoice #: <b>${esc(p.invoiceNumber)}</b></span>`:''}
+      <span>Lines found: <b>${lines.length}</b></span>
+    </div>
+    <div class="fld">
+      <label>Vendor (required) — confirms or overrides Claude's guess</label>
+      <select id="scanVendor" onchange="_scanState.vendorPick=this.value">
+        <option value="">— pick a vendor —</option>
+        ${vOpts}
+        <option value="__new">+ Create new vendor: ${esc(p.vendorName||'(unnamed)')}</option>
+      </select>
+    </div>
+  </div>`;
+
+  // Lines as a grid (similar to bulk-add)
+  const linesHtml = lines.length ? `<div class="bulk-grid-wrap"><table class="bulk-grid"><thead><tr>
+    <th class="req">Our product</th>
+    <th>Use for</th>
+    <th>Category</th>
+    <th class="req">Our unit</th>
+    <th>Vendor item</th>
+    <th>Vendor code</th>
+    <th>Pack desc</th>
+    <th class="req">Pack size</th>
+    <th class="req">Pack price</th>
+    <th>Match</th>
+    <th></th>
+  </tr></thead><tbody id="scanBody2">${
+    lines.map((L,i)=>{
+      const matchedKey = L.matchedProductKey || (productList.find(g=>normName(g.name)===normName(L.ourName||L.vendorItemName||''))?.key) || '';
+      const matchPill = matchedKey ? '<span class="match-pill matched"><i class="ti ti-check"></i>matched</span>' :
+                        (L.ourName?'<span class="match-pill new">new product</span>':'<span class="match-pill uncertain">needs name</span>');
+      return `<tr data-idx="${i}">
+        <td><input data-k="ourName" list="ourNameList" value="${esc(L.ourName||L.vendorItemName||'')}"></td>
+        <td><input data-k="useFor" value="${esc(L.useFor||'')}"></td>
+        <td><input data-k="category" value="${esc(L.category||'')}"></td>
+        <td><input data-k="unit" value="${esc(L.unit||'')}"></td>
+        <td><input data-k="vendorItemName" value="${esc(L.vendorItemName||'')}"></td>
+        <td><input data-k="vendorCode" value="${esc(L.vendorCode||'')}"></td>
+        <td><input data-k="packDesc" value="${esc(L.packDesc||'')}"></td>
+        <td class="num"><input data-k="packSize" type="number" step="any" value="${esc(L.packSize||'')}"></td>
+        <td class="num"><input data-k="price" type="number" step="any" value="${esc(L.price||'')}"></td>
+        <td>${matchPill}</td>
+        <td class="del"><button onclick="this.closest('tr').remove()" title="Remove row"><i class="ti ti-x"></i></button></td>
+      </tr>`;
+    }).join('')
+  }</tbody></table></div>` : '<div class="dash-empty">No line items were extracted. Try a clearer scan, or add items manually.</div>';
+
+  el.innerHTML = head +
+    `<div class="scan-step" style="padding:0">${linesHtml}</div>
+     <div class="scan-step" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+       <div style="font-size:12.5px;color:var(--text3)">Existing items for this vendor get a <b>new price quote</b> (preserves history). New items become fresh entries.</div>
+       <div>
+         <button class="btn ghost" onclick="scanCancel()">Discard & start over</button>
+         <button class="btn" onclick="scanSaveAll()"><i class="ti ti-device-floppy"></i> Save all</button>
+       </div>
+     </div>`;
+}
+
+function scanCancel(){
+  if(!confirm('Discard this scan and start over?')) return;
+  _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', error:'' };
+  renderScan();
+}
+
+async function scanSaveAll(){
+  let vendorId = _scanState.vendorPick;
+  if(vendorId==='__new'){
+    // Create the vendor on the fly using whatever name Claude gave
+    const nm = (_scanState.parsed && _scanState.parsed.vendorName) || prompt('Name for the new vendor?');
+    if(!nm){ alert('A vendor is required.'); return; }
+    try{
+      const ref = await db.collection('vendors').add({ name:nm.trim(), updatedAt:Date.now(), createdAt:Date.now() });
+      vendorId = ref.id;
+      toast('Created vendor: '+nm);
+    }catch(e){ alert('Could not create vendor: '+e.message); return; }
+  }
+  if(!vendorId){ alert('Pick a vendor at the top of the review.'); return; }
+  // Gather grid rows
+  const body = document.getElementById('scanBody2'); if(!body) return;
+  const rows = Array.from(body.querySelectorAll('tr')).map(tr=>{
+    const r={}; tr.querySelectorAll('input').forEach(i=>{ r[i.dataset.k]=(i.value||'').trim(); });
+    return r;
+  }).filter(r=>r.ourName && r.unit && parseFloat(r.packSize)>0 && parseFloat(r.price)>0);
+  if(!rows.length){ alert('No valid rows to save. Each row needs: Our product name, Our unit, Pack size, Pack price.'); return; }
+
+  // For each row: if (vendorId + ourName) already exists in items, create a new price quote
+  // (archive current price to priceHistory, update current). Otherwise, create a fresh item.
+  const stamp = Date.now();
+  const invoiceDate = (_scanState.parsed && _scanState.parsed.invoiceDate) || '';
+  let newItems=0, repriced=0;
+  try{
+    for(const r of rows){
+      const existing = items.find(x => x.vendorId===vendorId && normName(x.ourName)===normName(r.ourName));
+      if(existing){
+        // Archive old price to history, then update
+        const histDoc={
+          itemId: existing.id, ourName: existing.ourName||'', vendorId: existing.vendorId||'',
+          price: existing.price||0, packSize: existing.packSize||0, unit: existing.unit||'',
+          packDesc: existing.packDesc||'', vendorItemName: existing.vendorItemName||'', vendorCode: existing.vendorCode||'',
+          date: existing.date||'', notes: existing.notes||'',
+          archivedAt: stamp, archivedBy: userLabel(), ts: existing.updatedAt||existing.createdAt||stamp,
+          source: 'scan'
+        };
+        await db.collection('priceHistory').add(histDoc);
+        await db.collection('vendorItems').doc(existing.id).set({
+          price: parseFloat(r.price),
+          packSize: parseFloat(r.packSize),
+          unit: r.unit || existing.unit,
+          packDesc: r.packDesc || existing.packDesc || '',
+          vendorItemName: r.vendorItemName || existing.vendorItemName || '',
+          vendorCode: r.vendorCode || existing.vendorCode || '',
+          date: invoiceDate || existing.date || '',
+          notes: r.notes || existing.notes || '',
+          updatedAt: stamp, updatedBy: userLabel()
+        }, {merge:true});
+        repriced++;
+      } else {
+        await db.collection('vendorItems').add({
+          vendorId,
+          ourName: r.ourName,
+          useFor: r.useFor||'',
+          category: r.category||'',
+          unit: r.unit,
+          vendorItemName: r.vendorItemName||'',
+          vendorCode: r.vendorCode||'',
+          packDesc: r.packDesc||'',
+          packSize: parseFloat(r.packSize),
+          price: parseFloat(r.price),
+          date: invoiceDate || '',
+          notes: r.notes||'',
+          createdAt: stamp, updatedAt: stamp,
+          source: 'scan'
+        });
+        newItems++;
+      }
+    }
+    toast('Saved ✓ — '+newItems+' new, '+repriced+' repriced');
+    _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', error:'' };
+    renderScan();
+  }catch(e){ alert('Could not save: '+e.message); }
+}
+
+window.scanHandleFiles = scanHandleFiles;
+window.scanRemoveFile = scanRemoveFile;
+window.scanRunAI = scanRunAI;
+window.scanCancel = scanCancel;
+window.scanSaveAll = scanSaveAll;
+
 // ════════ ORDERS RELAY SETTINGS ════════
 // The orders@thepremiercaterer.com Apps Script URL lives in localStorage so each
 // browser/device can be pointed at the same deployment without hardcoding it.
 function getOrdersRelayUrl(){ try{ return localStorage.getItem('pcOrdersRelay')||''; }catch(e){ return ''; } }
 function setOrdersRelayUrl(url){ try{ localStorage.setItem('pcOrdersRelay', url||''); }catch(e){} }
+// Events@ relay — used for the AI invoice scan (where ANTHROPIC_KEY lives).
+function getEventsRelayUrl(){ try{ return localStorage.getItem('pcEventsRelay')||''; }catch(e){ return ''; } }
+function setEventsRelayUrl(url){ try{ localStorage.setItem('pcEventsRelay', url||''); }catch(e){} }
 function openOrdersSettings(){
-  const cur=getOrdersRelayUrl();
-  openModal(`<div class="modal-head"><div class="h">Orders relay</div><button class="icon-btn" onclick="closeModal()"><i class="ti ti-x"></i></button></div>
+  const curOrders=getOrdersRelayUrl();
+  const curEvents=getEventsRelayUrl();
+  openModal(`<div class="modal-head"><div class="h">Settings</div><button class="icon-btn" onclick="closeModal()"><i class="ti ti-x"></i></button></div>
   <div class="modal-body">
-    <div class="hint" style="margin-bottom:10px">This is the orders@ Apps Script URL. When you send an order, the purchasing app calls this URL — vendor email + printer copy go out from <b>orders@thepremiercaterer.com</b>.</div>
-    <div class="fld"><label>Orders relay URL</label><input id="orl_url" value="${esc(cur)}" placeholder="https://script.google.com/macros/s/…/exec"></div>
-    <div class="fld"><button class="btn ghost" onclick="testOrdersRelay()" type="button"><i class="ti ti-plug-connected"></i> Test connection</button> <span id="orl_status" style="margin-left:8px;font-size:12.5px"></span></div>
+    <div class="hint" style="margin-bottom:14px"><b>Two relays:</b> the purchasing app talks to two different Apps Scripts. Both URLs are saved per browser.</div>
+
+    <div class="fld" style="margin-bottom:6px"><label style="font-weight:600">Orders relay URL <span style="color:var(--text3);font-weight:400">— runs as orders@</span></label></div>
+    <div class="hint" style="margin-bottom:6px">Used when sending purchase orders to vendors. Vendor email + printer copy come from <b>orders@thepremiercaterer.com</b>.</div>
+    <div class="fld"><input id="orl_url" value="${esc(curOrders)}" placeholder="https://script.google.com/macros/s/…/exec"></div>
+    <div class="fld"><button class="btn ghost" onclick="testOrdersRelay()" type="button"><i class="ti ti-plug-connected"></i> Test orders relay</button> <span id="orl_status" style="margin-left:8px;font-size:12.5px"></span></div>
+
+    <div style="border-top:1px solid var(--border);margin:14px 0"></div>
+
+    <div class="fld" style="margin-bottom:6px"><label style="font-weight:600">Events relay URL <span style="color:var(--text3);font-weight:400">— runs as events@</span></label></div>
+    <div class="hint" style="margin-bottom:6px">Used only by the <b>Scan Invoice</b> feature (Claude reads the invoice). Same URL the main Operations Hub already uses.</div>
+    <div class="fld"><input id="erl_url" value="${esc(curEvents)}" placeholder="https://script.google.com/macros/s/…/exec"></div>
+    <div class="fld"><button class="btn ghost" onclick="testEventsRelay()" type="button"><i class="ti ti-plug-connected"></i> Test events relay</button> <span id="erl_status" style="margin-left:8px;font-size:12.5px"></span></div>
   </div>
   <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveOrdersRelay()">Save</button></div>`);
 }
@@ -1205,12 +1517,29 @@ async function testOrdersRelay(){
     const r=await fetch(url);
     const d=await r.json();
     if(d.ok && d.as){ st.innerHTML='<span style="color:var(--green-text)">✓ Connected — runs as <b>'+esc(d.as)+'</b></span>'; }
-    else st.innerHTML='<span style="color:var(--maroon)">Reached the URL but the response looked wrong: '+esc(JSON.stringify(d).slice(0,80))+'</span>';
+    else st.innerHTML='<span style="color:var(--maroon)">Reached the URL but response looked wrong: '+esc(JSON.stringify(d).slice(0,80))+'</span>';
+  }catch(e){ st.innerHTML='<span style="color:var(--maroon)">Could not reach the URL: '+esc(e.message)+'</span>'; }
+}
+async function testEventsRelay(){
+  const url=(document.getElementById('erl_url')||{}).value?.trim()||'';
+  const st=document.getElementById('erl_status'); if(!st) return;
+  if(!url){ st.textContent='Paste the URL first.'; st.style.color='var(--maroon)'; return; }
+  st.textContent='Testing…'; st.style.color='var(--text3)';
+  try{
+    // The events@ script's doGet returns a generic status — anything that responds with JSON is good.
+    const r=await fetch(url+(url.indexOf('?')>=0?'&':'?')+'action=parseInvoice');
+    const txt=await r.text();
+    // It will likely return an error like "no file provided" — that's a GOOD sign, means it understood the action.
+    if(/parseInvoice|no.*file|missing.*file|invoice/i.test(txt)) st.innerHTML='<span style="color:var(--green-text)">✓ Connected — parseInvoice action recognized</span>';
+    else if(/running|status/i.test(txt)) st.innerHTML='<span style="color:var(--brass-deep)">Reached the script but the parseInvoice action isn’t there yet (need to update events@ script).</span>';
+    else st.innerHTML='<span style="color:var(--maroon)">Reached the URL but response unclear: '+esc(txt.slice(0,80))+'</span>';
   }catch(e){ st.innerHTML='<span style="color:var(--maroon)">Could not reach the URL: '+esc(e.message)+'</span>'; }
 }
 function saveOrdersRelay(){
-  const url=(document.getElementById('orl_url')||{}).value?.trim()||'';
-  setOrdersRelayUrl(url); closeModal(); toast('Orders relay saved');
+  const orders=(document.getElementById('orl_url')||{}).value?.trim()||'';
+  const events=(document.getElementById('erl_url')||{}).value?.trim()||'';
+  setOrdersRelayUrl(orders); setEventsRelayUrl(events);
+  closeModal(); toast('Settings saved');
 }
 
 // ════════ PRINTER-COPY PDF ════════
