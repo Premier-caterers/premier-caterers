@@ -1645,6 +1645,7 @@ function renderDetail(e,role){
           ?`<button class="icon-btn" onclick="saveEdit('${e.id}')" style="color:var(--blue-mid)" title="Save"><i class="ti ti-check"></i></button>
              <button class="icon-btn" onclick="cancelEdit()" title="Cancel"><i class="ti ti-x"></i></button>`
           :`<button class="icon-btn" onclick="startEdit('${e.id}')" title="Edit"><i class="ti ti-edit"></i></button>`):''}
+        <button class="icon-btn" onclick="openBeo('${e.id}')" title="Banquet Event Order"><i class="ti ti-clipboard-list"></i></button>
         <button class="icon-btn" onclick="goChecklist('${e.id}')" title="Open checklist"><i class="ti ti-checklist"></i></button>
         <button class="icon-btn" onclick="closeDetail()" title="Close"><i class="ti ti-x"></i></button>
       </div>
@@ -2193,7 +2194,7 @@ function drawerDocuments(inq, role){
     _docBtn('Grocery list','ti-shopping-cart',true,''),
     _docBtn('Final checklist','ti-checklist',true,''),
     _docBtn('Linen order form','ti-wash',true,''),
-    _docBtn('BEO','ti-clipboard-list',true,''),
+    _docBtn('BEO','ti-clipboard-list',false,`openBeo('${id}')`),
     _docBtn('Contract','ti-file-certificate',true,''),
   ].join('');
   const floor = [
@@ -6956,6 +6957,253 @@ function buildInvoiceHTML(eid){
 
   return html;
 }
+
+// ─────────────────────────────────────────────────────────────
+// BANQUET EVENT ORDER (BEO)
+// A printable kitchen/captain document built from the booked event's meals
+// plus the linked inquiry (guests, M/D/P, menu, allergy) and payment status.
+// Adaptive paging: 1–2 meals flow on shared pages; 3+ meals get a summary
+// cover page followed by one page per meal. Reuses the document footer rule.
+// Per-meal fields not yet captured (time, linen, setup, special requests) read
+// from e.beo when present and otherwise print as fill-in lines (editor: 3b-2).
+// ─────────────────────────────────────────────────────────────
+function _beoResolveEvent(arg){
+  let e = events.find(x=>x.id===arg);
+  if(!e) e = events.find(x=>x.id===('inq_'+arg));
+  return e || null;
+}
+function _beoInquiryFor(e){
+  if(!e) return {};
+  let inq=null;
+  if(e.inquiryId) inq=inquiries.find(x=>x.id===e.inquiryId);
+  if(!inq && String(e.id).indexOf('inq_')===0) inq=inquiries.find(x=>x.id===String(e.id).slice(4));
+  return inq || {};
+}
+function _beoPayState(inq){
+  const est = inq && inq.estimate;
+  if(est && Array.isArray(est.lines) && est.lines.length){
+    const t=calcInvoiceTotals(est); const dep=parseFloat(est.deposit||0); const bal=t.grand-dep;
+    if(t.grand>0 && bal<=0.01) return {label:'PAID IN FULL', sub:'No balance to collect', css:'color:#0C447C;background:#E6F1FB;border:2px solid #185FA5'};
+    if(dep>0.01) return {label:'PARTIAL \u2014 COLLECT BALANCE', sub:'Confirm balance before service', css:'color:#854F0B;background:#FAEEDA;border:2px solid #BA7517'};
+    return {label:'NOT PAID \u2014 COLLECT', sub:'Payment due', css:'color:#854F0B;background:#FAEEDA;border:2px dashed #BA7517'};
+  }
+  return {label:'NOT PAID \u2014 COLLECT', sub:'No estimate on file', css:'color:#854F0B;background:#FAEEDA;border:2px dashed #BA7517'};
+}
+function beoFileName(eventId){
+  const e=_beoResolveEvent(eventId); if(!e) return 'BEO';
+  const num=(fullEventNum(e)||e.job||'').replace(/[^0-9A-Za-z\-]/g,'');
+  const nm=(e.name||'event').replace(/[^0-9A-Za-z]+/g,'-').replace(/^-+|-+$/g,'');
+  return ('BEO_'+(num?num+'_':'')+nm).slice(0,60);
+}
+function buildBeoHTML(eventId){
+  const e=_beoResolveEvent(eventId); if(!e) return '';
+  const inq=_beoInquiryFor(e);
+  if(!e.beo) e.beo={};
+  const beo=e.beo;
+  const meals = (Array.isArray(e.meals) && e.meals.length) ? e.meals : [{
+    jobSuffix:'', label:e.typeLabel||e.name||'Event', name:e.name||'', typeLabel:e.typeLabel||'',
+    dayLabel:e.dayLabel||'', addr:e.addr||'', waiters:e.waiters||0, waiterTime:e.waiterTime||'',
+    chefs:e.chefs||0, chefTime:e.chefTime||'', porters:e.porters||0, bartenders:e.bartenders||0,
+    mashgiachNames:e.mashgiachNames||'', manager:e.manager||''
+  }];
+  const nMeals=meals.length;
+  const multi = nMeals>=3;
+
+  const evFull = fullEventNum(e) || (e.job||'');
+  const parts = String(evFull).split('-');
+  const evSeq = parts.length>1 ? parts[parts.length-1] : evFull;
+  const evPrefix = parts.length>1 ? parts.slice(0,-1).join('-')+'-' : '';
+
+  const clientName = e.name || clientPrimary(inq) || ((inq.firstName||'')+' '+(inq.lastName||'')).trim() || 'Client';
+  const org = (e.organization||inq.organization||'').trim();
+  const venueName = inq.venueName || '';
+  const venueAddr = inq.venueLocation || e.addr || '';
+  const dateStr = e.dayLabel || (inq.eventDate?formatDate(inq.eventDate):'');
+  const contact = e.contactName || clientContact(inq) || [inq.phone,inq.email].filter(Boolean).join(' \u00b7 ');
+  const allergy = (typeof inqAllergies==='function') ? inqAllergies(inq) : (inq.allergies||'');
+  const pay = _beoPayState(inq);
+  const eventMenu = inq.menuLink || (Array.isArray(inq.menus)&&inq.menus[0]?inq.menus[0].url:'') || '';
+
+  // content-only signature for the revision footer
+  const sigObj={c:clientName,o:org,v:venueName+'|'+venueAddr,d:dateStr,a:allergy,pay:pay.label,
+    g:inq.guestCount||'',m:inq.meatDairy||'',menu:eventMenu||'',
+    meals:meals.map(m=>({s:m.jobSuffix,n:m.name||m.label,w:m.waiters,ch:m.chefs,p:m.porters,b:m.bartenders,wt:m.waiterTime,ct:m.chefTime,mg:m.mashgiachNames,mgr:m.manager})),
+    beoMeals:(beo.meals||null)};
+  finalizeDoc(beo, _docSig(sigObj));
+  try{ _saveEvent(e); }catch(err){ console.warn('beo save:',err); }
+  const footer = docFooterText(beo,'BEO',evFull);
+
+  const fillLine = '<span style="display:inline-block;min-width:120px;border-bottom:1px dotted #aaa;height:13px"></span>';
+  const fld = (label,val) => `<div class="beo-fld"><div class="beo-fld-k">${label}</div><div class="beo-fld-v">${val?pcEsc(val):fillLine}</div></div>`;
+
+  const mealSection = (m,i) => {
+    const bm = (beo.meals && beo.meals[i]) || {};
+    const letter = (m.jobSuffix||'').trim() || String.fromCharCode(97+i);
+    const mname = m.name || m.label || ('Meal '+(i+1));
+    const guests = bm.guests || inq.guestCount || '';
+    const mdp = bm.mdp || inq.meatDairy || (m.typeLabel||'');
+    const time = bm.time || '';
+    const linen = bm.linen || '';
+    const setup = bm.setup || '';
+    const menu = bm.menu || (eventMenu?'See attached menu':'');
+    const notes = bm.notes || m.notes || '';
+    const special = bm.special || '';
+    const staff = [];
+    if(m.waiters) staff.push('Waiters: '+m.waiters+(m.waiterTime?(' @ '+m.waiterTime):''));
+    if(m.chefs) staff.push('Chefs: '+m.chefs+(m.chefTime?(' @ '+m.chefTime):''));
+    if(m.porters) staff.push('Porters: '+m.porters);
+    if(m.bartenders) staff.push('Bartenders: '+m.bartenders);
+    const staffLine = staff.length?staff.join('&nbsp;&nbsp;\u00b7&nbsp;&nbsp;'):fillLine;
+    return `<section class="beo-meal${multi?' beo-pagebreak':''}">
+      <div class="beo-meal-head">
+        <span class="beo-letter">${pcEsc(letter.toUpperCase())}</span>
+        <span class="beo-meal-name">${pcEsc(mname)}</span>
+        <span class="beo-meal-when">${pcEsc(m.dayLabel||dateStr||'')}</span>
+      </div>
+      <div class="beo-grid">
+        ${fld('Guest count', guests)}
+        ${fld('Meat / Dairy / Parve', mdp)}
+        ${fld('Service time', time)}
+        ${fld('Linen', linen)}
+        ${fld('Setup', setup)}
+        ${fld('Manager / Mashgiach', [m.manager,m.mashgiachNames].filter(Boolean).join(' / '))}
+      </div>
+      <div class="beo-row"><div class="beo-row-k">Staffing</div><div class="beo-row-v">${staffLine}</div></div>
+      <div class="beo-row"><div class="beo-row-k">Menu</div><div class="beo-row-v">${menu?pcEsc(menu):fillLine}</div></div>
+      <div class="beo-row"><div class="beo-row-k">Notes</div><div class="beo-row-v">${notes?pcEsc(notes):fillLine+'<br>'+fillLine}</div></div>
+      <div class="beo-special"><div class="beo-special-k"><i>!</i> Special requests</div><div class="beo-special-v">${special?pcEsc(special):fillLine+' '+fillLine}</div></div>
+    </section>`;
+  };
+
+  const headerBlock = `
+    <div class="beo-top">
+      <div class="beo-brand">
+        <div class="beo-co">Premier Caterers</div>
+        <div class="beo-co-sub">201-250-9487 &nbsp;\u00b7&nbsp; events@thepremiercaterer.com</div>
+      </div>
+      <div class="beo-evbox">
+        <div class="beo-evlabel">Event #</div>
+        <div class="beo-evnum"><span class="beo-evprefix">${pcEsc(evPrefix)}</span><span class="beo-evseq">${pcEsc(evSeq)}</span></div>
+      </div>
+    </div>
+    <div class="beo-title">Banquet Event Order</div>
+    ${allergy?`<div class="beo-allergy"><span class="beo-allergy-ic">\u26A0</span><span><b>ALLERGY ALERT:</b> ${pcEsc(allergy)}</span></div>`:''}
+    <div class="beo-info">
+      <div class="beo-info-col"><div class="beo-info-k">Client</div><div class="beo-info-v">${pcEsc(org?org+' \u2014 '+clientName:clientName)}</div>${contact?`<div class="beo-info-sub">${pcEsc(contact)}</div>`:''}</div>
+      <div class="beo-info-col"><div class="beo-info-k">Venue</div><div class="beo-info-v">${pcEsc(venueName||venueAddr||'\u2014')}</div>${venueName&&venueAddr?`<div class="beo-info-sub">${pcEsc(venueAddr)}</div>`:''}<div class="beo-info-sub">${pcEsc(dateStr)}</div></div>
+      <div class="beo-info-col"><div class="beo-info-k">Payment</div><div class="beo-pay" style="${pay.css}">${pay.label}</div><div class="beo-info-sub">${pay.sub}</div></div>
+    </div>`;
+
+  let coverPage='';
+  if(multi){
+    const rows = meals.map((m,i)=>{
+      const bm=(beo.meals&&beo.meals[i])||{};
+      const letter=(m.jobSuffix||'').trim()||String.fromCharCode(97+i);
+      return `<tr><td class="c">${pcEsc(letter.toUpperCase())}</td><td>${pcEsc(m.name||m.label||('Meal '+(i+1)))}</td><td>${pcEsc(m.dayLabel||'')}</td><td class="c">${pcEsc(bm.time||'')}</td><td class="c">${pcEsc(bm.guests||inq.guestCount||'')}</td><td class="c">${pcEsc(bm.mdp||inq.meatDairy||m.typeLabel||'')}</td></tr>`;
+    }).join('');
+    coverPage = `<div class="beo-page beo-pagebreak-after">
+      ${headerBlock}
+      <div class="beo-summary-title">All meals \u2014 ${nMeals} total</div>
+      <table class="beo-summary"><thead><tr><th class="c">#</th><th>Meal</th><th>Day</th><th class="c">Time</th><th class="c">Guests</th><th class="c">M/D/P</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="beo-foot">${pcEsc(footer)}</div>
+    </div>`;
+  }
+
+  const mealsHtml = meals.map((m,i)=>mealSection(m,i)).join('');
+  const body = multi
+    ? coverPage + `<div class="beo-page">${mealsHtml}<div class="beo-foot">${pcEsc(footer)}</div></div>`
+    : `<div class="beo-page">${headerBlock}${mealsHtml}<div class="beo-foot">${pcEsc(footer)}</div></div>`;
+
+  const css = `
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;font-size:12px;line-height:1.4}
+    .beo-page{max-width:760px;margin:0 auto;padding:34px 40px}
+    .beo-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+    .beo-co{font-size:24px;font-weight:800;color:#8B1A1A;letter-spacing:.01em}
+    .beo-co-sub{font-size:11px;color:#666;margin-top:2px}
+    .beo-evbox{background:#FBE2A6;border:2px solid #BA7517;border-radius:10px;padding:7px 14px;text-align:center;min-width:120px}
+    .beo-evlabel{font-size:9px;font-weight:700;letter-spacing:.12em;color:#854F0B;text-transform:uppercase}
+    .beo-evnum{line-height:1;margin-top:2px}
+    .beo-evprefix{font-size:13px;font-weight:600;color:#633806}
+    .beo-evseq{font-size:30px;font-weight:800;color:#5a3205}
+    .beo-title{font-size:15px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#1a1a1a;border-top:2px solid #8B1A1A;border-bottom:2px solid #8B1A1A;padding:7px 0;margin:14px 0 0;text-align:center}
+    .beo-allergy{display:flex;align-items:center;gap:9px;background:#C81E1E;color:#fff;border-radius:8px;padding:9px 13px;margin:12px 0 0;font-size:13px;font-weight:700}
+    .beo-allergy-ic{font-size:18px}
+    .beo-info{display:flex;gap:12px;margin:14px 0 4px}
+    .beo-info-col{flex:1;border:1px solid #ddd;border-radius:8px;padding:9px 11px}
+    .beo-info-k{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#999}
+    .beo-info-v{font-size:13px;font-weight:700;margin-top:3px}
+    .beo-info-sub{font-size:11px;color:#666;margin-top:2px}
+    .beo-pay{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.02em;border-radius:7px;padding:4px 9px;margin-top:3px}
+    .beo-meal{border:1.5px solid #8B1A1A;border-radius:10px;padding:0;margin-top:16px;overflow:hidden;page-break-inside:avoid}
+    .beo-meal-head{display:flex;align-items:center;gap:10px;background:#f7efe6;border-bottom:1.5px solid #8B1A1A;padding:8px 12px}
+    .beo-letter{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:#FBE2A6;border:1.5px solid #BA7517;border-radius:6px;font-weight:800;font-size:15px;color:#5a3205}
+    .beo-meal-name{font-size:15px;font-weight:800;color:#1a1a1a;flex:1}
+    .beo-meal-when{font-size:12px;font-weight:600;color:#8B1A1A}
+    .beo-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-bottom:1px solid #eee}
+    .beo-fld{padding:8px 12px;border-right:1px solid #eee;border-bottom:1px solid #eee}
+    .beo-fld:nth-child(3n){border-right:none}
+    .beo-fld-k{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#999}
+    .beo-fld-v{font-size:13px;font-weight:600;margin-top:3px;min-height:16px}
+    .beo-row{display:flex;border-bottom:1px solid #eee}
+    .beo-row-k{width:120px;flex-shrink:0;padding:8px 12px;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#999;background:#fafafa}
+    .beo-row-v{flex:1;padding:8px 12px;font-size:12.5px}
+    .beo-special{display:flex;background:#FAEEDA}
+    .beo-special-k{width:120px;flex-shrink:0;padding:8px 12px;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#854F0B}
+    .beo-special-k i{font-style:normal;font-weight:800;color:#BA7517}
+    .beo-special-v{flex:1;padding:8px 12px;font-size:12.5px;color:#5a3205}
+    .beo-summary-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#8B1A1A;margin:16px 0 8px}
+    .beo-summary{width:100%;border-collapse:collapse}
+    .beo-summary th{background:#8B1A1A;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.06em;padding:7px 9px;text-align:left}
+    .beo-summary td{border:1px solid #ddd;padding:7px 9px;font-size:12px}
+    .beo-summary .c{text-align:center}
+    .beo-foot{margin-top:22px;padding-top:9px;border-top:1px solid #ccc;font-size:9px;color:#999;text-align:center}
+    @media print{ .beo-pagebreak{page-break-before:always} .beo-pagebreak-after{page-break-after:always} body{font-size:12px} }
+    @page{margin:14mm}
+  `;
+
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+pcEsc(beoFileName(eventId))+'</title><style>'+css+'</style></head><body>'+body+'</body></html>';
+}
+function printBeo(eventId){
+  closeBeoModal();
+  const html=buildBeoHTML(eventId);
+  if(!html){ alert('No booked event found for this BEO.'); return; }
+  const w=window.open('','_blank'); if(!w){ alert('Please allow pop-ups to print the BEO.'); return; }
+  w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>{ try{w.print();}catch(e){} },400);
+}
+function downloadBeo(eventId){
+  closeBeoModal();
+  const html=buildBeoHTML(eventId);
+  if(!html){ alert('No booked event found for this BEO.'); return; }
+  downloadHtmlAsPdf(html, beoFileName(eventId));
+}
+function closeBeoModal(){ const m=document.getElementById('beoModal'); if(m) m.remove(); }
+function openBeo(arg){
+  const e=_beoResolveEvent(arg);
+  if(!e){ alert('The BEO becomes available once the event is booked \u2014 it pulls the meals and staffing from the booked event.'); return; }
+  const inq=_beoInquiryFor(e);
+  const meals=(Array.isArray(e.meals)&&e.meals.length)?e.meals:[{}];
+  const clientName = e.name || clientPrimary(inq) || 'Client';
+  const evFull = fullEventNum(e) || (e.job||'');
+  closeBeoModal();
+  const wrap=document.createElement('div');
+  wrap.id='beoModal';
+  wrap.setAttribute('style','position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:inherit');
+  wrap.onclick=function(ev){ if(ev.target===wrap) closeBeoModal(); };
+  const btn='display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font-size:14px;font-weight:600;padding:12px;border-radius:9px;cursor:pointer;font-family:inherit;border:none';
+  wrap.innerHTML='<div style="background:#fff;border-radius:15px;max-width:430px;width:90%;padding:22px 22px 18px">'
+    +'<div style="display:flex;align-items:center;gap:9px;margin-bottom:5px"><i class="ti ti-clipboard-list" style="font-size:21px;color:#8B1A1A"></i><span style="font-size:17px;font-weight:700">Banquet Event Order</span></div>'
+    +'<div style="font-size:13px;color:#666;margin-bottom:17px">'+pcEsc(clientName)+(evFull?(' \u00b7 #'+pcEsc(evFull)):'')+(meals.length>1?(' \u00b7 '+meals.length+' meals'):'')+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:10px">'
+    +'<button onclick="printBeo(\''+e.id+'\')" style="'+btn+';background:#8B1A1A;color:#fff"><i class="ti ti-printer" style="font-size:17px"></i>Print BEO</button>'
+    +'<button onclick="downloadBeo(\''+e.id+'\')" style="'+btn+';background:#fff;color:#8B1A1A;border:1.5px solid #8B1A1A"><i class="ti ti-file-type-pdf" style="font-size:17px"></i>Save as PDF</button>'
+    +'</div>'
+    +'<div style="font-size:11.5px;color:#999;margin-top:15px;line-height:1.5"><i class="ti ti-info-circle" style="font-size:12px"></i> Service time, linen, setup and special requests print as fill-in lines for now \u2014 the editor to save those per meal is the next step.</div>'
+    +'<button onclick="closeBeoModal()" style="width:100%;margin-top:13px;font-size:13px;padding:9px;border-radius:8px;cursor:pointer;background:#f3f3f3;border:none;color:#555;font-family:inherit">Close</button>'
+    +'</div>';
+  document.body.appendChild(wrap);
+}
+window.openBeo=openBeo; window.printBeo=printBeo; window.downloadBeo=downloadBeo; window.closeBeoModal=closeBeoModal;
 
 
 function renderReports(){
