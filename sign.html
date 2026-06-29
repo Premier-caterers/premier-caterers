@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Premier Caterers — Sign your agreement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --maroon:#8B1A1A; --maroon-dk:#6f1414; --brass:#BA7517; --amber-bg:#FAEEDA;
+    --ink:#221c18; --muted:#6b625b; --cream:#f6f1e9; --line:#e3dccf; --green:#1a7a3a; --green-bg:#e9f7ee;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',system-ui,sans-serif;color:var(--ink);background:var(--cream);line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:680px;margin:0 auto;padding:0 16px 80px}
+  .topbar{background:var(--maroon);color:#fff;padding:22px 0}
+  .topbar .inner{max-width:680px;margin:0 auto;padding:0 16px;display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .brand{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:24px;letter-spacing:.01em}
+  .brand small{display:block;font-family:'Inter';font-weight:400;font-size:11px;opacity:.85;letter-spacing:.02em;margin-top:2px}
+  .topbar .phone{font-size:13px;opacity:.9}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;margin-top:22px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  h1{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:26px;margin-bottom:4px}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin-bottom:10px}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:14px 20px;margin:18px 0;padding:16px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .meta .k{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .meta .v{font-size:15px;font-weight:600;margin-top:2px}
+  .price{display:flex;justify-content:space-between;font-size:14px;padding:5px 0}
+  .price.total{border-top:1px solid var(--line);margin-top:4px;padding-top:9px;font-weight:700;font-size:16px}
+  .terms{white-space:pre-wrap;font-size:13.5px;line-height:1.65;color:#3a332d;margin-top:6px}
+  .terms-head{font-family:'Fraunces',serif;font-size:17px;font-weight:600;margin:22px 0 6px}
+  .sign-card{border:2px solid var(--maroon);border-radius:14px;padding:22px;margin-top:24px;background:#fffdfb}
+  .sign-card h2{font-family:'Fraunces',serif;font-size:20px;font-weight:600;margin-bottom:4px;color:var(--maroon)}
+  label.fld{display:block;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 6px}
+  input[type=text]{width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:16px;font-family:inherit;background:#fff}
+  input[type=text]:focus{outline:none;border-color:var(--maroon)}
+  .pad-wrap{border:1.5px dashed var(--brass);border-radius:10px;background:#fff;position:relative;touch-action:none}
+  canvas{display:block;width:100%;height:170px;border-radius:10px;cursor:crosshair}
+  .pad-hint{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#c9bfb0;font-size:14px;pointer-events:none;font-style:italic}
+  .pad-tools{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+  .clear-btn{background:none;border:none;color:var(--maroon);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;padding:4px}
+  .agree{display:flex;align-items:flex-start;gap:11px;margin:20px 0 6px;font-size:14px;cursor:pointer}
+  .agree input{width:20px;height:20px;margin-top:1px;accent-color:var(--maroon);flex-shrink:0}
+  .submit{width:100%;margin-top:18px;background:var(--maroon);color:#fff;border:none;border-radius:11px;padding:16px;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer}
+  .submit:disabled{background:#cbbfb4;cursor:not-allowed}
+  .note{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.5;text-align:center}
+  .state{text-align:center;padding:40px 10px}
+  .state .ic{font-size:46px}
+  .state h1{margin:14px 0 6px}
+  .state p{color:var(--muted);font-size:15px}
+  .signed-banner{background:var(--green-bg);border:2px solid var(--green);border-radius:12px;padding:18px;text-align:center;margin-top:22px}
+  .signed-banner .ic{font-size:38px;color:var(--green)}
+  .signed-banner h2{font-family:'Fraunces',serif;color:var(--green);font-size:21px;margin:6px 0 2px}
+  .spinner{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--maroon);border-radius:50%;animation:spin .8s linear infinite;margin:50px auto}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (max-width:520px){ .meta{grid-template-columns:1fr} h1{font-size:23px} }
+</style>
+</head>
+<body>
+<div class="topbar"><div class="inner"><div class="brand">Premier Caterers<small>Kosher Catering · OU &amp; PCK supervision</small></div><div class="phone">201-250-9487</div></div></div>
+<div class="wrap" id="root"><div class="spinner"></div></div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
+  authDomain: "premier-caterers-internal-app.firebaseapp.com",
+  projectId: "premier-caterers-internal-app",
+  storageBucket: "premier-caterers-internal-app.firebasestorage.app",
+  messagingSenderId: "471701398759",
+  appId: "1:471701398759:web:559a7bee3b645ce545ee42"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const root = document.getElementById('root');
+
+function qp(k){ return new URLSearchParams(location.search).get(k); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function money(v){ return '$'+(parseFloat(v||0)).toFixed(2); }
+
+function stateScreen(icon, title, msg){
+  root.innerHTML = '<div class="card state"><div class="ic">'+icon+'</div><h1>'+esc(title)+'</h1><p>'+esc(msg)+'</p></div>';
+}
+
+const cid = qp('c'), tok = qp('t');
+
+(async function(){
+  if(!cid || !tok){ stateScreen('🔗','Link incomplete','This signing link is missing information. Please use the exact link from your email.'); return; }
+  let doc;
+  try{
+    const snap = await db.collection('contracts').doc(cid).get();
+    if(!snap.exists){ stateScreen('🔍','Agreement not found','We could not find this agreement. Please contact Premier Caterers at 201-250-9487.'); return; }
+    doc = snap.data();
+  }catch(e){
+    stateScreen('⚠️','Could not load','Something went wrong loading your agreement. Please try again, or contact us at 201-250-9487.'); return;
+  }
+  if(String(doc.token||'') !== String(tok)){ stateScreen('🔒','Invalid link','This signing link is not valid. Please use the exact link from your email, or contact us at 201-250-9487.'); return; }
+  if(doc.status === 'signed'){ renderAlreadySigned(doc); return; }
+  renderContract(doc);
+})();
+
+function renderAlreadySigned(doc){
+  const when = doc.signedAt ? new Date(doc.signedAt).toLocaleString() : '';
+  root.innerHTML = '<div class="card"><div class="signed-banner"><div class="ic">✓</div>'
+    + '<h2>This agreement is signed</h2>'
+    + '<p style="color:var(--muted);font-size:14px">Signed by '+esc(doc.signedName||'')+(when?(' on '+esc(when)):'')+'</p></div>'
+    + '<p class="note">Thank you. A copy is on file with Premier Caterers. Questions? Call 201-250-9487.</p></div>';
+}
+
+function renderContract(doc){
+  const s = doc.snapshot || {};
+  const pr = s.pricing;
+  const priceHtml = pr ? ('<div style="margin:6px 0 2px">'
+      + '<div class="price"><span>Estimated total</span><span>'+money(pr.grand)+'</span></div>'
+      + '<div class="price"><span>Deposit</span><span>'+money(pr.deposit)+'</span></div>'
+      + '<div class="price total"><span>Balance</span><span>'+money(pr.balance)+'</span></div></div>') : '';
+
+  root.innerHTML =
+    '<div class="card">'
+    + '<div class="eyebrow">Catering Agreement</div>'
+    + '<h1>'+esc(s.clientName||'Your event')+'</h1>'
+    + (s.evFull?('<div style="color:var(--muted);font-size:13px">Event #'+esc(s.evFull)+'</div>'):'')
+    + '<div class="meta">'
+      + '<div><div class="k">Event date</div><div class="v">'+esc(s.dateStr||'—')+'</div></div>'
+      + '<div><div class="k">Guests</div><div class="v">'+esc(s.guests||'—')+'</div></div>'
+      + '<div><div class="k">Venue</div><div class="v">'+esc(s.venue||'—')+'</div>'+(s.venueAddr&&s.venueAddr!==s.venue?('<div style="font-size:12px;color:var(--muted)">'+esc(s.venueAddr)+'</div>'):'')+'</div>'
+      + '<div><div class="k">Caterer</div><div class="v">Premier Caterers</div></div>'
+    + '</div>'
+    + priceHtml
+    + '<div class="terms-head">Terms</div>'
+    + '<div class="terms">'+esc(doc.terms||'')+'</div>'
+    + '</div>'
+
+    + '<div class="sign-card">'
+    + '<h2>Sign your agreement</h2>'
+    + '<p style="font-size:13.5px;color:var(--muted)">Confirm your details, then draw your signature below.</p>'
+    + '<label class="fld" for="fullname">Full name</label>'
+    + '<input type="text" id="fullname" autocomplete="name" placeholder="Your full name">'
+    + '<label class="fld" for="email">Email</label>'
+    + '<input type="text" id="email" autocomplete="email" inputmode="email" placeholder="you@email.com" value="'+esc(doc.signerEmail||'')+'">'
+    + '<label class="fld">Signature</label>'
+    + '<div class="pad-wrap"><canvas id="pad"></canvas><span class="pad-hint" id="padHint">Draw your signature here</span></div>'
+    + '<div class="pad-tools"><span style="font-size:12px;color:var(--muted)">Use your finger or mouse</span><button class="clear-btn" id="clearBtn" type="button">Clear</button></div>'
+    + '<label class="agree"><input type="checkbox" id="agree"><span>I have read and agree to the terms of this Catering Agreement.</span></label>'
+    + '<label class="agree"><input type="checkbox" id="consent"><span>I consent to sign electronically and to receive records electronically. I understand this electronic signature is the legal equivalent of my handwritten signature.</span></label>'
+    + '<button class="submit" id="submitBtn" disabled>Sign agreement</button>'
+    + '<p class="note">Your name, email, date &amp; time, IP address and device are recorded as a signature certificate.</p>'
+    + '</div>';
+
+  // best-effort: record that the agreement was opened
+  try{ db.collection('contracts').doc(cid).update({ viewedAt: Date.now() }); }catch(e){}
+
+  setupSigning(doc);
+}
+
+function setupSigning(doc){
+  const canvas = document.getElementById('pad');
+  const hint = document.getElementById('padHint');
+  const nameEl = document.getElementById('fullname');
+  const emailEl = document.getElementById('email');
+  const agreeEl = document.getElementById('agree');
+  const consentEl = document.getElementById('consent');
+  const submitBtn = document.getElementById('submitBtn');
+  const ctx = canvas.getContext('2d');
+  let hasDrawn = false, drawing = false, last = null;
+
+  function fit(){
+    const ratio = window.devicePixelRatio||1;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    canvas.width = w*ratio; canvas.height = h*ratio;
+    ctx.scale(ratio,ratio);
+    ctx.lineWidth = 2.4; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle='#1a1a2a';
+  }
+  setTimeout(fit, 30);
+
+  function pos(e){
+    const r = canvas.getBoundingClientRect();
+    const t = (e.touches && e.touches[0]) || e;
+    return { x:(t.clientX-r.left), y:(t.clientY-r.top) };
+  }
+  function start(e){ e.preventDefault(); drawing=true; last=pos(e); hint.style.display='none'; }
+  function move(e){
+    if(!drawing) return; e.preventDefault();
+    const p = pos(e);
+    ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke();
+    last=p; hasDrawn=true; refresh();
+  }
+  function end(e){ drawing=false; }
+
+  canvas.addEventListener('mousedown',start); canvas.addEventListener('mousemove',move);
+  window.addEventListener('mouseup',end);
+  canvas.addEventListener('touchstart',start,{passive:false}); canvas.addEventListener('touchmove',move,{passive:false});
+  canvas.addEventListener('touchend',end);
+
+  document.getElementById('clearBtn').addEventListener('click',function(){
+    ctx.clearRect(0,0,canvas.width,canvas.height); hasDrawn=false; hint.style.display='block'; refresh();
+  });
+
+  function emailOk(v){ return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(v||'').trim()); }
+  function refresh(){ submitBtn.disabled = !(nameEl.value.trim() && emailOk(emailEl.value) && agreeEl.checked && consentEl.checked && hasDrawn); }
+  [nameEl,emailEl].forEach(el=>el.addEventListener('input',refresh));
+  [agreeEl,consentEl].forEach(el=>el.addEventListener('change',refresh));
+
+  async function sha256Hex(str){
+    try{
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    }catch(e){ return ''; }
+  }
+  async function getIP(){
+    try{ const r = await fetch('https://api.ipify.org?format=json'); const d = await r.json(); return d.ip||''; }catch(e){ return ''; }
+  }
+
+  submitBtn.addEventListener('click',async function(){
+    submitBtn.disabled = true; submitBtn.textContent = 'Saving…';
+    const now = Date.now();
+    const nowISO = new Date(now).toISOString();
+    let tz=''; try{ tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; }catch(e){}
+    const name = nameEl.value.trim();
+    const email = emailEl.value.trim();
+    let sigData = ''; try{ sigData = canvas.toDataURL('image/png'); }catch(e){}
+    const sigId = 'sig_'+now.toString(36)+Math.random().toString(36).slice(2,8);
+    const ip = await getIP();
+    const canonical = [cid, doc.token||'', doc.terms||'', JSON.stringify(doc.snapshot||{}), name, email, nowISO].join('|');
+    const hash = await sha256Hex(canonical);
+    try{
+      await db.collection('contracts').doc(cid).update({
+        status: 'signed',
+        signedName: name,
+        signedEmail: email,
+        signedAt: now,
+        signedAtISO: nowISO,
+        signedTZ: tz,
+        signatureDataUrl: sigData,
+        signedUA: navigator.userAgent || '',
+        signedIP: ip,
+        signatureId: sigId,
+        documentHash: hash,
+        consent: true,
+        consentedAt: now
+      });
+      const local = new Date(now).toLocaleString();
+      root.innerHTML = '<div class="card"><div class="signed-banner"><div class="ic">\u2713</div>'
+        + '<h2>Thank you \u2014 you\'re all set</h2>'
+        + '<p style="color:var(--muted);font-size:14px">Your agreement has been signed and sent to Premier Caterers.</p></div>'
+        + '<div style="margin-top:18px;border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:#fff;font-size:12.5px;color:#444">'
+          + '<div style="font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--maroon);font-size:11px;margin-bottom:8px">Signature certificate</div>'
+          + '<div style="margin:3px 0"><span style="color:var(--muted)">Signed by:</span> '+esc(name)+' &lt;'+esc(email)+'&gt;</div>'
+          + '<div style="margin:3px 0"><span style="color:var(--muted)">Date &amp; time:</span> '+esc(local)+(tz?(' ('+esc(tz)+')'):'')+'</div>'
+          + (ip?'<div style="margin:3px 0"><span style="color:var(--muted)">IP address:</span> '+esc(ip)+'</div>':'')
+          + '<div style="margin:3px 0"><span style="color:var(--muted)">Document ID:</span> '+esc(cid)+' / '+esc(sigId)+'</div>'
+          + (hash?'<div style="margin:3px 0;word-break:break-all"><span style="color:var(--muted)">Fingerprint:</span> '+esc(hash)+'</div>':'')
+        + '</div>'
+        + '<p class="note">Keep this page for your records. Questions? Call 201-250-9487.</p></div>';
+      window.scrollTo(0,0);
+    }catch(e){
+      submitBtn.disabled=false; submitBtn.textContent='Sign agreement';
+      alert('Sorry \u2014 we could not save your signature. Please check your connection and try again, or call us at 201-250-9487.');
+    }
+  });
+}
+</script>
+</body>
+</html>
