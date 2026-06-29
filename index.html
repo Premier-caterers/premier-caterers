@@ -1898,6 +1898,97 @@ function plCardFoot(inq){
     <span class="inq-signals">${hasMenu?`<span class="inq-signal has-menu"><i class="ti ti-file-check" style="font-size:12px"></i>menu</span>`:''}</span>
   </div>`;
 }
+// ── PAYMENT STATE (3-state, colorblind-safe: pattern + colour + tooltip) ──
+function pcEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function plPayState(inq){
+  try{
+    const evId='inq_'+inq.id;
+    const slots = (typeof invoiceSlotsForEvent==='function') ? invoiceSlotsForEvent(evId) : (invoices[evId]?[evId]:[]);
+    let grand=0, paid=0, hasInvoice=false;
+    for(const k of slots){
+      const inv=invoices[k]; if(!inv) continue;
+      if(inv.status==='invoice'||inv.status==='paid'){
+        const t=calcInvoiceTotals(inv);
+        grand += t.grand; paid += parseFloat(inv.deposit||0); hasInvoice=true;
+      }
+    }
+    if(!hasInvoice) return null;
+    const balance = grand - paid;
+    if(grand>0 && balance<=0.01) return 'paid';
+    if(paid>0.01) return 'partial';
+    return 'none';
+  }catch(e){ return null; }
+}
+const PAY_META = {
+  paid:    {label:'Paid in full',             css:'border:3px solid var(--blue-mid)'},
+  partial: {label:'Partial payment received', css:'border:3px solid #FFC400'},
+  none:    {label:'No payment received',      css:'border:3px dashed #FFC400'},
+};
+function _plIsBooked(colKey){ return ['booked','month_out','two_weeks','this_week','past'].includes(colKey); }
+function plBorderStyle(inq, colKey){
+  if(!_plIsBooked(colKey)) return '';
+  const st = plPayState(inq);
+  return st ? `style="${PAY_META[st].css}"` : '';
+}
+function plPayTitle(inq, colKey){
+  if(!_plIsBooked(colKey)) return '';
+  const st = plPayState(inq);
+  return st ? `title="${PAY_META[st].label}"` : '';
+}
+
+// ── ALLERGY ALERT (always loud; text + icon so it doesn't rely on colour) ──
+function inqAllergies(inq){ return (inq && (inq.allergies||inq.allergyNotes)) ? String(inq.allergies||inq.allergyNotes).trim() : ''; }
+function allergyBanner(inq, compact){
+  const a = inqAllergies(inq);
+  if(!a) return '';
+  return `<div title="Allergy alert" style="display:flex;align-items:center;gap:7px;background:#C81E1E;color:#fff;border-radius:7px;padding:${compact?'4px 8px':'7px 11px'};margin-bottom:8px;font-weight:700;font-size:${compact?'11px':'12.5px'};line-height:1.3;box-shadow:0 1px 3px rgba(200,30,30,.4)">
+    <i class="ti ti-alert-triangle" style="font-size:${compact?'14px':'17px'};flex-shrink:0"></i>
+    <span style="flex:1;min-width:0">ALLERGY${compact?'':' ALERT'}: ${pcEsc(a)}</span>
+  </div>`;
+}
+function editAllergies(id){
+  const inq=inquiries.find(x=>x.id===id); if(!inq) return;
+  const cur = inqAllergies(inq);
+  const v = prompt('Allergy / dietary alert for this event\n\nType the note (e.g. "Severe nut allergy — table 4"). Leave blank to clear it.', cur);
+  if(v===null) return;
+  inq.allergies = v.trim();
+  _saveInquiry(inq);
+  try{ logActivity(inq.id,'note', inq.allergies?('Allergy note set: '+inq.allergies):'Allergy note cleared', {}); }catch(e){}
+  showToast(inq.allergies?'Allergy note saved ✓':'Allergy note cleared');
+  render();
+}
+
+// ── CONTACT CLIENT (Email works today; Text + WhatsApp are coming soon) ──
+function openContactMenu(id){
+  const inq = inquiries.find(x=>x.id===id); if(!inq) return;
+  document.getElementById('contactMenuOverlay')?.remove();
+  const hasEmail = !!(inq.email && inq.email.trim());
+  const hasPhone = !!(inq.phone && inq.phone.trim());
+  const row=(icon,label,sub,enabled,onclick,soon)=>`
+    <button ${enabled?`onclick="${onclick}"`:'disabled'} style="display:flex;align-items:center;gap:11px;width:100%;text-align:left;padding:12px 14px;border:0.5px solid var(--border2);border-radius:10px;background:${enabled?'var(--bg2)':'var(--bg)'};color:${enabled?'var(--text)':'var(--text3)'};cursor:${enabled?'pointer':'not-allowed'};font-family:inherit;font-size:14px;margin-bottom:8px">
+      <i class="ti ${icon}" style="font-size:19px;flex-shrink:0"></i>
+      <span style="flex:1;min-width:0"><span style="font-weight:600">${label}</span>${sub?`<br><span style="font-size:11px;color:var(--text3)">${sub}</span>`:''}</span>
+      ${soon?'<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--amber-text);background:var(--amber-bg);border-radius:5px;padding:2px 7px;flex-shrink:0">Soon</span>':'<i class="ti ti-chevron-right" style="font-size:16px;color:var(--text3);flex-shrink:0"></i>'}
+    </button>`;
+  const w=document.createElement('div');
+  w.id='contactMenuOverlay';
+  w.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+  w.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:380px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3)">
+    <div style="font-weight:700;font-size:15px;margin-bottom:3px">Contact ${pcEsc(clientPrimary(inq)||'client')}</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Choose how to reach out.</div>
+    ${row('ti-mail','Email', hasEmail?pcEsc(inq.email):'No email on file', hasEmail, `closeContactMenu();openClientEmailModal('${inq.id}')`, false)}
+    ${row('ti-message','Text message', hasPhone?pcEsc(inq.phone):'No phone on file', false, '', true)}
+    ${row('ti-brand-whatsapp','WhatsApp', hasPhone?pcEsc(inq.phone):'No phone on file', false, '', true)}
+    <div style="display:flex;justify-content:flex-end;margin-top:6px">
+      <button onclick="closeContactMenu()" style="font-size:13px;padding:8px 14px;border:0.5px solid var(--border2);border-radius:9px;background:transparent;color:var(--text2);cursor:pointer">Close</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.4">Text and WhatsApp are coming soon — Text is pending carrier (A2P 10DLC) approval and WhatsApp is pending Meta Business approval.</div>
+  </div>`;
+  document.body.appendChild(w);
+  w.addEventListener('click',e=>{ if(e.target===w) closeContactMenu(); });
+}
+function closeContactMenu(){ document.getElementById('contactMenuOverlay')?.remove(); }
+
 function renderPipeline(){
   const role = roles[currentRole];
   const stages = [
@@ -1957,7 +2048,8 @@ function renderPipeline(){
         const contact = clientContact(inq);
         const chev = `<button class="pl-card-toggle" onclick="event.stopPropagation();togglePlCard('${inq.id}')" title="${compact?'Expand':'Minimize'}"><i class="ti ti-chevron-${compact?'down':'up'}"></i></button>`;
         if(compact){
-          return `<div class="inq-card compact ${selectedInqId===inq.id?'selected':''}" ${plUnpaidFull(inq)?'style="border:3px solid #FFC400"':''} onclick="selectInquiry('${inq.id}')">
+          return `<div class="inq-card compact ${selectedInqId===inq.id?'selected':''}" ${plBorderStyle(inq,s.key)} ${plPayTitle(inq,s.key)} onclick="selectInquiry('${inq.id}')">
+            ${allergyBanner(inq,true)}
             <div class="pl-card-head"><div class="inq-name">${nm}</div>${chev}</div>
             <div class="pl-compact-meta">
               ${inq.eventType ? `<span><i class="ti ti-tag" style="font-size:11px"></i>${inq.eventType}</span>` : ''}
@@ -1966,7 +2058,8 @@ function renderPipeline(){
           </div>`;
         }
         return `
-      <div class="inq-card ${selectedInqId===inq.id?'selected':''}" ${plUnpaidFull(inq)?'style="border:3px solid #FFC400"':''} onclick="selectInquiry('${inq.id}')">
+      <div class="inq-card ${selectedInqId===inq.id?'selected':''}" ${plBorderStyle(inq,s.key)} ${plPayTitle(inq,s.key)} onclick="selectInquiry('${inq.id}')">
+        ${allergyBanner(inq,false)}
         <div class="pl-card-head"><div class="inq-name">${nm}</div>${chev}</div>
         ${contact ? `<div style="font-size:11px;color:var(--text3);margin:-2px 0 4px"><i class="ti ti-user" style="font-size:10px"></i> ${contact}</div>` : ''}
         ${inq.eventName ? `<div class="inq-event-name">${inq.eventName}</div>` : ''}
@@ -1985,7 +2078,8 @@ function renderPipeline(){
           ${isBooked || s.key==='past' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">→ Go to event week</button>` : ''}
           ${s.key!=='lost'&&s.key!=='past' ? `<button class="stage-btn" style="background:var(--amber-bg);color:var(--amber-text)" onclick="event.stopPropagation();markInquiryLost('${inq.id}')">Mark lost</button>` : ''}
           ${s.key==='lost' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();reviveInquiry('${inq.id}')"><i class="ti ti-arrow-back-up" style="font-size:12px"></i> Revive</button>` : ''}
-          <button onclick="event.stopPropagation();deleteInquiry('${inq.id}')" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px;margin-left:auto"><i class="ti ti-trash"></i></button>
+          <button class="stage-btn" style="background:var(--bg2);color:var(--text2);margin-left:auto" onclick="event.stopPropagation();openContactMenu('${inq.id}')" title="Contact client"><i class="ti ti-send" style="font-size:12px"></i> Contact</button>
+          <button onclick="event.stopPropagation();deleteInquiry('${inq.id}')" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px"><i class="ti ti-trash"></i></button>
         </div>` : ''}
       </div>`;
       }).join('')}
@@ -2081,7 +2175,7 @@ function renderInqDetail(inq, role){
     <div class="hub-head">
       <div class="hub-head-actions">
         ${role.canEdit?`<button class="hub-hbtn" onclick="openEditInquiryModal('${inq.id}')"><i class="ti ti-edit"></i>Edit</button>`:''}
-        ${(role.canEdit && inq.email)?`<button class="hub-hbtn" onclick="openClientEmailModal('${inq.id}')" title="Email this client"><i class="ti ti-mail"></i>Email</button>`:''}
+        ${role.canEdit?`<button class="hub-hbtn" onclick="openContactMenu('${inq.id}')" title="Contact this client"><i class="ti ti-send"></i>Contact</button>`:''}
         ${role.canViewInvoices?`<button class="hub-hbtn" onclick="viewClientQuote('${inq.id}')"><i class="ti ti-file-invoice"></i>Quote / Invoice</button>`:''}
         <button class="hub-hbtn x" onclick="closeInqDetail()" title="Close">\u00d7</button>
       </div>
@@ -2091,6 +2185,10 @@ function renderInqDetail(inq, role){
       ${pillBits.length?`<div class="hub-pill"><span style="width:7px;height:7px;border-radius:50%;background:#fff;display:inline-block"></span>${pillBits.join(' \u00b7 ')}</div>`:''}
     </div>
     <div class="hub-body">
+      ${(()=>{ const a=inqAllergies(inq);
+        if(a) return `<div title="Allergy alert" style="display:flex;align-items:center;gap:9px;background:#C81E1E;color:#fff;border-radius:9px;padding:10px 13px;margin-bottom:14px;font-weight:700;font-size:13.5px;line-height:1.35;box-shadow:0 1px 4px rgba(200,30,30,.4)"><i class="ti ti-alert-triangle" style="font-size:20px;flex-shrink:0"></i><span style="flex:1;min-width:0">ALLERGY ALERT: ${pcEsc(a)}</span>${role.canEdit?`<button onclick="editAllergies('${inq.id}')" title="Edit allergy note" style="background:rgba(255,255,255,.22);border:none;color:#fff;border-radius:6px;padding:4px 7px;cursor:pointer;flex-shrink:0"><i class="ti ti-edit" style="font-size:14px"></i></button>`:''}</div>`;
+        if(role.canEdit) return `<button onclick="editAllergies('${inq.id}')" style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;padding:4px 10px;border:0.5px dashed #C81E1E;border-radius:7px;background:transparent;color:#C81E1E;cursor:pointer;margin-bottom:12px;font-family:inherit"><i class="ti ti-alert-triangle" style="font-size:13px"></i>Add allergy alert</button>`;
+        return ''; })()}
       ${moneyHtml}
       <div class="hub-facts">
         ${fact('Client', name)}
