@@ -7325,16 +7325,6 @@ function buildEventPaperwork(eventId, opts){
       enclosed.push((st==='invoice'||st==='paid')?'Invoice':'Estimate / quote');
     });
   }
-  if(opts.checklist){
-    if(typeof initChecklist==='function'){ try{ initChecklist(e.id); }catch(err){} }
-    const clItems=((typeof checklists!=='undefined' && checklists[e.id])?checklists[e.id]:[]).filter(i=>!i.na);
-    if(clItems.length && typeof generateChecklistHTML==='function'){
-      const ch=generateChecklistHTML(e, clItems);
-      styleParts.push(_scopeCssForPdf(_ppStyle(ch), '.pp-cl'));
-      sectionsHtml+='<div class="pp-section pp-cl">'+_ppBody(ch)+'</div>';
-      enclosed.push('Checklist ('+clItems.length+' items)');
-    }
-  }
   if(menuUrl) enclosed.push(opts.menuInPacket ? 'Menu (attached at end of packet)' : 'Menu (link on cover)');
 
   const coverStyle = '.pp-cover{padding:46px 50px;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a}'
@@ -7370,7 +7360,18 @@ function buildEventPaperwork(eventId, opts){
     +'<div class="pp-foot">Generated '+pcEsc(nowStamp())+(evFull?(' \u00b7 Event #'+pcEsc(evFull)):'')+'</div>'
     +'</section>';
 
-  sectionsHtml = (opts.cover!==false ? coverBody : '') + sectionsHtml;
+  let contentsHtml='';
+  if(opts.contents){
+    const items = enclosed.length ? enclosed : ['(no documents selected)'];
+    const rows = items.map(function(x){ return '<div class="pp-ct-row"><span class="pp-ct-box"></span><span>'+pcEsc(x)+'</span></div>'; }).join('');
+    styleParts.unshift('.pp-contents{padding:46px 50px;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a}'
+      +'.pp-contents h2{font-size:22px;font-weight:800;margin:0 0 4px}'
+      +'.pp-contents .pp-ct-sub{font-size:12.5px;color:#777;margin-bottom:20px}'
+      +'.pp-contents .pp-ct-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #eee;font-size:15px}'
+      +'.pp-contents .pp-ct-box{width:17px;height:17px;border:1.5px solid #555;border-radius:3px;flex-shrink:0}');
+    contentsHtml = '<section class="pp-section pp-contents"><h2>Packet contents</h2><div class="pp-ct-sub">'+pcEsc(clientName)+(evFull?(' \u00b7 #'+pcEsc(evFull)):'')+'</div>'+rows+'</section>';
+  }
+  sectionsHtml = (opts.cover!==false ? coverBody : '') + contentsHtml + sectionsHtml;
   const baseStyle='@page{margin:12mm} html,body{margin:0;padding:0;background:#fff} .pp-section{page-break-before:always} .pp-section:first-child{page-break-before:auto}';
   const css = baseStyle+'\n'+styleParts.join('\n');
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+pcEsc('Paperwork '+(evFull||clientName))+'</title><style>'+css+'</style></head><body>'+sectionsHtml+'</body></html>';
@@ -7413,8 +7414,8 @@ async function _htmlToPdfArrayBuffer(html){
 async function _runPaperwork(eventId, mode){
   const g=id=>document.getElementById(id);
   const wantMenu=!!(g('pp-menu') && g('pp-menu').checked);
-  const opts={ cover:!!(g('pp-cover')&&g('pp-cover').checked), beo:!!(g('pp-beo')&&g('pp-beo').checked), beoCopies:(g('pp-beocopies')&&g('pp-beocopies').value)||1, invoice:!!(g('pp-invoice')&&g('pp-invoice').checked), checklist:!!(g('pp-checklist')&&g('pp-checklist').checked) };
-  if(!opts.cover && !opts.beo && !opts.invoice && !opts.checklist && !wantMenu){ alert('Pick at least one document to include.'); return; }
+  const opts={ cover:!!(g('pp-cover')&&g('pp-cover').checked), beo:!!(g('pp-beo')&&g('pp-beo').checked), beoCopies:(g('pp-beocopies')&&g('pp-beocopies').value)||1, invoice:!!(g('pp-invoice')&&g('pp-invoice').checked), contents:!!(g('pp-contents')&&g('pp-contents').checked) };
+  if(!opts.cover && !opts.beo && !opts.invoice && !wantMenu){ alert('Pick at least one document to include.'); return; }
   const e=_beoResolveEvent(eventId);
   const inq=_beoInquiryFor(e);
   const menuLink=inq.menuLink||(Array.isArray(inq.menus)&&inq.menus[0]?inq.menus[0].url:'')||'';
@@ -7470,9 +7471,6 @@ function openPaperwork(arg){
   const hasBeo = true;
   const invSlots=_ppEventInvoiceSlots(e.id);
   const hasInv=invSlots.length>0;
-  if(typeof initChecklist==='function'){ try{ initChecklist(e.id); }catch(err){} }
-  const clItems=((typeof checklists!=='undefined' && checklists[e.id])?checklists[e.id]:[]).filter(i=>!i.na);
-  const clCount=clItems.length; const hasChecklist=clCount>0;
   const evFull=fullEventNum(e)||(e.job||'');
   closePaperwork();
   const row=(checked,disabled,id,label,sub,extra)=>'<label style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid #e2dcd2;border-radius:10px;margin-bottom:9px;'+(disabled?'opacity:.5':'cursor:pointer')+'">'
@@ -7490,7 +7488,7 @@ function openPaperwork(arg){
       +row(true,false,'pp-cover','Cover sheet','Event summary + a list of what is enclosed','')
       +row(true,!hasBeo,'pp-beo','Banquet Event Order','Per-meal sections, staffing, allergy','<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#666">copies <input type="number" id="pp-beocopies" value="1" min="1" max="6" style="width:46px;padding:5px;border:1px solid #d8d2c8;border-radius:6px;font-family:inherit;text-align:center"></span>')
       +row(hasInv,!hasInv,'pp-invoice','Invoice / estimate', hasInv?('Billing document for this event'+(invSlots.length>1?(' ('+invSlots.length+')'):'')):'No invoice on this event yet','')
-      +row(false,!hasChecklist,'pp-checklist','Checklist', hasChecklist?(clCount+' items \u2014 the event to-do list'):'No checklist items yet','')
+      +row(false,false,'pp-contents','List of included items','A checkbox list of everything in this packet','')
       +row(!!menuUrl,!menuUrl,'pp-menu','Menu', menuUrl?'Added as real PDF pages (via your Apps Script relay)':'No menu linked to this event yet','')
       +(menuUrl?'<div style="font-size:11.5px;color:#888;padding:4px 2px 0"><i class="ti ti-info-circle" style="font-size:12px"></i> When the menu is included the packet is built as one merged PDF. If the menu cannot be reached it falls back to a link on the cover.</div>':'')
     +'</div>'
