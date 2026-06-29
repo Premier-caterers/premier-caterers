@@ -2463,6 +2463,34 @@ async function convertEstimateToInvoice(id){  const inq=_findInq(id); if(!inq) r
   setTimeout(()=>{ try{ openInvoice(evId); }catch(e){} }, 350);
 }
 
+// ── DOCUMENT FOOTER + REVISION RULE (system-wide) ──
+// Footer reads: "Event #YY-MMDD-NN · <Doc> Rev N · Generated Sun 6/28/26 4:32 PM"
+// Revision rule: Rev 1 stays a draft until first print/send (finalize). After a
+// doc is finalized, regenerating it with CHANGED content bumps the rev; reprinting
+// identical content does not. Drafts never bump. Rev metadata lives on the doc
+// object itself (_rev/_finalized/_revSig), so it persists with normal saves.
+function nowStamp(){
+  const d=new Date();
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let h=d.getHours(); const ap=h>=12?'PM':'AM'; h=h%12; if(h===0) h=12;
+  const mm=String(d.getMinutes()).padStart(2,'0');
+  return `${days[d.getDay()]} ${d.getMonth()+1}/${d.getDate()}/${String(d.getFullYear()).slice(2)} ${h}:${mm} ${ap}`;
+}
+function _docSig(obj){ try{ return JSON.stringify(obj); }catch(e){ return String(Date.now()); } }
+// Mutates meta (_rev/_finalized/_revSig). Call when a doc is printed/sent.
+function finalizeDoc(meta, sig){
+  if(!meta) return;
+  if(typeof meta._rev!=='number') meta._rev=1;
+  if(!meta._finalized){ meta._finalized=true; meta._revSig=sig; }
+  else if(meta._revSig!==sig){ meta._rev+=1; meta._revSig=sig; }
+}
+function docFooterText(meta, docLabel, eventNumFull){
+  const rev = (meta && typeof meta._rev==='number') ? meta._rev : 1;
+  const draft = (meta && meta._finalized) ? '' : ' · draft';
+  const ev = eventNumFull ? ('Event #'+eventNumFull+' · ') : '';
+  return ev + docLabel + ' Rev ' + rev + draft + ' · Generated ' + nowStamp();
+}
+
 // Load jsPDF on demand (used to build the estimate PDF attachment)
 function _loadScriptOnce(src){
   return new Promise((res,rej)=>{
@@ -2614,6 +2642,15 @@ async function buildEstimatePdfBase64(inq){
   if(est.notes){ ty+=10; doc.setFont(undefined,'bold'); doc.setFontSize(10); doc.text('Notes', 40, ty); ty+=14; doc.setFont(undefined,'normal'); doc.setFontSize(9); doc.text(doc.splitTextToSize(est.notes, 515), 40, ty); }
   doc.setFontSize(8); doc.setTextColor(130);
   doc.text('This is an estimate, subject to final confirmation. Pricing may adjust with final guest count and menu selections.', 40, 758);
+  // Standardized revision footer
+  try{
+    const sig=_docSig({lines:est.lines,notes:est.notes,taxExempt:est.taxExempt,logisticsRate:est.logisticsRate,deposit:est.deposit});
+    finalizeDoc(est, sig);
+    const evNum = fullEventNum(events.find(x=>x.id==='inq_'+inq.id));
+    doc.setTextColor(150); doc.setFontSize(7.5);
+    doc.text(docFooterText(est,'Estimate',evNum), 40, 778);
+    _saveInquiry(inq);
+  }catch(e){ console.warn('estimate footer:',e); }
   return doc.output('datauristring').split(',')[1];
 }
 
@@ -6820,6 +6857,14 @@ function buildInvoiceHTML(eid){
   const isInvoice = inv.status==='invoice'||inv.status==='paid';
   const docType = isInvoice ? 'INVOICE' : 'ESTIMATE';
   const now = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  // Standardized revision footer (Rev bumps only on changed content after first print/send)
+  let _revFooter='';
+  try{
+    const sig=_docSig({lines:inv.lines,deposit:inv.deposit,status:inv.status,notes:inv.notes,taxExempt:inv.taxExempt,logisticsRate:inv.logisticsRate});
+    finalizeDoc(inv, sig);
+    _revFooter = docFooterText(inv, isInvoice?'Invoice':'Estimate', fullEventNum(e));
+    if(db) db.collection('invoices').doc(eid).set(inv);
+  }catch(err){ console.warn('invoice footer:',err); }
 
   const html = '<!DOCTYPE html><html><head><title>'+invoiceFileName(eid)+'</title><style>'+
     '*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:14px;color:#000;padding:40px 50px;max-width:780px;margin:0 auto}'+
@@ -6882,6 +6927,7 @@ function buildInvoiceHTML(eid){
     (inv.notes?'<div class="notes"><strong>Notes:</strong> '+inv.notes+'</div>':'')+
     (!isInvoice ? '<div style="margin:20px 0;padding:14px 16px;border:1.5px solid #8B1A1A;border-radius:6px;background:#fdf8f8;font-size:10px;color:#555;line-height:1.7;text-align:center"><strong style="color:#8B1A1A;font-size:11px">ESTIMATE DISCLAIMER</strong><br>THIS IS AN ESTIMATE. FINAL FOOD COST AND LABOR COSTS TO BE DETERMINED AFTER FINAL MENU, GUEST COUNT, EVENT DETAILS AND LOGISTICS ARE DETERMINED.<br>STAFF GRATUITIES ARE NOT INCLUDED IN THIS ESTIMATE.</div>' : '')+
     '<div class="footer">Premier Caterers · Kosher supervision provided by the OU and the PCK · thepremiercaterer.com · Thank you for your business!</div>'+
+    '<div class="footer" style="margin-top:6px;border-top:none;color:#aaa;font-size:8px">'+_revFooter+'</div>'+
     '</body></html>';
 
   return html;
