@@ -354,7 +354,7 @@ async function emptyTrash(){
 
 
 function startFirebaseListeners(){
-  eventsCol.onSnapshot( snap=>{ const first=events.length===0; events=snap.docs.map(d=>d.data()); try{ events.forEach(ev=>{ if(ev&&String(ev.id).indexOf('inq_')===0) _actPrevEv[ev.id]=JSON.parse(JSON.stringify(ev)); }); }catch(e){} try{ backfillEventNumbers(); }catch(e){ console.warn('eventNumber backfill skipped:',e); } if(first||currentView==='events'||currentView==='home') render(); });
+  eventsCol.onSnapshot( snap=>{ const first=events.length===0; events=snap.docs.map(d=>d.data()); try{ events.forEach(ev=>{ if(ev&&String(ev.id).indexOf('inq_')===0) _actPrevEv[ev.id]=JSON.parse(JSON.stringify(ev)); }); }catch(e){} try{ backfillEventNumbers(); }catch(e){ console.warn('eventNumber backfill skipped:',e); } try{ repairEventNumbers(); }catch(e){ console.warn('eventNumber repair skipped:',e); } if(first||currentView==='events'||currentView==='home') render(); });
   changesCol.onSnapshot( snap=>{ changes=snap.docs.map(d=>d.data()).sort((a,b)=>(b.time||'').localeCompare(a.time||'')); if(currentView==='changes') render(); });
   inquiriesCol.onSnapshot( snap=>{
     inquiries=snap.docs.map(d=>d.data());
@@ -610,6 +610,75 @@ async function backfillEventNumbers(){
     console.error('eventNumber backfill failed:', err);
   } finally {
     _eventNumBackfillBusy = false;
+  }
+}
+
+// ── ONE-TIME REPAIR ──
+// Fixes events left with a "bare" global-count number (e.g. eventNumber "#63")
+// from the old dateless-creation bug. A healthy number always contains a dash
+// (26-0705-02); a bare number does not. For each affected week we find the
+// highest healthy sequence already in use and slot the strays in right after
+// it, preserving their existing order. Both `job` (what the screens show) and
+// `eventNumber` (what paperwork shows) are corrected. Self-terminating: once an
+// event has a dashed number it's skipped, so this is a safe no-op on later
+// loads. Legacy '#2a'-style values live in `job` only and are handled by the
+// backfill above, so they're never touched here.
+let _eventNumRepairBusy = false;
+async function repairEventNumbers(){
+  if(!db || _eventNumRepairBusy) return;
+  // A stray = has a week, and its eventNumber is present but has no dash.
+  const broken = events.filter(e => {
+    if(!e || !e.weekOf) return false;
+    const cur = String(e.eventNumber || '');
+    return cur.length > 0 && !cur.includes('-');
+  });
+  if(!broken.length) return;
+  _eventNumRepairBusy = true;
+  try {
+    const byWeek = {};
+    broken.forEach(e => { (byWeek[e.weekOf] = byWeek[e.weekOf] || []).push(e); });
+    const batch = db.batch();
+    let n = 0; const mapping = [];
+    Object.keys(byWeek).forEach(week => {
+      // Highest healthy (dashed) sequence already used this week.
+      let max = 0;
+      events.forEach(e => {
+        if((e.weekOf || '') !== week) return;
+        const cur = String(e.eventNumber || '');
+        if(!cur.includes('-')) return;            // skip the strays themselves
+        const t = parseSeqToken(seqFromAny(cur));
+        if(t && t.num > max) max = t.num;
+      });
+      // Assign sequentially, preserving the strays' existing order.
+      byWeek[week]
+        .slice()
+        .sort((a,b) => {
+          const ta = parseSeqToken(seqFromAny(a.eventNumber || a.job));
+          const tb = parseSeqToken(seqFromAny(b.eventNumber || b.job));
+          const na = ta ? ta.num : 0, nb = tb ? tb.num : 0;
+          return na !== nb ? na - nb : String(a.id).localeCompare(String(b.id));
+        })
+        .forEach(e => {
+          max++;
+          const num = makeEventNumber(week, String(max));
+          if(!num) return;
+          const before = e.eventNumber || e.job || '(none)';
+          e.job = num; e.eventNumber = num;
+          batch.set(db.collection('events').doc(e.id), e);
+          mapping.push(before + '  →  ' + num + '   (' + (e.name || '') + ')');
+          n++;
+        });
+    });
+    if(n > 0){
+      await batch.commit();
+      console.log('[eventNumber repair] ' + n + ' event(s) fixed:\n' + mapping.join('\n'));
+      showToast('Fixed numbering on ' + n + ' event' + (n > 1 ? 's' : '') + ' \u2713', 5000);
+      render();
+    }
+  } catch(err){
+    console.error('eventNumber repair failed:', err);
+  } finally {
+    _eventNumRepairBusy = false;
   }
 }
 
@@ -889,16 +958,6 @@ async function coverSaveMeal(eventId, mealIdx, field, val, isNumber){
   // keep label in sync with jobSuffix if label is blank
   if(field==='jobSuffix' && !e.meals[mealIdx].label) e.meals[mealIdx].label = val;
   await _saveEvent(e);
-}
-
-function coverCreateDropOff(){
-  if(!window._coverTempRows) window._coverTempRows = [];
-  const weekDate = getWeekEndDate(currentWeekOffset);
-  const weekStr  = weekDate.toISOString().split('T')[0];
-  const nextJob  = nextJobNumber(weekStr);
-  window._coverTempRows.push({job:nextJob, name:'', label:'Drop off', typeLabel:'Drop off catering', dayLabel:'', addr:'', waiters:0, bartenders:0, waiterTime:'', chefs:0, chefTime:'', porters:0, mashgiach:'', manager:''});
-  render();
-  setTimeout(()=>document.querySelector('tfoot')?.scrollIntoView({behavior:'smooth',block:'nearest'}),100);
 }
 
 function coverCreateDropOff(){
@@ -4047,11 +4106,28 @@ function createEventFromInquiry(inq){
     existing.addr = inq.venueLocation || existing.addr;
     if(menuLink && !existing.menuLink) existing.menuLink = menuLink;
     existing.inquiryId = inq.id;
+    // If we now know the week and this event still lacks a proper per-week
+    // number — either it was booked before a date was set, or it carries an
+    // old global-count artifact like "#63" — assign the next free number now.
+    // (A healthy number always contains a dash, e.g. 26-0705-02.)
+    if(existing.weekOf){
+      const cur = String(existing.eventNumber || '');
+      if(!cur || !cur.includes('-')){
+        existing.eventNumber = ''; existing.job = '';   // clear stale value so it can't inflate the per-week count
+        const n = nextEventNumber(existing.weekOf);
+        if(n){ existing.eventNumber = n; existing.job = n; }
+      }
+    }
     _saveEvent(existing);
     return;
   }
 
-  const autoJob = wi.weekOf ? nextEventNumber(wi.weekOf) : '#'+(events.length+1);
+  // No week yet (event has no date) → leave it UNNUMBERED for now. A real
+  // per-week number (01, 02, …) is assigned the moment a date is set — see the
+  // `existing` branch above and repairEventNumbers(). The old fallback here was
+  // '#'+(events.length+1), which stamped a global running count (#63, #64…)
+  // that then stuck even after a date was added. That's the bug this removes.
+  const autoJob = wi.weekOf ? nextEventNumber(wi.weekOf) : '';
   const newEvent = {
     id: evId,
     job: autoJob,
