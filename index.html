@@ -7387,6 +7387,7 @@ function openPaperwork(arg){
   const e=_beoResolveEvent(arg);
   if(!e){ alert('Event paperwork is available once the event is booked \u2014 it pulls the BEO and invoice from the booked event.'); return; }
   const inq=_beoInquiryFor(e);
+  const menuUrl=inq.menuLink||(Array.isArray(inq.menus)&&inq.menus[0]?inq.menus[0].url:'')||'';
   const hasBeo = true;
   const invSlots=_ppEventInvoiceSlots(e.id);
   const hasInv=invSlots.length>0;
