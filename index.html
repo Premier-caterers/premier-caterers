@@ -342,7 +342,7 @@ async function emptyTrash(){
 
 
 function startFirebaseListeners(){
-  eventsCol.onSnapshot( snap=>{ const first=events.length===0; events=snap.docs.map(d=>d.data()); try{ events.forEach(ev=>{ if(ev&&String(ev.id).indexOf('inq_')===0) _actPrevEv[ev.id]=JSON.parse(JSON.stringify(ev)); }); }catch(e){} if(first||currentView==='events'||currentView==='home') render(); });
+  eventsCol.onSnapshot( snap=>{ const first=events.length===0; events=snap.docs.map(d=>d.data()); try{ events.forEach(ev=>{ if(ev&&String(ev.id).indexOf('inq_')===0) _actPrevEv[ev.id]=JSON.parse(JSON.stringify(ev)); }); }catch(e){} try{ backfillEventNumbers(); }catch(e){ console.warn('eventNumber backfill skipped:',e); } if(first||currentView==='events'||currentView==='home') render(); });
   changesCol.onSnapshot( snap=>{ changes=snap.docs.map(d=>d.data()).sort((a,b)=>(b.time||'').localeCompare(a.time||'')); if(currentView==='changes') render(); });
   inquiriesCol.onSnapshot( snap=>{
     inquiries=snap.docs.map(d=>d.data());
@@ -381,7 +381,7 @@ async function seedIfEmpty(){
     seedEvents.forEach(e=>{ 
     // Na'aleh (#9) is this week (Jun 8), all others are last week (Jun 1)
     if(!e.weekOf) e.weekOf = (e.id==='9') ? '2026-06-07' : '2026-05-31';
-    // Convert old job format (#1, #2a) to new format
+    // Convert old job format (#1, #2a) to legacy long form, keep it on `job`.
     if(e.job && e.job.startsWith('#') && !e.job.includes('-')){
       const n = e.job.replace('#','');
       const d = new Date((e.weekOf||'2026-06-07')+'T12:00:00');
@@ -390,6 +390,8 @@ async function seedIfEmpty(){
       const yy = String(d.getFullYear()).slice(2);
       e.job = mm+dd+yy+'-'+n;
     }
+    // New canonical event number (parallel field; `job` stays as-is).
+    if(!e.eventNumber){ const en = makeEventNumber(e.weekOf, seqFromAny(e.job)); if(en) e.eventNumber = en; }
     batch.set(db.collection('events').doc(e.id),e); 
   });
     await batch.commit();
@@ -455,40 +457,139 @@ let checklists = {};
 const dayOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
 const typeMap = {dinner:'Dinner',lunch:'Lunch',engagement:'Engagement',barmitzvah:'Bar mitzvah',shalosh:'Shalosh seudah',dropoff:'Drop off'};
 
-// ── JOB NUMBER HELPERS ──
-// Full job ID format: MMDDYY-N (e.g. 060826-1)
-// Display format: #N (e.g. #1)
+// ── EVENT NUMBER HELPERS ──
+// Canonical event number format:  YY-MMDD-NN[letter]
+//   YY     = 2-digit year of the W/E (Sunday) date
+//   MMDD   = month+day of the W/E (Sunday) date
+//   NN     = 2-digit per-week sequence, leading zero
+//   letter = optional lowercase suffix for sub-meals (a, b, c…)
+// Examples: 26-0705-01, 26-0705-01a
+// Short conversational form: #01, #01a
+//
+// IMPORTANT: the legacy `job` field (#2a, 053126-2a, 260531-2a …) is NEVER
+// deleted. We store the new number in a parallel `eventNumber` field and the
+// app displays that going forward. The two earlier, conflicting long formats
+// (MMDDYY-N and YYMMDD-N) are both readable here because we always take the
+// LAST dash-segment as the sequence.
 
-function makeJobId(weekOfStr, n){
-  // weekOfStr = '2026-06-07'
-  const d = new Date(weekOfStr + 'T12:00:00');
-  const mm = String(d.getMonth()+1).padStart(2,'0');
-  const dd = String(d.getDate()).padStart(2,'0');
-  const yy = String(d.getFullYear()).slice(2);
-  return mm+dd+yy+'-'+n;
+// W/E (Sunday) date pieces from a 'YYYY-MM-DD' weekOf string.
+function weDateParts(weekOf){
+  if(!weekOf) return null;
+  const d = new Date(weekOf + 'T12:00:00Z');
+  if(isNaN(d)) return null;
+  return {
+    yy: String(d.getUTCFullYear()).slice(2),
+    mm: String(d.getUTCMonth()+1).padStart(2,'0'),
+    dd: String(d.getUTCDate()).padStart(2,'0')
+  };
 }
 
-function displayJob(fullJob){
-  // '060826-1' -> '#1', '060826-2a' -> '#2a', '#1' -> '#1' (legacy)
+// Split a sequence token like '2', '2a', '02', '02a' into {num, letter}.
+function parseSeqToken(tok){
+  const m = String(tok==null?'':tok).trim().match(/^(\d+)\s*([a-z]?)$/i);
+  if(!m) return null;
+  return { num: parseInt(m[1],10), letter: (m[2]||'').toLowerCase() };
+}
+
+// Pull the sequence token out of ANY known format:
+//   '#2a'->'2a'  '060726-1'->'1'  '260607-2a'->'2a'  '26-0607-01a'->'01a'
+function seqFromAny(val){
+  if(!val) return '';
+  let s = String(val).trim().replace(/^#/,'');
+  if(s.includes('-')){ const p = s.split('-'); s = p[p.length-1]; } // sequence is always the last segment
+  return s;
+}
+
+// Build the canonical event number from a weekOf + any sequence token.
+function makeEventNumber(weekOf, seqToken){
+  const p = weDateParts(weekOf);
+  const t = parseSeqToken(seqToken);
+  if(!p || !t) return '';
+  return p.yy+'-'+p.mm+p.dd+'-'+String(t.num).padStart(2,'0')+t.letter;
+}
+
+// New short conversational form from any value: '26-0705-01a' -> '#01a'
+function shortEventNumber(val){
+  const t = parseSeqToken(seqFromAny(val));
+  if(!t) return val ? ('#'+seqFromAny(val)) : '';
+  return '#'+String(t.num).padStart(2,'0')+t.letter;
+}
+
+// The canonical full number for an event (stored eventNumber, else computed).
+function fullEventNum(e){
+  if(!e) return '';
+  if(e.eventNumber) return e.eventNumber;
+  return makeEventNumber(e.weekOf, seqFromAny(e.job)) || '';
+}
+
+// Next available canonical number for a week (highest existing sequence + 1).
+function nextEventNumber(weekOf){
+  const p = weDateParts(weekOf);
+  if(!p) return '';
+  let max = 0;
+  events.forEach(e=>{
+    if((e.weekOf||'') !== weekOf) return;
+    const t = parseSeqToken(seqFromAny(e.eventNumber || e.job));
+    if(t && t.num > max) max = t.num;
+  });
+  return p.yy+'-'+p.mm+p.dd+'-'+String(max+1).padStart(2,'0');
+}
+
+// Legacy short form (what numbers used to look like): '#2a'. Kept only so the
+// transition UI can show "was #2a" beside the new number.
+function legacyShortJob(fullJob){
   if(!fullJob) return '';
-  if(fullJob.includes('-')) return '#'+fullJob.split('-')[1];
-  return fullJob.startsWith('#') ? fullJob : '#'+fullJob;
+  if(String(fullJob).includes('-')) return '#'+String(fullJob).split('-')[1];
+  return String(fullJob).startsWith('#') ? fullJob : '#'+fullJob;
 }
 
-function nextJobNumber(weekOf){
-  // Find highest number for this week
-  const weStr = weekOf || '2026-06-07';
-  const d = new Date(weStr + 'T12:00:00');
-  const mm = String(d.getMonth()+1).padStart(2,'0');
-  const dd = String(d.getDate()).padStart(2,'0');
-  const yy = String(d.getFullYear()).slice(2);
-  const prefix = mm+dd+yy+'-';
-  const existing = events
-    .filter(e=>e.job && e.job.startsWith(prefix))
-    .map(e=>{ const n=e.job.split('-')[1]; return parseInt(n)||0; })
-    .filter(n=>!isNaN(n));
-  const max = existing.length ? Math.max(...existing) : 0;
-  return prefix + (max+1);
+// During the numbering transition we surface the full canonical number on
+// event cards so Kenny can eyeball a whole week at once. Flip to false once
+// everyone's used to the new numbers.
+const SHOW_FULL_EVENT_NUM = true;
+
+// displayJob now speaks the NEW short form everywhere it's used inline.
+function displayJob(val){ return shortEventNumber(val); }
+
+// ── Legacy generators kept as thin wrappers so any straggler call still works;
+//    everything now routes through the canonical generator above. ──
+function makeJobId(weekOfStr, n){ return makeEventNumber(weekOfStr, n); }
+function nextJobNumber(weekOf){ return nextEventNumber(weekOf); }
+
+// ── ONE-TIME BACKFILL ──
+// Computes `eventNumber` for any event that doesn't have one yet, from the
+// event's W/E date + its existing sequence. The old `job` field is preserved
+// untouched (rollback path). Self-terminating: once every event with a
+// weekOf+job has an eventNumber, this becomes a no-op. Idempotent across
+// devices because the value is computed deterministically.
+let _eventNumBackfillBusy = false;
+async function backfillEventNumbers(){
+  if(!db || _eventNumBackfillBusy) return;
+  const need = events.filter(e => e && !e.eventNumber && e.weekOf && e.job);
+  if(!need.length) return;
+  _eventNumBackfillBusy = true;
+  try {
+    const batch = db.batch();
+    let n = 0; const mapping = [];
+    need.forEach(e=>{
+      const num = makeEventNumber(e.weekOf, seqFromAny(e.job));
+      if(!num) return;
+      e.eventNumber = num;
+      batch.set(db.collection('events').doc(e.id), e);
+      mapping.push(legacyShortJob(e.job) + '  →  ' + num);
+      n++;
+    });
+    if(n > 0){
+      await batch.commit();
+      console.log('[eventNumber backfill] '+n+' event(s) renumbered:\n'+mapping.join('\n'));
+      showToast('Renumbered '+n+' event'+(n>1?'s':'')+' to the new format ✓', 5000);
+      render();
+    }
+  } catch(err){
+    console.error('eventNumber backfill failed:', err);
+  } finally {
+    _eventNumBackfillBusy = false;
+  }
 }
 
 const roles = {
@@ -733,18 +834,14 @@ function render(){
 let coverSortKey = 'job';
 let coverSortDir = 1; // 1=asc, -1=desc
 
-function coverJobNum(job){
-  if(!job) return '';
-  if(job.includes('-')) return '#'+job.split('-').pop();
-  return job.startsWith('#') ? job : '#'+job;
-}
+function coverJobNum(job){ return shortEventNumber(job); }
 
 function coverSortEvents(list){
   const parse = j => { const s=(j||'').replace('#','').split('-').pop(); const m=s.match(/^(\d+)([a-z]*)$/i); return m?[parseInt(m[1]),m[2].toLowerCase()]:[999,'']; };
   return list.slice().sort((a,b)=>{
     let av, bv;
     switch(coverSortKey){
-      case 'job':     { const [an,al]=parse(a.job),[bn,bl]=parse(b.job); return coverSortDir*(an!==bn?an-bn:al<bl?-1:al>bl?1:0); }
+      case 'job':     { const [an,al]=parse(a.eventNumber||a.job),[bn,bl]=parse(b.eventNumber||b.job); return coverSortDir*(an!==bn?an-bn:al<bl?-1:al>bl?1:0); }
       case 'day':     av=(['sunday','monday','tuesday','wednesday','thursday','friday','saturday'].indexOf((a.day||'').toLowerCase())); bv=(['sunday','monday','tuesday','wednesday','thursday','friday','saturday'].indexOf((b.day||'').toLowerCase())); break;
       case 'name':    av=(a.name||'').toLowerCase(); bv=(b.name||'').toLowerCase(); break;
       case 'type':    av=(a.typeLabel||a.type||'').toLowerCase(); bv=(b.typeLabel||b.type||'').toLowerCase(); break;
@@ -813,27 +910,29 @@ async function coverCommitRow(ri){
   const weekDate = getWeekEndDate(currentWeekOffset);
   const weekStr  = weekDate.toISOString().split('T')[0];
 
-  // Build full job number
-  const yy = String(weekDate.getUTCFullYear()).slice(2);
-  const mm = String(weekDate.getUTCMonth()+1).padStart(2,'0');
-  const dd = String(weekDate.getUTCDate()).padStart(2,'0');
-  const prefix = yy+mm+dd+'-';
-  let fullJob = row.job ? (row.job.includes('-') ? row.job : prefix+row.job.replace(/^#/,'')) : nextJobNumber(weekStr);
+  // Resolve the typed/auto job into a canonical event number for this week.
+  let fullJob;
+  if(row.job){
+    fullJob = makeEventNumber(weekStr, seqFromAny(row.job)) || nextEventNumber(weekStr);
+  } else {
+    fullJob = nextEventNumber(weekStr);
+  }
+  const wantSeq  = parseSeqToken(seqFromAny(fullJob));
+  const shortNum = wantSeq ? String(wantSeq.num).padStart(2,'0') : '';
+  const sameSeq  = (e)=>{ const t=parseSeqToken(seqFromAny(e.eventNumber||e.job)); return !!(t && wantSeq && t.num===wantSeq.num); };
 
-  // Detect: same job # + same name → sub-meal of existing event
-  const shortNum = fullJob.includes('-') ? fullJob.split('-')[1].replace(/[a-z]+$/i,'') : '';
+  // Detect: same sequence # + same name this week → sub-meal of existing event
   const matchEvent = events.find(e =>
     (e.weekOf||'') === weekStr &&
-    e.job && e.job.includes('-') &&
-    e.job.split('-')[1].replace(/[a-z]+$/i,'') === shortNum &&
+    sameSeq(e) &&
     e.name.toLowerCase().trim() === row.name.toLowerCase().trim()
   );
 
   if(matchEvent){
-    // Same client, same job # → add as sub-meal
-    if(confirm(`"${row.name}" already has job #${shortNum} this week.\n\nAdd "${row.label||'this meal'}" as a sub-meal row under that event?`)){
+    // Same client, same event # → add as sub-meal
+    if(confirm(`"${row.name}" already has event #${shortNum} this week.\n\nAdd "${row.label||'this meal'}" as a sub-meal row under that event?`)){
       if(!matchEvent.meals) matchEvent.meals = [];
-      const suffix = fullJob.includes('-') ? (fullJob.split('-')[1].replace(/^\d+/,'')) : '';
+      const suffix = wantSeq ? wantSeq.letter : '';
       matchEvent.meals.push({
         jobSuffix: suffix, label: row.label||'', name: row.name,
         typeLabel: row.typeLabel, dayLabel: row.dayLabel, addr: row.addr,
@@ -845,13 +944,12 @@ async function coverCommitRow(ri){
       showToast('Added as sub-meal under ' + matchEvent.name);
     } else return;
   } else {
-    // Different client or new job # → create new booked event
+    // Different client or new event # → create new booked event
     const sameJobDiffClient = events.find(e =>
-      (e.weekOf||'') === weekStr &&
-      e.job && e.job.split('-')[1]?.replace(/[a-z]+$/i,'') === shortNum
+      (e.weekOf||'') === weekStr && sameSeq(e)
     );
     let msg = sameJobDiffClient
-      ? `Job #${shortNum} this week belongs to "${sameJobDiffClient.name}".\n\n"${row.name}" appears to be a different client at the same job #.\nCreate as a NEW booked event for this week?`
+      ? `Event #${shortNum} this week belongs to "${sameJobDiffClient.name}".\n\n"${row.name}" appears to be a different client at the same number.\nCreate as a NEW booked event for this week?`
       : `Create "${row.name}" as a new booked event for the week of ${weekStr}?`;
     if(!confirm(msg)) return;
 
@@ -859,6 +957,7 @@ async function coverCommitRow(ri){
     const newEvent = {
       id: 'ev_' + Date.now(),
       job: fullJob,
+      eventNumber: fullJob,
       name: row.name,
       type: 'other', typeLabel: row.typeLabel||'',
       day: 'friday', dayLabel: row.dayLabel||'',
@@ -1409,6 +1508,7 @@ function renderEvents(){
           ${e.lost ? '<span style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:8px;background:var(--amber-text);color:var(--amber-bg);font-weight:600">LOST</span>' : ''}
           ${!e.lost && changes.some(c=>c.job===e.job && changeDepts.some(d=>!(c.acks||{})[d])) ? '<i class="ti ti-alert-triangle" style="font-size:14px;color:var(--amber-text);margin-left:auto" title="Unacknowledged changes"></i>' : ''}
         </div>
+        ${SHOW_FULL_EVENT_NUM && fullEventNum(e) ? `<div style="font-size:10px;color:var(--text3);letter-spacing:.02em;margin:-2px 0 2px" title="New event number">${esc(fullEventNum(e))}</div>` : ''}
         <div class="pl-card-head"><div class="client-name">${e.name}</div>${ewChev}</div>
         ${e.contactName ? `<div style="font-size:11px;color:var(--text3);margin:-2px 0 4px"><i class="ti ti-user" style="font-size:10px"></i> ${e.contactName}</div>` : ''}
         ${e.addr?`<div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>${e.addr}</div>`:''}
@@ -1494,6 +1594,17 @@ function renderEvents(){
   return h;
 }
 
+// Header number for the detail panel: new canonical (prominent) + old (quiet).
+function detailNumberHtml(e){
+  const full = fullEventNum(e);
+  if(!full) return (e.job ? esc(e.job) : '');
+  const legacy = legacyShortJob(e.job);
+  const oldBit = legacy && (legacy !== shortEventNumber(full))
+    ? ` <span style="font-size:12px;font-weight:500;color:var(--text3)">· was ${esc(legacy)}</span>`
+    : '';
+  return `<span>${esc(full)}</span>${oldBit}`;
+}
+
 function renderDetail(e,role){
   const ed=editingId===e.id;
   const f=(k,label,val,type='text')=>`<div class="drow"><span class="dkey">${label}</span><span class="dval">${ed&&role.canEdit?`<input type="${type}" id="f-${k}" value="${(val||'').toString().replace(/"/g,'&quot;')}">`:(val||'—')}</span></div>`;
@@ -1505,7 +1616,7 @@ function renderDetail(e,role){
 
   return `<div class="detail-panel">
     <div class="detail-header">
-      <div class="detail-title">${e.job} — ${e.name}</div>
+      <div class="detail-title">${detailNumberHtml(e)} — ${e.name}</div>
       <div class="detail-actions">
         ${role.canEdit?(ed
           ?`<button class="icon-btn" onclick="saveEdit('${e.id}')" style="color:var(--blue-mid)" title="Save"><i class="ti ti-check"></i></button>
@@ -2331,10 +2442,51 @@ function syncHubDrawer(){
   const inq = (currentView==='pipeline' && selectedInqId) ? inquiries.find(x=>x.id===selectedInqId) : null;
   if(inq){
     const role=roles[currentRole];
+    // Preserve scroll position and active element across the re-render so editing an
+    // estimate/invoice field doesn't bounce the drawer back to the top.
+    const _prevScroll = dr.scrollTop || 0;
+    const _activeEl = document.activeElement;
+    let _activeMeta = null;
+    if(_activeEl && dr.contains(_activeEl) && _activeEl.tagName){
+      // Record enough to find the new equivalent input after re-render.
+      _activeMeta = {
+        tag: _activeEl.tagName,
+        type: _activeEl.type || '',
+        id: _activeEl.id || '',
+        name: _activeEl.name || '',
+        // Anchor on the input's onchange/oninput text since those carry line indexes etc.
+        signature: (_activeEl.getAttribute('onchange')||'')+'|'+(_activeEl.getAttribute('oninput')||''),
+        selStart: (typeof _activeEl.selectionStart === 'number') ? _activeEl.selectionStart : null,
+        selEnd:   (typeof _activeEl.selectionEnd   === 'number') ? _activeEl.selectionEnd   : null
+      };
+    }
     try{ dr.innerHTML = renderInqDetail(inq, role); }
     catch(err){ dr.innerHTML = '<div style="padding:2rem;color:#b00;font:13px monospace">Hub error: '+(err&&err.message||err)+'</div>'; }
     dr.setAttribute('aria-hidden','false');
     requestAnimationFrame(()=>{ dr.classList.add('show'); sc.classList.add('show'); });
+    // Restore scroll first (cheap) — then refocus the equivalent input if we can find it.
+    dr.scrollTop = _prevScroll;
+    if(_activeMeta && _activeMeta.signature){
+      try{
+        let candidate = null;
+        // Try by id first, then by name, then by the onchange/oninput signature.
+        if(_activeMeta.id) candidate = dr.querySelector('#'+CSS.escape(_activeMeta.id));
+        if(!candidate && _activeMeta.name) candidate = dr.querySelector('['+'name="'+CSS.escape(_activeMeta.name)+'"]');
+        if(!candidate){
+          const all = dr.querySelectorAll('input,select,textarea');
+          for(const el of all){
+            const sig = (el.getAttribute('onchange')||'')+'|'+(el.getAttribute('oninput')||'');
+            if(sig && sig===_activeMeta.signature){ candidate = el; break; }
+          }
+        }
+        if(candidate){
+          candidate.focus({preventScroll:true});
+          if(_activeMeta.selStart!=null && _activeMeta.selEnd!=null && typeof candidate.setSelectionRange==='function'){
+            try{ candidate.setSelectionRange(_activeMeta.selStart, _activeMeta.selEnd); }catch(e){}
+          }
+        }
+      }catch(e){}
+    }
     if(_estimateOpenId===inq.id){
       requestAnimationFrame(()=>{ try{ initLineSortable('estLinesBody-'+_estimateOpenId, (from,to)=>reorderEstimateLine(_estimateOpenId, from, to)); }catch(e){} });
     }
@@ -3532,10 +3684,11 @@ function createEventFromInquiry(inq){
     return;
   }
 
-  const autoJob = wi.weekOf ? nextJobNumber(wi.weekOf) : '#'+(events.length+1);
+  const autoJob = wi.weekOf ? nextEventNumber(wi.weekOf) : '#'+(events.length+1);
   const newEvent = {
     id: evId,
     job: autoJob,
+    eventNumber: autoJob,
     inquiryId: inq.id,
     name: clientPrimary(inq) || (inq.eventName||'Event'),
     organization: (inq.organization||'').trim(),
@@ -7409,14 +7562,14 @@ function addEvent(){
     if(!firstName && !lastName){ alert('Please enter a client name.'); return; }
     if(!eventDate){ alert('Please enter the event date so it lands on the correct week.'); return; }
 
-    // Optional custom job number — validate against duplicates for that week
+    // Optional custom event number — validate against duplicates for that week
     const jobInput = document.getElementById('m-job')?.value?.trim();
     const wi = weekInfoFromDate(eventDate);
     if(jobInput && wi){
-      const fullJob = makeJobId(wi.weekOf, jobInput.replace('#',''));
-      const duplicate = events.find(e => e.weekOf === wi.weekOf && e.job === fullJob);
+      const want = parseSeqToken(jobInput.replace('#',''));
+      const duplicate = want ? events.find(e => (e.weekOf === wi.weekOf) && (()=>{ const t=parseSeqToken(seqFromAny(e.eventNumber||e.job)); return !!(t && t.num===want.num && t.letter===want.letter); })()) : null;
       if(duplicate){
-        alert('Job #' + jobInput.replace('#','') + ' is already used that week for "' + duplicate.name + '". Please use a different number.');
+        alert('Event #' + jobInput.replace('#','') + ' is already used that week for "' + duplicate.name + '". Please use a different number.');
         return;
       }
     }
@@ -7455,10 +7608,10 @@ function addEvent(){
     createEventFromInquiry(inq);
     // Booked from the start → add to Google Calendar as blueberry
     if(inq.stage==='booked'){ gcalBooked(inq); }
-    // If a custom job # was given, apply it to the created event
+    // If a custom event # was given, apply it to the created event
     if(jobInput && wi){
       const ev = events.find(x=>x.id==='inq_'+inq.id);
-      if(ev){ ev.job = makeJobId(wi.weekOf, jobInput.replace('#','')); _saveEvent(ev); }
+      if(ev){ const num = makeEventNumber(wi.weekOf, jobInput.replace('#','')); if(num){ ev.job = num; ev.eventNumber = num; } _saveEvent(ev); }
     }
     closeModal();
     render(); updatePipelineBadge();
