@@ -49,6 +49,10 @@
   #userBar .ub-out{padding:5px 12px;border:0.5px solid var(--border2,#ccc);border-radius:8px;background:var(--bg2,#f3f3f3);color:var(--text2,#444);font-size:12px;cursor:pointer}
   /* Wider hub drawer — overrides styles.css (loads later in the document) */
   #hubDrawer{width:min(1040px,96vw)!important;max-width:96vw!important}
+  .drow.add-hover{cursor:pointer;border-radius:6px}
+  .drow.add-hover .add-cta{color:var(--text3,#999)}
+  .drow.add-hover:hover{background:var(--bg2,#f3f3f3)}
+  .drow.add-hover:hover .add-cta{color:var(--blue-mid,#185FA5)}
 </style>
 <div id="loginOverlay"><div class="lg-card"><div id="loginStep"></div></div></div>
 <!-- =================== END LOGIN OVERLAY (added) =================== -->
@@ -2230,12 +2234,19 @@ function drawerDocuments(inq, role, ev){
 
 function drawerStaffDetails(inq, ev, role){
   if(!ev) return '';
-  const row=(label,val)=>`<div class="drow"><span class="dkey">${label}</span><span class="dval">${(val||val===0)?pcEsc(String(val)):'—'}</span></div>`;
+  const roVal=v=>(v||v===0)?pcEsc(String(v)):'\u2014';
+  const row=(label,val)=>{
+    const empty=!(val||val===0);
+    if(empty && role.canEdit) return `<div class="drow add-hover" onclick="openEditInquiryModal('${inq.id}')" title="Click to add"><span class="dkey">${label}</span><span class="dval"><span class="add-cta"><i class="ti ti-plus" style="font-size:12px;vertical-align:-1px"></i> Add</span></span></div>`;
+    return `<div class="drow"><span class="dkey">${label}</span><span class="dval">${roVal(val)}</span></div>`;
+  };
+  const mrow=(label,val)=>`<div class="drow"><span class="dkey">${label}</span><span class="dval">${roVal(val)}</span></div>`;
   const dayLabel = ev.day ? (ev.day.charAt(0).toUpperCase()+ev.day.slice(1)) : '';
   let html='';
-  if(role.canEdit){ html += `<div style="margin-bottom:10px"><button onclick="editEventClassic('${ev.id}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:inherit"><i class="ti ti-edit" style="font-size:14px"></i>Edit staff &amp; logistics</button></div>`; }
+  if(role.canEdit){ html += `<div style="margin-bottom:10px"><button onclick="openEditInquiryModal('${inq.id}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:inherit"><i class="ti ti-edit" style="font-size:14px"></i>Edit staff &amp; logistics</button></div>`; }
   html += row('Day', dayLabel) + row('Address', ev.addr);
   if(ev.notes) html += `<div class="drow" style="flex-direction:column;gap:4px"><span class="dkey">Event notes</span><span class="dval" style="text-align:left;width:100%;white-space:pre-wrap">${pcEsc(ev.notes)}</span></div>`;
+  else if(role.canEdit) html += row('Event notes','');
   if(ev.menuLink){
     html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px">
       <button onclick="createPdfVersion('${ev.id}')" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer"><i class="ti ti-file-type-pdf" style="font-size:13px;vertical-align:-2px"></i> Create PDF version</button>
@@ -2251,7 +2262,7 @@ function drawerStaffDetails(inq, ev, role){
     html += row('Waiters', ev.waiters)+row('Bartenders', ev.bartenders)+row('Waiter arrival', ev.waiterTime)+row('Chefs', ev.chefs)+row('Chef arrival', ev.chefTime)+row('Porters', ev.porters)+row('Manager', ev.manager)+row('Mashgiach', ev.mashgiach);
     (ev.meals||[]).forEach((meal,mi)=>{
       html += `<div style="font-size:11px;font-weight:600;color:var(--blue-mid);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px;padding-top:8px;border-top:0.5px solid var(--border)">${pcEsc(String(coverJobNum(ev.job))+(meal.jobSuffix||''))} \u00b7 ${pcEsc(meal.label||meal.dayLabel||('Meal '+(mi+1)))}${meal.typeLabel?` <span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0">\u2014 ${pcEsc(meal.typeLabel)}</span>`:''}</div>`;
-      html += row('Waiters', meal.waiters)+row('Bartenders', meal.bartenders)+row('Waiter arrival', meal.waiterTime)+row('Chefs', meal.chefs)+row('Chef arrival', meal.chefTime)+row('Porters', meal.porters)+row('Manager', meal.manager)+row('Mashgiach', meal.mashgiachNames||meal.mashgiach);
+      html += mrow('Waiters', meal.waiters)+mrow('Bartenders', meal.bartenders)+mrow('Waiter arrival', meal.waiterTime)+mrow('Chefs', meal.chefs)+mrow('Chef arrival', meal.chefTime)+mrow('Porters', meal.porters)+mrow('Manager', meal.manager)+mrow('Mashgiach', meal.mashgiachNames||meal.mashgiach);
     });
   }
   return html;
@@ -4342,11 +4353,47 @@ function openEditInquiryModal(id){
     const v = Array.isArray(o)?o[0]:o, lbl = Array.isArray(o)?o[1]:(o||'—');
     return `<option value="${esc(v)}" ${String(cur||'')===String(v)?'selected':''}>${lbl}</option>`;
   }).join('');
+  const ev = _eventForInq(inq);
+  const dayOpts = ['','thursday','friday','saturday','sunday','monday'].map(d=>`<option value="${d}" ${ev&&ev.day===d?'selected':''}>${d?d.charAt(0).toUpperCase()+d.slice(1):'—'}</option>`).join('');
+  const evtTypeOpts = (typeof typeMap==='object'?Object.entries(typeMap):[]).map(([v,l])=>`<option value="${v}" ${ev&&ev.type===v?'selected':''}>${l}</option>`).join('');
+  const evSec = ev ? `
+    <div style="margin:18px 0 10px;font-size:13px;font-weight:700;color:var(--maroon,#8B1A1A);border-top:1px solid var(--border);padding-top:14px">Event logistics &amp; staff</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>Schedule type (card &amp; menu)</label><select id="iee-type">${evtTypeOpts}</select></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Day of week</label><select id="iee-day">${dayOpts}</select></div>
+    </div>
+    <div class="modal-row"><label>Event address</label><input id="iee-addr" value="${esc(ev.addr)}"></div>
+    <div class="modal-row"><label>Event notes (kitchen / setup)</label><textarea id="iee-notes" style="min-height:50px">${esc(ev.notes)}</textarea></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>Menu link</label><input id="iee-menuLink" value="${esc(ev.menuLink)}"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Grocery link</label><input id="iee-groceryLink" value="${esc(ev.groceryLink)}"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>Floor plan link</label><input id="iee-floorplan" value="${esc(ev.floorplan)}"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Venue sheet link</label><input id="iee-venueLink" value="${esc(ev.venueLink)}"></div>
+    </div>
+    <div class="modal-row"><label>Client logo link</label><input id="iee-logoData" value="${esc(ev.logoData)}"></div>
+    <div style="margin:12px 0 4px;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Main-event staffing</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>Waiters</label><input id="iee-waiters" type="number" value="${esc(ev.waiters)}"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Bartenders</label><input id="iee-bartenders" type="number" value="${esc(ev.bartenders)}"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Porters</label><input id="iee-porters" type="number" value="${esc(ev.porters)}"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>Chefs</label><input id="iee-chefs" type="number" value="${esc(ev.chefs)}"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Chef arrival</label><input id="iee-chefTime" value="${esc(ev.chefTime)}"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Waiter arrival</label><input id="iee-waiterTime" value="${esc(ev.waiterTime)}"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label>Manager</label><input id="iee-manager" value="${esc(ev.manager)}"></div>
+      <div class="modal-row" style="margin-bottom:0"><label>Mashgiach</label><input id="iee-mashgiach" value="${esc(ev.mashgiach)}"></div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">Per-meal staffing for multi-meal events appears in the drawer breakdown.</div>` : '';
   const m = document.createElement('div');
   m.id = 'editInqModal';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:2rem;overflow-y:auto';
   m.innerHTML = `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:620px;box-shadow:0 8px 40px rgba(0,0,0,.2);margin:auto">
-    <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Edit inquiry details</div>
+    <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">${ev?'Edit event — all details':'Edit inquiry details'}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="modal-row" style="margin-bottom:0"><label>First name</label><input id="ie-firstName" value="${esc(inq.firstName)}"></div>
       <div class="modal-row" style="margin-bottom:0"><label>Last name</label><input id="ie-lastName" value="${esc(inq.lastName)}"></div>
@@ -4380,6 +4427,7 @@ function openEditInquiryModal(id){
     </div>
     <div class="modal-row"><label>Notes / comments</label><textarea id="ie-comments" style="min-height:70px">${esc(inq.comments)}</textarea></div>
     <div class="modal-row"><label>Stage</label><select id="ie-stage">${sel(stageOpts, inq.stage)}</select></div>
+    ${evSec}
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem">
       <button class="btn-cancel" onclick="document.getElementById('editInqModal').remove()">Cancel</button>
       <button class="btn-save" onclick="saveInquiryEdits('${inq.id}')">Save changes</button>
@@ -4549,6 +4597,21 @@ function saveInquiryEdits(id){
     const ev = events.find(x=>x.id==='inq_'+inq.id);
     if(ev){ ev.lost = (newStage==='lost'); _saveEvent(ev); }
   }
+
+  // Save the linked event's logistics & staffing (the unified form's event section)
+  try{
+    const ev2 = _eventForInq(inq);
+    if(ev2 && document.getElementById('iee-addr')){
+      const ge = k => { const el=document.getElementById('iee-'+k); return el?el.value:undefined; };
+      const gi = k => { const el=document.getElementById('iee-'+k); return el?(parseInt(el.value)||0):undefined; };
+      const tv=ge('type'); if(tv!==undefined && tv!==''){ ev2.type=tv; ev2.typeLabel=(typeof typeMap==='object'&&typeMap[tv])||tv; }
+      const dv=ge('day'); if(dv!==undefined) ev2.day=dv;
+      ['addr','notes','menuLink','groceryLink','floorplan','venueLink','logoData','manager','mashgiach','waiterTime','chefTime'].forEach(k=>{ const v=ge(k); if(v!==undefined) ev2[k]=v; });
+      ['waiters','bartenders','porters','chefs'].forEach(k=>{ const v=gi(k); if(v!==undefined) ev2[k]=v; });
+      try{ autoSaveVenue(ev2.name, ev2.addr); }catch(e){}
+      _saveEvent(ev2);
+    }
+  }catch(e){ console.warn('event edit save skipped:', e); }
 
   document.getElementById('editInqModal')?.remove();
   showToast('Inquiry updated ✓');
