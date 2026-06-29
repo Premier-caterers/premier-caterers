@@ -7325,7 +7325,17 @@ function buildEventPaperwork(eventId, opts){
       enclosed.push((st==='invoice'||st==='paid')?'Invoice':'Estimate / quote');
     });
   }
-  if(menuUrl) enclosed.push('Menu (link on cover)');
+  if(opts.checklist){
+    if(typeof initChecklist==='function'){ try{ initChecklist(e.id); }catch(err){} }
+    const clItems=((typeof checklists!=='undefined' && checklists[e.id])?checklists[e.id]:[]).filter(i=>!i.na);
+    if(clItems.length && typeof generateChecklistHTML==='function'){
+      const ch=generateChecklistHTML(e, clItems);
+      styleParts.push(_scopeCssForPdf(_ppStyle(ch), '.pp-cl'));
+      sectionsHtml+='<div class="pp-section pp-cl">'+_ppBody(ch)+'</div>';
+      enclosed.push('Checklist ('+clItems.length+' items)');
+    }
+  }
+  if(menuUrl) enclosed.push(opts.menuInPacket ? 'Menu (attached at end of packet)' : 'Menu (link on cover)');
 
   const coverStyle = '.pp-cover{padding:46px 50px;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a}'
     +'.pp-cover .pp-head{display:flex;justify-content:space-between;align-items:flex-start}'
@@ -7345,7 +7355,7 @@ function buildEventPaperwork(eventId, opts){
     +'.pp-cover .pp-menu{font-size:12px;color:#444;margin-top:16px;word-break:break-all}'
     +'.pp-cover .pp-menu a{color:#185FA5}'
     +'.pp-cover .pp-foot{margin-top:40px;font-size:9px;color:#aaa;border-top:1px solid #ddd;padding-top:9px}';
-  styleParts.unshift(coverStyle);
+  if(opts.cover!==false) styleParts.unshift(coverStyle);
 
   const encList = enclosed.length ? enclosed.map(x=>'<li>'+pcEsc(x)+'</li>').join('') : '<li>(no documents selected)</li>';
   const coverBody = '<section class="pp-section pp-cover">'
@@ -7356,11 +7366,11 @@ function buildEventPaperwork(eventId, opts){
     +'<div><span class="pp-k">Venue</span><span class="pp-v">'+pcEsc(venue||venueAddr||'\u2014')+'</span></div>'
     +'<div><span class="pp-k">Date</span><span class="pp-v">'+pcEsc(dateStr||'\u2014')+'</span></div></div>'
     +'<div class="pp-enc-title">Enclosed in this packet</div><ol class="pp-enc">'+encList+'</ol>'
-    +(menuUrl?'<div class="pp-menu"><b>Menu:</b> <a href="'+pcEsc(menuUrl)+'">'+pcEsc(menuUrl)+'</a></div>':'')
+    +((menuUrl && !opts.menuInPacket)?'<div class="pp-menu"><b>Menu:</b> <a href="'+pcEsc(menuUrl)+'">'+pcEsc(menuUrl)+'</a></div>':'')
     +'<div class="pp-foot">Generated '+pcEsc(nowStamp())+(evFull?(' \u00b7 Event #'+pcEsc(evFull)):'')+'</div>'
     +'</section>';
 
-  sectionsHtml = coverBody + sectionsHtml;
+  sectionsHtml = (opts.cover!==false ? coverBody : '') + sectionsHtml;
   const baseStyle='@page{margin:12mm} html,body{margin:0;padding:0;background:#fff} .pp-section{page-break-before:always} .pp-section:first-child{page-break-before:auto}';
   const css = baseStyle+'\n'+styleParts.join('\n');
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+pcEsc('Paperwork '+(evFull||clientName))+'</title><style>'+css+'</style></head><body>'+sectionsHtml+'</body></html>';
@@ -7371,11 +7381,80 @@ function _ppFileName(e){
   return ('Paperwork_'+(num?num+'_':'')+nm).slice(0,60);
 }
 function closePaperwork(){ const m=document.getElementById('ppModal'); if(m) m.remove(); }
-function _runPaperwork(eventId, mode){
+// Load pdf-lib on demand (used to merge the menu PDF into the packet)
+async function ensurePdfLib(){
+  if(window.PDFLib) return;
+  await _loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js');
+}
+function _b64ToBytes(b64){
+  const clean=String(b64||'').replace(/^data:[^,]*,/,'');
+  const bin=atob(clean); const len=bin.length; const u=new Uint8Array(len);
+  for(let i=0;i<len;i++) u[i]=bin.charCodeAt(i);
+  return u;
+}
+// Render a full HTML document string to PDF bytes (ArrayBuffer) using html2pdf,
+// inside an isolated off-screen iframe so the document's CSS can't touch the app.
+async function _htmlToPdfArrayBuffer(html){
+  await ensureHtml2Pdf();
+  const f=document.createElement('iframe');
+  f.setAttribute('aria-hidden','true');
+  f.style.cssText='position:fixed;right:0;bottom:0;width:850px;height:1100px;border:0;opacity:0;pointer-events:none;z-index:-1';
+  document.body.appendChild(f);
+  const d=f.contentWindow.document; d.open(); d.write(html); d.close();
+  await new Promise(res=>{ let done=false; const go=()=>{ if(!done){done=true;res();} }; try{ f.onload=()=>setTimeout(go,350); }catch(e){} setTimeout(go,1000); });
+  const opts={ margin:0, image:{type:'jpeg',quality:0.96}, html2canvas:{scale:2, useCORS:true, backgroundColor:'#ffffff'}, jsPDF:{unit:'mm',format:'letter',orientation:'portrait'}, pagebreak:{mode:['css','legacy']} };
+  let ab=null;
+  try{
+    const pdf=await window.html2pdf().set(opts).from(d.body).toPdf().get('pdf');
+    ab=pdf.output('arraybuffer');
+  } finally { try{ document.body.removeChild(f); }catch(e){} }
+  return ab;
+}
+async function _runPaperwork(eventId, mode){
   const g=id=>document.getElementById(id);
-  const opts={ beo:!!(g('pp-beo')&&g('pp-beo').checked), beoCopies:(g('pp-beocopies')&&g('pp-beocopies').value)||1, invoice:!!(g('pp-invoice')&&g('pp-invoice').checked) };
-  if(!opts.beo && !opts.invoice){ alert('Pick at least one document to include.'); return; }
+  const wantMenu=!!(g('pp-menu') && g('pp-menu').checked);
+  const opts={ cover:!!(g('pp-cover')&&g('pp-cover').checked), beo:!!(g('pp-beo')&&g('pp-beo').checked), beoCopies:(g('pp-beocopies')&&g('pp-beocopies').value)||1, invoice:!!(g('pp-invoice')&&g('pp-invoice').checked), checklist:!!(g('pp-checklist')&&g('pp-checklist').checked) };
+  if(!opts.cover && !opts.beo && !opts.invoice && !opts.checklist && !wantMenu){ alert('Pick at least one document to include.'); return; }
   const e=_beoResolveEvent(eventId);
+  const inq=_beoInquiryFor(e);
+  const menuLink=inq.menuLink||(Array.isArray(inq.menus)&&inq.menus[0]?inq.menus[0].url:'')||'';
+
+  // ── Menu-in-packet path: build a single merged PDF (our pages + the menu PDF) ──
+  if(wantMenu && menuLink){
+    closePaperwork();
+    if(typeof showToast==='function') showToast('Building packet with menu — this can take a few seconds…');
+    try{
+      const html=buildEventPaperwork(eventId, Object.assign({}, opts, {menuInPacket:true}));
+      await ensurePdfLib();
+      const ourAB=await _htmlToPdfArrayBuffer(html);
+      const menuB64=await fetchMenuPdfBase64(menuLink);
+      const PDFDocument=window.PDFLib.PDFDocument;
+      const merged=await PDFDocument.create();
+      const ours=await PDFDocument.load(ourAB);
+      (await merged.copyPages(ours, ours.getPageIndices())).forEach(p=>merged.addPage(p));
+      const menuDoc=await PDFDocument.load(_b64ToBytes(menuB64));
+      (await merged.copyPages(menuDoc, menuDoc.getPageIndices())).forEach(p=>merged.addPage(p));
+      const bytes=await merged.save();
+      const blob=new Blob([bytes], {type:'application/pdf'});
+      const url=URL.createObjectURL(blob);
+      const fname=_ppFileName(e)+'.pdf';
+      if(mode==='pdf'){
+        const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove();
+      } else {
+        const w=window.open(url,'_blank');
+        if(!w){ const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); }
+      }
+      setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(e){} }, 60000);
+      if(typeof showToast==='function') showToast('Packet ready — menu included');
+      return;
+    }catch(err){
+      console.error('menu merge failed:', err);
+      if(typeof showToast==='function') showToast('Could not pull the menu — building packet with the menu as a link instead');
+      // fall through to the plain (non-merged) packet below
+    }
+  }
+
+  // ── Plain path: HTML packet via the browser (menu stays a link on the cover) ──
   const html=buildEventPaperwork(eventId, opts);
   if(!html){ alert('Could not build the paperwork.'); return; }
   closePaperwork();
@@ -7391,6 +7470,9 @@ function openPaperwork(arg){
   const hasBeo = true;
   const invSlots=_ppEventInvoiceSlots(e.id);
   const hasInv=invSlots.length>0;
+  if(typeof initChecklist==='function'){ try{ initChecklist(e.id); }catch(err){} }
+  const clItems=((typeof checklists!=='undefined' && checklists[e.id])?checklists[e.id]:[]).filter(i=>!i.na);
+  const clCount=clItems.length; const hasChecklist=clCount>0;
   const evFull=fullEventNum(e)||(e.job||'');
   closePaperwork();
   const row=(checked,disabled,id,label,sub,extra)=>'<label style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid #e2dcd2;border-radius:10px;margin-bottom:9px;'+(disabled?'opacity:.5':'cursor:pointer')+'">'
@@ -7405,10 +7487,12 @@ function openPaperwork(arg){
     +'<div style="padding:18px 20px 12px;border-bottom:1px solid #eee"><div style="display:flex;align-items:center;gap:9px"><i class="ti ti-files" style="font-size:20px;color:#8B1A1A"></i><span style="font-size:16px;font-weight:700">Create event paperwork</span></div>'
     +'<div style="font-size:12.5px;color:#777;margin-top:3px">'+pcEsc(e.name||'Event')+(evFull?(' \u00b7 #'+pcEsc(evFull)):'')+' \u00b7 pick what to combine into one packet</div></div>'
     +'<div style="padding:15px 20px;overflow-y:auto;flex:1">'
-      +'<div style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid #e2dcd2;border-radius:10px;margin-bottom:9px;background:#faf7f2"><i class="ti ti-file-description" style="font-size:18px;color:#8B1A1A"></i><span style="flex:1"><span style="font-size:14px;font-weight:600;display:block">Cover sheet</span><span style="font-size:11.5px;color:#888">Always included \u2014 summary + contents</span></span></div>'
+      +row(true,false,'pp-cover','Cover sheet','Event summary + a list of what is enclosed','')
       +row(true,!hasBeo,'pp-beo','Banquet Event Order','Per-meal sections, staffing, allergy','<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#666">copies <input type="number" id="pp-beocopies" value="1" min="1" max="6" style="width:46px;padding:5px;border:1px solid #d8d2c8;border-radius:6px;font-family:inherit;text-align:center"></span>')
       +row(hasInv,!hasInv,'pp-invoice','Invoice / estimate', hasInv?('Billing document for this event'+(invSlots.length>1?(' ('+invSlots.length+')'):'')):'No invoice on this event yet','')
-      +(menuUrl?'<div style="font-size:11.5px;color:#888;padding:4px 2px 0">The menu is a Google Doc, so it appears as a link on the cover sheet.</div>':'')
+      +row(false,!hasChecklist,'pp-checklist','Checklist', hasChecklist?(clCount+' items \u2014 the event to-do list'):'No checklist items yet','')
+      +row(!!menuUrl,!menuUrl,'pp-menu','Menu', menuUrl?'Added as real PDF pages (via your Apps Script relay)':'No menu linked to this event yet','')
+      +(menuUrl?'<div style="font-size:11.5px;color:#888;padding:4px 2px 0"><i class="ti ti-info-circle" style="font-size:12px"></i> When the menu is included the packet is built as one merged PDF. If the menu cannot be reached it falls back to a link on the cover.</div>':'')
     +'</div>'
     +'<div style="padding:13px 20px;border-top:1px solid #eee;display:flex;gap:9px;justify-content:flex-end">'
       +'<button onclick="closePaperwork()" style="'+fbtn+';background:#f3f3f3;color:#555">Cancel</button>'
