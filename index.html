@@ -7411,57 +7411,243 @@ async function _htmlToPdfArrayBuffer(html){
   } finally { try{ document.body.removeChild(f); }catch(e){} }
   return ab;
 }
-async function _runPaperwork(eventId, mode){
-  const g=id=>document.getElementById(id);
-  const wantMenu=!!(g('pp-menu') && g('pp-menu').checked);
-  const opts={ cover:!!(g('pp-cover')&&g('pp-cover').checked), beo:!!(g('pp-beo')&&g('pp-beo').checked), beoCopies:(g('pp-beocopies')&&g('pp-beocopies').value)||1, invoice:!!(g('pp-invoice')&&g('pp-invoice').checked), contents:!!(g('pp-contents')&&g('pp-contents').checked) };
-  if(!opts.cover && !opts.beo && !opts.invoice && !wantMenu){ alert('Pick at least one document to include.'); return; }
-  const e=_beoResolveEvent(eventId);
+// Draw the cover/contents/BEO/invoice as TRUE vector PDF pages (jsPDF), then merge
+// the menu PDF (pdf-lib) — honoring a per-part copy count. Returns {bytes, menuFailed}.
+async function buildPacketPdfBytes(eventId, opts){
+  await ensureJsPdf(); await ensurePdfLib();
+  const { jsPDF } = window.jspdf;
+  const e=_beoResolveEvent(eventId); if(!e) throw new Error('Event not found.');
   const inq=_beoInquiryFor(e);
+  const evFull=fullEventNum(e)||(e.job||'');
+  const clientName=e.name||clientPrimary(inq)||'Client';
   const menuLink=inq.menuLink||(Array.isArray(inq.menus)&&inq.menus[0]?inq.menus[0].url:'')||'';
+  const ML=40, MR=572, PW=612, BOTTOM=752;
+  const C={maroon:[139,26,26], amberFill:[251,226,166], amberBorder:[186,117,23], dark:[26,26,26], grey:[120,120,120], line:[214,214,214], faint:[170,170,170], red:[200,30,30], strip:[247,239,230], sp:[250,238,218]};
+  const doc=new jsPDF({unit:'pt',format:'letter'});
+  let started=false;
+  function page(){ if(started) doc.addPage(); started=true; }
+  function setF(c){ doc.setFillColor(c[0],c[1],c[2]); }
+  function setD(c){ doc.setDrawColor(c[0],c[1],c[2]); }
+  function setT(c){ doc.setTextColor(c[0],c[1],c[2]); }
+  function fB(s){ doc.setFont('helvetica','bold'); doc.setFontSize(s); }
+  function fN(s){ doc.setFont('helvetica','normal'); doc.setFontSize(s); }
+  function lbl(t,x,y){ fN(8); setT(C.grey); doc.text(String(t).toUpperCase(),x,y); }
 
-  // ── Menu-in-packet path: build a single merged PDF (our pages + the menu PDF) ──
-  if(wantMenu && menuLink){
-    closePaperwork();
-    if(typeof showToast==='function') showToast('Building packet with menu — this can take a few seconds…');
-    try{
-      const html=buildEventPaperwork(eventId, Object.assign({}, opts, {menuInPacket:true}));
-      await ensurePdfLib();
-      const ourAB=await _htmlToPdfArrayBuffer(html);
-      const menuB64=await fetchMenuPdfBase64(menuLink);
-      const PDFDocument=window.PDFLib.PDFDocument;
-      const merged=await PDFDocument.create();
-      const ours=await PDFDocument.load(ourAB);
-      (await merged.copyPages(ours, ours.getPageIndices())).forEach(p=>merged.addPage(p));
-      const menuDoc=await PDFDocument.load(_b64ToBytes(menuB64));
-      (await merged.copyPages(menuDoc, menuDoc.getPageIndices())).forEach(p=>merged.addPage(p));
-      const bytes=await merged.save();
-      const blob=new Blob([bytes], {type:'application/pdf'});
-      const url=URL.createObjectURL(blob);
-      const fname=_ppFileName(e)+'.pdf';
-      if(mode==='pdf'){
-        const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove();
-      } else {
-        const w=window.open(url,'_blank');
-        if(!w){ const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); }
-      }
-      setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(e){} }, 60000);
-      if(typeof showToast==='function') showToast('Packet ready — menu included');
-      return;
-    }catch(err){
-      console.error('menu merge failed:', err);
-      if(typeof showToast==='function') showToast('Could not pull the menu — building packet with the menu as a link instead');
-      // fall through to the plain (non-merged) packet below
-    }
+  // What is enclosed (for cover + contents)
+  const enclosed=[];
+  if(opts.beo) enclosed.push('Banquet Event Order'+(opts.beoCopies>1?(' \u00d7'+opts.beoCopies+' copies'):''));
+  let invSlots=[];
+  if(opts.invoice){ invSlots=_ppEventInvoiceSlots(e.id); invSlots.forEach(k=>{ const st=invoices[k].status; enclosed.push(((st==='invoice'||st==='paid')?'Invoice':'Estimate / quote')+(opts.invoiceCopies>1?(' \u00d7'+opts.invoiceCopies):'')); }); }
+  if(opts.menu && menuLink) enclosed.push('Menu'+(opts.menuCopies>1?(' \u00d7'+opts.menuCopies):''));
+
+  function header(yTop){
+    fB(18); setT(C.maroon); doc.text('Premier Caterers', ML, yTop);
+    fN(9); setT(C.grey); doc.text('201-250-9487   \u00b7   events@thepremiercaterer.com', ML, yTop+15);
+    const bw=124,bh=46,bx=MR-bw,by=yTop-22;
+    setF(C.amberFill); setD(C.amberBorder); doc.setLineWidth(1.5); doc.roundedRect(bx,by,bw,bh,6,6,'FD');
+    fB(7); setT([133,79,11]); doc.text('EVENT #',bx+bw/2,by+13,{align:'center'});
+    fB(15); setT([90,50,5]); doc.text(String(evFull||'\u2014'),bx+bw/2,by+34,{align:'center'});
+  }
+  function payColors(label){
+    if(/PAID IN FULL/.test(label)) return {fill:[230,241,251],border:[24,95,165],text:[12,68,124],dashed:false};
+    return {fill:[250,238,218],border:[186,117,23],text:[133,79,11],dashed:/NOT PAID/.test(label)};
   }
 
-  // ── Plain path: HTML packet via the browser (menu stays a link on the cover) ──
-  const html=buildEventPaperwork(eventId, opts);
-  if(!html){ alert('Could not build the paperwork.'); return; }
+  function drawCover(){
+    page(); header(52);
+    fB(26); setT(C.dark); doc.text('Event Paperwork', ML, 112);
+    let y=148;
+    const irow=(k,v)=>{ lbl(k,ML,y); fB(13); setT(C.dark); doc.text(doc.splitTextToSize(String(v||'\u2014'),MR-ML),ML,y+16); y+=44; };
+    irow('Client', clientName);
+    irow('Venue', inq.venueName||e.addr||'\u2014');
+    irow('Date', e.dayLabel||(inq.eventDate?formatDate(inq.eventDate):'\u2014'));
+    y+=4; setD(C.maroon); doc.setLineWidth(2); doc.line(ML,y,MR,y); y+=22;
+    fB(11); setT(C.maroon); doc.text('ENCLOSED IN THIS PACKET', ML, y);
+    fN(13); setT(C.dark);
+    (enclosed.length?enclosed:['(no documents selected)']).forEach((it,i)=>{ y+=22; doc.text((i+1)+'.   '+it, ML, y); });
+    fN(8); setT(C.grey); doc.text('Generated '+nowStamp()+(evFull?('   \u00b7   Event #'+evFull):''), ML, 772);
+  }
+
+  function drawContents(){
+    page();
+    fB(22); setT(C.dark); doc.text('Packet contents', ML, 60);
+    fN(12); setT(C.grey); doc.text(clientName+(evFull?('   \u00b7   #'+evFull):''), ML, 80);
+    let y=114; fN(14);
+    (enclosed.length?enclosed:['(no documents selected)']).forEach(it=>{
+      setD([90,90,90]); doc.setLineWidth(1.2); doc.rect(ML, y-11, 14, 14);
+      setT(C.dark); doc.text(String(it), ML+24, y);
+      setD(C.line); doc.setLineWidth(0.5); doc.line(ML, y+13, MR, y+13);
+      y+=32;
+    });
+  }
+
+  function drawMealBlock(m,i,y0){
+    const bm=(e.beo&&e.beo.meals&&e.beo.meals[i])||{};
+    const letter=((m.jobSuffix||'').trim()||String.fromCharCode(97+i)).toUpperCase();
+    const name=m.name||m.label||('Meal '+(i+1));
+    const x=ML, w=MR-ML; let y=y0;
+    const stripH=24; setF(C.strip); setD(C.maroon); doc.setLineWidth(1.2); doc.rect(x,y,w,stripH,'FD');
+    setF(C.amberFill); setD(C.amberBorder); doc.rect(x+6,y+4,16,16,'FD'); fB(11); setT([90,50,5]); doc.text(letter,x+14,y+16,{align:'center'});
+    fB(12); setT(C.dark); doc.text(name, x+30, y+16);
+    fN(10); setT(C.maroon); doc.text(String(m.dayLabel||e.dayLabel||''), MR-6, y+16, {align:'right'});
+    y+=stripH;
+    const fields=[
+      ['Guest count', bm.guests||inq.guestCount||''],
+      ['Meat / Dairy / Parve', bm.mdp||inq.meatDairy||(m.typeLabel||'')],
+      ['Service time', bm.time||''],
+      ['Linen', bm.linen||''],
+      ['Setup', bm.setup||''],
+      ['Manager / Mashgiach', [m.manager,m.mashgiachNames].filter(Boolean).join(' / ')],
+    ];
+    const cols=3, cw=w/cols, rh=34;
+    fields.forEach((f,idx)=>{
+      const cx=x+(idx%cols)*cw, ry=y+Math.floor(idx/cols)*rh;
+      lbl(f[0], cx+6, ry+12);
+      if(f[1]){ fN(11); setT(C.dark); doc.text(doc.splitTextToSize(String(f[1]),cw-12), cx+6, ry+26); }
+      else { setD(C.faint); doc.setLineWidth(0.7); doc.line(cx+6, ry+24, cx+cw-10, ry+24); }
+    });
+    y+=rh*2; setD(C.line); doc.setLineWidth(0.5); doc.line(x,y,x+w,y);
+    const staff=[]; if(m.waiters)staff.push('Waiters: '+m.waiters+(m.waiterTime?(' @ '+m.waiterTime):'')); if(m.chefs)staff.push('Chefs: '+m.chefs+(m.chefTime?(' @ '+m.chefTime):'')); if(m.porters)staff.push('Porters: '+m.porters); if(m.bartenders)staff.push('Bartenders: '+m.bartenders);
+    function rowLine(label,val){
+      lbl(label,x+6,y+14); fN(10.5); setT(C.dark);
+      let lines=val?doc.splitTextToSize(String(val),w-130):[''];
+      if(val) doc.text(lines, x+120, y+14); else { setD(C.faint); doc.setLineWidth(0.7); doc.line(x+120, y+12, x+w-10, y+12); }
+      y += Math.max(22, lines.length*12+8);
+      setD(C.line); doc.setLineWidth(0.5); doc.line(x,y,x+w,y);
+    }
+    rowLine('Staffing', staff.join('    \u00b7    '));
+    rowLine('Menu', bm.menu||(menuLink?'See attached menu':''));
+    rowLine('Notes', bm.notes||m.notes||'');
+    const spText=bm.special||''; const spLines=spText?doc.splitTextToSize(spText,w-130):[''];
+    const spH=Math.max(26, spLines.length*12+12);
+    setF(C.sp); doc.rect(x,y,w,spH,'F');
+    lbl('Special req.',x+6,y+15); setT([90,50,5]); fN(10.5);
+    if(spText) doc.text(spLines,x+120,y+15); else { setD(C.amberBorder); doc.setLineWidth(0.7); doc.line(x+120,y+13,x+w-10,y+13); }
+    y+=spH;
+    setD(C.maroon); doc.setLineWidth(1.2); doc.rect(x,y0,w,y-y0);
+    return y;
+  }
+
+  function drawBeo(){
+    page(); header(52);
+    setD(C.maroon); doc.setLineWidth(1.5); doc.line(ML,78,MR,78);
+    fB(13); setT(C.dark); doc.text('BANQUET EVENT ORDER', PW/2, 95, {align:'center'});
+    doc.line(ML,104,MR,104);
+    let y=122;
+    const allergy=(typeof inqAllergies==='function')?inqAllergies(inq):(inq.allergies||'');
+    if(allergy){ const bh=28; setF(C.red); doc.rect(ML,y,MR-ML,bh,'F'); setT([255,255,255]); fB(11); doc.text(doc.splitTextToSize('ALLERGY ALERT: '+allergy, MR-ML-20), ML+10, y+18); y+=bh+14; }
+    const pay=(typeof _beoPayState==='function')?_beoPayState(inq):{label:'NOT PAID \u2014 COLLECT'};
+    const colW=(MR-ML)/3;
+    lbl('Client',ML,y); lbl('Venue',ML+colW,y); lbl('Payment',ML+2*colW,y);
+    fB(12); setT(C.dark);
+    doc.text(doc.splitTextToSize(clientName,colW-10),ML,y+16);
+    doc.text(doc.splitTextToSize(inq.venueName||e.addr||'\u2014',colW-10),ML+colW,y+16);
+    const pc=payColors(pay.label||'');
+    setF(pc.fill); setD(pc.border); doc.setLineWidth(1.5);
+    try{ if(pc.dashed && doc.setLineDashPattern) doc.setLineDashPattern([3,2],0); }catch(_){}
+    doc.roundedRect(ML+2*colW, y+4, colW-4, 22, 3,3,'FD');
+    try{ if(doc.setLineDashPattern) doc.setLineDashPattern([],0); }catch(_){}
+    fB(8.5); setT(pc.text); doc.text(doc.splitTextToSize(pay.label||'',colW-14), ML+2*colW+6, y+18);
+    y+=50;
+    const meals=(Array.isArray(e.meals)&&e.meals.length)?e.meals:[{jobSuffix:'',label:e.typeLabel||e.name||'Event',name:e.name||'',typeLabel:e.typeLabel||'',dayLabel:e.dayLabel||'',waiters:e.waiters||0,waiterTime:e.waiterTime||'',chefs:e.chefs||0,chefTime:e.chefTime||'',porters:e.porters||0,bartenders:e.bartenders||0,mashgiachNames:e.mashgiachNames||'',manager:e.manager||''}];
+    meals.forEach((m,i)=>{ if(y+200>BOTTOM){ doc.addPage(); y=56; } y=drawMealBlock(m,i,y); y+=14; });
+    // revision footer
+    try{ if(!e.beo) e.beo={}; const sig=_docSig({c:clientName,a:allergy,pay:pay.label,meals:meals.map(m=>({s:m.jobSuffix,n:m.name||m.label,w:m.waiters,ch:m.chefs})),g:inq.guestCount,m:inq.meatDairy,beoMeals:(e.beo.meals||null)}); finalizeDoc(e.beo,sig); if(typeof _saveEvent==='function') _saveEvent(e); }catch(_){}
+    fN(7.5); setT([150,150,150]); doc.text((evFull?('Event #'+evFull+'   \u00b7   '):'')+'BEO Rev '+((e.beo&&e.beo._rev)||1)+'   \u00b7   Generated '+nowStamp(), ML, 778);
+  }
+
+  function drawInvoiceSlot(k){
+    page();
+    const inv=invoices[k]; if(!inv){ return; }
+    const tots=calcInvoiceTotals(inv);
+    const isInvoice=inv.status==='invoice'||inv.status==='paid';
+    const docType=isInvoice?'INVOICE':'ESTIMATE';
+    fB(18); setT(C.maroon); doc.text('Premier Caterers', ML, 52);
+    fN(9); setT(C.grey); doc.text('thepremiercaterer.com   \u00b7   events@thepremiercaterer.com', ML, 67);
+    fB(24); setT(C.maroon); doc.text(docType, MR, 56, {align:'right'});
+    setD(C.dark); doc.setLineWidth(1.5); doc.line(ML, 80, MR, 80);
+    let y=100;
+    const meta=[];
+    try{ meta.push([docType+' #', (typeof invoiceDisplayLabel==='function'?String(invoiceDisplayLabel(baseEventIdOf(k),k)).replace(/^#/,''):'')]); }catch(_){ meta.push([docType+' #','']); }
+    meta.push(['Date', new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})]);
+    meta.push(['Client', e.name||clientName]);
+    if(e.typeLabel) meta.push(['Event type', e.typeLabel]);
+    try{ meta.push(['Event date', (typeof getFullEventDate==='function'?getFullEventDate(e):(e.dayLabel||''))]); }catch(_){}
+    if(e.addr) meta.push(['Venue', e.addr]);
+    if(inv.clientEmail) meta.push(['Email', inv.clientEmail]);
+    if(inv.status==='paid') meta.push(['Paid on', inv.paidDate||'']);
+    if(inv.paymentMethod) meta.push(['Payment', inv.paymentMethod+(inv.checkNumber?(' #'+inv.checkNumber):'')]);
+    if(inv.taxExempt) meta.push(['Tax status','Exempt (non-profit)']);
+    const colX=[ML, ML+272];
+    meta.forEach((mm,i)=>{ const cx=colX[i%2]; const ry=y+Math.floor(i/2)*30; lbl(mm[0],cx,ry); fN(11); setT(C.dark); doc.text(doc.splitTextToSize(String(mm[1]||''),250),cx,ry+13); });
+    let ty=y+Math.ceil(meta.length/2)*30+12;
+    const body=inv.lines.map(l=>{ const tot=parseFloat(l.qty||0)*parseFloat(l.price||0); if(!tot&&!l.price) return null; const desc=(l.category?(l.category+'\n'):'')+(l.description||''); return [desc, String(l.qty||0), '$'+parseFloat(l.price||0).toFixed(2), '$'+tot.toFixed(2)]; }).filter(Boolean);
+    doc.autoTable({ startY:ty, head:[['Description','Qty','Unit price','Total']], body, theme:'striped', headStyles:{fillColor:[26,26,26]}, styles:{fontSize:10,cellPadding:5}, columnStyles:{1:{halign:'center',cellWidth:45},2:{halign:'right',cellWidth:75},3:{halign:'right',cellWidth:75}}, margin:{left:ML,right:PW-MR} });
+    let yy=(doc.lastAutoTable?doc.lastAutoTable.finalY:ty)+16;
+    if(yy>BOTTOM-120){ doc.addPage(); yy=64; }
+    const right=MR;
+    function tl(label,val,o){ doc.setFont('helvetica',(o&&o.bold)?'bold':'normal'); doc.setFontSize((o&&o.bold)?13:10.5); setT((o&&o.maroon)?C.maroon:C.dark); doc.text(label,358,yy); doc.text(val,right,yy,{align:'right'}); yy+=(o&&o.bold)?20:16; }
+    tl('Subtotal','$'+tots.subtotal.toFixed(2));
+    tl('Logistics fee ('+(tots.logRate*100).toFixed(2)+'%)','$'+tots.logistics.toFixed(2));
+    tl('Sales tax'+(inv.taxExempt?' (exempt)':' (6.625%)'),'$'+tots.tax.toFixed(2));
+    tl('Grand total','$'+tots.grand.toFixed(2),{bold:true});
+    tl('Deposit paid','$'+parseFloat(inv.deposit||0).toFixed(2));
+    tl('Balance due','$'+tots.balance.toFixed(2),{bold:true,maroon:true});
+    try{ const sig=_docSig({lines:inv.lines,deposit:inv.deposit,status:inv.status,notes:inv.notes,taxExempt:inv.taxExempt,logisticsRate:inv.logisticsRate}); finalizeDoc(inv,sig); fN(7.5); setT([150,150,150]); doc.text(docFooterText(inv,isInvoice?'Invoice':'Estimate',evFull), ML, 778); if(typeof db!=='undefined'&&db) db.collection('invoices').doc(k).set(inv); }catch(_){}
+  }
+
+  // ---- assemble vector parts in order, repeating per-part copies ----
+  for(let c=0;c<(opts.cover?(opts.coverCopies||1):0);c++) drawCover();
+  for(let c=0;c<(opts.contents?(opts.contentsCopies||1):0);c++) drawContents();
+  if(opts.beo){ for(let c=0;c<(opts.beoCopies||1);c++) drawBeo(); }
+  if(opts.invoice){ for(let c=0;c<(opts.invoiceCopies||1);c++){ invSlots.forEach(k=>drawInvoiceSlot(k)); } }
+
+  // ---- merge (our vector pages + menu pages) via pdf-lib ----
+  const { PDFDocument }=window.PDFLib;
+  const merged=await PDFDocument.create();
+  if(started){ const ours=await PDFDocument.load(doc.output('arraybuffer')); (await merged.copyPages(ours,ours.getPageIndices())).forEach(p=>merged.addPage(p)); }
+  let menuFailed=false;
+  if(opts.menu && menuLink){
+    try{
+      const b64=await fetchMenuPdfBase64(menuLink);
+      const menuDoc=await PDFDocument.load(_b64ToBytes(b64));
+      const idxs=menuDoc.getPageIndices();
+      for(let c=0;c<(opts.menuCopies||1);c++){ (await merged.copyPages(menuDoc,idxs)).forEach(p=>merged.addPage(p)); }
+    }catch(err){ console.error('menu fetch failed:', err); menuFailed=true; }
+  }
+  if(merged.getPageCount()===0) throw new Error('Nothing to include in the packet.');
+  const bytes=await merged.save();
+  return { bytes, menuFailed };
+}
+
+async function _runPaperwork(eventId, mode){
+  const g=id=>document.getElementById(id);
+  const ck=id=>!!(g(id)&&g(id).checked);
+  const num=(id,d)=>{ const el=g(id); let v=el?parseInt(el.value,10):d; if(!v||v<1)v=d; return Math.min(9,Math.max(1,v)); };
+  const opts={
+    cover:ck('pp-cover'), coverCopies:num('pp-cover-copies',1),
+    contents:ck('pp-contents'), contentsCopies:num('pp-contents-copies',1),
+    beo:ck('pp-beo'), beoCopies:num('pp-beo-copies',1),
+    invoice:ck('pp-invoice'), invoiceCopies:num('pp-invoice-copies',1),
+    menu:ck('pp-menu'), menuCopies:num('pp-menu-copies',1),
+  };
+  if(!opts.cover && !opts.beo && !opts.invoice && !opts.menu){ alert('Pick at least one document to include.'); return; }
   closePaperwork();
-  if(mode==='pdf'){ downloadHtmlAsPdf(html, _ppFileName(e)); return; }
-  const w=window.open('','_blank'); if(!w){ alert('Please allow pop-ups to print.'); return; }
-  w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>{ try{w.print();}catch(e){} },450);
+  if(typeof showToast==='function') showToast('Building packet\u2026 this can take a few seconds');
+  try{
+    const e=_beoResolveEvent(eventId);
+    const res=await buildPacketPdfBytes(eventId, opts);
+    const blob=new Blob([res.bytes], {type:'application/pdf'});
+    const url=URL.createObjectURL(blob);
+    const fname=_ppFileName(e)+'.pdf';
+    if(mode==='pdf'){ const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); }
+    else { const w=window.open(url,'_blank'); if(!w){ const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); } }
+    setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(e){} }, 60000);
+    if(typeof showToast==='function') showToast(res.menuFailed ? 'Packet ready \u2014 but the menu could not be pulled (check Settings)' : ('Packet ready'+(opts.menu?' \u2014 menu included':'')));
+  }catch(err){
+    console.error('paperwork build failed:', err);
+    alert('Sorry \u2014 building the packet failed: '+((err&&err.message)?err.message:err)+(opts.menu?'\n\nIf the menu could not be reached, check that your Apps Script URL is saved in Settings.':''));
+  }
 }
 function openPaperwork(arg){
   const e=_beoResolveEvent(arg);
@@ -7476,6 +7662,7 @@ function openPaperwork(arg){
   const row=(checked,disabled,id,label,sub,extra)=>'<label style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid #e2dcd2;border-radius:10px;margin-bottom:9px;'+(disabled?'opacity:.5':'cursor:pointer')+'">'
     +'<input type="checkbox" id="'+id+'" '+(checked?'checked':'')+' '+(disabled?'disabled':'')+' style="width:18px;height:18px;accent-color:#8B1A1A">'
     +'<span style="flex:1"><span style="font-size:14px;font-weight:600;display:block">'+label+'</span><span style="font-size:11.5px;color:#888">'+sub+'</span></span>'+(extra||'')+'</label>';
+  const cpx=(cid,def)=>'<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#666">copies <input type="number" id="'+cid+'" value="'+def+'" min="1" max="9" style="width:44px;padding:5px;border:1px solid #d8d2c8;border-radius:6px;font-family:inherit;text-align:center"></span>';
   const wrap=document.createElement('div');
   wrap.id='ppModal';
   wrap.setAttribute('style','position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:inherit;padding:18px');
@@ -7485,12 +7672,12 @@ function openPaperwork(arg){
     +'<div style="padding:18px 20px 12px;border-bottom:1px solid #eee"><div style="display:flex;align-items:center;gap:9px"><i class="ti ti-files" style="font-size:20px;color:#8B1A1A"></i><span style="font-size:16px;font-weight:700">Create event paperwork</span></div>'
     +'<div style="font-size:12.5px;color:#777;margin-top:3px">'+pcEsc(e.name||'Event')+(evFull?(' \u00b7 #'+pcEsc(evFull)):'')+' \u00b7 pick what to combine into one packet</div></div>'
     +'<div style="padding:15px 20px;overflow-y:auto;flex:1">'
-      +row(true,false,'pp-cover','Cover sheet','Event summary + a list of what is enclosed','')
-      +row(true,!hasBeo,'pp-beo','Banquet Event Order','Per-meal sections, staffing, allergy','<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#666">copies <input type="number" id="pp-beocopies" value="1" min="1" max="6" style="width:46px;padding:5px;border:1px solid #d8d2c8;border-radius:6px;font-family:inherit;text-align:center"></span>')
-      +row(hasInv,!hasInv,'pp-invoice','Invoice / estimate', hasInv?('Billing document for this event'+(invSlots.length>1?(' ('+invSlots.length+')'):'')):'No invoice on this event yet','')
-      +row(false,false,'pp-contents','List of included items','A checkbox list of everything in this packet','')
-      +row(!!menuUrl,!menuUrl,'pp-menu','Menu', menuUrl?'Added as real PDF pages (via your Apps Script relay)':'No menu linked to this event yet','')
-      +(menuUrl?'<div style="font-size:11.5px;color:#888;padding:4px 2px 0"><i class="ti ti-info-circle" style="font-size:12px"></i> When the menu is included the packet is built as one merged PDF. If the menu cannot be reached it falls back to a link on the cover.</div>':'')
+      +row(true,false,'pp-cover','Cover sheet','Event summary + the enclosed list', cpx('pp-cover-copies',1))
+      +row(false,false,'pp-contents','List of included items','A checkbox list of what is in this packet', cpx('pp-contents-copies',1))
+      +row(true,!hasBeo,'pp-beo','Banquet Event Order','Per-meal sections, staffing, allergy', cpx('pp-beo-copies',1))
+      +row(hasInv,!hasInv,'pp-invoice','Invoice / estimate', hasInv?('Billing document'+(invSlots.length>1?(' \u00b7 '+invSlots.length+' on file'):'')):'No invoice on this event yet', hasInv?cpx('pp-invoice-copies',1):'')
+      +row(!!menuUrl,!menuUrl,'pp-menu','Menu', menuUrl?'Your menu PDF, pulled in via the Apps Script relay':'No menu linked to this event yet', menuUrl?cpx('pp-menu-copies',1):'')
+      +'<div style="font-size:11.5px;color:#888;padding:6px 2px 0;line-height:1.5"><i class="ti ti-info-circle" style="font-size:12px"></i> Everything is built into one crisp PDF. Set a copies count on any part. The menu needs your Apps Script URL saved in Settings (same as the menu email).</div>'
     +'</div>'
     +'<div style="padding:13px 20px;border-top:1px solid #eee;display:flex;gap:9px;justify-content:flex-end">'
       +'<button onclick="closePaperwork()" style="'+fbtn+';background:#f3f3f3;color:#555">Cancel</button>'
