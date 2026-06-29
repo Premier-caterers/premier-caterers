@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Premier Caterers — Grocery & Kitchen Copy</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --maroon:#8B1A1A;--maroon-d:#6f1414;--maroon-soft:#fbeaea;
+    --bg:#faf7f5;--card:#fff;--ink:#23201f;--ink2:#6b625f;--ink3:#9a908c;--line:#ece5e1;--line2:#f4efec;
+    --P-bg:#fdf3e3;--P-tx:#9a6a00;--M-bg:#fbe3e3;--M-tx:#a32d2d;--X-bg:#f1efe8;--X-tx:#6b625f;--D-bg:#e6f1fb;--D-tx:#185fa5;
+    --green:#1f8a4c;--amber:#9a6a00;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  button{font-family:inherit}
+  .top{background:var(--maroon);color:#fff;padding:11px 16px;display:flex;align-items:center;gap:11px;position:sticky;top:0;z-index:50}
+  .top .logo{width:30px;height:30px;border-radius:7px;background:#fff;color:var(--maroon);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px}
+  .top h1{font-size:16px;margin:0;font-weight:700;line-height:1}
+  .top small{display:block;font-size:11px;opacity:.85;margin-top:2px}
+  .top .sp{margin-left:auto}
+  .tabbtn{background:rgba(255,255,255,.14);color:#fff;border:none;border-radius:8px;padding:7px 13px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .tabbtn.on{background:#fff;color:var(--maroon)}
+  .wrap{max-width:1150px;margin:0 auto;padding:16px}
+  .btn{display:inline-flex;align-items:center;gap:7px;border:none;border-radius:10px;font-size:14px;font-weight:600;padding:9px 15px;cursor:pointer}
+  .btn-primary{background:var(--maroon);color:#fff}.btn-primary:active{background:var(--maroon-d)}
+  .btn-ghost{background:#fff;border:1px solid var(--line);color:var(--ink2)}
+  .btn-sm{padding:6px 11px;font-size:13px;border-radius:8px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:14px}
+  .card-h{padding:11px 15px;border-bottom:1px solid var(--line);font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;justify-content:space-between}
+  .muted{color:var(--ink3)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .pill{background:var(--maroon-soft);color:var(--maroon);font-weight:700;font-size:12px;padding:3px 10px;border-radius:20px}
+  select,input[type=text],input[type=date]{font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
+  label.fld{font-size:12px;color:var(--ink2);display:block;margin-bottom:3px;font-weight:600}
+  .hide{display:none!important}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:200;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+  /* two-pane builder */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:860px){.grid2{grid-template-columns:1fr}}
+  .col-body{max-height:74vh;overflow:auto}
+  .dept{background:#f7f2ef;padding:5px 14px;font-size:12px;font-weight:700;color:var(--maroon);text-transform:capitalize;position:sticky;top:0;z-index:1}
+  .pickrow{display:flex;align-items:center;gap:9px;padding:7px 14px;border-top:1px solid var(--line2);cursor:pointer}
+  .pickrow:hover{background:#faf7f5}
+  .pickrow input{width:16px;height:16px;flex:0 0 auto;accent-color:var(--maroon)}
+  .pickrow .nm{flex:1;font-size:13px}.pickrow .cnt{font-size:11px;color:var(--ink3)}
+  .search{width:100%;padding:9px 13px;border:none;border-bottom:1px solid var(--line);font-size:13px;outline:none}
+  /* kitchen copy */
+  .kc-item{display:flex;border-top:1px solid var(--line2)}
+  .kc-left{flex:0 0 44%;padding:7px 11px;font-size:12.5px;border-right:1px solid var(--line2)}
+  .kc-right{flex:1;padding:5px 9px}
+  .kc-b .kc-item{display:block}
+  .kc-b .kc-left{flex:none;border-right:none;font-weight:600;padding-bottom:2px}
+  .grow{display:flex;gap:6px;align-items:center;font-size:11.5px;padding:1.5px 0}
+  .code{display:inline-flex;align-items:center;justify-content:center;width:19px;height:17px;border-radius:4px;font-size:10px;font-weight:800;flex:0 0 auto}
+  .cP{background:var(--P-bg);color:var(--P-tx)}.cM{background:var(--M-bg);color:var(--M-tx)}.cX{background:var(--X-bg);color:var(--X-tx)}.cD{background:var(--D-bg);color:var(--D-tx)}
+  .grow .it{flex:1;color:var(--ink)}.grow .qty{width:46px;text-align:right}.grow .ven{width:62px;text-align:right;color:var(--ink3)}
+  .grow input{border:1px solid transparent;border-radius:5px;font-size:11.5px;padding:1px 4px;background:transparent;font-family:inherit;color:var(--ink)}
+  .grow input:hover,.grow input:focus{border-color:var(--line);background:#fff;outline:none}
+  .grow .qty input{width:44px;text-align:right}.grow .ven input{width:60px;text-align:right;color:var(--ink3)}
+  .grow .del{opacity:0;cursor:pointer;color:var(--ink3);font-size:13px;border:none;background:none;padding:0 1px}
+  .grow .del:hover{color:var(--maroon)}
+  .grow:hover .del{opacity:1}
+  .empty{padding:30px 16px;text-align:center;color:var(--ink3);font-size:13px}
+  .addrow{font-size:11px;color:var(--maroon);cursor:pointer;padding:2px 0 4px;display:inline-block}
+  /* library editor */
+  .lib-item{border-top:1px solid var(--line2);padding:9px 14px}
+  .lib-item h4{margin:0 0 5px;font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+  .tmpl-chips{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0}
+  .chip{font-size:11px;padding:4px 9px;border-radius:16px;border:1px solid var(--line);background:#fff;cursor:pointer;user-select:none}
+  .chip.on{background:var(--maroon);color:#fff;border-color:var(--maroon)}
+  /* weekly */
+  .ven-sec{border-top:1px solid var(--line);padding:8px 14px}
+  .ven-sec h4{margin:0 0 4px;font-size:13px;color:var(--maroon);font-weight:700}
+  @media print{
+    .no-print{display:none!important}
+    .wrap{max-width:100%;padding:0}.card{border:none;margin:0}.col-body{max-height:none;overflow:visible}
+    body{background:#fff}
+    #buildPane .grid2{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="logo">P</div>
+  <div><h1>Grocery &amp; Kitchen Copy</h1><small id="topSub">Loading…</small></div>
+  <span class="sp"></span>
+  <button class="tabbtn on" id="tab-build" onclick="showTab('build')"><i class="ti ti-checkbox"></i> Build</button>
+  <button class="tabbtn" id="tab-week" onclick="showTab('week')"><i class="ti ti-shopping-cart"></i> Weekly order</button>
+  <button class="tabbtn" id="tab-lib" onclick="showTab('lib')"><i class="ti ti-book"></i> Library</button>
+</div>
+
+<div class="wrap">
+  <div id="bootMsg" class="muted" style="padding:6px 2px"></div>
+
+  <!-- ============ BUILD TAB ============ -->
+  <div id="buildPane">
+    <div class="card no-print">
+      <div class="card-h"><span>1 · Choose the event</span></div>
+      <div style="padding:13px 15px">
+        <div class="row">
+          <div>
+            <label class="fld">Event (from your main app)</label>
+            <select id="evSelect" onchange="onEventPick()"><option value="">— pick an event —</option></select>
+          </div>
+          <div>
+            <label class="fld">Menu type</label>
+            <select id="typeSelect" onchange="onTypeChange()"></select>
+          </div>
+          <div style="align-self:flex-end">
+            <button class="btn btn-ghost btn-sm" onclick="toggleManual()"><i class="ti ti-pencil"></i> Manual event</button>
+          </div>
+        </div>
+        <div id="manualBox" class="hide" style="margin-top:11px">
+          <div class="row">
+            <div><label class="fld">Event # / name</label><input type="text" id="mEvName" placeholder="#8 Weintraub" style="width:160px"></div>
+            <div><label class="fld">Week ending (Sun)</label><input type="date" id="mWeek"></div>
+            <div><label class="fld">Guests</label><input type="text" id="mGuests" placeholder="307" style="width:80px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card no-print">
+      <div class="card-h">
+        <span>2 · Tick what's on the final menu</span>
+        <span class="row" style="gap:7px">
+          <span class="pill" id="pickCount">0 chosen</span>
+          <button class="btn btn-ghost btn-sm" onclick="checkAll(true)">All</button>
+          <button class="btn btn-ghost btn-sm" onclick="checkAll(false)">None</button>
+        </span>
+      </div>
+      <div class="grid2">
+        <div>
+          <input class="search" id="pickSearch" placeholder="Search items…" oninput="renderPicker()">
+          <div class="col-body" id="picker"></div>
+        </div>
+        <div>
+          <div style="padding:9px 13px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+            <b style="font-size:13px">Kitchen copy</b>
+            <span class="row" style="gap:6px">
+              <span class="muted" style="font-size:11px" id="kcRows"></span>
+              <button class="btn btn-ghost btn-sm" id="menuBtn" onclick="toggleLiveMenu()"><i class="ti ti-layout-sidebar"></i> Live menu</button>
+              <button class="btn btn-ghost btn-sm" id="layoutBtn" onclick="toggleLayout()"><i class="ti ti-layout-columns"></i> Layout A</button>
+            </span>
+          </div>
+          <div class="col-body" id="kitchen"><div class="empty">Pick an event and tick items to build the kitchen copy.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card no-print" id="liveMenuCard" style="display:none">
+      <div class="card-h">
+        <span><i class="ti ti-layout-sidebar"></i> Live menu &amp; groceries (split view)</span>
+        <span class="row" style="gap:7px">
+          <span class="muted" style="font-size:11px" id="liveMenuStatus"></span>
+          <button class="btn btn-ghost btn-sm" onclick="reloadLiveMenu()"><i class="ti ti-refresh"></i> Refresh menu</button>
+        </span>
+      </div>
+      <div style="display:flex;gap:0;min-height:60vh">
+        <div style="flex:0 0 55%;border-right:1px solid var(--line);position:relative">
+          <div id="liveMenuFrameWrap" style="height:72vh;overflow:hidden">
+            <div class="empty" id="liveMenuEmpty">Pick an event that has a menu link to see its live Google Doc here.</div>
+            <iframe id="liveMenuFrame" style="width:100%;height:100%;border:none;display:none"></iframe>
+          </div>
+        </div>
+        <div style="flex:1">
+          <div class="col-body" id="liveKitchen" style="height:72vh"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card no-print">
+      <div class="card-h"><span>3 · Save &amp; print</span></div>
+      <div style="padding:13px 15px" class="row">
+        <button class="btn btn-primary" onclick="saveGrocery()"><i class="ti ti-device-floppy"></i> Save this event's grocery</button>
+        <button class="btn btn-ghost" onclick="printKitchen()"><i class="ti ti-printer"></i> Print kitchen copy</button>
+        <button class="btn btn-ghost" onclick="printClientMenu()"><i class="ti ti-external-link"></i> Open client menu (Google Doc)</button>
+        <span class="muted" id="saveState" style="font-size:12px"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ WEEKLY ORDER TAB ============ -->
+  <div id="weekPane" class="hide">
+    <div class="card no-print">
+      <div class="card-h"><span>Weekly purchasing list — combined by vendor</span></div>
+      <div style="padding:13px 15px" class="row">
+        <div><label class="fld">Week ending (Sunday)</label><input type="date" id="weekPick"></div>
+        <button class="btn btn-primary" onclick="buildWeekly()" style="align-self:flex-end"><i class="ti ti-refresh"></i> Build weekly list</button>
+        <button class="btn btn-ghost" onclick="printWeekly()" style="align-self:flex-end"><i class="ti ti-printer"></i> Print</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><span>Order list</span><span class="muted" id="weekMeta" style="font-size:12px;font-weight:400"></span></div>
+      <div id="weeklyOut"><div class="empty">Pick a week and build the list. It gathers every saved event that week and groups all items by vendor.</div></div>
+    </div>
+  </div>
+
+  <!-- ============ LIBRARY TAB ============ -->
+  <div id="libPane" class="hide">
+    <div class="card no-print">
+      <div class="card-h"><span>Master library</span>
+        <button class="btn btn-primary btn-sm" onclick="openAddItem()"><i class="ti ti-plus"></i> Add menu item</button>
+      </div>
+      <div style="padding:11px 15px">
+        <div class="row">
+          <div><label class="fld">Show menu type</label><select id="libType" onchange="renderLib()"></select></div>
+          <input class="search" id="libSearch" placeholder="Search items…" oninput="renderLib()" style="flex:1;border:1px solid var(--line);border-radius:9px;border-bottom:1px solid var(--line)">
+        </div>
+        <div class="muted" style="font-size:12px;margin-top:7px">Edit quantities, vendors, codes inline. Changes save to your library and are the defaults for future events.</div>
+      </div>
+    </div>
+    <div class="card"><div id="libOut" class="col-body"></div></div>
+  </div>
+
+</div>
+
+<!-- Add-item modal -->
+<div id="addItemModal" class="hide" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;max-width:540px;width:100%;max-height:88vh;overflow:auto">
+    <div class="card-h" style="border-bottom:1px solid var(--line)"><span>Add a new menu item</span><button class="btn btn-ghost btn-sm" onclick="closeAddItem()"><i class="ti ti-x"></i></button></div>
+    <div style="padding:15px">
+      <label class="fld">Item / station name</label>
+      <input type="text" id="aiName" placeholder="e.g. Roasted beet salad" style="width:100%;margin-bottom:11px">
+      <label class="fld">Department (menu section)</label>
+      <input type="text" id="aiDept" placeholder="e.g. salads" style="width:100%;margin-bottom:11px">
+      <label class="fld">Which template menus does this belong to? (tick all)</label>
+      <div class="tmpl-chips" id="aiTemplates"></div>
+      <label class="fld" style="margin-top:8px">Grocery rows</label>
+      <div id="aiRows"></div>
+      <span class="addrow" onclick="aiAddRow()"><i class="ti ti-plus"></i> Add grocery row</span>
+      <div style="margin-top:14px;text-align:right">
+        <button class="btn btn-primary" onclick="saveNewItem()"><i class="ti ti-check"></i> Add to selected templates</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script>
+// ============ Firebase (same project as main app + time clock) ============
+const firebaseConfig = {
+  apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
+  authDomain: "premier-caterers-internal-app.firebaseapp.com",
+  projectId: "premier-caterers-internal-app",
+  storageBucket: "premier-caterers-internal-app.firebasestorage.app",
+  messagingSenderId: "471701398759",
+  appId: "1:471701398759:web:559a7bee3b645ce545ee42"
+};
+let db, GLIB, GSAVED, EVENTS;
+// gro_ prefix isolates grocery data. Reads main app 'events' read-only.
+
+// ============ Seeded library (from your spreadsheet) ============
+const SEED = {
+  "shabbos": {
+    "label": "Shabbos",
+    "sections": [
+      {"name": "Dinner", "dept": "pre set", "rows": [["X", "regular size challah", "1", "strauss dir"], ["X", "limes", "40", "premier"], ["X", "ice", "yes", "premier"], ["X", "two tone heimish challah rolls TWO TONE", "8dz", "strauss dir"], ["P", "asst dips....", "yes", "premier"], ["P", "cole slaw", "yes", "bertram"], ["X", "pickles", "yes", "bertram"], ["X", "olives", "yes", "bertram"]]},
+      {"name": "dinner / appy / gefilte", "dept": "appetizer", "rows": [["P", "gefilte fish", "yes", "ab"], ["X", "horseraddish", "yes", "chefs"], ["P", "cucumber salad", "yes", "premier"], ["P", "deco for appetizer", "yes", "premier"]]},
+      {"name": "dinner / appy / duet gefilte", "dept": "appetizer", "rows": [["P", "gefilte fish", "?", "ab"], ["P", "salmon gefilte fish", "?", "ab"], ["X", "horseraddish", "?", "chefs"], ["P", "cucumber salad", "yes", "premier"], ["P", "deco of appetizer", "yes", "premier"]]},
+      {"name": "dinner / appy / trio gefilte", "dept": "appetizer", "rows": [["P", "cocktail regular gefilte", "?", "ab"], ["P", "cocktail salmon gefilte", "?", "ab"], ["P", "cocktail other gefilte", "?", "ab"], ["X", "horseraddish", "?", "chefs"], ["P", "cucumber salad", "yes", "premier"], ["P", "deco for appetizer", "yes", "premier"], ["X", "alfalfa sprouts", "?", "premier"]]},
+      {"name": "dinner / appy / breaded tilapia", "dept": "appetizer", "rows": [["P", "breaded flounder filet", "?", "bertram"], ["P", "quinoa", "?", "premier"], ["P", "garlic aioli sauce", "yes", "premier"], ["P", "deco for appetizer", "yes", "premier"]]},
+      {"name": "dinner / appy / moroccan fish", "dept": "appetizer", "rows": [["P", "moroccan fish", "?", "rd"], ["P", "israeli couscous", "?", "premier"], ["P", "deco for appetizer", "yes", "premier"]]},
+      {"name": "dinner / appy / mesculan salad", "dept": "appetizer", "rows": [["X", "spring mix", "?", "aisle"], ["P", "dressing for above", "yes", "premier"], ["P", "shredded carrots", "yes", "premier"], ["X", "asst peppers", "yes", "premier"], ["X", "cherry tomatoes", "yes", "premier"], ["X", "red onions", "yes", "premier"], ["P", "deco for appetizer", "yes", "premier"]]},
+      {"name": "dinner / appy / grilled salmon", "dept": "appetizer", "rows": [["P", "salmon, honey mustard", "?", "rd"], ["X", "mixed greens", "1 per 6", "aisle"], ["P", "garlic dijon dressing", "yes", "premier"], ["P", "shredded carrots", "yes", "premier"], ["X", "asst peppers", "yes", "premier"], ["X", "cherry tomatoes", "yes", "premier"], ["X", "red onions", "yes", "premier"], ["P", "deco for appetizer", "yes", "premier"]]},
+      {"name": "dinner / appy / fillet of sole", "dept": "appetizer", "rows": [["P", "filet of sole, lemon marinated", "?", "bertram"], ["X", "baby kale", "?", "aisle"], ["P", "autum citrus dressing", "yes", "premier"], ["P", "shredded carrots", "yes", "premier"], ["X", "asst peppers", "yes", "premier"], ["X", "cherry tomatoes", "yes", "premier"], ["X", "red onions", "yes", "premier"], ["P", "deco for appetizer", "yes", "premier"]]},
+      {"name": "dinner / appy / sampler", "dept": "appetizer", "rows": [["P", "cocktail gefilte regular", "?", "ab"], ["P", "cocktail gefilte salmon", "?", "ab"], ["P", "horseraddish", "?", "chefs"], ["P", "papaya, mango", "yes", "premier"], ["X", "avacados", "?", "premier"], ["P", "asian pasta", "yes", "premier"], ["P", "flaked salmon", "?", "rd"], ["P", "deco for appetizer", "yes", "premier"], ["X", "sesame seeds", "yes", "premier"]]},
+      {"name": "dinner / appy / spinach rolatini", "dept": "appetizer", "rows": [["P", "spinach rolatini PARVE", "?", "chefs"], ["P", "tomato ragu", "yes", "premier"], ["P", "fried shallots", "yes", "premier"], ["P", "deco for appetizer", "yes", "premier"]]},
+      {"name": "dinner / appy / mid east salads", "dept": "appetizer", "rows": [["P", "israeli salad", "yes", "premier"], ["P", "chummos", "?", "premier"], ["P", "techina", "?", "premier"], ["P", "turkish salad", "?", "chefs"], ["P", "babaganoush", "?", "chefs"], ["X", "pita breads", "?", "strauss dir"]]},
+      {"name": "dinner / appy / meatballs", "dept": "appetizer", "rows": [["M", "mini meatballs", "?", "premier"], ["M", "basmati rice", "?", "premier"], ["M", "deco for appetizer", "yes", "premier"]]},
+      {"name": "dinner / appy / quinoa, tofu, gv", "dept": "appetizer", "rows": [["P", "quinoa", "yes", "premier"], ["P", "grilled vegetables", "yes", "premier"], ["P", "tofu squares", "yes", "rd"], ["P", "balsamic glaze / dressing", "yes", "premier"], ["P", "deco for appetizer", "yes", "premier"]]},
+      {"name": "dinner / appy / duet spring rolls", "dept": "appetizer", "rows": [["M", "pulled beef spring roll", "?", "premier"], ["P", "vegetable spring roll", "?", "premier"], ["X", "hoisen sauce", "?", "premier"], ["X", "alfalfa sprouts", "?", "premier"], ["P", "red cabbage salad", "?", "bertram"], ["P", "deco for appetizer", "yes", "premier"]]},
+      {"name": "dinner / appy / bbq beef", "dept": "appetizer", "rows": [["M", "bbq beef", "?", "premier"], ["M", "rice pilaf", "?", "premier"], ["M", "potato hay", "yes", "premier"]]},
+      {"name": "dinner / SOUP / chicken", "dept": "soup", "rows": [["M", "chicken soup", "?", "premier"], ["M", "matzo balls", "?", "premier"], ["M", "veg for soup", "?", "premier"], ["X", "soup croutons", "?", "bertram"]]},
+      {"name": "dinner / SOUP / cream chicken", "dept": "soup", "rows": [["M", "cream of chicken soup", "?", "premier"], ["M", "matzo balls", "?", "premier"], ["X", "soup croutons", "?", "bertram"]]},
+      {"name": "dinner / SOUP / mushroom barley", "dept": "soup", "rows": [["M", "mushroom barley soup", "?", "premier"], ["M", "meat for soup", "?", "premier"], ["X", "soup croutons", "?", "bertram"]]},
+      {"name": "dinner / SOUP / vegetable", "dept": "soup", "rows": [["P", "vegetable soup", "?", "premier"], ["X", "croutons for soup", "?", "bertram"]]},
+      {"name": "dinner / SOUP / butternut squash", "dept": "soup", "rows": [["P", "butternut squash soup", "?", "premier"], ["X", "croutons for soup", "?", "bertram"]]},
+      {"name": "dinner / SOUP / parsnip", "dept": "soup", "rows": [["P", "creamy parsnip soup", "?", "premier"], ["X", "croutons for soup", "?", "bertram"]]},
+      {"name": "dinner / SOUP / zuchini", "dept": "soup", "rows": [["P", "zuchini soup", "?", "premier"], ["X", "croutons for soup", "?", "bertram"]]},
+      {"name": "dinner / SOUP / morocon chicken", "dept": "soup", "rows": [["M", "moroccan chicken soup", "?", "premier"], ["X", "croutons for soup", "?", "bertram"]]},
+      {"name": "dinner / SOUP / tomato", "dept": "soup", "rows": [["P", "tomato soup", "?", "premier"], ["P", "brushetta", "?", "sterns"], ["X", "croutons for soup", "?", "bertram"]]},
+      {"name": "dinner / ENTREE / french cut", "dept": "entree", "rows": [["M", "french cut chicken", "?", "gg"], ["M", "sauce for entree", "yes", "premier"], ["M", "deco for entree", "yes", "premier"]]},
+      {"name": "dinner / ENTREE / white capon", "dept": "entree", "rows": [["M", "white capon", "?", "aisle"], ["M", "sauce for entree", "yes", "premier"], ["M", "deco for entree", "yes", "premier"]]},
+      {"name": "dinner / ENTREE / dark capon", "dept": "entree", "rows": [["M", "dark capons", "?", "gg"], ["M", "sauce for entree", "yes", "premier"], ["M", "deco for entree", "yes", "premier"]]},
+      {"name": "dinner / ENTREE / chicken duet", "dept": "entree", "rows": [["M", "grilled chicken", "?", "premier"], ["M", "breaded chicken", "?", "premier"], ["M", "sauce for entree", "yes", "premier"], ["M", "deco for entree", "yes", "premier"]]},
+      {"name": "dinner / ENTREE / marsala", "dept": "entree", "rows": [["M", "chicken marsala", "?", "premier"], ["M", "deco for entree", "yes", "premier"]]},
+      {"name": "dinner / ENTREE / UPGRADED ENTREE", "dept": "entree", "rows": [["M", "UPGRADED entree", "?", "aaaa"], ["M", "sauce for entrre", "yes", "premier"], ["M", "deco for entree", "yes", "premier"]]},
+      {"name": "dinner / ENTREE / fish / veg option", "dept": "entree", "rows": [["P", "fish option", "?", "rd"], ["P", "vegeterian option", "?", "premier"]]},
+      {"name": "dinner / ENTREE / sides", "dept": "entree", "rows": [["M", "roasted red potatos", "?", "premier"]]},
+      {"name": "dinner / ENTREE / sides", "dept": "entree", "rows": [["M", "basmati rice", "?", "premier"]]},
+      {"name": "dinner / ENTREE / sides", "dept": "entree", "rows": [["M", "smashed potatoes", "?", "premier"]]},
+      {"name": "dinner / ENTREE / sides", "dept": "entree", "rows": [["P", "swirled yukon mashed", "?", "premier"], ["P", "swirled sweet mashed", "?", "premier"]]},
+      {"name": "dinner / ENTREE / sides", "dept": "entree", "rows": [["M", "parsnip puree", "?", "premier"]]},
+      {"name": "dinner / ENTREE / sides", "dept": "entree", "rows": [["P", "quinoa", "?", "premier"]]},
+      {"name": "dinner / ENTREE / sides", "dept": "entree", "rows": [["M", "wild rice", "?", "premier"]]},
+      {"name": "dinner / ENTREE / sides", "dept": "entree", "rows": [["P", "potato kugel muffin", "?", "premier"]]},
+      {"name": "dinner / ENTREE / sides", "dept": "entree", "rows": [["M", "potato wedges", "?", "premier"]]},
+      {"name": "dinner / ENTREE / sides", "dept": "entree", "rows": [["M", "melange vegetables", "?", "premier"]]},
+      {"name": "dinner / ENTREE / sides", "dept": "entree", "rows": [["M", "speghetti vegetables", "?", "premier"]]},
+      {"name": "dinner / ENTREE / sides", "dept": "entree", "rows": [["M", "tied bundles french beans", "?", "premier"]]},
+      {"name": "dinner / ENTREE / sides", "dept": "entree", "rows": [["M", "white asparagus", "?", "premier"]]},
+      {"name": "dinner / ENTREE / sides", "dept": "entree", "rows": [["M", "belgian carrots", "?", "premier"]]},
+      {"name": "dinner / ENTREE / sides", "dept": "entree", "rows": [["P", "grilled vegetables", "?", "premier"]]},
+      {"name": "dinner / ENTREE / passing", "dept": "entree", "rows": [["M", "london broil", "?", "premier"]]},
+      {"name": "dinner / ENTREE / passing", "dept": "entree", "rows": [["M", "brisket", "?", "premier"]]},
+      {"name": "dinner / ENTREE / passing", "dept": "entree", "rows": [["P", "kugel muffins....", "?", "premier"]]},
+      {"name": "dinner  / KIDS / appetizer", "dept": "kids", "rows": [["M", "pulled beef", "?", "premier"], ["X", "pickle chip", "?", "premier"], ["X", "slider bun, commercial sliced or pretzel", "?", "strauss dir"], ["X", "ketchup", "?", "premier"]]},
+      {"name": "dinner  / KIDS / appetizer", "dept": "kids", "rows": [["X", "tortilla chips", "?", "rd"], ["X", "salsa", "?", "rd"], ["P", "guacamole", "?", "premier"]]},
+      {"name": "dinner  / KIDS / appetizer", "dept": "kids", "rows": [["M", "franks in blankets", "?", "premier"], ["X", "mustard", "?", "premier"]]},
+      {"name": "dinner  / KIDS / appetizer", "dept": "kids", "rows": [["X", "romaine", "?", "bertram"], ["X", "caesar croutons", "?", "premier"], ["P", "caesar dressing", "?", "premier"]]},
+      {"name": "dinner  / KIDS / soup", "dept": "kids", "rows": [["M", "same soup as adults", "?", "premier"]]},
+      {"name": "dinner  / KIDS / entree", "dept": "kids", "rows": [["M", "hamburger", "?", "premier"], ["X", "commercial sliced hamburger buns", "?", "strauss dir"], ["X", "pickle chips", "?", "premier"], ["X", "ketchup", "?", "premier"], ["X", "romaine", "?", "bertram"], ["M", "tater tots", "?", "premier"]]},
+      {"name": "dinner  / KIDS / entree", "dept": "kids", "rows": [["M", "meatballs", "?", "premier"], ["M", "rice", "?", "premier"], ["M", "tater tots", "?", "premier"], ["X", "ketchup", "?", "premier"]]},
+      {"name": "dessert / WARM RUNNY CHIP", "dept": "dessert", "rows": [["M", "runny chip dessert", "?", "chefs"], ["X", "vanilla ice cream - parve", "?", "strauss dir"], ["X", "shavings", "yes", "strauss dir"], ["X", "blueberrys", "yes", "premier"], ["X", "non dairy creamer", "2", "bertram"]]},
+      {"name": "dessert / SAMPLER", "dept": "dessert", "rows": [["M", "mug with soufle", "", ""], ["X", "mug with apple", "", ""], ["X", "empty mug", "", ""], ["X", "sorbet", "", ""], ["X", "non dairy creamer", "", ""], ["X", "whipped cream as glue", "", ""]]},
+      {"name": "dessert / FAMILY STYLE DESSERT", "dept": "dessert", "rows": [["X", "cantalope", "?", "premier"], ["X", "honeydew", "?", "premier"], ["X", "pineapple", "?", "premier"], ["X", "watermellon", "?", "premier"], ["X", "grapes x2", "?", "premier"], ["X", "mangos", "?", "premier"], ["X", "kiwis", "?", "premier"], ["X", "blueberries", "?", "premier"], ["X", "mini pastries", "?", "strauss dir"], ["X", "mini chocolates", "?", "strauss dir"], ["X", "mousse shots", "?", "strauss dir"], ["P", "baked cookies", "?", "premier"], ["X", "non dairy creamer", "?", "premier"]]},
+      {"name": "dessert / FRUIT FAMILY STYLE", "dept": "dessert", "rows": [["X", "cantalope", "?", "premier"], ["X", "honeydew", "?", "premier"], ["X", "pineapple", "?", "premier"], ["X", "watermellon", "?", "premier"], ["X", "grapes x2", "?", "premier"], ["X", "mangos", "?", "premier"], ["X", "kiwis", "?", "premier"], ["X", "blueberries", "?", "premier"]]},
+      {"name": "linen", "dept": "linen", "rows": [["X", "seating linen", "", ""], ["X", "side linen", "", ""], ["X", "napkins, linen", "", ""]]},
+      {"name": "SHABBOS BUFFET LUNCH", "dept": "***", "rows": [["X", "****", "", ""]]},
+      {"name": "lunch / buffet / PRE SET", "dept": "pre set", "rows": [["X", "regular size challah", "1", "strauss dir"], ["X", "limes", "?", "premier"], ["X", "ice", "?", "premier"], ["X", "heimish challah roll egg", "?", "strauss dir"], ["P", "asst dip", "yes", "premier"], ["P", "cole slaw", "yes", "bertram"], ["X", "pickles", "yes", "bertram"], ["X", "olives", "yes", "premier"]]},
+      {"name": "lunch / appetizer / liver & egg", "dept": "appetizer", "rows": [["M", "chopped liver", "?", "chefs"], ["P", "egg salad", "?", "premier"], ["X", "romaine", "?", "bertram"], ["X", "tomatoes", "?", "premier"], ["X", "crackers", "?", "bertram"], ["X", "cucumbers", "?", "premier"], ["X", "alfalfa sprouts", "?", "premier"]]},
+      {"name": "lunch / appetizer / sampler", "dept": "appetizer", "rows": [["P", "farro grain", "?", "premier"], ["X", "mini timbal", "?", "premier"], ["P", "teriyakee salmon", "?", "rd"], ["P", "sesame seeds", "1pt", "premier"], ["P", "asian cole slaw", "yes", "bertram"], ["P", "cold soup", "?", "premier"], ["X", "deco for appetizer", "yes", "premier"]]},
+      {"name": "salads / DECO", "dept": "salads", "rows": [["X", "deco box", "yes", "premier"]]},
+      {"name": "salads / RED CABBAGE", "dept": "salads", "rows": [["P", "red cabbage salad", "yes", "bertram"]]},
+      {"name": "salads / CALIFORNIA", "dept": "salads", "rows": [["X", "spring mix", "?", "aisle"], ["X", "dried cranberries", "yes", "premier"], ["X", "mandorine oranges", "yes", "premier"], ["X", "candied nuts", "yes", "premier"], ["P", "raspberry dressing", "yes", "premier"], ["X", "alfalfa sprouts", "yes", "premier"]]},
+      {"name": "salads / LETTUCE, PEP, PORT", "dept": "salads", "rows": [["X", "spring mix", "?", "aisle"], ["P", "roasted peppers", "yes", "premier"], ["P", "roasted portobella mushrooms", "yes", "premier"], ["P", "dressing for above", "yes", "premier"], ["X", "other vegetables for above", "yes", "premier"]]},
+      {"name": "buffet / CHICKENS.....", "dept": "buffet", "rows": [["M", "breaded plain chicken cutlets", "?", "premier"], ["M", "breaded cornflake chicken cutlets", "?", "premier"], ["M", "breaded pretzel chicken cutlets", "?", "premier"], ["M", "chicken roulades", "?", "premier"], ["M", "asst deli rolls", "?", "premier"], ["M", "grilled chicken pesto", "?", "premier"], ["M", "grilled chicken siracha", "?", "premier"], ["M", "grilled chicken bbq", "?", "premier"], ["M", "grilled chicken cranberry", "?", "premier"], ["X", "ketchup", "?", "premier"], ["X", "mustard", "?", "premier"], ["X", "russian", "?", "premier"], ["X", "bbq sauce", "?", "premier"], ["P", "wasabi mayo", "?", "premier"], ["P", "chimichuri sauce", "?", "premier"], ["M", "poper sauce", "?", "premier"]]},
+      {"name": "buffet / HOT", "dept": "hot", "rows": [["M", "cholent", "?", "premier"]]},
+      {"name": "buffet / HOT", "dept": "hot", "rows": [["M", "kishke", "?", "premier"]]},
+      {"name": "buffet / HOT", "dept": "hot", "rows": [["M", "bbq beef (maybe also yellow rice)", "?", "premier"]]},
+      {"name": "buffet / HOT", "dept": "hot", "rows": [["M", "mini meatballs", "?", "premier"]]},
+      {"name": "buffet / HOT", "dept": "hot", "rows": [["P", "potato kugel", "?", "premier"]]},
+      {"name": "buffet / HOT", "dept": "hot", "rows": [["P", "carrot kugel", "?", "chefs"]]},
+      {"name": "buffet / HOT", "dept": "hot", "rows": [["P", "salt and pepper kugel", "?", "premier"]]},
+      {"name": "buffet / DESSERT / FAMILY STYLE", "dept": "dessert", "rows": [["X", "cantalope", "?", "premier"], ["X", "honeydew", "?", "premier"], ["X", "pineapple", "?", "premier"], ["X", "watermellon", "?", "premier"], ["X", "grapes x2", "?", "premier"], ["X", "kiwis", "?", "premier"], ["X", "mangos", "?", "premier"], ["X", "blueberries", "?", "premier"], ["X", "mini pastries", "?", "strauss dir"], ["P", "baked cookies", "?", "chefs"], ["X", "mousse shots", "?", "strauss dir"], ["X", "non dairy creamer", "?", "bertram"]]},
+      {"name": "buffet / LINENS", "dept": "linen", "rows": [["X", "seating linen", "?", "a1"], ["X", "buffet linen", "?", "a1"], ["X", "napkins, linen", "?", "a1"], ["X", "dais linen?", "?", "a1"]]},
+      {"name": "SHABBOS BUFFET LUNCH", "dept": "***", "rows": [["X", "****", "", ""]]},
+      {"name": "lunch / buffet / PRE SET", "dept": "pre set", "rows": [["X", "regular size challah EGG DOUGH", "1", "strauss dir"], ["X", "limes", "?", "premier"], ["X", "ice", "?", "premier"], ["X", "heimish challah roll egg", "?", "strauss dir"], ["P", "asst dip", "yes", "premier"], ["P", "cole slaw", "yes", "bertram"], ["X", "pickles", "yes", "bertram"], ["X", "olives", "yes", "premier"]]},
+      {"name": "lunch / appetizer / meatballs", "dept": "appetizer", "rows": [["M", "meatballs", "yes", "premier"], ["X", "basmati rice", "", ""]]},
+      {"name": "lunch / plated entree", "dept": "entree", "rows": [["M", "stuffed chicken roulade w/ pastramis", "1per", "premier"], ["X", "russian dressing", "yes", "premier"], ["M", "deco for entree", "yes", "premier"]]},
+      {"name": "lunch / french service....", "dept": "entree", "rows": [["M", "chollent", "yes", "premier"], ["P", "potato kugel muffins", "yes", "premier"]]},
+      {"name": "lunch / plated / kids", "dept": "kids", "rows": [["M", "same as adults", "yes", "premier"], ["M", "pretzel chicken fingers", "yes", "premier"], ["X", "ketchup", "yes", "premier"], ["M", "chollent", "yes", "premier"], ["P", "kugel", "yes", "premier"]]},
+      {"name": "lunch / plated / mud cake", "dept": "desserrt", "rows": [["X", "10\" ambroisa cake cut into 16 sliced", "yes", "strauss dir"], ["X", "blueberries", "yes", "premier"], ["X", "whipped cream", "1qt", "strauss dir"], ["X", "shavings / deco for plate", "yes", "strauss dir"], ["X", "non dairy creamer", "yes", "bertram"]]},
+      {"name": "buffet / LINENS", "dept": "linen", "rows": [["X", "seating linen", "?", "a1"], ["X", "buffet linen", "?", "a1"], ["X", "napkins, linen", "?", "a1"], ["X", "dais linen?", "?", "a1"]]}
+    ]
+  },
+  "shalosh": {
+    "label": "Shalosh seudah",
+    "sections": [
+      {"name": "Rentals....", "dept": "rentals", "rows": [["X", "tables", "?", "premier"], ["X", "chairs", "?", "premier"], ["X", "lighting", "?", "premier"], ["X", "other rentals", "?", "premier"]]},
+      {"name": "misc.", "dept": "misc", "rows": [["X", "NO NUTS", "**", "strauss dir"], ["X", "NO NUTS", "**", "elegent dir"], ["P", "NO NUTS", "**", "premier"]]},
+      {"name": "appetizing", "dept": "appetizing", "rows": [["X", "bread display", "$?", "strauss dir"], ["X", "mini asst bagels", "?", "bagels fri"], ["X", "challah rolls", "?", "strauss dir"], ["X", "sliced breads", "?", "strauss dir"], ["X", "sliced smoked salmon", "?", "rd"], ["X", "cream cheese - parve or dairy - ????", "?", "aaaaa"], ["X", "avacados / onions / cilantro spice", "yes", "premier"], ["X", "lime juice", "yes", "premier"], ["X", "tuna fish", "yes", "bertram"], ["X", "whitefish salad", "yes", "premier"], ["X", "egg salad", "yes", "premier"], ["X", "tomatoes", "yes", "premier"], ["X", "cucumbers", "yes", "premier"], ["X", "onions", "yes", "premier"]]},
+      {"name": "salads", "dept": "salads", "rows": [["X", "SEE OTHER MENU", "?", "?"], ["X", "SEE OTHER MENU", "?", "?"], ["X", "SEE OTHER MENU", "?", "?"], ["X", "SEE OTHER MENU", "?", "?"], ["X", "SEE OTHER MENU", "?", "?"], ["X", "SEE OTHER MENU", "?", "?"], ["X", "SEE OTHER MENU", "?", "?"], ["X", "SEE OTHER MENU", "?", "?"], ["X", "SEE OTHER MENU", "?", "?"]]},
+      {"name": "fish", "dept": "fish", "rows": [["P", "whole poached salmon", "yes", "rd"], ["P", "tarter sauce", "yes", "rd"], ["P", "deco for fish", "yes", "premier"], ["P", "grilled tuna loins", "yes", "fish"], ["P", "wasabi mayo", "yes", "premier"], ["P", "honey mustard salmon 3oz", "yes", "rd"], ["P", "fried fish fingers", "yes", "bertram"], ["X", "ketchup", "yes", "premier"], ["X", "popcorner chips", "3bg", "aisle"]]},
+      {"name": "grains", "dept": "grains...", "rows": [["P", "farro grain", "yes", "premier"], ["P", "shell pasta with spinach", "yes", "premier"], ["P", "sesame / oriental noodles", "yes", "premier"]]},
+      {"name": "MYO", "dept": "myo", "rows": [["X", "romaine", "yes", "bertram"], ["X", "spring mix", "yes", "aisle"], ["X", "kale / arugala", "yes", "aisle"], ["X", "spinach", "yes", "aisle"], ["X", "iceburg - if we have", "yes", "bertram"], ["X", "tomatoes", "yes", "premier"], ["X", "green peppers", "yes", "premier"], ["X", "red peppers", "yes", "premier"], ["X", "yellow peppers", "yes", "premier"], ["X", "cucumbers", "yes", "premier"], ["X", "carrots", "yes", "premier"], ["X", "zuchini", "yes", "premier"], ["X", "squash", "yes", "premier"], ["X", "cherry tomatoes", "yes", "premier"], ["X", "canned cut baby corn", "yes", "premier"], ["X", "hop", "yes", "premier"], ["X", "canned corn", "yes", "premier"], ["X", "mushrooms", "yes", "premier"], ["P", "dressing x5", "yes", "premier"], ["X", "croutons", "yes", "premier"], ["X", "candied nuts", "yes", "premier"], ["X", "dried cranberries", "yes", "premier"], ["X", "tortilla chips", "yes", "premier"], ["X", "alfalfa sprouts", "yes", "premier"], ["X", "mandorine oranges", "yes", "premier"], ["X", "green olives", "yes", "premier"], ["X", "black olives", "yes", "premier"], ["X", "pickle chips", "yes", "premier"], ["X", "avacados", "20", "premier"]]},
+      {"name": "wraps", "dept": "wraps", "rows": [["X", "plain 12\" wraps", "?", "sterns comm"], ["X", "ww 12\" wraps", "?", "sterns comm"], ["X", "other flavot 12\" wraps", "?", "sterns comm"], ["P", "teriyskrr salmon", "yes", "rd"], ["P", "falafal balls", "yes", "premier"], ["P", "grilled portabello mushrooms", "yes", "premier"], ["P", "israeli salad", "yes", "premier"], ["P", "chummos", "yes", "premier"], ["P", "zuchinis - grilled?", "yes", "premier"], ["X", "alfalfa sprouts", "yes", "premier"], ["P", "pesto sauce", "yes", "premier"]]},
+      {"name": "dessert", "dept": "dessert", "rows": [["X", "cantalope", "4", "premier"], ["X", "honeydew", "4", "premier"], ["X", "pineapple", "4", "premier"], ["X", "watermellon", "1", "premier"], ["X", "grapes x2", "2+2", "premier"], ["X", "kiwis", "9", "premier"], ["X", "mangos", "4", "premier"], ["X", "blueberries", "3", "premier"], ["X", "star fruit", "10", "premier"], ["X", "asst mini pastries", "5bx", "strauss dir"], ["X", "asst mini pastries", "7bx", "elegant dir"], ["X", "whole ast bobkas", "4", "strauss dir"], ["X", "whole kokosh", "2", "strauss dir"], ["X", "whole long apple strudle", "1", "strauss dir"], ["X", "long asst tarts", "4", "strauss dir"], ["X", "carrot cake", "2", "strauss dir"], ["X", "asst loaf cakes - decorated", "4", "elegant dir"]]},
+      {"name": "dessert", "dept": "dessert", "rows": [["X", "asst parve gelatos and sorbets", "5", "strauss dir"], ["X", "sprinkles x2", "2x", "premier"], ["X", "cherries", "yes", "premier"], ["X", "mini marshmellows", "yes", "premier"], ["X", "ic cones", "yes", "premier"], ["X", "chocolate syrup", "yes", "premier"], ["X", "caramel syrup", "yes", "premier"], ["X", "strawberry syrup", "yes", "premier"], ["X", "vanilla syrup", "yes", "premier"], ["P", "crushed cookies", "yes", "premier"], ["X", "cocnut", "yes", "premier"], ["X", "blueberries", "yes", "premier"], ["X", "frozen mango", "2bg", "premier"], ["X", "chocolate chips", "yes", "premier"], ["X", "dried cranberries", "yes", "premier"], ["P", "crushed grahm crackers", "yes", "premier"]]},
+      {"name": "coffee", "dept": "coffee", "rows": [["P", "iced coffee", "yes", "premier"], ["P", "iced tea mix", "yes", "premier"], ["P", "lemonade mix", "yes", "premier"], ["X", "oat milk", "2", "wallmart"], ["D", "milk", "2+2", "aisle"], ["X", "asst creamer - PARVE - no nuts", "3", "aisle"], ["X", "staebucks creamers - PARVE - no nuts", "3", "wallmart"], ["X", "12 oz clear cups AND lids", "150", "premier"], ["X", "straws", "150", "premier"]]},
+      {"name": "linen", "dept": "linen", "rows": [["X", "seating linen -", "?", "a1"], ["X", "buffet linens", "?", "a1"], ["X", "other linens", "?", "a1"], ["X", "napkins linen", "?", "a1"]]}
+    ]
+  },
+  "kiddush": {
+    "label": "kiddush",
+    "sections": [
+      {"name": "Kiddush table", "dept": "kiddush", "rows": [["X", "asst soft rugaluch / bobka sticks", "yes", "elegent dir"], ["X", "xl chocolate kokosh", "yes", "strauss dir"], ["X", "baked cookies", "yes", "chefs"], ["X", "Mini black and whites", "yes", "strauss dir"], ["X", "Assorted loaf cakes", "yes", "elegent dir"], ["X", "gefilte fish", "yes", "ab"], ["X", "horseraddish", "yes", "chefs"], ["X", "asst herrings - 6 type", "6x", "chefs"], ["X", "crackers", "yes", "bertram"], ["X", "keichel", "yes", "elegent dir"]]},
+      {"name": "salads - DECO BOX", "dept": "salads", "rows": [["P", "deco box", "yes", "premier"]]},
+      {"name": "Salads - cran quinoa", "dept": "salads", "rows": [["P", "cranberry quinoa", "yes", "premier"]]},
+      {"name": "salads - CAESAR", "dept": "salads", "rows": [["X", "romaine", "1.5cs", "bertram"], ["P", "caesaer dressing", "yes", "premier"], ["X", "caesar croutons", "yes", "premier"]]},
+      {"name": "salads - CUCUMBER SALAD", "dept": "salads", "rows": [["P", "cucumber salad", "yes", "premier"]]},
+      {"name": "salads - K&A W/ BUTTERNUT SQUASH", "dept": "salads", "rows": [["X", "kale & arugala", "10", "aisle"], ["P", "roasted butternut squash", "yes", "premier"], ["P", "pom seeds", "yes", "premier"], ["P", "pom dressing", "yes", "premier"], ["P", "candied nuts", "yes", "premier"], ["X", "alfalfa sprouts", "2", "premier"]]},
+      {"name": "salads - MESCULAN WITH ROASTED", "dept": "salads", "rows": [["X", "spring mix / mesculan", "10", "aisle"], ["P", "roasted mushrooms", "yes", "premier"], ["P", "roasted peppers", "yes", "premier"], ["P", "shaved carrots", "yes", "premier"], ["P", "dressing for above", "yes", "premier"]]},
+      {"name": "salads - CRUNCHY RAINBOW SLAW", "dept": "salads", "rows": [["P", "crunchy rainbow cabbage salad", "yes", "bertram"]]},
+      {"name": "CHICKENS", "dept": "chicken", "rows": [["M", "plain breaded chicken nuggets", "yes", "premier"], ["M", "pretzel chicken nuggets", "yes", "premier"], ["M", "corn flake OR captain crunch nuggets", "yes", "premier"], ["X", "ketchup", "yes", "rd"], ["X", "mustard", "yes", "rd"], ["M", "chopped liver", "yes", "chefs"], ["X", "crackers", "3bx", "bertram"]]},
+      {"name": "hot food", "dept": "hot food", "rows": [["M", "chollent", "yes", "premier"], ["M", "kishka", "???", "ab"], ["M", "mini hot dogs / meatballs / bbq beef / stuffued cabbage", "???", "????"], ["P", "potato kugel", "???", "premier"], ["P", "other kugel", "???", "premier"]]},
+      {"name": "desserts", "dept": "desserts", "rows": [["P", "cantalope", "3", "premier"], ["P", "honeydew", "3", "premier"], ["P", "pineapple", "3", "premier"], ["P", "watermellon", "1", "premier"], ["P", "grapes x2", "1+1", "premier"], ["P", "kiwis", "4", "premier"], ["P", "mangos", "2", "premier"], ["P", "blueberries", "2", "premier"], ["X", "mini pastries", "12bx?", "strauss dir"], ["P", "rice crispy logs", "3", "premier"], ["X", "mini brownies / blondies", "3lb", "strauss dir"], ["X", "mousse shots", "1bx", "strauss dir"], ["X", "TBD - logo cookies - TBD", "???", "???"]]},
+      {"name": "linen", "dept": "linen", "rows": [["X", "buffet linen", "?", "a1"], ["X", "seating linen", "?", "a1"]]}
+    ]
+  },
+  "meat": {
+    "label": "Meat event",
+    "sections": [
+      {"name": "Misc / allergies", "dept": "misc", "rows": [["X", "misc / allergies", "??", "???"], ["X", "misc / allergies", "??", "???"], ["X", "misc / allergies", "??", "???"], ["X", "misc / allergies", "??", "???"]]},
+      {"name": "Bar", "dept": "bar", "rows": [["X", "ice", "?", "premier"], ["X", "oj", "?", "rd"], ["X", "limes", "?", "premier"], ["X", "lemmons", "?", "premier"]]},
+      {"name": "Hor dourves - SEARED TUNA", "dept": "passing", "rows": [["P", "seared tuna", "yes", "fish"], ["X", "avacados", "yes", "premier"]]},
+      {"name": "Hor dourves - FRANK BLANKET", "dept": "passing", "rows": [["M", "franks in blankets", "yes", "premier"], ["X", "mustard", "1pt", "premier"]]},
+      {"name": "Hor dourves - FRITTERS", "dept": "passing", "rows": [["P", "fritters", "yes", "premier"], ["X", "cranberry sauce - small", "1sm", "premier"]]},
+      {"name": "Hor dourves - SATEY", "dept": "passing", "rows": [["M", "satey - beef or chicken", "yes", "premier"]]},
+      {"name": "Hor dourves - PULLED / TACO", "dept": "passing", "rows": [["M", "pulled beef", "yes", "premier"], ["X", "mini hard corn taco", "?", "bertram"]]},
+      {"name": "Hor dourves - EMPANADAS", "dept": "passing", "rows": [["M", "beef emapanadas", "yes", "chefs"], ["M", "dip for empanadas", "yes", "premier"]]},
+      {"name": "Hor dourves - petite sliders", "dept": "passing", "rows": [["M", "petite sliders", "yes", "premier"], ["X", "tiny pretzel sliders", "yes", "chefs"], ["X", "ketchup", "1pt", "premier"], ["X", "cherry tomato", "1bx", "premier"]]},
+      {"name": "Hor dourvers - dim sum", "dept": "passing", "rows": [["M", "mini dumplings, beef or chicken?", "yes", "chefs"], ["X", "hoisen sauce", "1pt", "premier"]]},
+      {"name": "Hor dourves - PORT FRIES", "dept": "passing", "rows": [["M", "portabello fries", "yes", "premier"], ["X", "ketchup", "1pt", "premier"]]},
+      {"name": "Hor dourves - REUBEN SAND.", "dept": "passing", "rows": [["X", "sliced coctail bread - square", "2", "strauss dir"], ["X", "sliced corned beef", "3pkg", "premier"], ["X", "saurkraut", "1sm", "premier"], ["X", "mergerine", "1lb", "premier"], ["X", "russian dressing", "1pt", "premier"]]},
+      {"name": "Hor dourbes - MASHED POT MART", "dept": "passing", "rows": [["M", "regular mashed potatoes", "yes", "premier"], ["M", "sweet mashed potatoes", "yes", "premier"], ["M", "sauted mushrooms / onions", "yes", "premier"], ["X", "crispy onions", "yes", "premier"], ["X", "cherry tomatoes", "yes", "premier"], ["M", "brown gravy", "yes", "premier"]]},
+      {"name": "Pre set", "dept": "pre set", "rows": [["X", "limes", "?", "premier"], ["X", "ice", "?", "premier"], ["X", "asst dinner rolls", "?", "strauss"], ["X", "flat bread", "?", "bertram"]]},
+      {"name": "Appetizer - SAMPLER", "dept": "appetizer", "rows": [["P", "cold soup", "yes", "premier"], ["P", "teriyakee salmon", "yes", "rd"], ["P", "sesame seeds", "yes", "premier"], ["X", "alfalfa sprouts", "yes", "premier"], ["X", "mini plastic timbal", "yes", "premier"], ["P", "farro grain", "yes", "premier"], ["X", "micro greens", "yes", "aisle"]]},
+      {"name": "Appetizer - KIDS - PRET CHICK", "dept": "kids", "rows": [["M", "pretzel chicken fingers", "yes", "premier"], ["X", "ketchup", "yes", "premier"], ["P", "honey mustard", "yes", "premier"]]},
+      {"name": "buffet - HOT STATION", "dept": "hot station", "rows": [["M", "chicken fencese", "yes", "premier"], ["M", "other for frances", "yes", "premier"], ["M", "mini meatballs", "yes", "premier"], ["P", "penne pasta", "yes", "premier"], ["M", "roasted potatoes", "yes", "premier"], ["M", "melange vegetables", "yes", "premier"]]},
+      {"name": "buffet - MEXICAN", "dept": "mexican", "rows": [["M", "beef for tacos", "yes", "premier"], ["X", "hard taco shells", "?", "bertram"], ["M", "chicken fajita", "yes", "premier"], ["X", "soft corn tortilla", "?", "rd"], ["M", "mexican rice", "yes", "premier"], ["X", "shredded iceburg or romaine", "?", "bertram"], ["X", "tomatoes", "?", "premier"], ["X", "onions", "?", "premier"], ["X", "cilantri spirce", "?", "premier"], ["X", "avacados", "?", "premier"], ["X", "lime juice", "yes", "premier"]]},
+      {"name": "buffet - MIDDLE", "dept": "middle", "rows": [["M", "beef shish kebob", "yes", "premier"], ["M", "dilled rice", "yes", "premier"], ["M", "shwarma", "yes", "premier"], ["X", "pita, regular", "?", "strauss dir"], ["X", "pita, whole wheat", "?", "strauss dir"], ["X", "lafa", "?", "strauss dir"], ["P", "falafal balls", "yes", "premier"], ["P", "chummos", "yes", "premier"], ["P", "techina", "yes", "premier"], ["P", "israeli salad", "yes", "premier"], ["X", "israeli pickles", "yes", "premier"], ["X", "green olives", "yes", "premier"]]},
+      {"name": "Salads - CAESAR", "dept": "salads", "rows": [["X", "romaine", "?", "bertram"], ["X", "caesar croutons", "?", "bertram"], ["P", "caesar dressing", "?", "premier"]]},
+      {"name": "Soup - FRENCH ONION", "dept": "soup", "rows": [["P", "french onion soup", "?", "premier"], ["X", "soup croutons", "?", "premier"], ["X", "caesar croutons", "?", "premier"]]},
+      {"name": "PERSIAN STATION", "dept": "persian", "rows": [["M", "ghormi sabzi", "yes", "?"], ["M", "bamya (okra)", "yes", "rd"], ["M", "chicken kebobs", "yes", "premier"], ["M", "barg (ground lamb on skewers)", "yes", "chefs"], ["M", "koujide - ground", "yes", "?"], ["M", "white rice", "yes", "premier"], ["M", "green rice", "yes", "premier"]]},
+      {"name": "stations - BBQ", "dept": "bbq", "rows": [["M", "hot dogs", "yes", "premier"], ["M", "sliders", "yes", "premier"], ["M", "grilled (or breaded) chicken", "yes", "premier"], ["M", "Carving steak OPTIONAL", "?????", "premier"], ["X", "hot dog buns - commercial sliced", "yes", "strauss"], ["X", "slider buns - commercial sliced", "yes", "strauss"], ["X", "pretzel slider buns", "yes", "chefs"], ["M", "french fries - oven type", "yes", "bertram"], ["P", "cole slaw", "yes", "bertram"], ["P", "tri colored potato salad", "yes", "premier"], ["X", "plum tomatoes", "yes", "premier"], ["X", "onions", "yes", "premier"], ["X", "pickle chips", "yes", "premier"], ["X", "saurkraut", "1/2 gall", "premier"], ["X", "ketchup", "1gal", "premier"], ["X", "mustard", "1gal", "premier"], ["X", "bbq sauce", "2qt", "premier"]]},
+      {"name": "stations - PASTA", "dept": "pasta", "rows": [["P", "penne pasta", "yes", "premier"], ["P", "bowtie pasta", "yes", "premier"], ["P", "tri colored tortilini - PARVE", "yes", "bertram"], ["P", "pesto sauce", "yes", "premier"], ["M", "bolognaise sauce", "yes", "premier"], ["P", "garlic oil", "yes", "premier"], ["P", "garlic bread", "yes", "sterns"]]},
+      {"name": "Stations - ASIAN", "dept": "asian", "rows": [["M", "beef and vegetables", "yes", "premier"], ["X", "frozen brocolli", "yes", "bertram"], ["X", "asian sauce", "yes", "premier"], ["M", "gen tso chicmen", "yes", "premier"], ["M", "gen tso sauce", "yes", "premier"], ["M", "vegetable lo mein", "yes", "premier"], ["M", "mini egg rolls", "yes", "bertram"], ["M", "fried rice", "yes", "premier"], ["X", "duck sauce", "yes", "premier"], ["X", "chinese crispy noodles", "yes", "premier"], ["X", "soy sauce", "yes", "premier"]]},
+      {"name": "VIENESSE - BASE ITEMS", "dept": "dessert", "rows": [["X", "cantalope", "3", "premier"], ["X", "honeydew", "3", "premier"], ["X", "pineapple", "3", "premier"], ["X", "watermellon", "1", "premier"], ["X", "grapes x2", "1+1", "premier"], ["X", "kiwis", "5", "premier"], ["X", "mangos", "3", "premier"], ["X", "blueberries", "2", "premier"], ["X", "brownies / blondies - strauss or chefs TBD", "yes", "???"], ["X", "mini pastries", "yes", "strauss"], ["X", "logo cookies", "3dz", "strauss"], ["X", "non dairy creamer", "yes", "bertram"]]},
+      {"name": "vienesse - HOT ITEMS", "dept": "dessert", "rows": [["X", "cinnamon buns", "tbd", "chefs"], ["P", "sauce for cinnamon buns", "tbd", "strauss"], ["P", "baked (raw) assorted cookies", "yes", "chefs"], ["P", "apple crispt", "tbd", "premier"], ["X", "caramel sauce - in squeeze bottle", "1", "premier"]]},
+      {"name": "vinesse - FRIED OREO", "dept": "dessert", "rows": [["X", "oreos - parve", "yes", "bertram"], ["X", "pancake mix", "yes", "premier"], ["X", "pancake syrup", "yes", "premier"], ["X", "oil", "5gal", "premier"], ["X", "powdered sugar", "1qt", "premier"], ["X", "raw eggs", "1dz", "premier"], ["X", "non dairy creamer", "3", "bertram"]]},
+      {"name": "vienesse - SMORES", "dept": "dessert", "rows": [["X", "grahm crackers", "7bx", "bertram"], ["X", "chocolate chip", "1gall", "bertram"], ["X", "liquid chocolate", "1gall", "bertram"], ["X", "marshmellows - mini", "7bg", "bertram"], ["X", "wood skewers", "200", "premier"], ["X", "smores tables and rocks", "yes", "premier"]]},
+      {"name": "vienesse - WAFFLES", "dept": "dessert", "rows": [["X", "pancake mix", "?", "premier"], ["X", "raw eggs", "?", "premier"], ["X", "non dairy creamer", "?", "bertram"], ["X", "pancake syrup", "yes", "premier"], ["X", "parve vanilla ice cream", "?", "?????"], ["X", "chocolate syrup", "2", "premier"], ["X", "strawberry syrup", "1", "aisle"], ["X", "whipped cream cans PARVE", "?", "bertram"]]},
+      {"name": "vienesse - CANDY", "dept": "dessert", "rows": [["X", "candy - COMMISARY", "tbd", "premier"], ["X", "Candy - OH NUTS", "tbd", "aa oh nuts"]]},
+      {"name": "vienesse - COFFEE", "dept": "dessert", "rows": [["X", "non dairy creamer", "?", "bertram"]]},
+      {"name": "linen", "dept": "linen", "rows": [["X", "seating linen", "?", "a1"], ["X", "dais linen", "?", "a1"], ["X", "hiboy / cocktails", "?", "a1"], ["X", "buffet linens", "?", "a1"], ["X", "napkins - linen", "?", "a1"]]}
+    ]
+  },
+  "wedding": {
+    "label": "wedding",
+    "sections": [
+      {"name": "bar", "dept": "bar", "rows": [["X", "ice", "?", "premier"], ["X", "limes", "?", "premier"], ["X", "lemmons", "?", "premier"], ["X", "oj", "?", "rd"]]},
+      {"name": "tisch", "dept": "tisch", "rows": [["X", "tisch pastries", "3bx", "strauss dir"], ["M", "hot food", "yes", "premier"], ["X", "cantalope", "2", "premier"], ["X", "honeydew", "2", "premier"], ["X", "pineapple", "2", "premier"], ["X", "watermellon", "1", "premier"], ["X", "grapes x2", "1+1", "premier"], ["X", "mangos", "2", "premier"], ["X", "blueberries", "1", "premier"], ["X", "kiwis", "3", "premier"]]},
+      {"name": "passing - PULL BEEF SLIDER", "dept": "passing", "rows": [["M", "pulled beef", "yes", "premier"], ["X", "mini pretzel buns", "yes", "chefs"]]},
+      {"name": "passing - NEGAMAKI", "dept": "passing", "rows": [["M", "negamaki", "yes", "premier"], ["X", "hoisen sauce", "1pt", "premier"]]},
+      {"name": "passing - fritters", "dept": "passing", "rows": [["P", "fritters", "yes", "premier"], ["X", "cranberry sauce - small can", "1sm", "premier"]]},
+      {"name": "passing satey", "dept": "passing", "rows": [["M", "satey - beef or chicken?", "yes", "premier"]]},
+      {"name": "passing - lachmagine", "dept": "passing", "rows": [["M", "lachmagine", "yes", "chefs"]]},
+      {"name": "passing - KIBBE", "dept": "passing", "rows": [["M", "kibbe", "yes", "chefs"], ["M", "techina", "1pt", "premier"]]},
+      {"name": "passing - pulled beef / phylo", "dept": "passing", "rows": [["M", "pulled beef", "yes", "premier"], ["X", "mini phylo caup", "yes", "aisle"]]},
+      {"name": "passing - TURKEY ALMONDINE", "dept": "passing", "rows": [["X", "brick of deli  turkey", "yes", "aisle"], ["X", "slivered almonds", "1pt", "premier"], ["X", "russian dressing", "1pt", "premier"]]},
+      {"name": "passing - seared tuna", "dept": "passing", "rows": [["P", "seared tuna", "yes", "fish"], ["X", "avacado", "3", "premier"]]},
+      {"name": "passing - franks in blankets", "dept": "passing", "rows": [["M", "franks in blankets", "yes", "premier"], ["X", "mustard", "1pt", "premier"]]},
+      {"name": "passing - CHICKEN & WAFFLES", "dept": "passing", "rows": [["M", "mini breaded chicken - DARK CHICKEN", "yes", "premier"], ["M", "mini waffles", "yes", "premier"], ["X", "pancake syrup", "1pt", "premier"]]},
+      {"name": "passing - EMPANADAS", "dept": "passing", "rows": [["M", "beef empanadas", "yes", "chefs"], ["M", "sauce for empanadas", "1pt", "premier"]]},
+      {"name": "passing - MINI DUMPLINGS", "dept": "passing", "rows": [["M", "mini beef dumplings", "yes", "chefs"], ["X", "hoisen sauce", "1pt", "premier"]]},
+      {"name": "passing - PORTABELLO FRIES", "dept": "passing", "rows": [["P", "breaded portabello fries", "yes", "premier"], ["P", "sauce for above", "1pt", "premier"]]},
+      {"name": "passing - POTATO MARTINIS", "dept": "passing", "rows": [["P", "regular mashed potatoes", "yes", "premier"], ["P", "sweet mashed potatoes", "yes", "premier"], ["X", "mini spoon", "yes", "premier"], ["M", "gravy", "1qt", "premier"], ["X", "cherry tomatoes", "1cont", "premier"], ["P", "sauted mushrooms", "1pt", "premier"], ["X", "crispy onions", "1pkg", "premier"]]},
+      {"name": "passing - COLD SOUPS", "dept": "passing", "rows": [["P", "cold soups", "2x", "premier"]]},
+      {"name": "passing - MINI BEEF WELLINGTON", "dept": "passing", "rows": [["M", "mini beef wellingtons", "yes", "premier"], ["X", "hoisen sauce", "1pt", "premier"]]},
+      {"name": "salads - DECO BOX", "dept": "salads", "rows": [["X", "deco box", "yes", "premier"]]},
+      {"name": "salads - cran quinoa", "dept": "salads", "rows": [["P", "cranberry quinoa", "yes", "premier"]]},
+      {"name": "salads - corn / black bean", "dept": "salads", "rows": [["P", "corn and black bean salad", "yes", "premier"]]},
+      {"name": "salads - tom, baby, hop", "dept": "salads", "rows": [["P", "tomatoes, baby corn, hop salad", "yes", "premier"]]},
+      {"name": "salads - red cabbage", "dept": "salads", "rows": [["P", "red cabbage salad", "yes", "bertram"]]},
+      {"name": "salads - california", "dept": "salads", "rows": [["X", "spring mix", "8", "aisle"], ["X", "dried cranberry", "1qt", "premier"], ["X", "madorine oranges", "3qt", "premier"], ["X", "candied nuts", "1qt", "premier"], ["X", "alfalfa sprouts", "2", "premier"], ["P", "raspberry dressing", "2qt", "premier"]]},
+      {"name": "salads - k&a w/ squash", "dept": "salads", "rows": [["X", "kale & arugala", "8", "aisle"], ["P", "roasted butternut squsash", "yes", "premier"], ["X", "pom seeds", "yes", "premier"], ["X", "alfalfa sprouts", "2", "premier"], ["X", "candied nuts", "1qt", "premier"], ["P", "pom dressing", "2qt", "premier"]]},
+      {"name": "salads - GV", "dept": "salads", "rows": [["P", "grilled vegetables", "yes", "premier"]]},
+      {"name": "salads - sun dry tortilini", "dept": "salads", "rows": [["P", "sun dried tortilini - parve", "yes", "chefs"], ["P", "pesto sauce", "yes", "premier"]]},
+      {"name": "salads - caesar", "dept": "salads", "rows": [["X", "romaine", "?", "bertram"], ["X", "caesar croutons", "yes", "premier"], ["P", "caesar dressing", "yes", "premier"]]},
+      {"name": "salads - jicama", "dept": "salads", "rows": [["P", "jicama salad", "yes", "premier"]]},
+      {"name": "salads - brocoli cashwq", "dept": "salads", "rows": [["P", "brocoli cashew salad", "yes", "bertram"]]},
+      {"name": "salads - tabouli quinoa", "dept": "salads", "rows": [["P", "tabouli qunoa salad", "yes", "premier"]]},
+      {"name": "salads - ORIENTAL NOODLES", "dept": "salads", "rows": [["P", "oriental noodles", "yes", "premier"]]},
+      {"name": "salads - FARRO GRAIN", "dept": "salads", "rows": [["P", "farro grain", "yes", "premier"]]},
+      {"name": "salads - PMA", "dept": "salads", "rows": [["P", "papaya, mango", "yes", "premier"], ["P", "avacado", "yes", "premier"]]},
+      {"name": "salads - PESTO PASTA", "dept": "salads", "rows": [["P", "pesto pasta", "yes", "premier"]]},
+      {"name": "salads - WALDORF", "dept": "salads", "rows": [["P", "waldorf salad and all componants and dressing", "yes", "premier"]]},
+      {"name": "Stations - ASIAN", "dept": "asian", "rows": [["M", "beef and vegetables", "yes", "premier"], ["X", "frozen brocolli", "yes", "bertram"], ["X", "asian sauce", "yes", "premier"], ["M", "gen tso chicmen", "yes", "premier"], ["M", "gen tso sauce", "yes", "premier"], ["M", "vegetable lo mein", "yes", "premier"], ["M", "mini egg rolls", "yes", "bertram"], ["M", "fried rice", "yes", "premier"], ["X", "duck sauce", "yes", "premier"], ["X", "chinese crispy noodles", "yes", "premier"], ["X", "soy sauce", "yes", "premier"]]},
+      {"name": "stations - MIDDLE EAST", "dept": "middle", "rows": [["M", "beef shish kebob", "yes", "premier"], ["M", "dilled rice", "yes", "premier"], ["M", "shwarma", "yes", "premier"], ["X", "pita, reg", "?", "strauss"], ["X", "pita, ww", "?", "strauss"], ["X", "lafa bread", "?", "strauss"], ["P", "falafal balls", "yes", "premier"], ["P", "chummos", "yes", "premier"], ["P", "techina", "yes", "premier"], ["P", "israeli salad", "yes", "premier"], ["X", "israeli pickles", "yes", "premier"], ["X", "olives", "yes", "premier"]]},
+      {"name": "stations - MEXICAN", "dept": "mexican", "rows": [["M", "beef taco meat", "yes", "premier"], ["X", "hard taco shells", "?", "rd"], ["M", "chicken fajitas", "yes", "premier"], ["X", "soft corn tortillas", "?", "rd"], ["M", "mexican rice", "yes", "premier"], ["X", "shredded romaine or iceburg", "yes", "bertram"], ["X", "tomatoes", "yes", "premier"], ["X", "onions", "yes", "premier"], ["X", "cilantro spice", "yes", "premier"], ["X", "avacados (for guacamole)", "yes", "premier"], ["X", "lime juice", "yes", "premier"], ["X", "red onions", "yes", "premier"]]},
+      {"name": "stations - CARVING", "dept": "carving", "rows": [["M", "corned beef - carving", "yes", "premier"], ["M", "pastrami - carving", "yes", "premier"], ["M", "whole turkey - carving", "yes", "premier"], ["M", "london broil - carving", "yes", "premier"], ["X", "sliced cocktail breads", "3", "strauss"], ["P", "cole slaw", "yes", "bertram"], ["P", "tri colored potato salad", "yes", "premier"], ["X", "pickles - sour", "yes", "bertram"], ["X", "pickles - half sour", "yes", "bertram"], ["X", "olives", "yes", "premier"], ["X", "ketchup", "1gall", "premier"], ["X", "mustard", "1gall", "premier"], ["X", "russian", "2qt", "premier"], ["X", "cranberry sauce", "2sm", "premier"]]},
+      {"name": "hot station", "dept": "hot station", "rows": [["M", "meatballs", "yes", "premier"], ["P", "penne pasta", "yes", "premier"], ["M", "bbq beef", "yes", "premier"], ["M", "sesame chicken", "yes", "premier"], ["M", "sesame chicken sauce", "yes", "premier"], ["X", "sesame seeds", "1qt", "premier"], ["M", "beef and mixed vegetables", "yes", "premier"], ["X", "frozen brocolli", "? bg", "bertram"], ["X", "asian sauce", "1", "costco"]]},
+      {"name": "french fry station", "dept": "fries station", "rows": [["X", "oil", "5gall", "premier"], ["M", "steak fries - oven type", "? cs", "bertram"], ["M", "sweet potato fries - oven type", "? cs", "bertram"], ["M", "red potato wedges", "yes", "premier"], ["M", "breaded cauliflower", "? cs", "bertram"], ["X", "ketchup", "1gall", "premier"], ["P", "spicey ketchup", "2qt", "premier"], ["X", "ranch dressing", "2qt", "premier"], ["M", "brown gravy", "3qt", "premier"]]},
+      {"name": "crepe station", "dept": "crepes", "rows": [["P", "crepe skins", "yes", "premier"], ["M", "chicken and mushrooms", "yes", "premier"], ["M", "pulled beef", "yes", "premier"], ["X", "crunchy onions", "yes", "rd"], ["M", "smashed potatoes", "yes", "premier"], ["M", "sauted onions", "yes", "premier"], ["M", "sauted spinach", "yes", "bertram"], ["M", "chopped brocolli", "yes", "bertram"], ["M", "sauted onions", "yes", "premier"], ["X", "crispy onions", "yes", "rd"], ["M", "brown gravy", "yes", "premier"]]},
+      {"name": "stations - PASTA", "dept": "pasta", "rows": [["P", "penne pasta", "yes", "premier"], ["P", "bowtie pasta", "yes", "premier"], ["P", "tri colored tortilini - PARVE", "yes", "bertram"], ["P", "pesto sauce", "yes", "premier"], ["M", "bolognaise sauce", "yes", "premier"], ["P", "garlic oil", "yes", "premier"], ["P", "garlic bread", "yes", "sterns"]]},
+      {"name": "stations - BBQ", "dept": "bbq", "rows": [["M", "hot dogs", "yes", "premier"], ["M", "sliders", "yes", "premier"], ["M", "grilled  chicken", "yes", "premier"], ["X", "hot dog buns - commercial sliced", "yes", "strauss"], ["X", "slider buns - commercial sliced", "yes", "strauss"], ["X", "pretzel slider buns", "yes", "chefs"], ["M", "french fries - oven type", "yes", "bertram"], ["P", "cole slaw", "yes", "bertram"], ["P", "tri colored potato salad", "yes", "premier"], ["X", "plum tomatoes", "yes", "premier"], ["X", "onions", "yes", "premier"], ["X", "pickle chips", "yes", "premier"], ["X", "saurkraut", "1/2 gall", "premier"], ["X", "ketchup", "1gal", "premier"], ["X", "mustard", "1gal", "premier"], ["X", "bbq sauce", "2qt", "premier"]]},
+      {"name": "stations - RAMON SOUP", "dept": "ramen soup station", "rows": [["X", "raw ramen noodles", "yes", "aisle"], ["M", "chcken soup", "yes", "premier"], ["M", "chicken strips", "yes", "premier"], ["M", "beef strips", "yes", "premier"], ["P", "tofu strips", "yes", "rd"], ["P", "corn", "yes", "premier"], ["P", "carrots shredded", "yes", "premier"], ["P", "six minute eggs", "yes", "premier"], ["X", "scallions", "yes", "premier"], ["X", "bamboo shoots", "yes", "premier"], ["X", "soup croutons", "yes", "bertram"]]},
+      {"name": "stations - POKE", "dept": "poke", "rows": [["P", "salmon", "yes", "fish"], ["P", "tuna", "yes", "fish"], ["P", "sushi rice", "yes", "rd"], ["P", "brown rice", "yes", "rd"], ["X", "rice vinager", "yes", "premier"], ["X", "cucumber", "yes", "premier"], ["X", "onions", "yes", "premier"], ["X", "carrots", "yes", "premier"], ["X", "edamame", "yes", "rd"], ["X", "tomatoes", "yes", "premier"], ["X", "jalapenos", "yes", "premier"], ["X", "sushi sauce", "yes", "premier"], ["X", "ponzi sauce", "yes", "premier"], ["X", "plum sauce", "yes", "premier"], ["X", "soy sauce", "yes", "premier"], ["P", "wasabi mayo", "yes", "premier"], ["X", "mock crab", "yes", "fish"], ["X", "avacados", "yes", "premier"], ["X", "mangos", "yes", "premier"], ["X", "pickled ginger", "yes", "premier"], ["X", "scallions", "yes", "premier"], ["X", "panko crumbs", "yes", "premier"], ["X", "nori sheets", "yes", "fish"], ["P", "fried egg roll skins", "yes", "rd"]]},
+      {"name": "stations - PERSIAN", "dept": "persian", "rows": [["M", "ghormi sabtzi", "yes", "premier"], ["M", "bamya (okra)", "yes", "premier"], ["M", "chicken kebobs", "yes", "premier"], ["M", "beef kebobs", "yes", "premier"], ["M", "barg (lamb kebobs)", "yes", "premier"], ["M", "koujida", "yes", "premier"], ["M", "rice, white", "yes", "premier"], ["M", "rice, green", "yes", "premier"], ["M", "sauces for persian station", "yes", "premier"]]},
+      {"name": "stations - PESCATERIAN", "dept": "pescatarian", "rows": [["P", "salmon, siracha", "yes", "rd"], ["P", "quinoa", "yes", "premier"], ["P", "eggplant, spinach rolatini - PARVE", "yes", "bertram"], ["P", "vegeterian chili", "yes", "premier"], ["X", "soft corn tortillas", "yes", "rd"], ["X", "hard tortilla chips", "yes", "rd"]]},
+      {"name": "Sushi", "dept": "sushi", "rows": [["X", "sushi list....", "yes", "fish"], ["X", "sushi rice", "yes", "rd"], ["X", "avacados", "1cs", "premier"], ["X", "mangos", "5", "premier"], ["P", "sushi salmon", "2pc?", "fish"], ["P", "sushi tuna", "8lb?", "fish"], ["P", "sushi yellowtail", "1side?", "fish"], ["X", "nori sheets", "yes", "fish"], ["X", "wasabi powder", "yes", "fish"], ["X", "pickled ginger", "yes", "rd"], ["X", "frozen fake crab sticks", "yes", "fish"]]},
+      {"name": "pre set", "dept": "pre set", "rows": [["X", "asst dinner rolls", "1per", "strauss dir"], ["X", "flatbreads", "1per", "bertram"], ["X", "limes", "?", "premier"]]},
+      {"name": "appetizer - RAVIOLIS x3", "dept": "appetizer", "rows": [["P", "ravioilis - xl - mushroom", "1per", "chefs"], ["P", "ravioilis - xl - spinach", "1per", "chefs"], ["P", "ravioilis - xl - butternut or sweet potato", "1per", "chefs"], ["P", "pesto sauce", "yes", "premier"], ["P", "grilled vegetables - zuchini", "1per", "chefs"], ["P", "grilled vegetables - squash", "1per", "chefs"]]},
+      {"name": "appetizer - SALAD WITH MEAT", "dept": "appetizer", "rows": [["X", "greens / romains", "1 per 6", "aisle"], ["X", "cherry tomatoes", "yes", "premier"], ["P", "shredded carrots", "yes", "premier"], ["X", "peppers", "yes", "premier"], ["M", "london broil", "yes", "premier"], ["P", "portobello mushrooms", "yes", "premier"], ["P", "dressing for salad", "yes", "premier"], ["P", "deco for appetizer", "yes", "premier"]]},
+      {"name": "appetizer - SAMPLER", "dept": "appetizer", "rows": [["P", "cold peach soup", "yes", "rd"], ["P", "grilled sliced peach", "yes", "rd"], ["P", "teriyakee salmon - 2oz piece", "yes", "rd"], ["X", "sesame seeds", "1qt", "premier"], ["P", "farro grain", "yes", "premier"], ["X", "mini plastic timbal", "yes", "premier"], ["P", "deco for appetizer", "yes", "premier"]]},
+      {"name": "appetizer - CYLANDER SALMON", "dept": "appetizer", "rows": [["P", "grilled salmon - cylander", "?", "rd"], ["P", "slice of orange", "?", "premier"], ["P", "farro grain", "yes", "premier"], ["X", "alfalfa / deco for appetizer / micro greens", "?", "premier"], ["P", "aoli sauce for appetizer", "?", "premier"], ["P", "grilled portabello mushroom", "?", "premier"]]},
+      {"name": "entree - DUET CHICKEN", "dept": "entree", "rows": [["M", "grilled chicken - dark", "yes", "premier"], ["M", "breaded chicken", "yes", "premier"], ["M", "sauce for entree", "yes", "premier"], ["M", "deco for entree", "yes", "premier"], ["X", "ketchup", "yes", "premier"], ["P", "fish option", "yes", "rd"], ["P", "vegeterian option", "yes", "premier"]]},
+      {"name": "entree - CAPON - DARK", "dept": "entree", "rows": [["M", "dark capon", "1 per", "aisle"], ["M", "sauce for entree", "yes", "premier"], ["M", "deco for entree", "yes", "premier"], ["P", "fish option", "yes", "rd"], ["P", "vegeterian option", "yes", "premier"]]},
+      {"name": "entree - FRENCH CUT", "dept": "entree", "rows": [["M", "french cut chicken", "1 per", "gg"], ["M", "sauce for entree", "yes", "premier"], ["M", "deco for entree", "yes", "premier"], ["P", "fish option", "yes", "rd"], ["P", "vegeterian option", "yes", "premier"]]},
+      {"name": "entree - ROULLADE W/ PASTRAMI", "dept": "entree", "rows": [["M", "stuffed chicken roulade w/ pastramis", "1per", "premier"], ["X", "russian dressing", "yes", "premier"], ["M", "deco for entree", "yes", "premier"], ["M", "sauce for entree", "yes", "premier"], ["P", "fish option", "yes", "rd"], ["P", "vegeterian option", "yes", "premier"]]},
+      {"name": "sides for entree - ROASTED POTATOES", "dept": "entree", "rows": [["M", "roasted red potatoes", "yes", "premier"]]},
+      {"name": "sides for entree - dutches", "dept": "entree", "rows": [["P", "orange w/ white and sweet mashed potatoe", "1 per", "premier"]]},
+      {"name": "sides for entree - BASMATI RICE", "dept": "entree", "rows": [["M", "basmati rice", "yes", "premier"]]},
+      {"name": "side dish for entree - TOASTED COUSCOUS", "dept": "entree", "rows": [["P", "couscous with cranberries and nuts", "yes", "premier"]]},
+      {"name": "sides for entree - GV", "dept": "entree", "rows": [["P", "grilled vegetables", "yes", "premier"]]},
+      {"name": "sides for entree - SMASHED", "dept": "entree", "rows": [["M", "smashed potatoes", "yes", "premier"]]},
+      {"name": "sides for entree - FRENCH BEANS", "dept": "entree", "rows": [["M", "french beans", "yes", "premier"], ["M", "sauted onions", "yes", "premier"], ["M", "zatar flavored bread crumbs", "yes", "premier"]]},
+      {"name": "sides for entree - MELANGE", "dept": "entree", "rows": [["M", "melange vegetables - TIED BUNDLE", "yes", "premier"]]},
+      {"name": "dessert - VIENESEE", "dept": "dessert", "rows": [["X", "cantalope", "3", "premier"], ["X", "honeydew", "3", "premier"], ["X", "pineapple", "3", "premier"], ["X", "watermellon", "1", "premier"], ["X", "grapes x2", "1+1", "premier"], ["X", "kiwis", "5", "premier"], ["X", "mangos", "3", "premier"], ["X", "blueberries", "2", "premier"], ["P", "baked (or raw) cookies", "yes", "chefs"], ["X", "cinnamon buns", "yes", "chefs"], ["X", "sauce for cinnamon buns", "yes", "strauss dir"], ["X", "chocolate bobkas", "yes", "sterns"], ["X", "gelato (for shots)", "yes", "strauss dir"], ["X", "mini mugs for gelato", "yes", "premier"], ["X", "mini silver spoons", "yes", "premier"], ["X", "non dairy creamer", "yes", "premier"]]},
+      {"name": "dessert - PASSING VIENESSE", "dept": "dessert", "rows": [["X", "cantalope", "3", "premier"], ["X", "honeydew", "3", "premier"], ["X", "pineapple", "3", "premier"], ["X", "watermellon", "1", "premier"], ["X", "grapes x2", "1+1", "premier"], ["X", "kiwis", "5", "premier"], ["X", "mangos", "3", "premier"], ["X", "blueberries", "2", "premier"], ["X", "mini pastries", "?", "strauss"], ["X", "chocolate covered dried fruit", "yes", "strauss"], ["X", "sorbet", "1gall", "strauss"], ["X", "mini mug for sorbet", "60", "premier"], ["X", "mini donut for iced coffee", "2dz", "aisle"], ["X", "sorbet pops", "2bx", "strauss"], ["X", "mini frozen ice cream sandwiches / cones", "4bx", "strauss"], ["X", "brownies / blondies", "yes", "chefs"], ["P", "apple crisp (begger)", "yes", "premier"], ["P", "baked (raw) cookies", "yes", "chefs"], ["X", "non dairy creamer", "3", "bertram"]]},
+      {"name": "dessert - ICE CREAM BAR", "dept": "dessert", "rows": [["X", "gelato size parve ice cream (sorbet)", "4X", "strauss"], ["X", "whipped cream cans - parve", "yes", "bertram"], ["X", "chocolate syrup", "2", "bertram"], ["X", "caramel syrup", "1", "aisle"], ["X", "vanilla syrup", "1", "aisle"], ["X", "coffee syrup", "1", "aisle"], ["X", "strawberry syrup", "1", "aisle"], ["X", "ice  cream cones -  2 types", "2type", "aisle"], ["X", "crushed cookies", "2qt", "premier"], ["X", "cherries", "2qt", "premier"], ["X", "crushed brownies", "2qt", "premier"], ["X", "crushed cones", "2qt", "premier"]]},
+      {"name": "dessert - CANDY STATION", "dept": "dessert", "rows": [["X", "candies - see menu for specifics", "yes", "oh nuts"]]},
+      {"name": "linen", "dept": "linen", "rows": [["X", "seating linen", "yes", "a1"], ["X", "B&G linen", "yes", "a1"], ["X", "cocktail linen", "yes", "a1"], ["X", "hiboy linen", "yes", "a1"], ["X", "ceremony linen - WHITE", "yes", "a1"], ["X", "buffet linen", "yes", "a1"], ["X", "napkins - linen", "yes", "a1"]]}
+    ]
+  },
+  "dairy": {
+    "label": "dairy buffet",
+    "sections": [
+      {"name": "bar", "dept": "bar", "rows": [["X", "ice", "?", "premier"], ["X", "oj", "?", "rd"], ["X", "kids mixes", "yes", "premier"], ["X", "bottled water", "yes", "rd"], ["X", "soda", "yes", "rd"]]},
+      {"name": "pre set", "dept": "preset", "rows": [["X", "limes", "#", "premier"], ["X", "dinner rolls", "#", "strauss dir"], ["X", "flatbread", "#", "premier"]]},
+      {"name": "salads - DECO BOX", "dept": "salads", "rows": [["X", "deco box", "yes", "premier"]]},
+      {"name": "salads - GREEK SALAD", "dept": "salads", "rows": [["X", "romaine", "#", "bertram"], ["X", "feta cheese", "yes", "costco"], ["X", "italian dressing", "yes", "premier"], ["X", "black olives", "yes", "premier"], ["X", "green peppers", "yes", "premier"], ["X", "tomatoes", "yes", "premier"], ["X", "cucumbers", "yes", "premier"], ["X", "red onions", "yes", "premier"]]},
+      {"name": "salads - CAESAR SALAD", "dept": "salads", "rows": [["P", "caesar dressing", "yes", "premier"], ["P", "ceasar croutons", "yes", "premier"], ["X", "romaine", "#", "bertram"]]},
+      {"name": "salads - K&A W/ POMOGRANANT", "dept": "salads", "rows": [["P", "pomogranat dresssing", "yes", "premier"], ["X", "candied nuts", "yes", "premier"], ["P", "butternut sqaush - roasted", "yes", "premier"], ["P", "pomogranat seeds", "yes", "premier"], ["X", "alfalfa sprouts", "yes", "premier"], ["X", "kale / arugala", "#", "aisle"]]},
+      {"name": "salads - BROCOLI CASHEW SALAD", "dept": "salads", "rows": [["P", "brocoli cashew salad", "yes", "bertram"]]},
+      {"name": "salads - TUNA NICOISE SALAD", "dept": "salads", "rows": [["P", "tuna nicoise salad", "yes", "premier"], ["P", "componants for tuna nicoise", "yes", "premier"], ["P", "dressing for tuna nicoise", "yes", "premier"]]},
+      {"name": "salads - RAINBOW CABBAGE SALAD", "dept": "salads", "rows": [["P", "rainbow cabbqe salad", "yes", "bertram"]]},
+      {"name": "french fry station", "dept": "fries", "rows": [["X", "oil", "5gall", "rd"], ["X", "ketchup", "1gall", "rd"], ["X", "bbq sauce", "yes", "premier"], ["P", "gravy - parve", "yes", "premier"], ["P", "spicey mayo", "yes", "premier"], ["P", "french fries", "#", "rd"], ["P", "red potatoes", "yes", "premier"], ["P", "breaded cauliflower", "yes", "bertram"]]},
+      {"name": "pasta station", "dept": "pasta", "rows": [["D", "macaroni & cheese", "#", "bertram"], ["P", "penne pasta", "#", "bertram"], ["D", "ricotta / marinara sauce", "yes", "bertram"], ["P", "fettecini", "#", "bertram"], ["D", "alfredo sauce (premade or h. cream and flour)", "yes", "aisle"]]},
+      {"name": "pizza", "dept": "pizza", "rows": [["P", "long crusts (or raw round)", "#", "sterns"], ["P", "pizza sauce", "#", "rd"], ["P", "shredded pizza cheese", "#", "bertram"], ["X", "canned mushrooms", "yes", "premier"], ["D", "sauted mushrooms / peppers / onions", "yes", "premier"], ["X", "fetta", "#", "costco"]]},
+      {"name": "crepes", "dept": "crepes", "rows": [["P", "crepe skins", "?", "premier"], ["P", "brown gravy", "yes", "premier"], ["D", "sweet cheese filling - farmer cheese", "yes", "aisle"], ["P", "sauted spinach", "yes", "premier"], ["D", "feta cheese", "yes", "costco"], ["P", "apples and cinnamon", "yes", "premier"]]},
+      {"name": "fish", "dept": "fish", "rows": [["P", "salmon, teriyakee", "?", "rd"], ["P", "trout filtets", "?", "fish"]]},
+      {"name": "dessert - ROOM TEMP", "dept": "dessert", "rows": [["X", "cantalope", "#", "premier"], ["X", "honeydew", "#", "premier"], ["X", "pineapple", "#", "premier"], ["X", "watermellon", "#", "premier"], ["X", "grapes x2", "#", "premier"], ["X", "kiwis", "#", "premier"], ["X", "mangos", "#", "premier"], ["X", "blueberries", "#", "premier"], ["X", "davids brownies / blondies", "#", "chefs"], ["X", "mini asst pastries", "#", "strauss dir"], ["X", "asst 10\" cheesecakes", "#", "strauss dir"], ["X", "asst long tarts....fruit / pecan etc", "#", "strauss dir"], ["P", "rice crispy logs", "#", "premier"]]},
+      {"name": "dessert - HOT DESSERTS", "dept": "hot dessert", "rows": [["X", "cinnamon buns", "#", "chefs"], ["P", "sauce for cinnamon buns", "yes", "strauss dir"], ["P", "baked cookied, asst", "yes", "chefs"]]},
+      {"name": "dessert - STATIONS - POPCORN", "dept": "popcorn machine", "rows": [["X", "popcorn kernels", "yes", "premier"], ["X", "salt", "yes", "premier"], ["X", "oil", "2qt", "premier"], ["X", "popcorn bags", "300", "premier"]]},
+      {"name": "dessert - STATIONS - ICE CREAM BAR", "dept": "ice cream", "rows": [["X", "gelato size ice cream DAIRY", "4", "strauss dir"], ["X", "ice cream cones", "#", "aisle"], ["X", "sprinkles - 2 types", "2x", "rd"], ["X", "cherries", "yes", "rd"], ["P", "crushed cookeis", "yes", "premier"], ["P", "crushed brownies", "yes", "premier"], ["P", "crushed cones", "yes", "premier"], ["P", "coconut, dried", "yes", "premier"], ["X", "chocolate chips - mini", "yes", "premier"], ["X", "marshmellows - mini", "yes", "bertram"], ["X", "marshmellow fluff", "yes", "rd"], ["X", "chocolate syrup", "#", "bertram"], ["X", "coffee syrup", "#", "aisle"], ["X", "caramel syrup", "#", "bertram"], ["X", "vanilla syrup", "#", "aisle"]]},
+      {"name": "dessert - STATIONS - CANDY BAR", "dept": "candy", "rows": [["X", "assorted candies - 10 types", "yes", "oh nuts"]]},
+      {"name": "dessert - STATIONS - DONUT WALL", "dept": "donut wall", "rows": [["X", "donut walls...", "yes", "premier"], ["X", "asst donuts with holes....", "#", "straus dir?"]]},
+      {"name": "desserts - STATIONS - WARM CAKES", "dept": "warm cakes....", "rows": [["X", "10\" asst bobkas - choc, vanill, other NO NUTS", "1ea", "strauss dir"], ["X", "long apple strudle", "1", "strauss dir"], ["X", "vanilla ice cream - DAIRY - gelato size", "1", "strauss dir"]]},
+      {"name": "desserts - STATIONS - WAFFLES", "dept": "waffles", "rows": [["D", "pancake mix", "2bx", "premier"], ["D", "raw eggs", "1/2 dz", "premier"], ["D", "milk, red", "4", "aisle"], ["X", "pancake syrup", "1gall", "premier"], ["X", "non stick spray", "1", "premier"], ["X", "vanilla ice cream - DAIRY - gelato size", "1", "strauss dir"], ["X", "chocolate syrup", "1", "premier"], ["X", "caramel syrup", "1", "premier"], ["X", "strawberry syrup", "1", "premier"], ["X", "dairy whipped cream cans", "3", "bertram"], ["X", "sprinkles", "1qt", "premier"], ["X", "blueberries", "1qt", "premier"]]},
+      {"name": "dessert - COFFEE", "dept": "coffee", "rows": [["X", "milk", "#", "aisle"], ["X", "coffee creamers / syrups", "#", "aisle"], ["P", "iced coffee ?????", "??", "premier"], ["X", "cups / strawa for iced coffee ????", "??", "premier"]]},
+      {"name": "linen", "dept": "linen", "rows": [["X", "seating linens", "?", "a1"], ["X", "dais linens", "?", "a1"], ["X", "buffet linens", "?", "a1"], ["X", "cocktail / hiboy linens", "?", "a1"], ["X", "napkins - linen", "?", "a1"]]}
+    ]
+  },
+  "bris": {
+    "label": "bris",
+    "sections": [
+      {"name": "Bris - BASIC MENU", "dept": "bris", "rows": [["X", "asst bagels", "?", "bagels"], ["X", "croisants", "?", "bagels"], ["X", "onion pockets", "?", "????"], ["D", "cream cheese platters", "?", "chefs"], ["P", "fish platters -lox, w/f salad, whold w/f", "?", "rd"], ["P", "back up sliced lox", "yes", "rd"], ["P", "tuna platters", "?", "bertram"], ["P", "egg salad platters", "?", "premier"], ["P", "tco platters", "?", "premier"], ["P", "fruit platters", "?", "premier"], ["X", "milk, chocolate", "?", "aisle"], ["X", "milk, blue", "?", "aisle"], ["X", "milk, red", "?", "aisle"], ["X", "small cereal boxes", "?", "premier"], ["P", "baked cookies", "?", "chefs"], ["P", "baked mini muffins", "?", "chefs"], ["X", "xl chocolate kokosh", "?", "sterns"], ["X", "mini black and whites", "?", "sterns"], ["X", "oj", "?", "rd"], ["X", "cranberry juice", "2", "rd"], ["X", "grapefruit juice", "2", "rd"], ["X", "tomato juice", "2", "rd"], ["X", "apple juice", "2", "rd"], ["X", "bottled water - bris size", "?", "rd"], ["?", "hot food", "?", "????"], ["?", "hot food", "?", "????"], ["?", "hot food", "?", "????"], ["?", "hot food", "?", "????"], ["X", "coffee - reg & decaf", "yes", "rd"], ["X", "seating linens", "?", "a1"], ["X", "buffet linens", "?", "a1"]]},
+      {"name": "Bris - OMELETES", "dept": "bris", "rows": [["X", "raw eggs", "?", "rd"], ["X", "egg whites", "?", "rd"], ["X", "shredded motzorella cheese", "?", "bertram"], ["X", "shredded yellow cheder cheese", "?", "bertram"], ["P", "sauted mushroom / peppers / onions", "?", "premier"], ["X", "can mushrooms", "?", "premier"], ["X", "non stick spray", "?", "premier"], ["P", "chopped lox", "?", "rd"], ["P", "chopped tomatoes", "?", "premier"], ["P", "sauted spinach", "?", "bertram"], ["X", "ketchup", "?", "premier"]]},
+      {"name": "Bris - YOGURT", "dept": "bris", "rows": [["X", "vanilla yogurt", "?", "aisle"], ["X", "strawberry yogurt", "?", "aisle"], ["X", "coffee yogurt", "?", "aisle"], ["X", "parfait cups / spoons", "?", "premier"], ["X", "slivered almonds", "1qt", "premier"], ["X", "granollla", "1qt", "premier"], ["X", "dried cranberries", "1pt", "premier"], ["X", "blueberries", "1", "premier"], ["X", "honey", "1sm", "premier"], ["X", "mini chocolate chips", "1pt", "premier"], ["X", "dried coconut", "1pt", "premier"]]}
+    ]
+  },
+  "engagement": {
+    "label": "engagement",
+    "sections": [
+      {"name": "bar", "dept": "bar", "rows": [["X", "ice", "yes", "premier"], ["X", "oj", "2", "rd"]]},
+      {"name": "salads", "dept": "salad - deco box", "rows": [["P", "deco box", "yes", "premier"]]},
+      {"name": "salads", "dept": "salad - tom, baby hop", "rows": [["P", "tom, baby, hop salad", "yes", "premier"]]},
+      {"name": "salads", "dept": "salad - oriental noodles", "rows": [["P", "oriental noodles", "yes", "premier"]]},
+      {"name": "salads", "dept": "salad - k/a - squash", "rows": [["X", "kale / arugala", "8", "aisle"], ["P", "roasted butternut squash", "yes", "premier"], ["P", "pom seeds", "yes", "premier"], ["P", "pom dressing", "yes", "premier"], ["P", "candied nuts", "yes", "premier"], ["X", "alfafla sprouts", "1", "premier"]]},
+      {"name": "salads", "dept": "salad -gv", "rows": [["P", "grilled vegetables", "yes", "premier"]]},
+      {"name": "salads", "dept": "salad - arug & pear", "rows": [["X", "arugala", "8", "aisle"], ["X", "pears", "5", "premier"], ["X", "red onions", "3", "premier"], ["X", "cherry tomatoes", "2bx", "premier"], ["P", "dressing for above", "yes", "premier"]]},
+      {"name": "salads", "dept": "salad - rainbow", "rows": [["P", "rainbow cabbage salad", "yes", "premier"]]},
+      {"name": "salads", "dept": "salad - quinoa", "rows": [["P", "quinoa salad", "yes", "premier"]]},
+      {"name": "salads", "dept": "salads - greek", "rows": [["X", "romaine", "?", "bertram"], ["D", "feta cheese", "?", "costco"], ["X", "cucumbers", "yes", "premier"], ["X", "tomatoes", "yes", "premier"], ["X", "black olives", "yes", "premier"], ["X", "red onions", "yes", "premier"], ["X", "green peppers", "yes", "premier"]]},
+      {"name": "salads", "dept": "salads - caesar", "rows": [["X", "romaine", "?", "bertram"], ["P", "caesar dressing", "yes", "premier"], ["X", "caesar croutons", "yes", "bertram"], ["P", "papaya, mango", "yes", "premier"], ["X", "avacado", "yes", "premier"]]},
+      {"name": "salads", "dept": "salad........", "rows": [["?", "???????", "?", "???"], ["?", "???????", "?", "???"], ["?", "???????", "?", "???"], ["?", "???????", "?", "???"], ["?", "???????", "?", "???"], ["?", "???????", "?", "???"], ["?", "???????", "?", "???"], ["?", "???????", "?", "???"], ["?", "???????", "?", "???"], ["?", "???????", "?", "???"], ["?", "???????", "?", "???"], ["?", "???????", "?", "???"]]},
+      {"name": "soup", "dept": "soup...", "rows": [["X", "soup croutons", "yes", "bertram"], ["P", "brushetta", "yes", "sterns"], ["X", "caesar croutons", "yes", "bertram"]]},
+      {"name": "soup", "dept": "soup...", "rows": [["P", "butternutsquash", "yes", "premier"]]},
+      {"name": "soup", "dept": "soup...", "rows": [["P", "split pea soup", "yes", "premier"]]},
+      {"name": "soup", "dept": "soup...", "rows": [["P", "onion soup", "yes", "premier"], ["P", "shredded cheese for soup??????", "yes", "premier"]]},
+      {"name": "soup", "dept": "soup...", "rows": [["P", "vegetable soup", "yes", "premier"]]},
+      {"name": "soup", "dept": "soup...", "rows": [["P", "zuchini soup", "yes", "premier"]]},
+      {"name": "soup", "dept": "soup...", "rows": [["???", "other soup.....", "yes", "premier"]]},
+      {"name": "sushi", "dept": "sushi bar", "rows": [["P", "sushi rice", "yes", "rd"], ["X", "avacados", "yes", "premier"], ["P", "sushi salmon", "yes", "fish"], ["P", "sushi tuna", "yes", "fish"], ["P", "sushi yellow tail", "yes", "fish"], ["X", "fake crab", "yes", "fish"], ["X", "nori sheets", "yes", "fish"], ["X", "soy sauce pourers", "yes", "aisle"], ["X", "sushi list", "yes", "premier"]]},
+      {"name": "pasta - dairy", "dept": "pasta", "rows": [["P", "penne pasta", "yes", "premier"], ["P", "farfalle pasta", "yes", "premier"], ["P", "tri colored ravioli", "yes", "chefs"], ["P", "marinara sauce", "yes", "rd"], ["D", "ricotta cheese", "1qt", "bertram"], ["D", "grated parmigiana cheese", "yes", "bertram"], ["P", "olive oil / garlic", "yes", "premier"], ["P", "pesto sauce", "yes", "premier"]]},
+      {"name": "meat pizza", "dept": "meat pizza", "rows": [["X", "long pizza crusts", "1cs", "sterns"], ["X", "pizza sauce", "3cn", "rd"], ["M", "shredded chicken", "yes", "premier"], ["M", "shredded london broil", "yes", "premier"], ["M", "pulled beef", "yes", "premier"], ["M", "chopped meat crumbles", "yes", "premier"], ["M", "sauted vegetables for pizza", "yes", "premier"], ["X", "frozen brocoli", "1bg", "bertram"], ["X", "canned mushrooms", "1", "rd"], ["P", "wasabi mayo", "1qt", "premier"], ["P", "pesto mayo", "1qt", "premier"], ["X", "bbq sauce", "1qt", "premier"], ["X", "oregeno spice", "1pt", "premier"]]},
+      {"name": "dessert carving", "dept": "carving", "rows": [["X", "cantalope", "?", "premier"], ["X", "honeydew", "?", "premier"], ["X", "pineapple", "?", "premier"], ["X", "watermellon", "?", "premier"], ["X", "grapes x2", "?", "premier"], ["X", "mangos", "?", "premier"], ["X", "kiwis", "?", "premier"], ["X", "blueberries", "?", "premier"], ["X", "pom seeds", "?", "premier"], ["X", "star fruit", "?", "premier"], ["X", "long fruit tars", "?", "elegant"], ["X", "long pecan tart", "?", "elegant"]]},
+      {"name": "pastry shoppe", "dept": "desserts", "rows": [["X", "asst mini pastries", "?", "elegant"], ["X", "logo cookies", "?", "strauss"], ["X", "mousse shots", "?", "strauss"]]},
+      {"name": "chocolate....", "dept": "chocolates / candy", "rows": [["X", "mini molton cakes", "?", "strauss"], ["X", "brownies - david", "?", "chefs"], ["X", "blondies - david", "?", "chefs"], ["X", "candy and gummies", "yes", "oh nuts"], ["X", "long chocolate logs, asst", "3", "elegant"], ["X", "chocolate break up / truffles....", "yes", "elegant"]]},
+      {"name": "hot desserts", "dept": "hot desserts", "rows": [["X", "cinnamon buns", "?", "chefs"], ["X", "sauce for cinnnamon buns", "1 sb", "strauss"]]},
+      {"name": "hot desserts", "dept": "hot desserts", "rows": [["X", "apple crisp", "?", "premier"], ["X", "caramel for apple crisp", "1 sb", "strauss"]]},
+      {"name": "hot desserts", "dept": "hot desserts", "rows": [["X", "other hot desserts", "?", "?"], ["X", "other hot desserts", "?", "?"], ["X", "other hot desserts", "?", "?"], ["X", "other hot desserts", "?", "?"], ["X", "other hot desserts", "?", "?"], ["X", "other hot desserts", "?", "?"], ["X", "other hot desserts", "?", "?"]]},
+      {"name": "dessert crepes", "dept": "dessert crepes", "rows": [["P", "crepe skins", "?", "premier"], ["X", "fillings for crepe dessert", "5x", "aisle"], ["X", "apple filling", "yes", "premier"], ["X", "hazelnut / chocolate filling", "yes", "aisle"], ["X", "non stick spray", "2", "rd"], ["X", "powdered sugar", "1qt", "premier"], ["X", "crushed cookies", "1qt", "premier"], ["X", "chocolate syrup", "1", "bertram"], ["X", "vanilla syrup", "1", "aisle"], ["X", "caramel syrup", "1", "aisle"], ["X", "coffee syrup", "1", "aisle"], ["X", "toasted coconut", "1qt", "rd"]]},
+      {"name": "coffee", "dept": "coffee", "rows": [["X", "non dairy creamer (milk if dairy)", "yes", "bertram"], ["X", "coffee creamers TBD", "TBD", "aisle"]]},
+      {"name": "linen", "dept": "linen", "rows": [["X", "seating linen - lg / cock / hiboy", "?", "a1"], ["X", "buffet linens", "?", "a1"]]},
+      {"name": "rentals", "dept": "rentals", "rows": [["X", "cocktail tables", "?", "premier"], ["X", "hi boys", "?", "premier"], ["X", "bar", "?", "aaaaa"], ["X", "uplights / electric", "?", "premier"], ["X", "pin spots", "?", "premier"], ["X", "towers for pin spots", "?", "premier"]]}
+    ]
+  }
+};
+
+// menu-type key -> label is in SEED[key].label
+// Map main-app event.type values to our library type keys:
+const TYPE_MAP = {
+  dinner:'wedding', wedding:'wedding', barmitzvah:'meat', engagement:'engagement',
+  kiddush:'kiddush', bris:'bris', shalosh:'shalosh', dropoff:'wedding',
+  corporate:'meat', breakfast:'dairy', brunch:'dairy', lunch:'meat', other:'wedding'
+};
+
+// ============ State ============
+let library = {};            // {typeKey:{label, sections:[{id,name,dept,rows:[[code,item,qty,ven],...]}]}}
+let events = [];             // from main app
+let curType = 'wedding';
+let chosen = new Set();       // section ids chosen for current build
+let overrides = {};           // per-event qty/vendor + extra-rows + skip-rows, keyed
+let curEvent = null;          // {job,name,weekOf,guests,type}
+let layoutB = false;          // false=A (menu left), true=B (name heading)
+let manualMode = false;
+
+function uid(){ return 'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+// ============ Boot ============
+window.addEventListener('load', async ()=>{
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    GLIB = db.collection('gro_library');     // overrides/additions to the seed
+    GSAVED = db.collection('gro_saved');      // saved per-event grocery
+    EVENTS = db.collection('events');         // main app events (read)
+    await loadLibrary();
+    await loadEvents();
+    initTypeSelects();
+    renderPicker();
+    document.getElementById('bootMsg').textContent='';
+    document.getElementById('topSub').textContent = 'Connected · '+events.length+' events loaded';
+  }catch(e){
+    console.error(e);
+    document.getElementById('bootMsg').textContent='Could not connect. Check internet and refresh (Ctrl+Shift+R).';
+    document.getElementById('topSub').textContent='Offline';
+  }
+});
+
+// ============ Library load/merge ============
+async function loadLibrary(){
+  // Start from seed (deep clone) and assign ids
+  library = {};
+  for(const k in SEED){
+    library[k] = { label: SEED[k].label, sections: SEED[k].sections.map(s=>({
+      id: 'seed_'+k+'_'+slug(s.name)+'_'+s.dept,
+      name: s.name, dept: s.dept,
+      rows: s.rows.map(r=>r.slice())
+    })) };
+  }
+  // Apply saved library docs (edits + new items). Each doc: {type, id, name, dept, rows, deleted}
+  try{
+    const snap = await GLIB.get();
+    snap.forEach(doc=>{
+      const d = doc.data();
+      if(!d.type || !library[d.type]) return;
+      const arr = library[d.type].sections;
+      const i = arr.findIndex(s=>s.id===d.id);
+      if(d.deleted){ if(i>=0) arr.splice(i,1); return; }
+      const rec = {id:d.id, name:d.name, dept:(d.dept||'').toLowerCase(), rows:d.rows||[]};
+      if(i>=0) arr[i]=rec; else arr.push(rec);
+    });
+  }catch(e){ console.warn('lib overlay load failed', e); }
+}
+function slug(s){ return (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'').slice(0,28); }
+
+// ============ Events load ============
+async function loadEvents(){
+  events = [];
+  try{
+    const today = new Date(); today.setHours(0,0,0,0);
+    const cutoff = new Date(today.getTime() - 2*24*60*60*1000); // include events from 2 days ago (current week tail)
+    const cutStr = cutoff.toISOString().split('T')[0];
+    const snap = await EVENTS.get();
+    snap.forEach(d=>{
+      const e=d.data();
+      // Keep only events whose date OR week-ending is today/future (hide past). If no date, keep.
+      const keyDate = e.eventDate || e.weekOf || '';
+      if(keyDate && keyDate < cutStr) return; // skip past
+      events.push(e);
+    });
+    // sort soonest first (ascending by date/week)
+    events.sort((a,b)=>String(a.eventDate||a.weekOf||'').localeCompare(String(b.eventDate||b.weekOf||'')) || String(a.job||'').localeCompare(String(b.job||'')));
+  }catch(e){ console.warn('events load failed',e); }
+  const sel = document.getElementById('evSelect');
+  sel.innerHTML = '<option value="">— pick an event —</option>' + events.map(e=>{
+    const num = jobNum(e.job);
+    const wk = e.weekOf? ('W/E '+fmtMD(e.weekOf)) : '';
+    return `<option value="${e.id}">${num?('#'+num+' '):''}${esc(e.name||'Event')} · ${esc(e.typeLabel||e.type||'')} ${wk?('· '+wk):''}</option>`;
+  }).join('');
+}
+function jobNum(job){ if(!job) return ''; const p=String(job).split('-'); return p.length>1? p[1] : job.replace('#',''); }
+function fmtMD(d){ if(!d) return ''; const x=new Date(d+'T12:00:00'); return (x.getMonth()+1)+'/'+x.getDate(); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ============ Type selects ============
+function initTypeSelects(){
+  const opts = Object.keys(library).map(k=>`<option value="${k}">${esc(library[k].label)}</option>`).join('');
+  ['typeSelect','libType'].forEach(id=>{ document.getElementById(id).innerHTML=opts; });
+  document.getElementById('typeSelect').value = curType;
+  document.getElementById('libType').value = curType;
+  renderLib();
+}
+
+// ============ Event pick ============
+function onEventPick(){
+  const id = document.getElementById('evSelect').value;
+  const e = events.find(x=>x.id===id);
+  if(!e){ curEvent=null; return; }
+  const tkey = TYPE_MAP[e.type] || 'wedding';
+  curEvent = { id:e.id, job:e.job, num:jobNum(e.job), name:e.name||'Event', weekOf:e.weekOf||'', type:tkey, typeLabel:e.typeLabel||'', guests:e.guestCount||'' , menuLink:e.menuLink||'', pdfMenuLink:e.pdfMenuLink||''};
+  curType = tkey;
+  document.getElementById('typeSelect').value = tkey;
+  chosen = new Set(); overrides = {};
+  loadSavedForEvent(e.id);  // if previously saved, restore picks
+  renderPicker(); renderKitchen();
+  if(liveMenuOn) loadLiveMenu();
+  document.getElementById('saveState').textContent='';
+}
+function onTypeChange(){
+  curType = document.getElementById('typeSelect').value;
+  chosen = new Set(); overrides={};
+  renderPicker(); renderKitchen();
+}
+function toggleManual(){
+  manualMode = !manualMode;
+  document.getElementById('manualBox').classList.toggle('hide', !manualMode);
+}
+function manualEvent(){
+  return {
+    id:'manual', job:'', num:(document.getElementById('mEvName').value||'').replace(/[^0-9]/g,''),
+    name:document.getElementById('mEvName').value||'Manual event',
+    weekOf:document.getElementById('mWeek').value||'', type:curType, typeLabel:library[curType].label,
+    guests:document.getElementById('mGuests').value||''
+  };
+}
+
+// ============ Picker (left) ============
+function secList(){ return (library[curType]&&library[curType].sections)||[]; }
+function deptOrder(list){ const o=[]; list.forEach(s=>{ if(!o.includes(s.dept)) o.push(s.dept); }); return o; }
+function cleanName(s){
+  return s.name.replace(/^(stations?|station|sides for entree|sides for|salads?|salad|entree|dessert|hor dourves|hors|appetizer|appy|pre set)\s*[-\/]\s*/i,'').trim() || s.name;
+}
+function renderPicker(){
+  const q=(document.getElementById('pickSearch').value||'').toLowerCase();
+  const list=secList(); const host=document.getElementById('picker'); let h='';
+  deptOrder(list).forEach(d=>{
+    const secs=list.filter(s=>s.dept===d && (!q || s.name.toLowerCase().includes(q) || s.rows.some(r=>(r[1]||'').toLowerCase().includes(q))));
+    if(!secs.length) return;
+    h+='<div class="dept">'+esc(d||'other')+'</div>';
+    secs.forEach(s=>{
+      h+=`<label class="pickrow"><input type="checkbox" ${chosen.has(s.id)?'checked':''} onchange="togglePick('${s.id}',this.checked)"><span class="nm">${esc(cleanName(s))}</span><span class="cnt">${s.rows.length}</span></label>`;
+    });
+  });
+  host.innerHTML = h || '<div class="empty">No items in this menu type yet.</div>';
+  updatePickCount();
+}
+function togglePick(id,on){ on?chosen.add(id):chosen.delete(id); renderKitchen(); updatePickCount(); }
+function checkAll(on){ const list=secList(); if(on) list.forEach(s=>chosen.add(s.id)); else chosen.clear(); renderPicker(); renderKitchen(); }
+function updatePickCount(){ document.getElementById('pickCount').textContent = chosen.size+' chosen'; }
+
+// ============ Kitchen copy (right) ============
+function ovK(sid,ri,f){ return sid+'|'+ri+'|'+f; }
+function setOv(sid,ri,f,v){ overrides[ovK(sid,ri,f)]=v; }
+function getOv(sid,ri,f,d){ const k=ovK(sid,ri,f); return overrides[k]!==undefined?overrides[k]:d; }
+function delRow(sid,ri){ overrides[ovK(sid,ri,'_del')]=true; renderKitchen(); }
+function isDel(sid,ri){ return overrides[ovK(sid,ri,'_del')]===true; }
+// manual extra rows added on this event, per section
+function extraKey(sid){ return sid+'|_extra'; }
+function getExtras(sid){ return overrides[extraKey(sid)] || []; }
+function addExtraRow(sid){
+  const arr = getExtras(sid).slice();
+  arr.push(['X','','','']);
+  overrides[extraKey(sid)] = arr;
+  renderKitchen();
+}
+function setExtra(sid,ei,f,v){
+  const arr = getExtras(sid).slice();
+  if(!arr[ei]) return;
+  const map={c:0,it:1,q:2,v:3};
+  arr[ei][map[f]] = v;
+  overrides[extraKey(sid)] = arr;
+}
+function delExtra(sid,ei){
+  const arr = getExtras(sid).slice();
+  arr.splice(ei,1);
+  overrides[extraKey(sid)] = arr;
+  renderKitchen();
+}
+
+function renderKitchen(){
+  const host=document.getElementById('kitchen');
+  const list=secList(); const picked=list.filter(s=>chosen.has(s.id));
+  if(!picked.length){ host.innerHTML='<div class="empty">Tick items on the left to build the kitchen copy.</div>'; document.getElementById('kcRows').textContent=''; return; }
+  host.className='col-body '+(layoutB?'kc-b':'kc-a');
+  let h=''; let rowcount=0;
+  deptOrder(list).forEach(d=>{
+    const secs=picked.filter(s=>s.dept===d);
+    if(!secs.length) return;
+    h+='<div class="dept">'+esc(d||'other')+'</div>';
+    secs.forEach(s=>{
+      h+=`<div class="kc-item"><div class="kc-left">${esc(cleanName(s))}</div><div class="kc-right">`;
+      s.rows.forEach((r,ri)=>{
+        if(isDel(s.id,ri)) return;
+        rowcount++;
+        const code=(getOv(s.id,ri,'c',(r[0]||'X'))).toUpperCase();
+        const qty=esc(getOv(s.id,ri,'q',r[2]));
+        const ven=esc(getOv(s.id,ri,'v',r[3]));
+        h+=`<div class="grow"><span class="code c${code}">${code}</span>`+
+           `<span class="it">${esc(r[1])}</span>`+
+           `<span class="qty"><input value="${qty}" onchange="setOv('${s.id}',${ri},'q',this.value)"></span>`+
+           `<span class="ven"><input value="${ven}" onchange="setOv('${s.id}',${ri},'v',this.value)"></span>`+
+           `<button class="del no-print" title="remove" onclick="delRow('${s.id}',${ri})"><i class="ti ti-x"></i></button>`+
+           `<button class="del no-print" title="add a row here" onclick="addExtraRow('${s.id}')"><i class="ti ti-plus"></i></button></div>`;
+      });
+      // manual extra rows for this event
+      getExtras(s.id).forEach((er,ei)=>{
+        rowcount++;
+        const ecode=(er[0]||'X').toUpperCase();
+        h+=`<div class="grow"><select class="no-print" style="width:34px;padding:0 2px;font-size:10px;border:1px solid var(--line);border-radius:4px" onchange="setExtra('${s.id}',${ei},'c',this.value)">`+
+           ['X','P','M','D'].map(c=>`<option ${ecode===c?'selected':''}>${c}</option>`).join('')+`</select>`+
+           `<span class="code c${ecode} print-only" style="display:none">${ecode}</span>`+
+           `<span class="it"><input value="${esc(er[1])}" placeholder="new item" style="width:100%" onchange="setExtra('${s.id}',${ei},'it',this.value)"></span>`+
+           `<span class="qty"><input value="${esc(er[2])}" placeholder="qty" onchange="setExtra('${s.id}',${ei},'q',this.value)"></span>`+
+           `<span class="ven"><input value="${esc(er[3])}" placeholder="vendor" onchange="setExtra('${s.id}',${ei},'v',this.value)"></span>`+
+           `<button class="del no-print" title="remove" onclick="delExtra('${s.id}',${ei})"><i class="ti ti-x"></i></button>`+
+           `<button class="del no-print" title="add a row here" onclick="addExtraRow('${s.id}')"><i class="ti ti-plus"></i></button></div>`;
+      });
+      h+='</div></div>';
+    });
+  });
+  host.innerHTML=h;
+  document.getElementById('kcRows').textContent=rowcount+' rows';
+  if(liveMenuOn) renderLiveKitchen();
+}
+function toggleLayout(){
+  layoutB=!layoutB;
+  document.getElementById('layoutBtn').innerHTML = layoutB? '<i class="ti ti-layout-rows"></i> Layout B' : '<i class="ti ti-layout-columns"></i> Layout A';
+  renderKitchen();
+}
+
+// ============ Live menu (split view) ============
+let liveMenuOn=false;
+function docPreviewUrl(link){
+  if(!link) return '';
+  // Extract the Google Doc ID and build a preview (embed) URL
+  const m = String(link).match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if(m) return 'https://docs.google.com/document/d/'+m[1]+'/preview';
+  // If it's already a /preview or other doc URL, try to use as-is
+  if(link.indexOf('docs.google.com')>-1) return link.replace(/\/edit.*$/,'/preview');
+  return link;
+}
+function toggleLiveMenu(){
+  liveMenuOn=!liveMenuOn;
+  const card=document.getElementById('liveMenuCard');
+  card.style.display = liveMenuOn? 'block':'none';
+  document.getElementById('menuBtn').innerHTML = liveMenuOn
+    ? '<i class="ti ti-layout-sidebar-right"></i> Hide live menu'
+    : '<i class="ti ti-layout-sidebar"></i> Live menu';
+  if(liveMenuOn){ loadLiveMenu(); renderLiveKitchen(); card.scrollIntoView({behavior:'smooth',block:'start'}); }
+}
+function loadLiveMenu(){
+  const ev=currentEventObj()||{};
+  const link = ev.menuLink || ev.pdfMenuLink || '';
+  const frame=document.getElementById('liveMenuFrame');
+  const empty=document.getElementById('liveMenuEmpty');
+  const status=document.getElementById('liveMenuStatus');
+  if(!link){
+    frame.style.display='none'; empty.style.display='block';
+    empty.textContent = ev.name ? 'This event has no menu link saved in the main app. Add a menu link to the event, or use the printed kitchen copy.' : 'Pick an event that has a menu link.';
+    status.textContent=''; return;
+  }
+  const url=docPreviewUrl(link);
+  frame.src=url; frame.style.display='block'; empty.style.display='none';
+  status.textContent='Live from Google Docs · updates when you refresh';
+}
+function reloadLiveMenu(){
+  const frame=document.getElementById('liveMenuFrame');
+  if(frame.src){ const u=frame.src; frame.src='about:blank'; setTimeout(()=>frame.src=u, 60); }
+  renderLiveKitchen();
+}
+function renderLiveKitchen(){
+  // mirror of the kitchen copy, read-only-ish, into the split right pane
+  const host=document.getElementById('liveKitchen');
+  if(!host) return;
+  const src=document.getElementById('kitchen');
+  host.className='col-body '+(layoutB?'kc-b':'kc-a');
+  host.innerHTML = src.innerHTML || '<div class="empty">Tick items above to build groceries.</div>';
+}
+
+// ============ Save / load per-event grocery ============
+function currentEventObj(){ return manualMode ? manualEvent() : curEvent; }
+function buildSavedRows(){
+  // Flatten the chosen sections into grocery rows with overrides applied
+  const list=secList(); const picked=list.filter(s=>chosen.has(s.id));
+  const out=[];
+  deptOrder(list).forEach(d=>{
+    picked.filter(s=>s.dept===d).forEach(s=>{
+      s.rows.forEach((r,ri)=>{
+        if(isDel(s.id,ri)) return;
+        out.push({
+          dept:s.dept, section:cleanName(s),
+          code:(getOv(s.id,ri,'c',(r[0]||'X'))).toUpperCase(),
+          item:r[1], qty:getOv(s.id,ri,'q',r[2]), vendor:getOv(s.id,ri,'v',r[3])
+        });
+      });
+      getExtras(s.id).forEach(er=>{
+        if(!er[1] || !er[1].trim()) return;
+        out.push({
+          dept:s.dept, section:cleanName(s),
+          code:(er[0]||'X').toUpperCase(),
+          item:er[1].trim(), qty:(er[2]||'').trim(), vendor:(er[3]||'').trim()
+        });
+      });
+    });
+  });
+  return out;
+}
+async function saveGrocery(){
+  const ev=currentEventObj();
+  if(!ev || (!ev.id && !ev.name)){ toast('Pick an event first'); return; }
+  const rows=buildSavedRows();
+  if(!rows.length){ toast('Tick some items first'); return; }
+  const docId = ev.id && ev.id!=='manual' ? ev.id : ('manual_'+slug(ev.name)+'_'+(ev.weekOf||''));
+  const rec = {
+    eventId:docId, num:ev.num||'', name:ev.name||'', weekOf:ev.weekOf||'',
+    type:curType, guests:ev.guests||'', rows,
+    chosenIds:[...chosen], overrides, savedAt:new Date().toISOString()
+  };
+  try{
+    await GSAVED.doc(docId).set(rec);
+    document.getElementById('saveState').textContent='Saved ✓ '+new Date().toLocaleTimeString();
+    toast('Grocery saved for '+(ev.num?('#'+ev.num+' '):'')+ev.name);
+  }catch(e){ console.error(e); toast('Save failed — check connection'); }
+}
+async function loadSavedForEvent(eventId){
+  try{
+    const doc=await GSAVED.doc(eventId).get();
+    if(doc.exists){
+      const d=doc.data();
+      chosen=new Set(d.chosenIds||[]); overrides=d.overrides||{};
+      if(d.type){ curType=d.type; document.getElementById('typeSelect').value=d.type; }
+      document.getElementById('saveState').textContent='Loaded saved grocery from '+(d.savedAt?new Date(d.savedAt).toLocaleDateString():'before');
+    }
+  }catch(e){ /* none saved yet */ }
+}
+
+// ============ Weekly by-vendor ============
+async function buildWeekly(){
+  const wk=document.getElementById('weekPick').value;
+  if(!wk){ toast('Pick a week-ending Sunday'); return; }
+  const out=document.getElementById('weeklyOut');
+  out.innerHTML='<div class="empty">Gathering…</div>';
+  let docs=[];
+  try{
+    const snap=await GSAVED.where('weekOf','==',wk).get();
+    snap.forEach(d=>docs.push(d.data()));
+  }catch(e){ console.error(e); out.innerHTML='<div class="empty">Could not load. Check connection.</div>'; return; }
+  if(!docs.length){ out.innerHTML='<div class="empty">No saved events for W/E '+fmtMD(wk)+' yet. Build &amp; save events first.</div>'; document.getElementById('weekMeta').textContent=''; return; }
+  // group by vendor -> combine same item
+  const byVen={};
+  docs.forEach(ev=>{
+    (ev.rows||[]).forEach(r=>{
+      const ven=(r.vendor||'(no vendor)').trim()||'(no vendor)';
+      const key=(r.item||'').toLowerCase().trim();
+      byVen[ven]=byVen[ven]||{};
+      if(!byVen[ven][key]) byVen[ven][key]={item:r.item, code:r.code, qtys:[], events:new Set()};
+      if(r.qty && r.qty!=='yes') byVen[ven][key].qtys.push(r.qty + (ev.num?(' (#'+ev.num+')'):''));
+      byVen[ven][key].events.add(ev.num||ev.name);
+    });
+  });
+  const vendors=Object.keys(byVen).sort();
+  let h='';
+  vendors.forEach(v=>{
+    const items=Object.values(byVen[v]).sort((a,b)=>a.item.localeCompare(b.item));
+    h+=`<div class="ven-sec"><h4>${esc(v)} <span class="muted" style="font-weight:400">· ${items.length} items</span></h4>`;
+    items.forEach(it=>{
+      const evs=[...it.events].join(', ');
+      const code=(it.code||'X').toUpperCase();
+      const qtyStr = it.qtys.length? it.qtys.join(', ') : 'yes';
+      h+=`<div class="grow" style="padding:3px 0"><span class="code c${code}">${code}</span><span class="it">${esc(it.item)}</span><span style="width:auto;color:var(--ink2);font-size:11px">${esc(qtyStr)}</span><span class="muted" style="font-size:10px;margin-left:8px">#${esc(evs)}</span></div>`;
+    });
+    h+='</div>';
+  });
+  out.innerHTML=h;
+  document.getElementById('weekMeta').textContent = docs.length+' event'+(docs.length>1?'s':'')+' · '+vendors.length+' vendors · W/E '+fmtMD(wk);
+}
+
+// ============ Library editor ============
+function renderLib(){
+  const t=document.getElementById('libType').value || curType;
+  const q=(document.getElementById('libSearch').value||'').toLowerCase();
+  const list=(library[t]&&library[t].sections)||[];
+  const host=document.getElementById('libOut'); let h='';
+  deptOrder(list).forEach(d=>{
+    const secs=list.filter(s=>s.dept===d && (!q || s.name.toLowerCase().includes(q) || s.rows.some(r=>(r[1]||'').toLowerCase().includes(q))));
+    if(!secs.length) return;
+    h+='<div class="dept">'+esc(d||'other')+'</div>';
+    secs.forEach(s=>{
+      h+=`<div class="lib-item"><h4>${esc(s.name)} <button class="btn btn-ghost btn-sm no-print" onclick="delLibItem('${t}','${s.id}')"><i class="ti ti-trash"></i></button></h4>`;
+      s.rows.forEach((r,ri)=>{
+        const code=(r[0]||'X').toUpperCase();
+        h+=`<div class="grow"><span class="code c${code}">${code}</span>`+
+           `<span class="it">${esc(r[1])}</span>`+
+           `<span class="qty"><input value="${esc(r[2])}" onchange="editLibRow('${t}','${s.id}',${ri},'q',this.value)"></span>`+
+           `<span class="ven"><input value="${esc(r[3])}" onchange="editLibRow('${t}','${s.id}',${ri},'v',this.value)"></span></div>`;
+      });
+      h+='</div>';
+    });
+  });
+  host.innerHTML = h || '<div class="empty">No items. Use “Add menu item”.</div>';
+}
+async function editLibRow(t,id,ri,f,v){
+  const s=library[t].sections.find(x=>x.id===id); if(!s) return;
+  if(f==='q') s.rows[ri][2]=v; if(f==='v') s.rows[ri][3]=v;
+  await persistLibItem(t,s);
+  toast('Library updated');
+}
+async function persistLibItem(t,s){
+  try{ await GLIB.doc(s.id).set({type:t, id:s.id, name:s.name, dept:s.dept, rows:s.rows}); }
+  catch(e){ console.error(e); toast('Could not save to library'); }
+}
+async function delLibItem(t,id){
+  if(!confirm('Remove this item from the '+library[t].label+' library?')) return;
+  const arr=library[t].sections; const i=arr.findIndex(s=>s.id===id);
+  if(i>=0) arr.splice(i,1);
+  try{ await GLIB.doc(id).set({type:t,id,deleted:true}); }catch(e){}
+  renderLib(); toast('Removed');
+}
+
+// ============ Add new item (multi-template) ============
+let aiRows=[];
+function openAddItem(){
+  aiRows=[['X','','','']];
+  document.getElementById('aiName').value='';
+  document.getElementById('aiDept').value='';
+  const chips=Object.keys(library).map(k=>`<span class="chip" data-k="${k}" onclick="this.classList.toggle('on')">${esc(library[k].label)}</span>`).join('');
+  document.getElementById('aiTemplates').innerHTML=chips;
+  // pre-select current type
+  const cur=document.querySelector(`#aiTemplates .chip[data-k="${curType}"]`); if(cur) cur.classList.add('on');
+  renderAiRows();
+  document.getElementById('addItemModal').classList.remove('hide');
+}
+function closeAddItem(){ document.getElementById('addItemModal').classList.add('hide'); }
+function renderAiRows(){
+  document.getElementById('aiRows').innerHTML = aiRows.map((r,i)=>
+    `<div class="grow"><select onchange="aiRows[${i}][0]=this.value" style="padding:2px 4px;font-size:12px">
+       ${['X','P','M','D'].map(c=>`<option ${r[0]===c?'selected':''}>${c}</option>`).join('')}
+     </select>`+
+    `<input style="flex:1" placeholder="item" value="${esc(r[1])}" onchange="aiRows[${i}][1]=this.value">`+
+    `<input style="width:54px" placeholder="qty" value="${esc(r[2])}" onchange="aiRows[${i}][2]=this.value">`+
+    `<input style="width:64px" placeholder="vendor" value="${esc(r[3])}" onchange="aiRows[${i}][3]=this.value">`+
+    `<button class="del" style="opacity:1" onclick="aiRows.splice(${i},1);renderAiRows()"><i class="ti ti-x"></i></button></div>`
+  ).join('');
+}
+function aiAddRow(){ aiRows.push(['X','','','']); renderAiRows(); }
+async function saveNewItem(){
+  const name=document.getElementById('aiName').value.trim();
+  const dept=document.getElementById('aiDept').value.trim().toLowerCase();
+  if(!name){ toast('Give it a name'); return; }
+  const rows=aiRows.filter(r=>r[1].trim()).map(r=>[r[0],r[1].trim(),r[2].trim(),r[3].trim()]);
+  if(!rows.length){ toast('Add at least one grocery row'); return; }
+  const templates=[...document.querySelectorAll('#aiTemplates .chip.on')].map(c=>c.getAttribute('data-k'));
+  if(!templates.length){ toast('Tick at least one template'); return; }
+  for(const t of templates){
+    const id='new_'+slug(name)+'_'+dept+'_'+t;
+    const rec={id, name, dept, rows:rows.map(r=>r.slice())};
+    library[t].sections.push(rec);
+    await persistLibItem(t,rec);
+  }
+  closeAddItem();
+  toast('Added to '+templates.length+' template'+(templates.length>1?'s':''));
+  renderLib(); renderPicker();
+}
+
+// ============ Print (clean standalone documents) ============
+function evHeader(ev){
+  const num = ev.num ? '#'+ev.num+'  ' : '';
+  let h = `<div style="border-bottom:2px solid #8B1A1A;padding-bottom:8px;margin-bottom:14px">`+
+          `<div style="font-size:20px;font-weight:700;color:#8B1A1A">${num}${esc(ev.name||'Event')}</div>`+
+          `<div style="font-size:12px;color:#555;margin-top:3px">`+
+          [ev.typeLabel||library[curType]&&library[curType].label, ev.weekOf?('W/E '+fmtMD(ev.weekOf)):'', ev.guests?('Guests: '+esc(ev.guests)):'']
+            .filter(Boolean).join(' &nbsp;·&nbsp; ')+
+          `</div></div>`;
+  return h;
+}
+function printKitchen(){
+  if(!chosen.size){ toast('Tick items first'); return; }
+  const ev=currentEventObj()||{};
+  const rows=buildSavedRows();   // already grouped in dept order, includes extras
+  if(!rows.length){ toast('Nothing to print'); return; }
+  const codeColor={P:['#fdf3e3','#9a6a00'],M:['#fbe3e3','#a32d2d'],X:['#f1efe8','#6b625f'],D:['#e6f1fb','#185fa5']};
+  // group rows by section, preserving order
+  const groups=[]; const idx={};
+  rows.forEach(r=>{
+    const key=r.dept+'||'+r.section;
+    if(idx[key]===undefined){ idx[key]=groups.length; groups.push({dept:r.dept,section:r.section,rows:[]}); }
+    groups[idx[key]].rows.push(r);
+  });
+  let body='';
+  let lastDept='';
+  groups.forEach(g=>{
+    if(g.dept!==lastDept){ body+=`<div style="background:#f3ece9;color:#8B1A1A;font-weight:700;font-size:12px;text-transform:capitalize;padding:4px 8px;margin-top:8px">${esc(g.dept)}</div>`; lastDept=g.dept; }
+    const groc = g.rows.map(r=>{
+      const c=(r.code||'X').toUpperCase(); const col=codeColor[c]||codeColor.X;
+      return `<div style="display:flex;gap:6px;font-size:11.5px;padding:1px 0;align-items:center">`+
+             `<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:16px;border-radius:3px;font-size:9px;font-weight:700;background:${col[0]};color:${col[1]}">${c}</span>`+
+             `<span style="flex:1">${esc(r.item)}</span>`+
+             `<span style="width:42px;text-align:right">${esc(r.qty)}</span>`+
+             `<span style="width:60px;text-align:right;color:#999">${esc(r.vendor)}</span></div>`;
+    }).join('');
+    if(layoutB){
+      body+=`<div style="border-top:1px solid #eee;padding:5px 8px"><div style="font-weight:600;font-size:12.5px;margin-bottom:2px">${esc(g.section)}</div>${groc}</div>`;
+    }else{
+      body+=`<div style="display:flex;border-top:1px solid #eee">`+
+            `<div style="flex:0 0 44%;padding:5px 8px;font-size:12.5px;border-right:1px solid #eee">${esc(g.section)}</div>`+
+            `<div style="flex:1;padding:4px 8px">${groc}</div></div>`;
+    }
+  });
+  const doc=`<div style="font-family:-apple-system,Arial,sans-serif;max-width:760px;margin:0 auto;padding:24px;color:#23201f">`+
+            evHeader(ev)+`<div style="font-size:13px;font-weight:700;margin-bottom:4px">Kitchen copy</div>`+body+`</div>`;
+  openPrint(doc, (ev.num?('#'+ev.num+' '):'')+'Kitchen copy');
+}
+function printClientMenu(){
+  const ev=currentEventObj()||{};
+  const link = ev.menuLink || ev.pdfMenuLink || '';
+  if(!link){
+    toast('No menu link saved on this event — add one in the main app');
+    return;
+  }
+  // The real client menu is the Google Doc itself (no groceries on it).
+  // Open it so you can print or share the true formatted menu.
+  window.open(link, '_blank');
+}
+function openPrint(innerHtml, title){
+  const w=window.open('','_blank');
+  if(!w){ toast('Allow pop-ups to print'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title></head><body>${innerHtml}</body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(()=>{ w.print(); }, 350);
+}
+function printWeekly(){
+  const out=document.getElementById('weeklyOut').innerHTML;
+  if(!out || out.indexOf('empty')>-1){ toast('Build the weekly list first'); return; }
+  const meta=document.getElementById('weekMeta').textContent||'';
+  const doc=`<div style="font-family:-apple-system,Arial,sans-serif;max-width:760px;margin:0 auto;padding:24px;color:#23201f">`+
+            `<h2 style="color:#8B1A1A;border-bottom:2px solid #8B1A1A;padding-bottom:6px">Weekly purchasing list</h2>`+
+            `<p style="color:#555;font-size:12px;margin-top:4px">${esc(meta)}</p>`+out+`</div>`;
+  openPrint(doc, 'Weekly order');
+}
+
+// ============ Tabs ============
+function showTab(t){
+  ['build','week','lib'].forEach(x=>{
+    document.getElementById(x+'Pane').classList.toggle('hide', x!==t);
+    document.getElementById('tab-'+x).classList.toggle('on', x===t);
+  });
+  if(t==='lib') renderLib();
+}
+
+// ============ Toast ============
+let toastT;
+function toast(m){ const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),2600); }
+</script>
+</body>
+</html>
