@@ -198,6 +198,7 @@ let storage;
 let db, eventsCol, changesCol, inquiriesCol, checklistCol, equipCol, invoicesCol, venuesCol, trashCol;
 let _inqLoadedOnce=false;
 let groceryStationsCol, groceryListsCol, roadmapCol;
+let contractsCol; let contracts={};
 let groceryStations = []; // [{id, eventTypes:[], stationKey, label, items:[{name,code,qty,supplier,notes}]}]
 let groceryLists = {};    // {eventId: {items:[...], generated, lastModified}}
 let trash = [];
@@ -378,6 +379,8 @@ function startFirebaseListeners(){
   activityCol.onSnapshot( snap=>{ activityLog=snap.docs.map(d=>d.data()); if(_actOpenInqId) renderActivityLogBody(); });
   roadmapCol = db.collection('roadmap');
   roadmapCol.onSnapshot( snap=>{ roadmap=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='roadmap') render(); });
+  contractsCol = db.collection('contracts');
+  contractsCol.onSnapshot( snap=>{ contracts={}; snap.docs.forEach(d=>{ contracts[d.id]=d.data(); }); if(currentView==='pipeline'||currentView==='events') render(); try{ if(typeof syncHubDrawer==='function') syncHubDrawer(); }catch(e){} });
   try{ seedRoadmapIfEmpty(); }catch(e){ console.warn('roadmap seed skipped:',e); }
 }
 
@@ -1647,6 +1650,7 @@ function renderDetail(e,role){
           :`<button class="icon-btn" onclick="startEdit('${e.id}')" title="Edit"><i class="ti ti-edit"></i></button>`):''}
         <button class="icon-btn" onclick="openBeo('${e.id}')" title="Banquet Event Order"><i class="ti ti-clipboard-list"></i></button>
         <button class="icon-btn" onclick="openPaperwork('${e.id}')" title="Create event paperwork"><i class="ti ti-files"></i></button>
+        <button class="icon-btn" onclick="openContract('${e.id}')" title="Contract"><i class="ti ti-file-certificate"></i></button>
         <button class="icon-btn" onclick="goChecklist('${e.id}')" title="Open checklist"><i class="ti ti-checklist"></i></button>
         <button class="icon-btn" onclick="closeDetail()" title="Close"><i class="ti ti-x"></i></button>
       </div>
@@ -2196,7 +2200,7 @@ function drawerDocuments(inq, role){
     _docBtn('Final checklist','ti-checklist',true,''),
     _docBtn('Linen order form','ti-wash',true,''),
     _docBtn('BEO','ti-clipboard-list',false,`openBeo('${id}')`),
-    _docBtn('Contract','ti-file-certificate',true,''),
+    _docBtn('Contract','ti-file-certificate',false,`openContract('${id}')`),
   ].join('');
   const floor = [
     _docBtn('Floor plan(s)','ti-layout-2',true,''),
@@ -7438,6 +7442,8 @@ async function buildPacketPdfBytes(eventId, opts){
   if(opts.beo) enclosed.push('Banquet Event Order'+(opts.beoCopies>1?(' \u00d7'+opts.beoCopies+' copies'):''));
   let invSlots=[];
   if(opts.invoice){ invSlots=_ppEventInvoiceSlots(e.id); invSlots.forEach(k=>{ const st=invoices[k].status; enclosed.push(((st==='invoice'||st==='paid')?'Invoice':'Estimate / quote')+(opts.invoiceCopies>1?(' \u00d7'+opts.invoiceCopies):'')); }); }
+  const contractObj=(typeof contracts!=='undefined' && contracts[e.id])?contracts[e.id]:null;
+  if(opts.contract && contractObj) enclosed.push((contractObj.status==='signed'?'Signed contract':'Contract')+(opts.contractCopies>1?(' \u00d7'+opts.contractCopies):''));
   if(opts.menu && menuLink) enclosed.push('Menu'+(opts.menuCopies>1?(' \u00d7'+opts.menuCopies):''));
 
   function header(yTop){
@@ -7596,11 +7602,52 @@ async function buildPacketPdfBytes(eventId, opts){
     try{ const sig=_docSig({lines:inv.lines,deposit:inv.deposit,status:inv.status,notes:inv.notes,taxExempt:inv.taxExempt,logisticsRate:inv.logisticsRate}); finalizeDoc(inv,sig); fN(7.5); setT([150,150,150]); doc.text(docFooterText(inv,isInvoice?'Invoice':'Estimate',evFull), ML, 778); if(typeof db!=='undefined'&&db) db.collection('invoices').doc(k).set(inv); }catch(_){}
   }
 
+  function drawContract(){
+    const c=contractObj; if(!c) return;
+    page();
+    fB(18); setT(C.maroon); doc.text('Premier Caterers', ML, 52);
+    fN(9); setT(C.grey); doc.text('201-250-9487   \u00b7   events@thepremiercaterer.com', ML, 67);
+    setD(C.dark); doc.setLineWidth(1.5); doc.line(ML,80,MR,80);
+    fB(16); setT(C.dark); doc.text('Catering Agreement', ML, 102);
+    if(evFull){ fN(10); setT(C.grey); doc.text('Event #'+evFull, MR, 102, {align:'right'}); }
+    let y=126;
+    const snap=c.snapshot||{};
+    const grid=[['Client', snap.clientName||clientName],['Event date', snap.dateStr||(e.dayLabel||'')],['Venue', snap.venue||inq.venueName||e.addr||''],['Guests', snap.guests||inq.guestCount||'']];
+    grid.forEach((g,i)=>{ const cx=ML+(i%2)*((MR-ML)/2); const ry=y+Math.floor(i/2)*32; lbl(g[0],cx,ry); fN(11); setT(C.dark); doc.text(doc.splitTextToSize(String(g[1]||'\u2014'),(MR-ML)/2-12),cx,ry+14); });
+    y+=Math.ceil(grid.length/2)*32+8;
+    const pr=snap.pricing||_contractPricing(e,inq);
+    if(pr){ const pl=(k,v,b)=>{ doc.setFont('helvetica',b?'bold':'normal'); doc.setFontSize(11); setT(C.dark); doc.text(k,ML,y); doc.text('$'+parseFloat(v||0).toFixed(2),ML+210,y,{align:'right'}); y+=15; }; pl('Estimated total',pr.grand); pl('Deposit',pr.deposit); pl('Balance',pr.balance,true); y+=4; }
+    setD(C.line); doc.setLineWidth(0.5); doc.line(ML,y,MR,y); y+=16;
+    fN(9.5); setT([60,55,50]);
+    doc.splitTextToSize(String(c.terms||''), MR-ML).forEach(ln=>{ if(y>BOTTOM-30){ doc.addPage(); y=56; } doc.text(ln, ML, y); y+=13; });
+    if(y>BOTTOM-120){ doc.addPage(); y=56; }
+    y+=16; setD(C.dark); doc.setLineWidth(0.8);
+    if(c.status==='signed'){
+      lbl('Signature',ML,y); y+=6;
+      if(c.signatureDataUrl){ try{ doc.addImage(c.signatureDataUrl,'PNG',ML,y,180,54); }catch(_){} y+=58; }
+      doc.line(ML,y,ML+260,y); y+=15; fB(12); setT(C.dark); doc.text(String(c.signedName||c.signerName||''),ML,y);
+      fN(9.5); setT(C.grey); doc.text('Signed electronically on '+(c.signedAt?new Date(c.signedAt).toLocaleString():''),ML,y+14);
+    } else {
+      doc.line(ML,y+30,ML+280,y+30); fN(9.5); setT(C.grey); doc.text('Client signature',ML,y+42);
+      doc.line(ML+320,y+30,MR,y+30); doc.text('Date',ML+320,y+42); y+=46;
+    }
+    const cert=(typeof _contractCertLines==='function')?_contractCertLines(c):[];
+    if(cert.length){
+      if(y>BOTTOM-60){ doc.addPage(); y=56; }
+      y+=20; setD(C.maroon); doc.setLineWidth(0.8); doc.line(ML,y,MR,y); y+=14;
+      fB(9.5); setT(C.maroon); doc.text('ELECTRONIC SIGNATURE CERTIFICATE', ML, y); y+=14;
+      fN(8.5);
+      cert.forEach(l=>{ if(y>BOTTOM-16){ doc.addPage(); y=56; } setT(C.grey); doc.text(l[0]+':', ML, y); setT(C.dark); const vl=doc.splitTextToSize(String(l[1]), MR-ML-150); doc.text(vl, ML+150, y); y+=Math.max(13, vl.length*11+2); });
+    }
+    fN(7.5); setT([150,150,150]); doc.text((evFull?('Event #'+evFull+'   \u00b7   '):'')+'Catering Agreement'+(c.status==='signed'?' \u00b7 Signed':' \u00b7 Unsigned'), ML, 778);
+  }
+
   // ---- assemble vector parts in order, repeating per-part copies ----
   for(let c=0;c<(opts.cover?(opts.coverCopies||1):0);c++) drawCover();
   for(let c=0;c<(opts.contents?(opts.contentsCopies||1):0);c++) drawContents();
   if(opts.beo){ for(let c=0;c<(opts.beoCopies||1);c++) drawBeo(); }
   if(opts.invoice){ for(let c=0;c<(opts.invoiceCopies||1);c++){ invSlots.forEach(k=>drawInvoiceSlot(k)); } }
+  if(opts.contract && contractObj){ for(let c=0;c<(opts.contractCopies||1);c++) drawContract(); }
 
   // ---- merge (our vector pages + menu pages) via pdf-lib ----
   const { PDFDocument }=window.PDFLib;
@@ -7629,9 +7676,10 @@ async function _runPaperwork(eventId, mode){
     contents:ck('pp-contents'), contentsCopies:num('pp-contents-copies',1),
     beo:ck('pp-beo'), beoCopies:num('pp-beo-copies',1),
     invoice:ck('pp-invoice'), invoiceCopies:num('pp-invoice-copies',1),
+    contract:ck('pp-contract'), contractCopies:num('pp-contract-copies',1),
     menu:ck('pp-menu'), menuCopies:num('pp-menu-copies',1),
   };
-  if(!opts.cover && !opts.beo && !opts.invoice && !opts.menu){ alert('Pick at least one document to include.'); return; }
+  if(!opts.cover && !opts.beo && !opts.invoice && !opts.contract && !opts.menu){ alert('Pick at least one document to include.'); return; }
   closePaperwork();
   if(typeof showToast==='function') showToast('Building packet\u2026 this can take a few seconds');
   try{
@@ -7657,6 +7705,8 @@ function openPaperwork(arg){
   const hasBeo = true;
   const invSlots=_ppEventInvoiceSlots(e.id);
   const hasInv=invSlots.length>0;
+  const contractObj=(typeof contracts!=='undefined' && contracts[e.id])?contracts[e.id]:null;
+  const hasContract=!!contractObj; const contractSigned=hasContract&&contractObj.status==='signed';
   const evFull=fullEventNum(e)||(e.job||'');
   closePaperwork();
   const row=(checked,disabled,id,label,sub,extra)=>'<label style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid #e2dcd2;border-radius:10px;margin-bottom:9px;'+(disabled?'opacity:.5':'cursor:pointer')+'">'
@@ -7676,6 +7726,7 @@ function openPaperwork(arg){
       +row(false,false,'pp-contents','List of included items','A checkbox list of what is in this packet', cpx('pp-contents-copies',1))
       +row(true,!hasBeo,'pp-beo','Banquet Event Order','Per-meal sections, staffing, allergy', cpx('pp-beo-copies',1))
       +row(hasInv,!hasInv,'pp-invoice','Invoice / estimate', hasInv?('Billing document'+(invSlots.length>1?(' \u00b7 '+invSlots.length+' on file'):'')):'No invoice on this event yet', hasInv?cpx('pp-invoice-copies',1):'')
+      +row(!!contractSigned,!hasContract,'pp-contract', contractSigned?'Signed contract':'Contract', hasContract?(contractSigned?'Signed agreement with signature':'Not signed yet \u2014 blank signature lines'):'No contract created yet', hasContract?cpx('pp-contract-copies',1):'')
       +row(!!menuUrl,!menuUrl,'pp-menu','Menu', menuUrl?'Your menu PDF, pulled in via the Apps Script relay':'No menu linked to this event yet', menuUrl?cpx('pp-menu-copies',1):'')
       +'<div style="font-size:11.5px;color:#888;padding:6px 2px 0;line-height:1.5"><i class="ti ti-info-circle" style="font-size:12px"></i> Everything is built into one crisp PDF. Set a copies count on any part. The menu needs your Apps Script URL saved in Settings (same as the menu email).</div>'
     +'</div>'
@@ -7687,6 +7738,213 @@ function openPaperwork(arg){
   document.body.appendChild(wrap);
 }
 window.openPaperwork=openPaperwork; window.closePaperwork=closePaperwork; window._runPaperwork=_runPaperwork;
+
+// ─────────────────────────────────────────────────────────────
+// CONTRACT (e-signable). Client signs remotely via sign.html.
+// Status: draft -> sent -> signed. Stored in the `contracts` collection
+// keyed by event id. Colorblind-safe status (icon + border pattern + label).
+// ─────────────────────────────────────────────────────────────
+const CONTRACT_TEMPLATE = `PREMIER CATERERS \u2014 CATERING AGREEMENT
+
+This Catering Agreement ("Agreement") is entered into between Premier Caterers ("Caterer") and the client named above ("Client") for catering services at the event described above.
+
+1. SERVICES. The Caterer will provide kosher catering and related services for the event as described in the accompanying estimate/invoice and Banquet Event Order, which are incorporated into this Agreement by reference.
+
+2. KASHRUS. All food is prepared under strict kosher supervision (OU and PCK). The Client agrees that no outside food or beverage may be brought into the event without the prior written consent of the Caterer and the mashgiach.
+
+3. DEPOSIT & PAYMENT SCHEDULE. Payment is due according to the following schedule:
+   \u2022 A non-refundable deposit of $1,000 is due upon signing this Agreement to reserve the event date.
+   \u2022 50% of the remaining balance is due thirty (30) days before the event.
+   \u2022 The remaining balance (100%) is due no later than seventy-two (72) hours before the event.
+   \u2022 Any last-minute changes or additions requested within 72 hours of the event, or on the day of the event, are billed in addition to the above and are due upon presentation of the final invoice.
+   The event date is not considered reserved until the deposit is received.
+
+4. GUARANTEED GUEST COUNT. A final guaranteed guest count is due seven (7) days before the event. Charges are based on the guaranteed count or the actual number served, whichever is greater. The guaranteed count may not be reduced after this deadline.
+
+5. CHANGES. Any changes to the menu, guest count, or event details must be confirmed in writing and may affect pricing. The Caterer will make reasonable efforts to accommodate changes requested close to the event date.
+
+6. CANCELLATION. Deposits are non-refundable. Cancellations within thirty (30) days of the event may be subject to additional charges for costs already incurred.
+
+7. SERVICE & STAFFING. Staffing levels are based on the guest count and service style. Additional staff requested on site may incur additional charges. Gratuities are not included unless stated.
+
+8. LIABILITY. The Caterer maintains appropriate insurance and food-safety practices. The Caterer is not responsible for delays or losses caused by circumstances beyond its reasonable control, including weather, venue issues, or acts of the host or guests.
+
+9. FORCE MAJEURE. Neither party is liable for failure to perform due to events beyond its reasonable control. The parties will work in good faith to reschedule where possible.
+
+10. ENTIRE AGREEMENT. This Agreement, together with the estimate/invoice and Banquet Event Order, is the entire agreement between the parties and supersedes prior discussions.
+
+11. ELECTRONIC SIGNATURE & RECORDS. The parties agree that this Agreement may be signed electronically and that an electronic signature has the same legal effect as a handwritten signature. The Client consents to conduct this transaction by electronic means and to receive records electronically. The date, time, email, and other signing details are recorded automatically as part of the signature certificate.
+
+By signing below, the Client acknowledges they have read, understood, and agreed to the terms of this Agreement and authorizes Premier Caterers to provide the services described.`;
+
+function _saveContract(eid, c){ try{ if(typeof db!=='undefined'&&db) db.collection('contracts').doc(eid).set(c); contracts[eid]=c; }catch(err){ console.error('contract save:',err); } }
+function _contractToken(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,10); }
+function _ensureContract(e){
+  let c=contracts[e.id];
+  if(!c){ const inq=_beoInquiryFor(e); c={ eventId:e.id, status:'draft', token:_contractToken(), terms:CONTRACT_TEMPLATE, createdAt:Date.now(), signerEmail:(inq.email||''), signerName:(e.contactName||clientPrimary(inq)||e.name||'') }; contracts[e.id]=c; }
+  if(!c.token) c.token=_contractToken();
+  return c;
+}
+function _contractPricing(e,inq){
+  let inv=(typeof invoices!=='undefined' && invoices[e.id] && Array.isArray(invoices[e.id].lines) && invoices[e.id].lines.length) ? invoices[e.id] : null;
+  let src=inv || ((inq.estimate&&Array.isArray(inq.estimate.lines)&&inq.estimate.lines.length)?inq.estimate:null);
+  if(!src) return null;
+  const t=calcInvoiceTotals(src); const dep=parseFloat(src.deposit||0);
+  return { grand:t.grand, deposit:dep, balance:(t.balance!=null?t.balance:(t.grand-dep)) };
+}
+function _contractSnapshot(e,inq){
+  const pr=_contractPricing(e,inq);
+  return { evFull:fullEventNum(e)||(e.job||''), clientName:e.name||clientPrimary(inq)||'Client', dateStr:e.dayLabel||(inq.eventDate?formatDate(inq.eventDate):''), venue:inq.venueName||e.addr||'', venueAddr:inq.venueLocation||e.addr||'', guests:inq.guestCount||'', pricing:pr };
+}
+function contractSignLink(eid){
+  const c=contracts[eid]; if(!c) return '';
+  const base=location.origin+location.pathname.replace(/[^/]*$/,'');
+  return base+'sign.html?c='+encodeURIComponent(eid)+'&t='+encodeURIComponent(c.token||'');
+}
+function contractStatusInfo(eid){
+  const c=contracts[eid];
+  if(!c) return {key:'none',label:'Not created',icon:'ti-file-certificate',color:'#888',bg:'#f3f3f3',border:'1px dotted #bbb'};
+  if(c.status==='signed') return {key:'signed',label:'Signed',icon:'ti-circle-check',color:'#1a7a3a',bg:'#e9f7ee',border:'2px solid #1a7a3a'};
+  if(c.status==='sent') return {key:'sent',label:'Awaiting signature',icon:'ti-clock',color:'#854F0B',bg:'#FAEEDA',border:'2px dashed #BA7517'};
+  return {key:'draft',label:'Draft',icon:'ti-pencil',color:'#555',bg:'#f3f3f3',border:'1px dotted #999'};
+}
+function _contractCertLines(c){
+  if(!c || c.status!=='signed') return [];
+  const local=c.signedAt?new Date(c.signedAt).toLocaleString():'';
+  const utc=c.signedAtISO||(c.signedAt?new Date(c.signedAt).toISOString():'');
+  const lines=[];
+  lines.push(['Signed by', (c.signedName||c.signerName||'')+(c.signedEmail?(' <'+c.signedEmail+'>'):'')]);
+  lines.push(['Date & time', local+(c.signedTZ?(' ('+c.signedTZ+')'):'')]);
+  if(utc) lines.push(['Timestamp (UTC)', utc]);
+  if(c.signerEmail) lines.push(['Agreement sent to', c.signerEmail+(c.sentAt?(' on '+new Date(c.sentAt).toLocaleDateString()):'')]);
+  if(c.signedIP) lines.push(['IP address', c.signedIP]);
+  if(c.signedUA) lines.push(['Device / browser', String(c.signedUA).slice(0,95)]);
+  lines.push(['Document ID', (c.eventId||'')+' / '+String(c.signatureId||c.token||'').slice(0,18)]);
+  if(c.documentHash) lines.push(['Fingerprint (SHA-256)', c.documentHash]);
+  if(c.consent) lines.push(['Consent', 'Consented to electronic signing & records'+(c.consentedAt?(' on '+new Date(c.consentedAt).toLocaleDateString()):'')]);
+  return lines;
+}
+function closeContract(){ const m=document.getElementById('contractModal'); if(m) m.remove(); }
+function _readContractForm(eid){ const e=document.getElementById('contract-email'), t=document.getElementById('contract-terms'); const c=_ensureContract(_beoResolveEvent(eid)); if(e) c.signerEmail=e.value.trim(); if(t) c.terms=t.value; return c; }
+function openContract(arg){
+  const e=_beoResolveEvent(arg);
+  if(!e){ alert('The contract is available once the event is booked.'); return; }
+  const inq=_beoInquiryFor(e);
+  const c=_ensureContract(e);
+  const evFull=fullEventNum(e)||(e.job||'');
+  const st=contractStatusInfo(e.id);
+  closeContract();
+  const wrap=document.createElement('div'); wrap.id='contractModal';
+  wrap.setAttribute('style','position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:inherit;padding:18px');
+  wrap.onclick=function(ev){ if(ev.target===wrap) closeContract(); };
+  const fbtn='font-size:13.5px;font-weight:600;padding:10px 13px;border-radius:9px;cursor:pointer;font-family:inherit;border:none';
+  const signedBlock=(c.status==='signed')?(
+    '<div style="background:#e9f7ee;border:2px solid #1a7a3a;border-radius:10px;padding:12px 14px;margin-bottom:14px">'
+    +'<div style="display:flex;align-items:center;gap:8px;font-weight:700;color:#1a7a3a"><i class="ti ti-circle-check" style="font-size:18px"></i> Signed by '+pcEsc(c.signedName||c.signerName||'')+'</div>'
+    +'<div style="font-size:12px;color:#555;margin-top:4px">'+pcEsc(c.signedAt?new Date(c.signedAt).toLocaleString():'')+(c.signedEmail?(' \u00b7 '+pcEsc(c.signedEmail)):'')+'</div>'
+    +(c.signedIP?'<div style="font-size:11px;color:#888;margin-top:2px">IP '+pcEsc(c.signedIP)+(c.documentHash?(' \u00b7 fingerprint '+pcEsc(c.documentHash.slice(0,12))+'\u2026'):'')+'</div>':'')
+    +(c.signatureDataUrl?'<img src="'+c.signatureDataUrl+'" alt="signature" style="max-height:64px;margin-top:8px;background:#fff;border:1px solid #ddd;border-radius:6px;padding:3px">':'')
+    +'</div>'):'';
+  const sentBlock=(c.status==='sent')?(
+    '<div style="background:#FAEEDA;border:2px dashed #BA7517;border-radius:10px;padding:10px 13px;margin-bottom:14px;font-size:12.5px;color:#854F0B">'
+    +'<i class="ti ti-clock" style="font-size:14px;vertical-align:-2px"></i> Sent for signature'+(c.sentAt?(' \u00b7 '+new Date(c.sentAt).toLocaleDateString()):'')+'. '
+    +'<a href="javascript:void(0)" onclick="copyContractLink(\''+e.id+'\')" style="color:#8B1A1A;font-weight:600">Copy sign link</a></div>'):'';
+  wrap.innerHTML='<div style="background:#fff;border-radius:15px;max-width:560px;width:100%;max-height:92vh;display:flex;flex-direction:column">'
+    +'<div style="padding:17px 20px 12px;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px">'
+      +'<i class="ti ti-file-certificate" style="font-size:20px;color:#8B1A1A"></i>'
+      +'<div style="flex:1"><div style="font-size:16px;font-weight:700">Contract</div><div style="font-size:12.5px;color:#777">'+pcEsc(e.name||'Event')+(evFull?(' \u00b7 #'+pcEsc(evFull)):'')+'</div></div>'
+      +'<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:'+st.color+';background:'+st.bg+';border:'+st.border+';border-radius:20px;padding:4px 11px"><i class="ti '+st.icon+'" style="font-size:14px"></i>'+st.label+'</span>'
+    +'</div>'
+    +'<div style="padding:15px 20px;overflow-y:auto;flex:1">'
+      +signedBlock+sentBlock
+      +'<label style="font-size:11.5px;font-weight:600;color:#666;display:block;margin-bottom:5px">Client email</label>'
+      +'<input id="contract-email" value="'+String(c.signerEmail||inq.email||'').replace(/"/g,'&quot;')+'" placeholder="client@email.com" style="width:100%;padding:8px 10px;border:1px solid #d8d2c8;border-radius:8px;font-size:13px;font-family:inherit;margin-bottom:14px">'
+      +'<label style="font-size:11.5px;font-weight:600;color:#666;display:block;margin-bottom:5px">Contract terms <span style="font-weight:400;color:#999">\u2014 edit freely; this is what the client agrees to</span></label>'
+      +'<textarea id="contract-terms" style="width:100%;min-height:230px;padding:10px;border:1px solid #d8d2c8;border-radius:8px;font-size:12px;font-family:inherit;line-height:1.55;resize:vertical">'+pcEsc(c.terms||CONTRACT_TEMPLATE)+'</textarea>'
+    +'</div>'
+    +'<div style="padding:12px 20px;border-top:1px solid #eee;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">'
+      +'<button onclick="closeContract()" style="'+fbtn+';background:#f3f3f3;color:#555">Close</button>'
+      +'<button onclick="previewContract(\''+e.id+'\')" style="'+fbtn+';background:#fff;color:#444;border:1.5px solid #ddd"><i class="ti ti-eye" style="font-size:14px;vertical-align:-2px"></i> Preview</button>'
+      +'<button onclick="saveContract(\''+e.id+'\')" style="'+fbtn+';background:#fff;color:#8B1A1A;border:1.5px solid #8B1A1A">Save</button>'
+      +((c.status==='signed')
+        ? '<button onclick="downloadSignedContract(\''+e.id+'\')" style="'+fbtn+';background:#1a7a3a;color:#fff"><i class="ti ti-download" style="font-size:14px;vertical-align:-2px"></i> Signed PDF</button>'
+        : '<button onclick="sendContract(\''+e.id+'\')" style="'+fbtn+';background:#8B1A1A;color:#fff"><i class="ti ti-send" style="font-size:14px;vertical-align:-2px"></i> '+(c.status==='sent'?'Resend':'Send for signature')+'</button>')
+    +'</div></div>';
+  document.body.appendChild(wrap);
+}
+function saveContract(eid){ const c=_readContractForm(eid); _saveContract(eid,c); if(typeof showToast==='function') showToast('Contract saved'); }
+function copyContractLink(eid){ const c=_ensureContract(_beoResolveEvent(eid)); _saveContract(eid,c); const link=contractSignLink(eid); try{ navigator.clipboard.writeText(link); if(typeof showToast==='function') showToast('Sign link copied'); }catch(e){ prompt('Copy this sign link:', link); } }
+async function sendContract(eid){
+  const ev=_beoResolveEvent(eid); const inq=_beoInquiryFor(ev);
+  const c=_readContractForm(eid);
+  const email=(c.signerEmail||'').trim();
+  if(!email){ alert('Please enter the client email first.'); return; }
+  if(!c.token) c.token=_contractToken();
+  c.status='sent'; c.sentAt=Date.now();
+  c.snapshot=_contractSnapshot(ev,inq);
+  _saveContract(eid,c);
+  const link=contractSignLink(eid);
+  const clientName=c.signerName||clientPrimary(inq)||ev.name||'';
+  const evName=ev.name||'your event';
+  const subject='Your Premier Caterers agreement \u2014 please review & sign';
+  const bodyText='Dear '+(clientName||'Valued Client')+',\n\nThank you for choosing Premier Caterers. Please review and sign your catering agreement using the secure link below:\n\n'+link+'\n\nOnce signed you will receive confirmation. We look forward to '+evName+'.\n\nWarm regards,\nPremier Caterers\n201-250-9487\nevents@thepremiercaterer.com';
+  const htmlBody='<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.6">'
+    +'<p>Dear '+pcEsc(clientName||'Valued Client')+',</p>'
+    +'<p>Thank you for choosing Premier Caterers. Please review and sign your catering agreement using the secure button below.</p>'
+    +'<p style="text-align:center;margin:24px 0"><a href="'+link+'" style="background:#8B1A1A;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;display:inline-block">Review &amp; sign your agreement</a></p>'
+    +'<p style="font-size:12px;color:#666">Or open this link in your browser:<br>'+link+'</p>'
+    +'<p>Warm regards,<br>Premier Caterers<br>201-250-9487<br>events@thepremiercaterer.com</p></div>';
+  if(typeof sendGmailEmail==='function'){
+    const ok=await sendGmailEmail(email, subject, bodyText, htmlBody, []);
+    if(ok){ try{ if(typeof logActivity==='function') logActivity(String(eid).replace(/^inq_/,''),'contract','Contract sent for signature to '+email); }catch(e){} closeContract(); }
+  } else { alert('Email is not set up. Copy this link to send manually:\n\n'+link); }
+}
+function buildContractHTML(eid){
+  const e=_beoResolveEvent(eid); if(!e) return ''; const inq=_beoInquiryFor(e);
+  const c=contracts[eid]||_ensureContract(e);
+  const evFull=fullEventNum(e)||(e.job||''); const clientName=e.name||clientPrimary(inq)||'Client';
+  const dateStr=e.dayLabel||(inq.eventDate?formatDate(inq.eventDate):'');
+  const venue=inq.venueName||e.addr||''; const venueAddr=inq.venueLocation||e.addr||'';
+  const pr=_contractPricing(e,inq);
+  const termsHtml=pcEsc(c.terms||CONTRACT_TEMPLATE).replace(/\n/g,'<br>');
+  const money=v=>'$'+(parseFloat(v||0)).toFixed(2);
+  const priceRows = pr ? ('<table style="width:100%;border-collapse:collapse;margin:6px 0 4px;font-size:13px">'
+      +'<tr><td style="padding:3px 0">Estimated total</td><td style="text-align:right">'+money(pr.grand)+'</td></tr>'
+      +'<tr><td style="padding:3px 0">Deposit</td><td style="text-align:right">'+money(pr.deposit)+'</td></tr>'
+      +'<tr><td style="padding:3px 0;font-weight:700;border-top:1px solid #ccc">Balance</td><td style="text-align:right;font-weight:700;border-top:1px solid #ccc">'+money(pr.balance)+'</td></tr></table>') : '';
+  const sigBlock=(c.status==='signed')
+    ? ('<div style="margin-top:8px"><div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.06em">Signature</div>'
+       +(c.signatureDataUrl?'<img src="'+c.signatureDataUrl+'" style="max-height:80px;display:block;margin:6px 0">':'')
+       +'<div style="border-top:1px solid #000;padding-top:4px;font-size:13px"><b>'+pcEsc(c.signedName||c.signerName||'')+'</b></div>'
+       +'<div style="font-size:11px;color:#666">Signed electronically on '+pcEsc(c.signedAt?new Date(c.signedAt).toLocaleString():'')+'</div></div>')
+    : ('<div style="margin-top:30px"><div style="border-top:1px solid #000;width:300px;padding-top:4px;font-size:12px;color:#666">Client signature</div>'
+       +'<div style="border-top:1px solid #000;width:200px;padding-top:4px;margin-top:26px;font-size:12px;color:#666">Date</div></div>');
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contract '+pcEsc(evFull)+'</title><style>'
+    +'*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;font-size:13px;line-height:1.5;padding:40px 48px;max-width:760px;margin:0 auto}'
+    +'.co{font-size:22px;font-weight:800;color:#8B1A1A}.sub{font-size:11px;color:#666;margin-top:2px}'
+    +'h1{font-size:18px;margin:18px 0 4px;letter-spacing:.02em}'
+    +'.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin:12px 0;font-size:13px}'
+    +'.k{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.06em}'
+    +'.terms{margin-top:14px;padding-top:12px;border-top:1px solid #ccc;font-size:12px;line-height:1.6}'
+    +'@media print{@page{margin:16mm}body{padding:0}}'
+    +'</style></head><body>'
+    +'<div class="co">Premier Caterers</div><div class="sub">201-250-9487 \u00b7 events@thepremiercaterer.com '+(evFull?(' \u00b7 Event #'+pcEsc(evFull)):'')+'</div>'
+    +'<h1>Catering Agreement</h1>'
+    +'<div class="grid">'
+      +'<div><div class="k">Client</div>'+pcEsc(clientName)+'</div>'
+      +'<div><div class="k">Event date</div>'+pcEsc(dateStr||'\u2014')+'</div>'
+      +'<div><div class="k">Venue</div>'+pcEsc(venue||'\u2014')+(venueAddr&&venueAddr!==venue?('<br><span style="font-size:11px;color:#666">'+pcEsc(venueAddr)+'</span>'):'')+'</div>'
+      +'<div><div class="k">Guests</div>'+pcEsc(inq.guestCount||'\u2014')+'</div>'
+    +'</div>'
+    +priceRows
+    +'<div class="terms">'+termsHtml+'</div>'
+    +sigBlock
+    +((c.status==='signed')?('<div style="margin-top:22px;border:1px solid #ccc;border-radius:8px;padding:12px 14px;background:#fafafa;font-size:11px;color:#444"><div style="font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8B1A1A;margin-bottom:6px">Electronic Signature Certificate</div>'+_contractCertLines(c).map(l=>'<div style="margin:3px 0;word-break:break-all"><span style="color:#888">'+pcEsc(l[0])+':</span> '+pcEsc(l[1])+'</div>').join('')+'</div>'):'')
+    +'</body></html>';
+}
+function previewContract(eid){ const c=_readContractForm(eid); _saveContract(eid,c); const html=buildContractHTML(eid); const w=window.open('','_blank'); if(!w){ alert('Please allow pop-ups to preview the contract.'); return; } w.document.write(html); w.document.close(); }
+function downloadSignedContract(eid){ const e=_beoResolveEvent(eid); const html=buildContractHTML(eid); const nm=('Contract_'+(fullEventNum(e)||'')+'_'+((e&&e.name)||'').replace(/[^A-Za-z0-9]+/g,'-')).slice(0,60); if(typeof downloadHtmlAsPdf==='function') downloadHtmlAsPdf(html, nm); }
+window.openContract=openContract; window.closeContract=closeContract; window.saveContract=saveContract; window.sendContract=sendContract; window.previewContract=previewContract; window.downloadSignedContract=downloadSignedContract; window.copyContractLink=copyContractLink;
 
 
 function renderReports(){
