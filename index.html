@@ -1531,7 +1531,7 @@ function renderEvents(){
           ${e.lost ? '<span style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:8px;background:var(--amber-text);color:var(--amber-bg);font-weight:600">LOST</span>' : ''}
           ${!e.lost && changes.some(c=>c.job===e.job && changeDepts.some(d=>!(c.acks||{})[d])) ? '<i class="ti ti-alert-triangle" style="font-size:14px;color:var(--amber-text);margin-left:auto" title="Unacknowledged changes"></i>' : ''}
         </div>
-        ${SHOW_FULL_EVENT_NUM && fullEventNum(e) ? `<div style="font-size:10px;color:var(--text3);letter-spacing:.02em;margin:-2px 0 2px" title="New event number">${esc(fullEventNum(e))}</div>` : ''}
+        ${SHOW_FULL_EVENT_NUM && fullEventNum(e) ? `<div style="font-size:10px;color:var(--text3);letter-spacing:.02em;margin:-2px 0 2px" title="New event number">${pcEsc(fullEventNum(e))}</div>` : ''}
         <div class="pl-card-head"><div class="client-name">${e.name}</div>${ewChev}</div>
         ${e.contactName ? `<div style="font-size:11px;color:var(--text3);margin:-2px 0 4px"><i class="ti ti-user" style="font-size:10px"></i> ${e.contactName}</div>` : ''}
         ${e.addr?`<div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>${e.addr}</div>`:''}
