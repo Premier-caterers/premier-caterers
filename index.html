@@ -7197,12 +7197,84 @@ function openBeo(arg){
     +'<div style="display:flex;flex-direction:column;gap:10px">'
     +'<button onclick="printBeo(\''+e.id+'\')" style="'+btn+';background:#8B1A1A;color:#fff"><i class="ti ti-printer" style="font-size:17px"></i>Print BEO</button>'
     +'<button onclick="downloadBeo(\''+e.id+'\')" style="'+btn+';background:#fff;color:#8B1A1A;border:1.5px solid #8B1A1A"><i class="ti ti-file-type-pdf" style="font-size:17px"></i>Save as PDF</button>'
+    +'<button onclick="openBeoEditor(\''+e.id+'\')" style="'+btn+';background:#fff;color:#444;border:1.5px solid #ddd"><i class="ti ti-edit" style="font-size:16px"></i>Edit meal details</button>'
     +'</div>'
-    +'<div style="font-size:11.5px;color:#999;margin-top:15px;line-height:1.5"><i class="ti ti-info-circle" style="font-size:12px"></i> Service time, linen, setup and special requests print as fill-in lines for now \u2014 the editor to save those per meal is the next step.</div>'
+    +'<div style="font-size:11.5px;color:#999;margin-top:15px;line-height:1.5"><i class="ti ti-info-circle" style="font-size:12px"></i> Use <b>Edit meal details</b> to fill service time, linen, setup and special requests \u2014 anything left blank prints as a fill-in line.</div>'
     +'<button onclick="closeBeoModal()" style="width:100%;margin-top:13px;font-size:13px;padding:9px;border-radius:8px;cursor:pointer;background:#f3f3f3;border:none;color:#555;font-family:inherit">Close</button>'
     +'</div>';
   document.body.appendChild(wrap);
 }
+function closeBeoEditor(){ const m=document.getElementById('beoEditor'); if(m) m.remove(); }
+function openBeoEditor(arg){
+  const e=_beoResolveEvent(arg);
+  if(!e){ alert('The BEO becomes available once the event is booked.'); return; }
+  const inq=_beoInquiryFor(e);
+  if(!e.beo) e.beo={};
+  if(!Array.isArray(e.beo.meals)) e.beo.meals=[];
+  const meals=(Array.isArray(e.meals)&&e.meals.length)?e.meals:[{name:e.name||'Event',jobSuffix:''}];
+  const eventMenu = inq.menuLink || (Array.isArray(inq.menus)&&inq.menus[0]?inq.menus[0].url:'') || '';
+  const attr=v=>String(v==null?'':v).replace(/"/g,'&quot;');
+  const INP='width:100%;margin-top:3px;padding:7px 9px;border:1px solid #d8d2c8;border-radius:7px;font-size:13px;font-family:inherit;color:#1a1a1a;background:#fff';
+  const TXT=INP+';min-height:48px;resize:vertical';
+  const mdpOpts=cur=>['','Meat','Dairy','Parve'].map(o=>'<option value="'+o+'" '+(String(cur||'')===o?'selected':'')+'>'+(o||'\u2014 (use event default)')+'</option>').join('');
+  closeBeoModal(); closeBeoEditor();
+  const sections=meals.map((m,i)=>{
+    const bm=e.beo.meals[i]||{};
+    const letter=(m.jobSuffix||'').trim()||String.fromCharCode(97+i);
+    const mname=m.name||m.label||('Meal '+(i+1));
+    return '<div style="border:1px solid #e2dcd2;border-radius:11px;padding:13px 14px;margin-bottom:12px">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;background:#FBE2A6;border:1.5px solid #BA7517;border-radius:6px;font-weight:800;font-size:13px;color:#5a3205">'+pcEsc(letter.toUpperCase())+'</span><span style="font-weight:700;font-size:14px">'+pcEsc(mname)+'</span></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">'
+      +'<label style="font-size:11.5px;color:#666;font-weight:600">Service time<input id="beo-'+i+'-time" value="'+attr(bm.time)+'" placeholder="e.g. 6:30\u201310:30 PM" style="'+INP+'"></label>'
+      +'<label style="font-size:11.5px;color:#666;font-weight:600">Guest count<input id="beo-'+i+'-guests" value="'+attr(bm.guests)+'" placeholder="'+attr(inq.guestCount||'event default')+'" style="'+INP+'"></label>'
+      +'<label style="font-size:11.5px;color:#666;font-weight:600">Meat / Dairy / Parve<select id="beo-'+i+'-mdp" style="'+INP+'">'+mdpOpts(bm.mdp||'')+'</select></label>'
+      +'<label style="font-size:11.5px;color:#666;font-weight:600">Linen<input id="beo-'+i+'-linen" value="'+attr(bm.linen)+'" placeholder="e.g. white floor-length" style="'+INP+'"></label>'
+      +'</div>'
+      +'<label style="font-size:11.5px;color:#666;font-weight:600;display:block;margin-top:9px">Setup<input id="beo-'+i+'-setup" value="'+attr(bm.setup)+'" placeholder="e.g. rounds of 10, head table for 8" style="'+INP+'"></label>'
+      +'<label style="font-size:11.5px;color:#666;font-weight:600;display:block;margin-top:9px">Menu note<input id="beo-'+i+'-menu" value="'+attr(bm.menu)+'" placeholder="'+(eventMenu?'See attached menu':'e.g. plated dinner')+'" style="'+INP+'"></label>'
+      +'<label style="font-size:11.5px;color:#666;font-weight:600;display:block;margin-top:9px">Notes<textarea id="beo-'+i+'-notes" placeholder="Anything the kitchen or captain should know" style="'+TXT+'">'+pcEsc(bm.notes||'')+'</textarea></label>'
+      +'<label style="font-size:11.5px;color:#666;font-weight:600;display:block;margin-top:9px">Special requests <span style="color:#BA7517">(highlighted on the BEO)</span><textarea id="beo-'+i+'-special" placeholder="e.g. no garnish on head table, kids meals at table 4" style="'+TXT+'">'+pcEsc(bm.special||'')+'</textarea></label>'
+      +'</div>';
+  }).join('');
+  const evFull=fullEventNum(e)||(e.job||'');
+  const wrap=document.createElement('div');
+  wrap.id='beoEditor';
+  wrap.setAttribute('style','position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:inherit;padding:18px');
+  wrap.onclick=function(ev){ if(ev.target===wrap) closeBeoEditor(); };
+  const fbtn='font-size:14px;font-weight:600;padding:11px 16px;border-radius:9px;cursor:pointer;font-family:inherit;border:none';
+  wrap.innerHTML='<div style="background:#fff;border-radius:15px;max-width:560px;width:100%;max-height:90vh;display:flex;flex-direction:column">'
+    +'<div style="padding:18px 20px 12px;border-bottom:1px solid #eee">'
+      +'<div style="display:flex;align-items:center;gap:9px"><i class="ti ti-clipboard-list" style="font-size:20px;color:#8B1A1A"></i><span style="font-size:16px;font-weight:700">BEO meal details</span></div>'
+      +'<div style="font-size:12.5px;color:#777;margin-top:3px">'+pcEsc(e.name||'Event')+(evFull?(' \u00b7 #'+pcEsc(evFull)):'')+' \u00b7 leave a field blank to fall back to the event default or a fill-in line</div>'
+    +'</div>'
+    +'<div style="padding:14px 20px;overflow-y:auto;flex:1">'+sections+'</div>'
+    +'<div style="padding:13px 20px;border-top:1px solid #eee;display:flex;gap:9px;justify-content:flex-end">'
+      +'<button onclick="closeBeoEditor()" style="'+fbtn+';background:#f3f3f3;color:#555">Cancel</button>'
+      +'<button onclick="saveBeoEditor(\''+e.id+'\',false)" style="'+fbtn+';background:#fff;color:#8B1A1A;border:1.5px solid #8B1A1A">Save</button>'
+      +'<button onclick="saveBeoEditor(\''+e.id+'\',true)" style="'+fbtn+';background:#8B1A1A;color:#fff"><i class="ti ti-printer" style="font-size:15px;vertical-align:-2px"></i> Save &amp; print</button>'
+    +'</div>'
+  +'</div>';
+  document.body.appendChild(wrap);
+}
+function saveBeoEditor(arg, thenPrint){
+  const e=_beoResolveEvent(arg); if(!e) return;
+  if(!e.beo) e.beo={};
+  if(!Array.isArray(e.beo.meals)) e.beo.meals=[];
+  const meals=(Array.isArray(e.meals)&&e.meals.length)?e.meals:[{}];
+  const g=id=>{ const el=document.getElementById(id); return el?(el.value||'').trim():''; };
+  meals.forEach((m,i)=>{
+    e.beo.meals[i]=Object.assign(e.beo.meals[i]||{},{
+      time:g('beo-'+i+'-time'), guests:g('beo-'+i+'-guests'), mdp:g('beo-'+i+'-mdp'),
+      linen:g('beo-'+i+'-linen'), setup:g('beo-'+i+'-setup'), menu:g('beo-'+i+'-menu'),
+      notes:g('beo-'+i+'-notes'), special:g('beo-'+i+'-special')
+    });
+  });
+  try{ _saveEvent(e); }catch(err){ console.warn('beo editor save:',err); }
+  closeBeoEditor();
+  if(typeof showToast==='function') showToast('BEO details saved');
+  if(thenPrint) printBeo(e.id);
+}
+window.openBeoEditor=openBeoEditor; window.saveBeoEditor=saveBeoEditor; window.closeBeoEditor=closeBeoEditor;
 window.openBeo=openBeo; window.printBeo=printBeo; window.downloadBeo=downloadBeo; window.closeBeoModal=closeBeoModal;
 
 
