@@ -416,32 +416,24 @@ tbody tr:hover{background:var(--bg2)}
 
 <datalist id="ourNameList"></datalist>
 <datalist id="unitList">
-  <option value="lb">
-  <option value="oz">
-  <option value="kg">
-  <option value="g">
-  <option value="each">
-  <option value="dozen">
-  <option value="case">
-  <option value="pack">
-  <option value="gallon">
-  <option value="quart">
-  <option value="pint">
-  <option value="liter">
-  <option value="ml">
-  <option value="fl oz">
-  <option value="cup">
-  <option value="tsp">
-  <option value="tbsp">
-  <option value="guest">
-  <option value="serving">
-  <option value="tray">
-  <option value="sheet">
-  <option value="roll">
-  <option value="bag">
-  <option value="box">
-  <option value="bottle">
-  <option value="can">
+  <option value="Case">
+  <option value="Box">
+  <option value="Dozen">
+  <option value="Pound">
+  <option value="Piece">
+  <option value="Each">
+  <option value="Pack">
+  <option value="Bag">
+  <option value="Tray">
+  <option value="Sheet">
+  <option value="Roll">
+  <option value="Bottle">
+  <option value="Can">
+  <option value="Gallon">
+  <option value="Quart">
+  <option value="Pint">
+  <option value="Liter">
+  <option value="Ounce">
 </datalist>
 <div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"></div>
@@ -536,7 +528,21 @@ function fmtDate(d){ if(!d) return '—'; const p=String(d).split('-'); return p
 function unitCost(price,packSize){ price=parseFloat(price); packSize=parseFloat(packSize); if(isNaN(price)||isNaN(packSize)||packSize<=0) return null; return price/packSize; }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function normName(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
-function packLabel(x){ if(x.packDesc) return esc(x.packDesc); if(x.packSize) return esc(x.packSize)+' '+esc(x.unit||''); return '—'; }
+// "Sold by" unit: new items store soldBy; older items fall back to their old unit field.
+function soldByOf(x){ return x.soldBy || x.unit || ''; }
+function packLabel(x){
+  const sb=x.soldBy; const ps=parseFloat(x.packSize);
+  if(sb){ return (ps>1) ? (esc(sb)+' of '+esc(x.packSize)) : esc(sb); }
+  if(x.packDesc) return esc(x.packDesc);
+  if(x.packSize) return esc(x.packSize)+' '+esc(x.unit||'');
+  return '—';
+}
+// Suffix on the cost-each figure: "ea" when there are several per unit, else "/<sold-by>".
+function ucSuffix(x){
+  const ps=parseFloat(x.packSize);
+  if(x.soldBy){ return (ps>1) ? '<span class="muted" style="font-weight:400"> ea</span>' : '<span class="muted" style="font-weight:400">/'+esc(x.soldBy)+'</span>'; }
+  return '<span class="muted" style="font-weight:400">/'+esc(x.unit||'unit')+'</span>';
+}
 
 // Roll vendor items up into the distinct products WE buy (grouped by our name).
 function ourProducts(){
@@ -575,7 +581,7 @@ function renderItems(){
     .sort((a,b)=>normName(a.ourName).localeCompare(normName(b.ourName))||a._v.localeCompare(b._v));
   const el=document.getElementById('itemsTable'); if(!el) return;
   if(!rows.length){ el.innerHTML='<div class="empty">No items yet.'+(canEdit()?' Click “Add item” to enter a product the way a vendor sells it.':'')+'</div>'; return; }
-  el.innerHTML='<table><thead><tr><th>Our product</th><th>Vendor</th><th>Vendor’s item</th><th>Pack</th><th>Price</th><th>Unit cost</th>'+(canEdit()?'<th></th>':'')+'</tr></thead><tbody>'+
+  el.innerHTML='<table><thead><tr><th>Our product</th><th>Vendor</th><th>Vendor’s item</th><th>Sold by</th><th>Price per unit</th><th>Cost each</th>'+(canEdit()?'<th></th>':'')+'</tr></thead><tbody>'+
     rows.map(x=>{ const uc=unitCost(x.price,x.packSize);
       return `<tr>
       <td><b>${esc(x.ourName||'—')}</b>${x.useFor?`<div class="sub">${esc(x.useFor)}</div>`:''}</td>
@@ -583,7 +589,7 @@ function renderItems(){
       <td>${esc(x.vendorItemName||'—')}${x.vendorCode?`<div class="sub">#${esc(x.vendorCode)}</div>`:''}</td>
       <td>${packLabel(x)}</td>
       <td>${fmtMoney(x.price)}</td>
-      <td class="unit-cost">${uc!=null?fmtMoney(uc)+'<span class="muted" style="font-weight:400">/'+esc(x.unit||'unit')+'</span>':'—'}</td>
+      <td class="unit-cost">${uc!=null?fmtMoney(uc)+ucSuffix(x):'—'}</td>
       ${canEdit()?`<td style="text-align:right;white-space:nowrap"><button class="btn-newq" onclick="openNewQuote('${x.id}')" title="Save current price as history and record a new one"><i class="ti ti-arrow-up-right"></i>New quote</button> <button class="icon-btn" onclick="openHistory('${x.id}')" title="Price history"><i class="ti ti-history"></i></button> <button class="icon-btn" onclick="openItem('${x.id}')" title="Edit (correct typo, no history)"><i class="ti ti-edit"></i></button></td>`:''}
     </tr>`;}).join('')+'</tbody></table>';
 }
@@ -621,16 +627,16 @@ function renderCompare(){
   const costs=list.map(x=>x._uc).filter(c=>c!=null); const lowest=costs.length?Math.min.apply(null,costs):null;
   out.innerHTML =
     `<div class="cmp-meta"><span>Product: <b>${esc(g.name)}</b></span>${g.useFor?`<span>Used for: <b>${esc(g.useFor)}</b></span>`:''}<span>Vendor options: <b>${list.length}</b></span></div>`+
-    '<div class="card"><table><thead><tr><th>Vendor</th><th>Vendor’s item</th><th>Pack</th><th>Price</th><th>Unit cost</th><th>Date</th></tr></thead><tbody>'+
+    '<div class="card"><table><thead><tr><th>Vendor</th><th>Vendor’s item</th><th>Sold by</th><th>Price per unit</th><th>Cost each</th><th>Date</th></tr></thead><tbody>'+
     list.map(x=>`<tr class="${x._uc!=null&&lowest!=null&&x._uc===lowest?'lowest':''}">
       <td><b>${esc(vendorName(x.vendorId))}</b></td>
       <td>${esc(x.vendorItemName||'—')}${x.vendorCode?`<div class="sub">#${esc(x.vendorCode)}</div>`:''}</td>
       <td>${packLabel(x)}</td>
       <td>${fmtMoney(x.price)}</td>
-      <td class="unit-cost">${x._uc!=null?fmtMoney(x._uc)+'<span class="muted" style="font-weight:400">/'+esc(x.unit||'unit')+'</span>':'—'}${x._uc!=null&&lowest!=null&&x._uc===lowest?'<span class="tag-low">lowest</span>':''}</td>
+      <td class="unit-cost">${x._uc!=null?fmtMoney(x._uc)+ucSuffix(x):'—'}${x._uc!=null&&lowest!=null&&x._uc===lowest?'<span class="tag-low">lowest</span>':''}</td>
       <td class="muted">${fmtDate(x.date)}</td>
     </tr>`).join('')+'</tbody></table></div>'+
-    '<div class="hint" style="margin-top:10px">Unit cost = price ÷ pack size. Make sure items you’re comparing use the same unit (e.g. all per lb).</div>';
+    '<div class="hint" style="margin-top:10px">Cost each = price per unit ÷ how many per unit. Compare the same product across vendors to spot the best deal.</div>';
 }
 
 // ════════ ALERTS ════════
@@ -892,13 +898,13 @@ function openNewQuote(itemId){
       <div class="sub" style="font-weight:600;color:var(--brass-deep)">Current price on file</div>
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:3px">
         <div><b>${esc(x.ourName)}</b> <span class="muted">— ${esc(vendorName(x.vendorId))}</span><div class="sub">${esc(x.vendorItemName||'')}${x.vendorCode?' · #'+esc(x.vendorCode):''}</div></div>
-        <div class="price">${fmtMoney(x.price)} <span class="muted" style="font-size:11px">/${esc(x.packSize||'?')} ${esc(x.unit||'')}</span></div>
+        <div class="price">${fmtMoney(x.price)} <span class="muted" style="font-size:11px">per ${esc(soldByOf(x)||'unit')}</span></div>
       </div>
     </div>
     <div class="hint" style="margin-bottom:10px">The current price will be saved as history. The new one becomes the active price.</div>
     <div class="fld-row">
-      <div class="fld"><label>New pack size *</label><input id="nq_pack" type="number" step="any" value="${esc(x.packSize||'')}"><div class="hint">Usually unchanged.</div></div>
-      <div class="fld"><label>New pack price *</label><input id="nq_price" type="number" step="any" placeholder="e.g. 95.00"></div>
+      <div class="fld"><label>How many per unit *</label><input id="nq_pack" type="number" step="any" value="${esc(x.packSize||'')}"><div class="hint">Usually unchanged.</div></div>
+      <div class="fld"><label>New price per unit *</label><input id="nq_price" type="number" step="any" placeholder="e.g. 18.00"></div>
     </div>
     <div class="fld-row">
       <div class="fld"><label>Date</label><input id="nq_date" type="date" value="${(new Date()).toISOString().slice(0,10)}"></div>
@@ -911,7 +917,8 @@ function openNewQuote(itemId){
   const upd=()=>{
     const np=parseFloat(val('nq_price')), nk=parseFloat(val('nq_pack'));
     const newUc=unitCost(np,nk), oldUc=unitCost(x.price,x.packSize);
-    document.getElementById('nq_uc').innerHTML = newUc!=null?('New unit cost: <b>'+fmtMoney(newUc)+'/'+esc(x.unit||'unit')+'</b>'):'';
+    const sfx=(nk>1)?' ea':('/'+(soldByOf(x)||'unit'));
+    document.getElementById('nq_uc').innerHTML = newUc!=null?('New cost each: <b>'+fmtMoney(newUc)+sfx+'</b>'):'';
     let c=''; if(newUc!=null&&oldUc!=null&&oldUc>0){ const pct=(newUc-oldUc)/oldUc*100; c='Change vs. last: <b class="'+(pct>=0?'change-up':'change-down')+'">'+(pct>=0?'+':'')+pct.toFixed(1)+'%</b>'; }
     document.getElementById('nq_change').innerHTML=c;
   };
@@ -922,7 +929,7 @@ async function saveNewQuote(itemId){
   const x=items.find(q=>q.id===itemId); if(!x){ alert('Item not found.'); return; }
   const pack=parseFloat(val('nq_pack')), price=parseFloat(val('nq_price'));
   if(!isFinite(price)||price<=0){ alert('Enter the new pack price.'); return; }
-  if(!isFinite(pack)||pack<=0){ alert('Enter the pack size.'); return; }
+  if(!isFinite(pack)||pack<=0){ alert('Enter how many per unit.'); return; }
   // 1) archive current price to history
   const histDoc={
     itemId, ourName:x.ourName||'', vendorId:x.vendorId||'',
@@ -955,14 +962,14 @@ function openHistory(itemId){
     <div class="hist-current">
       <div class="sub" style="font-weight:600;color:var(--brass-deep)">Current</div>
       <div class="hist-row" style="border:none;padding:5px 0 0">
-        <div><span class="when">${fmtDate(x.date)}</span> <span class="pack">${esc(x.packSize||'')} ${esc(x.unit||'')}</span></div>
-        <div class="price">${fmtMoney(x.price)} ${curUc!=null?'<span class="muted" style="font-size:11px">·'+fmtMoney(curUc)+'/'+esc(x.unit||'unit')+'</span>':''}</div>
+        <div><span class="when">${fmtDate(x.date)}</span> <span class="pack">${packLabel(x)}</span></div>
+        <div class="price">${fmtMoney(x.price)} ${curUc!=null?'<span class="muted" style="font-size:11px">· '+fmtMoney(curUc)+ucSuffix(x)+'</span>':''}</div>
       </div>
     </div>
     ${hist.length
       ? hist.map(h=>{ const uc=unitCost(h.price,h.packSize); return `<div class="hist-row">
-          <div><span class="when">${fmtDate(h.date)}</span> <span class="pack">${esc(h.packSize||'')} ${esc(h.unit||'')}</span>${h.archivedBy?'<div class="who">archived by '+esc(h.archivedBy)+'</div>':''}</div>
-          <div class="price">${fmtMoney(h.price)} ${uc!=null?'<span class="muted" style="font-size:11px">·'+fmtMoney(uc)+'/'+esc(h.unit||'unit')+'</span>':''}</div>
+          <div><span class="when">${fmtDate(h.date)}</span> <span class="pack">${packLabel(h)}</span>${h.archivedBy?'<div class="who">archived by '+esc(h.archivedBy)+'</div>':''}</div>
+          <div class="price">${fmtMoney(h.price)} ${uc!=null?'<span class="muted" style="font-size:11px">· '+fmtMoney(uc)+ucSuffix(h)+'</span>':''}</div>
         </div>`;}).join('')
       : '<div class="dash-empty" style="margin-top:10px">No prior prices recorded yet for this item. Use “New quote” next time the vendor gives a price update — old prices will appear here.</div>'}
   </div>
@@ -1319,7 +1326,7 @@ async function scanRunAI(){
     }
     // Help Claude match against existing data
     const knownVendors = vendors.map(v=>v.name).filter(Boolean);
-    const knownProducts = ourProducts().map(g=>({ name:g.name, unit:(g.items[0]&&g.items[0].unit)||'' }));
+    const knownProducts = ourProducts().map(g=>({ name:g.name, soldBy:(g.items[0]&&soldByOf(g.items[0]))||'' }));
     const payload = {
       action: 'parseInvoice',
       files: encoded,
@@ -1376,57 +1383,68 @@ function renderScanReview(){
   // (not stored on product), and Pack price = per-pack cost. If Claude returned
   // a lineTotal instead of pack price, we derive it.
   const cols = [
-    { key:'ourName',        label:'Our product', req:true,  cls:'',    kind:'name'     },
-    { key:'useFor',         label:'Use for',     req:false, cls:'',    kind:'text'     },
-    { key:'category',       label:'Category',    req:false, cls:'',    kind:'category' },
-    { key:'unit',           label:'Our unit',    req:true,  cls:'',    kind:'unit'     },
-    { key:'vendorItemName', label:'Vendor item', req:false, cls:'',    kind:'text'     },
-    { key:'vendorCode',     label:'Vendor code', req:false, cls:'',    kind:'text'     },
-    { key:'packDesc',       label:'Pack desc',   req:false, cls:'',    kind:'text'     },
-    { key:'packSize',       label:'Pack size',   req:true,  cls:'num', kind:'number'   },
-    { key:'qty',            label:'Qty on inv.', req:false, cls:'num', kind:'number'   },
-    { key:'price',          label:'Pack price',  req:true,  cls:'num', kind:'number'   }
+    { key:'ourName',        label:'Our product',   req:true,  cls:'',    kind:'name'     },
+    { key:'category',       label:'Type',          req:false, cls:'',    kind:'category' },
+    { key:'vendorItemName', label:'Vendor’s item', req:false, cls:'',    kind:'text'     },
+    { key:'vendorCode',     label:'Code',          req:false, cls:'',    kind:'text'     },
+    { key:'soldBy',         label:'Sold by',       req:true,  cls:'',    kind:'unit'     },
+    { key:'packSize',       label:'How many/unit', req:true,  cls:'num', kind:'number'   },
+    { key:'price',          label:'Price/unit',    req:true,  cls:'num', kind:'number'   },
+    { key:'qty',            label:'Qty ordered',   req:false, cls:'num', kind:'number'   }
   ];
-  const ths = cols.map(c=>`<th class="${c.req?'req':''}">${esc(c.label)}</th>`).join('')+'<th>Match</th><th></th>';
+  const ths = cols.map(c=>`<th class="${c.req?'req':''}">${esc(c.label)}</th>`).join('')+'<th class="num">Cost each</th><th class="num">Total</th><th>Match</th><th></th>';
 
   const linesHtml = lines.length ? `<div class="bulk-grid-wrap"><table class="bulk-grid"><thead><tr>${ths}</tr></thead><tbody id="scanBody2">${
     lines.map((L,i)=>{
-      // Resolve a clean per-pack price.
-      // Claude is asked to give price = per-pack price. But if it gave us only a
-      // line total + qty, derive per-pack from (lineTotal / qty). Quantity itself
-      // is metadata of this invoice — NOT saved on the product/priceHistory.
-      let perPack = parseFloat(L.price);
+      // Resolve a clean price-per-unit. If Claude gave only a line total + qty, derive it.
+      let perUnit = parseFloat(L.price);
       const qty = parseFloat(L.qty || L.quantity || 0);
       const lineTotal = parseFloat(L.lineTotal || 0);
-      if((!isFinite(perPack) || perPack<=0) && isFinite(lineTotal) && lineTotal>0 && isFinite(qty) && qty>0){
-        perPack = lineTotal / qty;
+      if((!isFinite(perUnit) || perUnit<=0) && isFinite(lineTotal) && lineTotal>0 && isFinite(qty) && qty>0){
+        perUnit = lineTotal / qty;
       }
-      // Match against existing products
+      const sb = L.soldBy || L.unit || '';
+      const ps = parseFloat(L.packSize);
+      const ce  = (isFinite(perUnit)&&perUnit>0&&isFinite(ps)&&ps>0) ? perUnit/ps : null;
+      const tot = (isFinite(perUnit)&&perUnit>0&&isFinite(qty)&&qty>0) ? perUnit*qty : (isFinite(lineTotal)&&lineTotal>0?lineTotal:null);
       const matchedKey = L.matchedProductKey || (productList.find(g=>normName(g.name)===normName(L.ourName||L.vendorItemName||''))?.key) || '';
       const matchPill = matchedKey ? '<span class="match-pill matched"><i class="ti ti-check"></i>matched</span>' :
                         (L.ourName?'<span class="match-pill new">new product</span>':'<span class="match-pill uncertain">needs name</span>');
-      // Build cells using bulkCellHtml for the dropdowns/datalists
       const cellsHtml = cols.map(c=>{
         let v;
-        if(c.key === 'price') v = (isFinite(perPack) && perPack>0) ? perPack : '';
+        if(c.key === 'price') v = (isFinite(perUnit) && perUnit>0) ? perUnit : '';
         else if(c.key === 'qty') v = (isFinite(qty) && qty>0) ? qty : '';
+        else if(c.key === 'soldBy') v = sb;
         else v = L[c.key] || '';
         return `<td class="${c.cls}">${bulkCellHtml(c, v)}</td>`;
       }).join('');
-      return `<tr data-idx="${i}">${cellsHtml}<td>${matchPill}</td><td class="del"><button onclick="this.closest('tr').remove()" title="Remove row"><i class="ti ti-x"></i></button></td></tr>`;
+      return `<tr data-idx="${i}">${cellsHtml}<td class="num scan-ce">${ce!=null?fmtMoney(ce):'—'}</td><td class="num scan-tot">${tot!=null?fmtMoney(tot):'—'}</td><td>${matchPill}</td><td class="del"><button onclick="this.closest('tr').remove();scanRecalcAll()" title="Remove row"><i class="ti ti-x"></i></button></td></tr>`;
     }).join('')
   }</tbody></table></div>` : '<div class="dash-empty">No line items were extracted. Try a clearer scan, or add items manually.</div>';
 
   el.innerHTML = head +
     `<div class="scan-step" style="padding:0">${linesHtml}</div>
      <div class="scan-step" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-       <div style="font-size:12.5px;color:var(--text3)"><b>Pack price</b> is the per-pack cost (what gets saved). <b>Qty on inv.</b> is just shown for reference — it isn't saved on the product, since order quantity changes invoice to invoice. Existing items get a <b>new price quote</b> (preserves history). New items become fresh entries.</div>
+       <div style="font-size:12.5px;color:var(--text3)"><b>Price per unit</b> is what one sold-by unit costs — that's what gets saved. <b>Cost each</b> and <b>Total</b> are calculated for you. <b>Qty ordered</b> is shown for reference only; it isn't saved on the product, since it changes invoice to invoice. Existing items get a <b>new price quote</b> (keeps history); new items are added.</div>
        <div>
          <button class="btn ghost" onclick="scanCancel()">Discard & start over</button>
          <button class="btn" onclick="scanSaveAll()"><i class="ti ti-device-floppy"></i> Save all</button>
        </div>
      </div>`;
+  const sb2=document.getElementById('scanBody2');
+  if(sb2) sb2.addEventListener('input', e=>{ const tr=e.target.closest('tr'); if(tr) scanRecalcRow(tr); });
 }
+function scanRecalcRow(tr){
+  const g=k=>{ const i=tr.querySelector('[data-k="'+k+'"]'); return i?parseFloat(i.value):NaN; };
+  const price=g('price'), ps=g('packSize'), qty=g('qty');
+  const ce =(isFinite(price)&&price>0&&isFinite(ps)&&ps>0)?price/ps:null;
+  const tot=(isFinite(price)&&price>0&&isFinite(qty)&&qty>0)?price*qty:null;
+  const ceEl=tr.querySelector('.scan-ce'), totEl=tr.querySelector('.scan-tot');
+  if(ceEl) ceEl.textContent=ce!=null?fmtMoney(ce):'—';
+  if(totEl) totEl.textContent=tot!=null?fmtMoney(tot):'—';
+}
+function scanRecalcAll(){ const b=document.getElementById('scanBody2'); if(b) b.querySelectorAll('tr').forEach(scanRecalcRow); }
+window.scanRecalcAll=scanRecalcAll;
 
 function scanCancel(){
   if(!confirm('Discard this scan and start over?')) return;
@@ -1452,8 +1470,8 @@ async function scanSaveAll(){
   const rows = Array.from(body.querySelectorAll('tr')).map(tr=>{
     const r={}; tr.querySelectorAll('input,select').forEach(i=>{ r[i.dataset.k]=(i.value||'').trim(); });
     return r;
-  }).filter(r=>r.ourName && r.unit && parseFloat(r.packSize)>0 && parseFloat(r.price)>0);
-  if(!rows.length){ alert('No valid rows to save. Each row needs: Our product name, Our unit, Pack size, Pack price.'); return; }
+  }).filter(r=>r.ourName && r.soldBy && parseFloat(r.packSize)>0 && parseFloat(r.price)>0);
+  if(!rows.length){ alert('No valid rows to save. Each row needs: Our product, Sold by, How many per unit, Price per unit.'); return; }
 
   // For each row: if (vendorId + ourName) already exists in items, create a new price quote
   // (archive current price to priceHistory, update current). Otherwise, create a fresh item.
@@ -1477,8 +1495,10 @@ async function scanSaveAll(){
         await db.collection('vendorItems').doc(existing.id).set({
           price: parseFloat(r.price),
           packSize: parseFloat(r.packSize),
-          unit: r.unit || existing.unit,
-          packDesc: r.packDesc || existing.packDesc || '',
+          soldBy: r.soldBy || existing.soldBy || existing.unit || '',
+          unit: r.soldBy || existing.unit || '',
+          category: r.category || existing.category || '',
+          packDesc: (parseFloat(r.packSize)>1?(r.soldBy+' of '+r.packSize):r.soldBy) || existing.packDesc || '',
           vendorItemName: r.vendorItemName || existing.vendorItemName || '',
           vendorCode: r.vendorCode || existing.vendorCode || '',
           date: invoiceDate || existing.date || '',
@@ -1490,12 +1510,12 @@ async function scanSaveAll(){
         await db.collection('vendorItems').add({
           vendorId,
           ourName: r.ourName,
-          useFor: r.useFor||'',
           category: r.category||'',
-          unit: r.unit,
+          soldBy: r.soldBy,
+          unit: r.soldBy,
           vendorItemName: r.vendorItemName||'',
           vendorCode: r.vendorCode||'',
-          packDesc: r.packDesc||'',
+          packDesc: (parseFloat(r.packSize)>1?(r.soldBy+' of '+r.packSize):r.soldBy),
           packSize: parseFloat(r.packSize),
           price: parseFloat(r.price),
           date: invoiceDate || '',
@@ -1860,10 +1880,10 @@ function renderOrderPicker(){
         const uc=unitCost(pick.price,pick.packSize);
         const isMan=isManualPick(g);
         const tagHtml = isMan ? '<span class="tag manual">manual</span>' : (g.items.length>1 ? '<span class="tag cheap">cheapest</span>' : '');
-        vendorBlock=`<div class="op-vendor"><span class="name" onclick="openVendorPick(event,'${esc(g.key)}')">${esc(vendorName(pick.vendorId))} <i class="ti ti-chevron-down" style="font-size:11px;opacity:.6"></i></span><span class="cost">${uc!=null?fmtMoney(uc)+'/'+esc(pick.unit||'unit'):'—'}</span>${tagHtml}</div>`;
+        vendorBlock=`<div class="op-vendor"><span class="name" onclick="openVendorPick(event,'${esc(g.key)}')">${esc(vendorName(pick.vendorId))} <i class="ti ti-chevron-down" style="font-size:11px;opacity:.6"></i></span><span class="cost">${uc!=null?fmtMoney(uc)+ucSuffix(pick):'—'}</span>${tagHtml}</div>`;
       }
-      const packTxt = pick ? (pick.packDesc || ((pick.packSize||'?')+' '+(pick.unit||''))) : '—';
-      const conv = (pick && qty && pick.packSize) ? `<div class="conv">${qty} × ${pick.packSize} ${esc(pick.unit||'')} = ${(parseFloat(qty)*parseFloat(pick.packSize)).toLocaleString()} ${esc(pick.unit||'')}</div>` : '';
+      const packTxt = pick ? packLabel(pick) : '—';
+      const conv = (pick && qty && pick.price) ? `<div class="conv">${qty} ${esc(soldByOf(pick))} × ${fmtMoney(pick.price)} = <b>${fmtMoney(parseFloat(qty)*parseFloat(pick.price))}</b></div>` : '';
       return `<div class="op-row">
         <div class="op-prod"><b>${esc(g.name)}</b>${g.useFor?`<div class="sub">${esc(g.useFor)}</div>`:''}</div>
         ${vendorBlock}
@@ -1894,8 +1914,8 @@ function setQty(key, v){
     const wrap=inp?inp.parentNode.querySelector('.op-conv-wrap'):null;
     if(wrap){
       const qty=orderCart[key]?orderCart[key].qty:0;
-      wrap.innerHTML = (pick && qty && pick.packSize)
-        ? `<div class="conv">${qty} × ${pick.packSize} ${esc(pick.unit||'')} = ${(parseFloat(qty)*parseFloat(pick.packSize)).toLocaleString()} ${esc(pick.unit||'')}</div>` : '';
+      wrap.innerHTML = (pick && qty && pick.price)
+        ? `<div class="conv">${qty} ${esc(soldByOf(pick))} × ${fmtMoney(pick.price)} = <b>${fmtMoney(parseFloat(qty)*parseFloat(pick.price))}</b></div>` : '';
     }
   }catch(e){}
   renderCart();
@@ -2179,17 +2199,15 @@ const CATEGORIES=['','Meat','Fish','Dairy','Bakery','Frozen','Produce','Dry Good
 // into from a spreadsheet. Validation runs on save and flags any row that's
 // missing required fields. Valid rows commit in a single Firestore batch.
 const BULK_COLS = [
-  { key:'ourName',        label:'Our product name', req:true,  cls:'',     kind:'name'     },
-  { key:'useFor',         label:'Use for',          req:false, cls:'',     kind:'text'     },
-  { key:'category',       label:'Category',         req:false, cls:'',     kind:'category' },
-  { key:'unit',           label:'Our unit',         req:true,  cls:'',     kind:'unit'     },
-  { key:'vendorItemName', label:'Vendor item',      req:false, cls:'',     kind:'text'     },
-  { key:'vendorCode',     label:'Vendor code',      req:false, cls:'',     kind:'text'     },
-  { key:'packDesc',       label:'Pack desc',        req:false, cls:'',     kind:'text'     },
-  { key:'packSize',       label:'Pack size',        req:true,  cls:'num',  kind:'number'   },
-  { key:'price',          label:'Pack price',       req:true,  cls:'num',  kind:'number'   },
-  { key:'date',           label:'Date',             req:false, cls:'date', kind:'date'     },
-  { key:'notes',          label:'Notes',            req:false, cls:'',     kind:'text'     }
+  { key:'ourName',        label:'Our product name',  req:true,  cls:'',     kind:'name'     },
+  { key:'category',       label:'Type',              req:false, cls:'',     kind:'category' },
+  { key:'vendorItemName', label:'Vendor’s item',     req:false, cls:'',     kind:'text'     },
+  { key:'vendorCode',     label:'Vendor code',       req:false, cls:'',     kind:'text'     },
+  { key:'soldBy',         label:'Sold by (unit)',    req:true,  cls:'',     kind:'unit'     },
+  { key:'packSize',       label:'How many per unit', req:true,  cls:'num',  kind:'number'   },
+  { key:'price',          label:'Price per unit',    req:true,  cls:'num',  kind:'number'   },
+  { key:'date',           label:'Date',              req:false, cls:'date', kind:'date'     },
+  { key:'notes',          label:'Notes',             req:false, cls:'',     kind:'text'     }
 ];
 
 // Build the right input/select for a column kind, with an optional starting value.
@@ -2230,7 +2248,7 @@ function openBulkAdd(){
     <select id="bulkVendor">${vOpts}</select>
     <span style="font-size:12px;color:var(--text3)">All items below will be saved as this vendor's.</span>
   </div>
-  <div class="bulk-hint">Type in rows or paste a block from a spreadsheet (tab-separated). Each row becomes one item. Required: <b>Our product name</b>, <b>Our unit</b>, <b>Pack size</b>, <b>Pack price</b>.</div>
+  <div class="bulk-hint">Type in rows or paste a block from a spreadsheet (tab-separated). Each row becomes one item. Required: <b>Our product name</b>, <b>Sold by (unit)</b>, <b>How many per unit</b>, <b>Price per unit</b>.</div>
   <div class="bulk-grid-wrap"><table class="bulk-grid"><thead><tr>${ths}</tr></thead><tbody id="bulkBody">${startingRows}</tbody></table></div>
   <div class="bulk-actions">
     <div class="left">
@@ -2373,12 +2391,12 @@ async function bulkSave(){
     batch.set(ref, {
       vendorId,
       ourName: r.ourName,
-      useFor:  r.useFor||'',
       category: r.category||'',
-      unit:    r.unit,
+      soldBy:  r.soldBy,
+      unit:    r.soldBy,
       vendorItemName: r.vendorItemName||'',
       vendorCode:     r.vendorCode||'',
-      packDesc:       r.packDesc||'',
+      packDesc:       (parseFloat(r.packSize)>1?(r.soldBy+' of '+r.packSize):r.soldBy),
       packSize: parseFloat(r.packSize),
       price:    parseFloat(r.price),
       date:     r.date||'',
@@ -2400,51 +2418,53 @@ window.updateBulkStatus = updateBulkStatus;
 function openItem(id){
   if(!canEdit()) return;
   if(!vendors.length){ alert('Add at least one vendor first (Vendors tab).'); return; }
-  const x = id?items.find(q=>q.id===id):{date:'', unit:'lb'};
+  const x = id?items.find(q=>q.id===id):{date:'', soldBy:''};
   const vOpts=vendors.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(v=>`<option value="${v.id}" ${x.vendorId===v.id?'selected':''}>${esc(v.name)}</option>`).join('');
   const catOpts=CATEGORIES.map(c=>`<option value="${c}" ${x.category===c?'selected':''}>${c||'—'}</option>`).join('');
   openModal(`<div class="modal-head"><div class="h">${id?'Edit item':'Add item'}</div><button class="icon-btn" onclick="closeModal()"><i class="ti ti-x"></i></button></div>
   <div class="modal-body">
-    <div class="sec-label first">What you call it</div>
-    <div class="fld"><label>Our product name *</label><input id="i_ourname" list="ourNameList" value="${esc(x.ourName||'')}" placeholder="e.g. Chicken Breast" autocomplete="off"><div class="hint">Use the same name across vendors — that’s how they get compared. Start typing to reuse an existing one.</div></div>
-    <div class="fld"><label>What we use it for</label><input id="i_usefor" value="${esc(x.useFor||'')}" placeholder="e.g. cutlets, fried chicken"></div>
+    <div class="sec-label first">What it is</div>
+    <div class="fld"><label>Our product name *</label><input id="i_ourname" list="ourNameList" value="${esc(x.ourName||'')}" placeholder="e.g. Mini Fancy Pastry" autocomplete="off"><div class="hint">Use the same name across vendors — that’s how they get compared. Start typing to reuse an existing one.</div></div>
     <div class="fld-row">
-      <div class="fld"><label>Category</label><select id="i_cat">${catOpts}</select></div>
-      <div class="fld"><label>Our unit (for comparing) *</label><input id="i_unit" value="${esc(x.unit||'')}" placeholder="e.g. lb, each, dozen"></div>
+      <div class="fld"><label>What we use it for</label><input id="i_usefor" value="${esc(x.useFor||'')}" placeholder="e.g. dessert table"></div>
+      <div class="fld"><label>Type</label><select id="i_cat">${catOpts}</select></div>
     </div>
-    <div class="sec-label">How the vendor sells it</div>
+    <div class="sec-label">Vendor</div>
     <div class="fld"><label>Vendor *</label><select id="i_vendor">${vOpts}</select></div>
     <div class="fld-row">
       <div class="fld"><label>Vendor’s item name</label><input id="i_vname" value="${esc(x.vendorItemName||'')}" placeholder="their description"></div>
       <div class="fld"><label>Vendor’s item code</label><input id="i_vcode" value="${esc(x.vendorCode||'')}" placeholder="their SKU"></div>
     </div>
-    <div class="fld"><label>How they pack it (optional)</label><input id="i_packdesc" value="${esc(x.packDesc||'')}" placeholder="e.g. 40 lb case, 12 × 2 lb bags"></div>
+    <div class="sec-label">How it’s sold &amp; priced</div>
     <div class="fld-row">
-      <div class="fld"><label>Pack size (number) *</label><input id="i_pack" type="number" step="any" value="${esc(x.packSize||'')}" placeholder="e.g. 40"><div class="hint">Total units in the pack, in your unit above.</div></div>
-      <div class="fld"><label>Pack price *</label><input id="i_price" type="number" step="any" value="${esc(x.price||'')}" placeholder="e.g. 92.50"></div>
+      <div class="fld"><label>Sold by (unit) *</label><input id="i_soldby" list="unitList" value="${esc(x.soldBy||x.unit||'')}" placeholder="e.g. Box, Case, Lb, Piece" autocomplete="off"><div class="hint">The only way the vendor sells it.</div></div>
+      <div class="fld"><label>How many per unit *</label><input id="i_pack" type="number" step="any" value="${esc(x.packSize||'')}" placeholder="e.g. 36"><div class="hint">Pieces or lbs inside one. Enter 1 if sold individually.</div></div>
     </div>
     <div class="fld-row">
+      <div class="fld"><label>Price per unit *</label><input id="i_price" type="number" step="any" value="${esc(x.price||'')}" placeholder="e.g. 18.00"></div>
       <div class="fld"><label>Date (optional)</label><input id="i_date" type="date" value="${esc(x.date||'')}"></div>
-      <div class="fld"><label>Notes</label><input id="i_notes" value="${esc(x.notes||'')}" placeholder="fresh / frozen / brand"></div>
     </div>
+    <div class="fld"><label>Notes</label><input id="i_notes" value="${esc(x.notes||'')}" placeholder="fresh / frozen / brand"></div>
     <div class="hint" id="i_uc"></div>
   </div>
   <div class="modal-foot">${id?`<button class="btn ghost" onclick="deleteItem('${id}')" style="margin-right:auto;color:#c0392b">Delete</button>`:''}<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveItem('${id||''}')">${id?'Save':'Add item'}</button></div>`);
-  const upd=()=>{ const uc=unitCost(val('i_price'),val('i_pack')); document.getElementById('i_uc').innerHTML=uc!=null?('Unit cost: <b>'+fmtMoney(uc)+'/'+esc(val('i_unit')||'unit')+'</b>'):''; };
-  ['i_pack','i_price','i_unit'].forEach(i=>{ const e=document.getElementById(i); if(e) e.addEventListener('input',upd); });
-  // auto-fill use/category/unit when an existing product name is typed
+  const upd=()=>{ const uc=unitCost(val('i_price'),val('i_pack')); const ps=parseFloat(val('i_pack')); const sb=val('i_soldby')||'unit'; const sfx=(ps>1)?' each':('/'+sb); document.getElementById('i_uc').innerHTML=uc!=null?('Cost each: <b>'+fmtMoney(uc)+sfx+'</b>'):''; };
+  ['i_pack','i_price','i_soldby'].forEach(i=>{ const e=document.getElementById(i); if(e) e.addEventListener('input',upd); });
+  // auto-fill use/type/sold-by when an existing product name is typed
   const on=document.getElementById('i_ourname');
-  if(on) on.addEventListener('change',()=>{ const g=ourProducts().find(p=>p.key===normName(on.value)); if(g){ if(!val('i_usefor')&&g.useFor) document.getElementById('i_usefor').value=g.useFor; if(g.category) document.getElementById('i_cat').value=g.category; const ex=g.items[0]; if(ex&&ex.unit&&!val('i_unit')){ document.getElementById('i_unit').value=ex.unit; } upd(); } });
+  if(on) on.addEventListener('change',()=>{ const g=ourProducts().find(p=>p.key===normName(on.value)); if(g){ if(!val('i_usefor')&&g.useFor) document.getElementById('i_usefor').value=g.useFor; if(g.category) document.getElementById('i_cat').value=g.category; const ex=g.items[0]; if(ex&&!val('i_soldby')){ document.getElementById('i_soldby').value=soldByOf(ex); } upd(); } });
   setTimeout(()=>document.getElementById('i_ourname').focus(),60); upd();
 }
 async function saveItem(id){
-  const ourName=val('i_ourname'), unit=val('i_unit'), vendorId=val('i_vendor'), packSize=val('i_pack'), price=val('i_price');
+  const ourName=val('i_ourname'), soldBy=val('i_soldby'), vendorId=val('i_vendor'), packSize=val('i_pack'), price=val('i_price');
   if(!ourName){ alert('“Our product name” is required — it’s how vendors get compared.'); return; }
-  if(!unit){ alert('“Our unit” is required (e.g. lb) — it’s the basis for unit cost.'); return; }
+  if(!soldBy){ alert('“Sold by (unit)” is required (e.g. Box, Lb).'); return; }
   if(!vendorId){ alert('Pick a vendor.'); return; }
-  if(!packSize||!price){ alert('Pack size and pack price are required.'); return; }
-  const data={ ourName, useFor:val('i_usefor'), category:val('i_cat'), unit,
-    vendorId, vendorItemName:val('i_vname'), vendorCode:val('i_vcode'), packDesc:val('i_packdesc'),
+  if(!packSize||!price){ alert('“How many per unit” and “Price per unit” are required.'); return; }
+  const data={ ourName, useFor:val('i_usefor'), category:val('i_cat'),
+    soldBy, unit:soldBy,
+    vendorId, vendorItemName:val('i_vname'), vendorCode:val('i_vcode'),
+    packDesc:(parseFloat(packSize)>1?(soldBy+' of '+packSize):soldBy),
     packSize:parseFloat(packSize), price:parseFloat(price), date:val('i_date'), notes:val('i_notes'), updatedAt:Date.now() };
   try{ if(id){ await db.collection('vendorItems').doc(id).set(data,{merge:true}); } else { data.createdAt=Date.now(); await db.collection('vendorItems').add(data); } closeModal(); toast('Item saved ✓'); }
   catch(e){ alert('Could not save: '+e.message); }
