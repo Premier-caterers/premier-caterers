@@ -415,6 +415,34 @@ tbody tr:hover{background:var(--bg2)}
 </div>
 
 <datalist id="ourNameList"></datalist>
+<datalist id="unitList">
+  <option value="lb">
+  <option value="oz">
+  <option value="kg">
+  <option value="g">
+  <option value="each">
+  <option value="dozen">
+  <option value="case">
+  <option value="pack">
+  <option value="gallon">
+  <option value="quart">
+  <option value="pint">
+  <option value="liter">
+  <option value="ml">
+  <option value="fl oz">
+  <option value="cup">
+  <option value="tsp">
+  <option value="tbsp">
+  <option value="guest">
+  <option value="serving">
+  <option value="tray">
+  <option value="sheet">
+  <option value="roll">
+  <option value="bag">
+  <option value="box">
+  <option value="bottle">
+  <option value="can">
+</datalist>
 <div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"></div>
 
@@ -1344,44 +1372,55 @@ function renderScanReview(){
     </div>
   </div>`;
 
-  // Lines as a grid (similar to bulk-add)
-  const linesHtml = lines.length ? `<div class="bulk-grid-wrap"><table class="bulk-grid"><thead><tr>
-    <th class="req">Our product</th>
-    <th>Use for</th>
-    <th>Category</th>
-    <th class="req">Our unit</th>
-    <th>Vendor item</th>
-    <th>Vendor code</th>
-    <th>Pack desc</th>
-    <th class="req">Pack size</th>
-    <th class="req">Pack price</th>
-    <th>Match</th>
-    <th></th>
-  </tr></thead><tbody id="scanBody2">${
+  // Lines as a grid (similar to bulk-add). New: Qty column for invoice quantity
+  // (not stored on product), and Pack price = per-pack cost. If Claude returned
+  // a lineTotal instead of pack price, we derive it.
+  const cols = [
+    { key:'ourName',        label:'Our product', req:true,  cls:'',    kind:'name'     },
+    { key:'useFor',         label:'Use for',     req:false, cls:'',    kind:'text'     },
+    { key:'category',       label:'Category',    req:false, cls:'',    kind:'category' },
+    { key:'unit',           label:'Our unit',    req:true,  cls:'',    kind:'unit'     },
+    { key:'vendorItemName', label:'Vendor item', req:false, cls:'',    kind:'text'     },
+    { key:'vendorCode',     label:'Vendor code', req:false, cls:'',    kind:'text'     },
+    { key:'packDesc',       label:'Pack desc',   req:false, cls:'',    kind:'text'     },
+    { key:'packSize',       label:'Pack size',   req:true,  cls:'num', kind:'number'   },
+    { key:'qty',            label:'Qty on inv.', req:false, cls:'num', kind:'number'   },
+    { key:'price',          label:'Pack price',  req:true,  cls:'num', kind:'number'   }
+  ];
+  const ths = cols.map(c=>`<th class="${c.req?'req':''}">${esc(c.label)}</th>`).join('')+'<th>Match</th><th></th>';
+
+  const linesHtml = lines.length ? `<div class="bulk-grid-wrap"><table class="bulk-grid"><thead><tr>${ths}</tr></thead><tbody id="scanBody2">${
     lines.map((L,i)=>{
+      // Resolve a clean per-pack price.
+      // Claude is asked to give price = per-pack price. But if it gave us only a
+      // line total + qty, derive per-pack from (lineTotal / qty). Quantity itself
+      // is metadata of this invoice — NOT saved on the product/priceHistory.
+      let perPack = parseFloat(L.price);
+      const qty = parseFloat(L.qty || L.quantity || 0);
+      const lineTotal = parseFloat(L.lineTotal || 0);
+      if((!isFinite(perPack) || perPack<=0) && isFinite(lineTotal) && lineTotal>0 && isFinite(qty) && qty>0){
+        perPack = lineTotal / qty;
+      }
+      // Match against existing products
       const matchedKey = L.matchedProductKey || (productList.find(g=>normName(g.name)===normName(L.ourName||L.vendorItemName||''))?.key) || '';
       const matchPill = matchedKey ? '<span class="match-pill matched"><i class="ti ti-check"></i>matched</span>' :
                         (L.ourName?'<span class="match-pill new">new product</span>':'<span class="match-pill uncertain">needs name</span>');
-      return `<tr data-idx="${i}">
-        <td><input data-k="ourName" list="ourNameList" value="${esc(L.ourName||L.vendorItemName||'')}"></td>
-        <td><input data-k="useFor" value="${esc(L.useFor||'')}"></td>
-        <td><input data-k="category" value="${esc(L.category||'')}"></td>
-        <td><input data-k="unit" value="${esc(L.unit||'')}"></td>
-        <td><input data-k="vendorItemName" value="${esc(L.vendorItemName||'')}"></td>
-        <td><input data-k="vendorCode" value="${esc(L.vendorCode||'')}"></td>
-        <td><input data-k="packDesc" value="${esc(L.packDesc||'')}"></td>
-        <td class="num"><input data-k="packSize" type="number" step="any" value="${esc(L.packSize||'')}"></td>
-        <td class="num"><input data-k="price" type="number" step="any" value="${esc(L.price||'')}"></td>
-        <td>${matchPill}</td>
-        <td class="del"><button onclick="this.closest('tr').remove()" title="Remove row"><i class="ti ti-x"></i></button></td>
-      </tr>`;
+      // Build cells using bulkCellHtml for the dropdowns/datalists
+      const cellsHtml = cols.map(c=>{
+        let v;
+        if(c.key === 'price') v = (isFinite(perPack) && perPack>0) ? perPack : '';
+        else if(c.key === 'qty') v = (isFinite(qty) && qty>0) ? qty : '';
+        else v = L[c.key] || '';
+        return `<td class="${c.cls}">${bulkCellHtml(c, v)}</td>`;
+      }).join('');
+      return `<tr data-idx="${i}">${cellsHtml}<td>${matchPill}</td><td class="del"><button onclick="this.closest('tr').remove()" title="Remove row"><i class="ti ti-x"></i></button></td></tr>`;
     }).join('')
   }</tbody></table></div>` : '<div class="dash-empty">No line items were extracted. Try a clearer scan, or add items manually.</div>';
 
   el.innerHTML = head +
     `<div class="scan-step" style="padding:0">${linesHtml}</div>
      <div class="scan-step" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-       <div style="font-size:12.5px;color:var(--text3)">Existing items for this vendor get a <b>new price quote</b> (preserves history). New items become fresh entries.</div>
+       <div style="font-size:12.5px;color:var(--text3)"><b>Pack price</b> is the per-pack cost (what gets saved). <b>Qty on inv.</b> is just shown for reference — it isn't saved on the product, since order quantity changes invoice to invoice. Existing items get a <b>new price quote</b> (preserves history). New items become fresh entries.</div>
        <div>
          <button class="btn ghost" onclick="scanCancel()">Discard & start over</button>
          <button class="btn" onclick="scanSaveAll()"><i class="ti ti-device-floppy"></i> Save all</button>
@@ -1411,7 +1450,7 @@ async function scanSaveAll(){
   // Gather grid rows
   const body = document.getElementById('scanBody2'); if(!body) return;
   const rows = Array.from(body.querySelectorAll('tr')).map(tr=>{
-    const r={}; tr.querySelectorAll('input').forEach(i=>{ r[i.dataset.k]=(i.value||'').trim(); });
+    const r={}; tr.querySelectorAll('input,select').forEach(i=>{ r[i.dataset.k]=(i.value||'').trim(); });
     return r;
   }).filter(r=>r.ourName && r.unit && parseFloat(r.packSize)>0 && parseFloat(r.price)>0);
   if(!rows.length){ alert('No valid rows to save. Each row needs: Our product name, Our unit, Pack size, Pack price.'); return; }
@@ -2140,25 +2179,46 @@ const CATEGORIES=['','Meat','Fish','Dairy','Bakery','Frozen','Produce','Dry Good
 // into from a spreadsheet. Validation runs on save and flags any row that's
 // missing required fields. Valid rows commit in a single Firestore batch.
 const BULK_COLS = [
-  { key:'ourName',        label:'Our product name', req:true,  cls:'' },
-  { key:'useFor',         label:'Use for',          req:false, cls:'' },
-  { key:'category',       label:'Category',         req:false, cls:'' },
-  { key:'unit',           label:'Our unit',         req:true,  cls:'' },
-  { key:'vendorItemName', label:'Vendor item',      req:false, cls:'' },
-  { key:'vendorCode',     label:'Vendor code',      req:false, cls:'' },
-  { key:'packDesc',       label:'Pack desc',        req:false, cls:'' },
-  { key:'packSize',       label:'Pack size',        req:true,  cls:'num' },
-  { key:'price',          label:'Pack price',       req:true,  cls:'num' },
-  { key:'date',           label:'Date',             req:false, cls:'date' },
-  { key:'notes',          label:'Notes',            req:false, cls:'' }
+  { key:'ourName',        label:'Our product name', req:true,  cls:'',     kind:'name'     },
+  { key:'useFor',         label:'Use for',          req:false, cls:'',     kind:'text'     },
+  { key:'category',       label:'Category',         req:false, cls:'',     kind:'category' },
+  { key:'unit',           label:'Our unit',         req:true,  cls:'',     kind:'unit'     },
+  { key:'vendorItemName', label:'Vendor item',      req:false, cls:'',     kind:'text'     },
+  { key:'vendorCode',     label:'Vendor code',      req:false, cls:'',     kind:'text'     },
+  { key:'packDesc',       label:'Pack desc',        req:false, cls:'',     kind:'text'     },
+  { key:'packSize',       label:'Pack size',        req:true,  cls:'num',  kind:'number'   },
+  { key:'price',          label:'Pack price',       req:true,  cls:'num',  kind:'number'   },
+  { key:'date',           label:'Date',             req:false, cls:'date', kind:'date'     },
+  { key:'notes',          label:'Notes',            req:false, cls:'',     kind:'text'     }
 ];
+
+// Build the right input/select for a column kind, with an optional starting value.
+function bulkCellHtml(col, value){
+  const v = (value==null?'':String(value)).replace(/"/g,'&quot;');
+  if(col.kind === 'category'){
+    return '<select data-k="'+col.key+'">'+CATEGORIES.map(c=>`<option value="${c}" ${normName(v)===normName(c)?'selected':''}>${c||'—'}</option>`).join('')+'</select>';
+  }
+  if(col.kind === 'unit'){
+    return '<input data-k="'+col.key+'" list="unitList" value="'+v+'" autocomplete="off">';
+  }
+  if(col.kind === 'name'){
+    return '<input data-k="'+col.key+'" list="ourNameList" value="'+v+'" autocomplete="off">';
+  }
+  if(col.kind === 'number'){
+    return '<input data-k="'+col.key+'" type="number" step="any" value="'+v+'">';
+  }
+  if(col.kind === 'date'){
+    return '<input data-k="'+col.key+'" type="date" value="'+v+'">';
+  }
+  return '<input data-k="'+col.key+'" value="'+v+'">';
+}
 function openBulkAdd(){
   if(!canEdit()) return;
   if(!vendors.length){ alert('Add at least one vendor first (Vendors tab).'); return; }
   const vOpts = vendors.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))
     .map(v=>`<option value="${v.id}">${esc(v.name)}</option>`).join('');
   const ths = BULK_COLS.map(c=>`<th class="${c.req?'req':''}">${esc(c.label)}</th>`).join('')+'<th></th>';
-  const blankRow = '<tr>'+BULK_COLS.map(c=>`<td class="${c.cls}"><input data-k="${c.key}" type="${c.cls==='num'?'number':(c.cls==='date'?'date':'text')}" ${c.cls==='num'?'step="any"':''} ></td>`).join('')+'<td class="del"><button onclick="this.closest(\'tr\').remove();updateBulkStatus()" title="Remove row"><i class="ti ti-x"></i></button></td></tr>';
+  const blankRow = '<tr>'+BULK_COLS.map(c=>`<td class="${c.cls}">${bulkCellHtml(c,'')}</td>`).join('')+'<td class="del"><button onclick="this.closest(\'tr\').remove();updateBulkStatus()" title="Remove row"><i class="ti ti-x"></i></button></td></tr>';
   const startingRows = Array.from({length:8}).map(()=>blankRow).join('');
 
   // Build the modal directly (skipping openModal's max-width) so we can be wider.
@@ -2199,7 +2259,7 @@ function bulkAddRows(n){
   const body=document.getElementById('bulkBody'); if(!body) return;
   for(let i=0;i<n;i++){
     const row=document.createElement('tr');
-    row.innerHTML = BULK_COLS.map(c=>`<td class="${c.cls}"><input data-k="${c.key}" type="${c.cls==='num'?'number':(c.cls==='date'?'date':'text')}" ${c.cls==='num'?'step="any"':''} ></td>`).join('')+'<td class="del"><button onclick="this.closest(\'tr\').remove();updateBulkStatus()" title="Remove row"><i class="ti ti-x"></i></button></td>';
+    row.innerHTML = BULK_COLS.map(c=>`<td class="${c.cls}">${bulkCellHtml(c,'')}</td>`).join('')+'<td class="del"><button onclick="this.closest(\'tr\').remove();updateBulkStatus()" title="Remove row"><i class="ti ti-x"></i></button></td>';
     body.appendChild(row);
   }
   updateBulkStatus();
@@ -2235,8 +2295,18 @@ function onBulkPaste(e){
     if(!tr){ bulkAddRows(1); tr = tbody.lastElementChild; }
     cells.forEach((val, ci)=>{
       const tdIdx = startTdIdx + ci;
-      const td = tr.children[tdIdx]; if(!td || !td.querySelector('input')) return;
-      td.querySelector('input').value = val.trim();
+      const td = tr.children[tdIdx]; if(!td) return;
+      const field = td.querySelector('input, select'); if(!field) return;
+      const v = val.trim();
+      if(field.tagName==='SELECT'){
+        // Try to find an option whose value (or text) matches loosely.
+        const want = v.toLowerCase();
+        let matched = '';
+        Array.from(field.options).forEach(opt=>{ if(!matched && (opt.value.toLowerCase()===want || (opt.textContent||'').trim().toLowerCase()===want)) matched = opt.value; });
+        field.value = matched; // empty string = falls back to the first option
+      } else {
+        field.value = v;
+      }
     });
   });
   updateBulkStatus();
@@ -2244,7 +2314,7 @@ function onBulkPaste(e){
 
 function readBulkRow(tr){
   const out={};
-  tr.querySelectorAll('input').forEach(i=>{ out[i.dataset.k] = (i.value||'').trim(); });
+  tr.querySelectorAll('input,select').forEach(i=>{ out[i.dataset.k] = (i.value||'').trim(); });
   return out;
 }
 function rowIsEmpty(r){ return BULK_COLS.every(c=>!r[c.key]); }
@@ -2261,7 +2331,7 @@ function updateBulkStatus(){
   if(!body||!st) return;
   let filled=0, errs=0;
   body.querySelectorAll('tr').forEach(tr=>{
-    tr.classList.remove('err'); tr.querySelectorAll('input').forEach(i=>i.classList.remove('err'));
+    tr.classList.remove('err'); tr.querySelectorAll('input,select').forEach(i=>i.classList.remove('err'));
     const r=readBulkRow(tr); if(rowIsEmpty(r)) return;
     filled++;
     if(rowMissing(r).length) errs++;
@@ -2279,15 +2349,15 @@ async function bulkSave(){
   const rows=Array.from(body.querySelectorAll('tr'));
   const toSave=[]; let errCount=0;
   rows.forEach(tr=>{
-    tr.classList.remove('err'); tr.querySelectorAll('input').forEach(i=>i.classList.remove('err'));
+    tr.classList.remove('err'); tr.querySelectorAll('input,select').forEach(i=>i.classList.remove('err'));
     const r=readBulkRow(tr); if(rowIsEmpty(r)) return;
     const miss=rowMissing(r);
     if(miss.length){
       tr.classList.add('err');
       // mark the actual missing inputs
-      BULK_COLS.filter(c=>c.req).forEach(c=>{ if(!r[c.key]){ const inp=tr.querySelector('input[data-k="'+c.key+'"]'); if(inp) inp.classList.add('err'); } });
-      if(r.packSize && !(parseFloat(r.packSize)>0)){ const inp=tr.querySelector('input[data-k="packSize"]'); if(inp) inp.classList.add('err'); }
-      if(r.price && !(parseFloat(r.price)>0)){ const inp=tr.querySelector('input[data-k="price"]'); if(inp) inp.classList.add('err'); }
+      BULK_COLS.filter(c=>c.req).forEach(c=>{ if(!r[c.key]){ const inp=tr.querySelector('[data-k="'+c.key+'"]'); if(inp) inp.classList.add('err'); } });
+      if(r.packSize && !(parseFloat(r.packSize)>0)){ const inp=tr.querySelector('[data-k="packSize"]'); if(inp) inp.classList.add('err'); }
+      if(r.price && !(parseFloat(r.price)>0)){ const inp=tr.querySelector('[data-k="price"]'); if(inp) inp.classList.add('err'); }
       errCount++;
       return;
     }
