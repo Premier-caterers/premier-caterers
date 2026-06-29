@@ -196,6 +196,7 @@ const firebaseConfig = {
 // db and collections initialized in _startApp() after Firebase SDK loads
 let storage;
 let db, eventsCol, changesCol, inquiriesCol, checklistCol, equipCol, invoicesCol, venuesCol, trashCol;
+let _inqLoadedOnce=false;
 let groceryStationsCol, groceryListsCol, roadmapCol;
 let groceryStations = []; // [{id, eventTypes:[], stationKey, label, items:[{name,code,qty,supplier,notes}]}]
 let groceryLists = {};    // {eventId: {items:[...], generated, lastModified}}
@@ -332,6 +333,7 @@ async function deleteFromTrashPermanently(trashId){
   const t = (trash||[]).find(x=>x.id===trashId);
   if(!t) return;
   if(!confirm('Permanently delete "'+(t.label||'this item')+'"? This cannot be undone.')) return;
+  try{ if(t.kind==='inquiry'){ const d=JSON.parse(t.data||'{}'); if(d.id && eventsCol) await eventsCol.doc('inq_'+d.id).delete(); } }catch(e){}
   try{ await trashCol.doc(trashId).delete(); showToast('Permanently deleted'); render(); }
   catch(err){ console.error(err); }
 }
@@ -349,6 +351,7 @@ function startFirebaseListeners(){
   changesCol.onSnapshot( snap=>{ changes=snap.docs.map(d=>d.data()).sort((a,b)=>(b.time||'').localeCompare(a.time||'')); if(currentView==='changes') render(); });
   inquiriesCol.onSnapshot( snap=>{
     inquiries=snap.docs.map(d=>d.data());
+    _inqLoadedOnce=true;
     try{ _cleanInquiryMenus(inquiries); }catch(e){}
     try{ _actDetectNewInquiries(inquiries); inquiries.forEach(q=>{ _actPrevInq[q.id]=JSON.parse(JSON.stringify(q)); }); }catch(e){}
     updatePipelineBadge();
@@ -1051,13 +1054,25 @@ function coverSaveStaffMeal(id, mi, dept, val){
   _saveEvent(e);
 }
 
+// True when a booked event's source inquiry has been deleted/trashed. Such
+// "orphan" events should not appear on the cover sheet, This Week, home, or
+// schedule. Non-destructive: the event doc is kept, so restoring the inquiry
+// brings it back automatically. Guarded by _inqLoadedOnce so we never hide
+// valid events during the brief window before inquiries first load.
+function eventInquiryMissing(e){
+  if(!e || !e.id || String(e.id).indexOf('inq_')!==0) return false;
+  if(!_inqLoadedOnce) return false;
+  const inqId = String(e.id).slice(4);
+  return !inquiries.some(x=>x.id===inqId);
+}
+
 function renderCoverSheet(){
   const weekDate = getWeekEndDate(currentWeekOffset);
   const weekStr  = weekDate.toISOString().split('T')[0];
   const months   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const wLabel   = 'W/E '+months[weekDate.getUTCMonth()]+' '+weekDate.getUTCDate()+', \''+String(weekDate.getUTCFullYear()).slice(2);
 
-  const allWeekEvents = events.filter(e => (e.weekOf || '2026-05-31') === weekStr);
+  const allWeekEvents = events.filter(e => (e.weekOf || '2026-05-31') === weekStr && !eventInquiryMissing(e));
   const weekEvents = coverSortEvents(allWeekEvents);
 
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1242,7 +1257,7 @@ function renderCoverSheet(){
 function printCoverSheet(){
   const weekDate = getWeekEndDate(currentWeekOffset);
   const weekStr  = weekDate.toISOString().split('T')[0];
-  const weekEvents = coverSortEvents(events.filter(e=>(e.weekOf||'2026-05-31')===weekStr));
+  const weekEvents = coverSortEvents(events.filter(e=>(e.weekOf||'2026-05-31')===weekStr && !eventInquiryMissing(e)));
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const cols = ['#','NAME','MEAL','TYPE','DAY','ADDRESS','# WAITERS','BARTENDERS','WAITER TIME','# CHEFS','CHEFS TIME','# PORTERS','MASHGIACH','MANAGER'];
   const th = s => `<th style="padding:6px 8px;border:1px solid #999;background:#f0f0f0;font-size:10px;font-weight:700;text-align:left;white-space:nowrap">${s}</th>`;
@@ -1315,7 +1330,7 @@ function renderHome(){
   const wLabel   = months[weekDate.getUTCMonth()]+' '+weekDate.getUTCDate()+", '"+String(weekDate.getUTCFullYear()).slice(2);
 
   const dayOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
-  const weekEvents = events.filter(e=>(e.weekOf||'2026-05-31')===weekStr)
+  const weekEvents = events.filter(e=>(e.weekOf||'2026-05-31')===weekStr && !eventInquiryMissing(e))
     .sort((a,b)=> dayOrder.indexOf((a.day||'').toLowerCase()) - dayOrder.indexOf((b.day||'').toLowerCase()));
 
   // Open to-dos across this week's events
@@ -1418,6 +1433,7 @@ function renderEvents(){
   const currentWeekDate = getWeekEndDate(currentWeekOffset);
   const currentWeekStr = currentWeekDate.toISOString().split('T')[0];
   const weekEvents = events.filter(e => {
+    if(eventInquiryMissing(e)) return false;
     // Events without weekOf belong to the base week (2026-06-08)
     const ew = e.weekOf || '2026-05-31';
     return ew === currentWeekStr;
@@ -1604,12 +1620,12 @@ function renderEvents(){
 // Header number for the detail panel: new canonical (prominent) + old (quiet).
 function detailNumberHtml(e){
   const full = fullEventNum(e);
-  if(!full) return (e.job ? esc(e.job) : '');
+  if(!full) return (e.job ? pcEsc(e.job) : '');
   const legacy = legacyShortJob(e.job);
   const oldBit = legacy && (legacy !== shortEventNumber(full))
-    ? ` <span style="font-size:12px;font-weight:500;color:var(--text3)">· was ${esc(legacy)}</span>`
+    ? ` <span style="font-size:12px;font-weight:500;color:var(--text3)">· was ${pcEsc(legacy)}</span>`
     : '';
-  return `<span>${esc(full)}</span>${oldBit}`;
+  return `<span>${pcEsc(full)}</span>${oldBit}`;
 }
 
 function renderDetail(e,role){
@@ -4464,7 +4480,7 @@ function renderSchedule(){
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const schedWeekLabel = 'W/E '+months[schedWeekDate.getUTCMonth()]+' '+schedWeekDate.getUTCDate()+', '+String(schedWeekDate.getUTCFullYear()).slice(2);
 
-  const weekEvents  = events.filter(e=>(e.weekOf||'2026-05-31')===schedWeekStr);
+  const weekEvents  = events.filter(e=>(e.weekOf||'2026-05-31')===schedWeekStr && !eventInquiryMissing(e));
   const staffEvents = weekEvents.filter(e=>!e.noStaffing);
   const noStaffEvents = weekEvents.filter(e=>e.noStaffing);
 
