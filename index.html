@@ -117,6 +117,14 @@
   <div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto">
     <h3>Add new event</h3>
     <div style="font-size:12px;color:var(--text3);margin:-6px 0 12px">This creates a booked event — it appears in the Booked pipeline column and on its week's events page.</div>
+    <div style="margin-bottom:16px;padding:12px;background:#FFF3F3;border:1px solid #DCC5C5;border-radius:var(--radius);display:flex;gap:12px;align-items:center">
+      <i class="ti ti-clipboard-text" style="font-size:18px;color:#8B1A1A;flex-shrink:0"></i>
+      <div style="flex:1">
+        <div style="font-weight:600;color:#333;font-size:13px">Import from email or notes?</div>
+        <div style="font-size:11px;color:#666;margin-top:2px">Paste an email or notes and Claude will extract the details for you.</div>
+      </div>
+      <button onclick="aiParseInquiryPrompt()" style="padding:6px 12px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">📋 Paste</button>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="modal-row" style="margin-bottom:0"><label>First name</label><input id="m-firstName" placeholder="David"></div>
       <div class="modal-row" style="margin-bottom:0"><label>Last name</label><input id="m-lastName" placeholder="Smith"></div>
@@ -9321,6 +9329,62 @@ function openModal(){
   document.getElementById('addModal').classList.add('open');
 }
 function closeModal(){ document.getElementById('addModal').classList.remove('open'); }
+// Click "Paste email/notes" button — prompt for text, send to relay for AI parsing, fill form
+async function aiParseInquiryPrompt(){
+  const text = prompt('Paste an email, message, or notes about the inquiry:\n\n(The app will extract first name, event type, date, guest count, etc.)');
+  if(!text) return;
+  
+  const relay = localStorage.getItem('scriptUrl');
+  if(!relay){
+    alert('Connect the Apps Script URL in Settings first.');
+    return;
+  }
+  
+  showToast('Parsing email/notes with AI...', 3000);
+  try {
+    const url = relay + (relay.includes('?')?'&':'?') + 'action=aiParseInquiry';
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'aiParseInquiry', text: text })
+    });
+    const data = await r.json();
+    if(!data.ok){
+      showToast('Error: ' + (data.error || 'unknown error'), 5000);
+      console.error('aiParseInquiry error:', data);
+      return;
+    }
+    const result = data.result || {};
+    // Fill the form fields with parsed data (only if not empty)
+    if(result.firstName)      document.getElementById('m-firstName').value = result.firstName;
+    if(result.lastName)       document.getElementById('m-lastName').value = result.lastName;
+    if(result.organization)   document.getElementById('m-organization').value = result.organization;
+    if(result.email)          document.getElementById('m-email').value = result.email;
+    if(result.phone)          document.getElementById('m-phone').value = result.phone;
+    if(result.eventName)      document.getElementById('m-eventName').value = result.eventName;
+    if(result.eventType)      document.getElementById('m-type').value = result.eventType;
+    if(result.eventDate)      document.getElementById('m-eventDate').value = result.eventDate;
+    if(result.venueName)      document.getElementById('m-venueName').value = result.venueName;
+    if(result.venueLocation)  document.getElementById('m-venueLocation').value = result.venueLocation;
+    if(result.guestCount)     document.getElementById('m-guestCount').value = result.guestCount;
+    if(result.meatDairy)      document.getElementById('m-meatDairy').value = result.meatDairy;
+    if(result.shabbos)        document.getElementById('m-shabbos').value = result.shabbos;
+    if(result.howFound)       document.getElementById('m-howFound').value = result.howFound;
+    if(result.referredBy)     document.getElementById('m-referredBy').value = result.referredBy;
+    if(result.eventAttended)  document.getElementById('m-eventAttended').value = result.eventAttended;
+    if(result.plannerName)    document.getElementById('m-plannerName').value = result.plannerName;
+    if(result.cuisine)        document.getElementById('m-cuisine').value = result.cuisine;
+    if(result.comments)       document.getElementById('m-notes').value = result.comments;
+    
+    // List what was extracted
+    const filled = Object.keys(result).filter(k => result[k]).length;
+    showToast('Extracted ' + filled + ' field(s) — review and complete the rest', 4000);
+  } catch(err){
+    showToast('Network error: ' + err.message, 5000);
+    console.error('aiParseInquiry fetch error:', err);
+  }
+}
+
 function addEvent(){
   try{
     if(!db){ alert('Still connecting — please wait a moment and try again.'); return; }
