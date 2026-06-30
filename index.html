@@ -2648,6 +2648,39 @@ async function convertEstimateToInvoice(id){  const inq=_findInq(id); if(!inq) r
   setTimeout(()=>{ try{ openInvoice(evId); }catch(e){} }, 350);
 }
 
+// Banner companion to convertEstimateToInvoice: same idea, but for the case where
+// the event is ALREADY booked (so an invoice record already exists, just blank).
+// Copies the estimate's lines / tax / logistics rate / deposit / notes into the
+// current invoice slot. Stays as a 'quote' status so Kenny still reviews and sends
+// — the conversion is just plumbing, no auto-finalization.
+async function convertEstimateToInvoiceNow(eid){
+  const inv = invoices[eid];
+  if(!inv){ alert('Could not find this invoice. Try refreshing the page.'); return; }
+  const baseEvId = baseEventIdOf(eid);
+  const inqId = baseEvId.startsWith('inq_') ? baseEvId.slice(4) : null;
+  const inq = inqId ? inquiries.find(x=>x.id===inqId) : null;
+  if(!inq || !inq.estimate || !Array.isArray(inq.estimate.lines)){
+    alert('No estimate was found on the original inquiry. Nothing to convert.');
+    return;
+  }
+  if(inv.status === 'invoice' || inv.status === 'paid'){
+    alert('This invoice has already been sent or paid — refusing to overwrite it. If you really need to redo it, use the edit-override button first.');
+    return;
+  }
+  const est = inq.estimate;
+  // Deep-copy lines so future edits to either side don't affect the other.
+  inv.lines = JSON.parse(JSON.stringify(est.lines || []));
+  if(typeof est.taxExempt !== 'undefined') inv.taxExempt = est.taxExempt;
+  if(typeof est.logisticsRate !== 'undefined') inv.logisticsRate = est.logisticsRate;
+  if(typeof est.deposit !== 'undefined' && !inv.deposit) inv.deposit = est.deposit;
+  if(est.notes && !inv.notes) inv.notes = est.notes;
+  await _saveInvoice(eid, inv);
+  try{ logActivity(inqId, 'invoice', 'Converted estimate to invoice (manual)', {invoiceId: eid}); }catch(_){}
+  showToast('Estimate copied into invoice \u2713 \u2014 review before sending', 4000);
+  renderInvoiceDetail();
+}
+window.convertEstimateToInvoiceNow = convertEstimateToInvoiceNow;
+
 // ── DOCUMENT FOOTER + REVISION RULE (system-wide) ──
 // Footer reads: "Event #YY-MMDD-NN · <Doc> Rev N · Generated Sun 6/28/26 4:32 PM"
 // Revision rule: Rev 1 stays a draft until first print/send (finalize). After a
@@ -6778,9 +6811,38 @@ function renderInvoiceDetail(){
   const isLocked = (inv.status === 'paid' || inv.status === 'invoice') && !inv._editOverride;
   const canEdit = !isLocked;
 
+  // Detect "estimate not yet copied across". Happens when the event's underlying inquiry
+  // has a real (priced) estimate but this invoice is still its template defaults (total = 0).
+  // We only offer the convert on the PRIMARY invoice slot, never on extra slots, never on
+  // a paid/sent invoice — those have left the building.
+  let estimateBannerHtml = '';
+  try {
+    if(!isExtraSlot(eid) && !isLocked && (inv.status === 'quote' || inv.status === 'none')) {
+      const baseEvId = baseEventIdOf(eid);
+      const inqId = baseEvId.startsWith('inq_') ? baseEvId.slice(4) : null;
+      const inq = inqId ? inquiries.find(x=>x.id===inqId) : null;
+      const est = inq && inq.estimate;
+      const estLines = est && Array.isArray(est.lines) ? est.lines : [];
+      const estTotal = estLines.reduce((s,l)=>s + (parseFloat(l.qty)||0) * (parseFloat(l.price)||0), 0);
+      const invTotal = tots.subtotal || 0;
+      if(estTotal > 0 && invTotal < 0.01) {
+        const fmt$ = n => '$'+(Math.round(n*100)/100).toFixed(2);
+        estimateBannerHtml = `<div style="margin-bottom:14px;padding:14px 16px;background:var(--amber-bg);border:1.5px dashed var(--amber-text);border-radius:var(--radius);display:flex;gap:14px;align-items:center">
+          <i class="ti ti-receipt" style="font-size:22px;color:var(--amber-text);flex-shrink:0"></i>
+          <div style="flex:1">
+            <div style="font-weight:600;color:var(--text);font-size:14px">An estimate already exists for this event (${fmt$(estTotal)})</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:3px">It wasn\u2019t carried over when this event was booked. Click Convert to copy the estimate\u2019s line items, tax setting, logistics rate, deposit, and notes into this invoice. Nothing is sent — you\u2019ll review it first.</div>
+          </div>
+          <button onclick="convertEstimateToInvoiceNow('${eid}')" style="padding:8px 16px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-arrow-right"></i> Convert estimate to invoice</button>
+        </div>`;
+      }
+    }
+  } catch(_err) { /* banner is best-effort; never break the page over it */ }
+
   const inpStyle = 'background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);font-family:inherit;width:100%;text-align:right';
 
   el.innerHTML = `<div class="detail-panel">
+    ${estimateBannerHtml}
     ${(function(){
       const evId = baseEventIdOf(eid);
       const slots = invoiceSlotsForEvent(evId);
