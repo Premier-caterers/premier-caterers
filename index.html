@@ -117,14 +117,6 @@
   <div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto">
     <h3>Add new event</h3>
     <div style="font-size:12px;color:var(--text3);margin:-6px 0 12px">This creates a booked event — it appears in the Booked pipeline column and on its week's events page.</div>
-    <div style="margin-bottom:16px;padding:12px;background:#FFF3F3;border:1px solid #DCC5C5;border-radius:var(--radius);display:flex;gap:12px;align-items:center">
-      <i class="ti ti-clipboard-text" style="font-size:18px;color:#8B1A1A;flex-shrink:0"></i>
-      <div style="flex:1">
-        <div style="font-weight:600;color:#333;font-size:13px">Import from email or notes?</div>
-        <div style="font-size:11px;color:#666;margin-top:2px">Paste an email or notes and Claude will extract the details for you.</div>
-      </div>
-      <button onclick="aiParseInquiryPrompt()" style="padding:6px 12px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">📋 Paste</button>
-    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="modal-row" style="margin-bottom:0"><label>First name</label><input id="m-firstName" placeholder="David"></div>
       <div class="modal-row" style="margin-bottom:0"><label>Last name</label><input id="m-lastName" placeholder="Smith"></div>
@@ -4728,15 +4720,187 @@ function saveInquiryEdits(id){
 }
 
 function openAddInquiryModal(){
-  // Open the client form in a new window
-  // Form submits back to this platform via addInquiryFromForm()
-  const formUrl = 'premier_caterers_form.html';
-  const w = window.open(formUrl, '_blank', 'width=780,height=900,scrollbars=yes,resizable=yes');
-  if(!w){
-    // Popup blocked — fall back to same tab
-    window.open(formUrl, '_blank');
+  // Open the in-app "Add new lead" modal with Paste-from-email support.
+  // Creates a new inquiry with stage='new' so it lands in the New Leads column.
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'addLeadModal';
+  modal.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;align-items:center;justify-content:center';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto;background:#fff;padding:24px;border-radius:8px;width:90%">
+      <h3 style="margin:0 0 4px;font-size:18px">Add new lead</h3>
+      <div style="font-size:12px;color:var(--text3);margin:-2px 0 12px">This creates a new lead in the pipeline (New Leads column). Fill in what you know — most fields are optional.</div>
+      <div style="margin-bottom:16px;padding:12px;background:#FFF3F3;border:1px solid #DCC5C5;border-radius:var(--radius);display:flex;gap:12px;align-items:center">
+        <i class="ti ti-clipboard-text" style="font-size:18px;color:#8B1A1A;flex-shrink:0"></i>
+        <div style="flex:1">
+          <div style="font-weight:600;color:#333;font-size:13px">Import from email or notes?</div>
+          <div style="font-size:11px;color:#666;margin-top:2px">Paste an email or notes and Claude will extract the details for you.</div>
+        </div>
+        <button onclick="aiParseLeadPrompt()" style="padding:6px 12px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">📋 Paste</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="modal-row" style="margin-bottom:8px"><label>First name</label><input id="lead-firstName" placeholder="David"></div>
+        <div class="modal-row" style="margin-bottom:8px"><label>Last name</label><input id="lead-lastName" placeholder="Smith"></div>
+      </div>
+      <div class="modal-row" style="margin-bottom:8px"><label>Organization (optional)</label><input id="lead-organization" placeholder="e.g. Congregation Beth Sholom"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="modal-row" style="margin-bottom:8px"><label>Email</label><input id="lead-email" type="email" placeholder="client@email.com"></div>
+        <div class="modal-row" style="margin-bottom:8px"><label>Phone</label><input id="lead-phone" placeholder="201-555-1234"></div>
+      </div>
+      <div class="modal-row" style="margin-bottom:8px"><label>Event name</label><input id="lead-eventName" placeholder="e.g. Smith Bar Mitzvah"></div>
+      <div class="modal-row" style="margin-bottom:8px"><label>Event type</label>
+        <select id="lead-eventType">
+          <option value="">Select…</option>
+          <option value="Wedding">Wedding</option>
+          <option value="Bar Mitzvah">Bar Mitzvah</option>
+          <option value="Bat Mitzvah">Bat Mitzvah</option>
+          <option value="Engagement party">Engagement party</option>
+          <option value="Vort">Vort</option>
+          <option value="Aufruf">Aufruf</option>
+          <option value="Sheva Brachos">Sheva Brachos</option>
+          <option value="Kiddush">Kiddush</option>
+          <option value="Bris">Bris</option>
+          <option value="Shabbos meals">Shabbos meals</option>
+          <option value="Bar mitzvah party - not shabbos">Bar mitzvah party - not shabbos</option>
+          <option value="Bas mitzvah party - not shabbos">Bas mitzvah party - not shabbos</option>
+          <option value="Bar mitzvah over shabbos">Bar mitzvah over shabbos</option>
+          <option value="Corporate event">Corporate event</option>
+          <option value="Organization event">Organization event</option>
+          <option value="Drop off catering">Drop off catering</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="modal-row" style="margin-bottom:8px"><label>Event date</label><input id="lead-eventDate" type="date"></div>
+      <div class="modal-row" style="margin-bottom:8px"><label>Venue name</label><input id="lead-venueName" placeholder="The venue / hall"></div>
+      <div class="modal-row" style="margin-bottom:8px"><label>Venue location / address</label><input id="lead-venueLocation" placeholder="123 Main St, Teaneck"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="modal-row" style="margin-bottom:8px"><label>Guest count</label><input id="lead-guestCount" placeholder="150"></div>
+        <div class="modal-row" style="margin-bottom:8px"><label>Meat / Dairy / Parve</label>
+          <select id="lead-meatDairy"><option value="">Select…</option><option value="Meat">Meat</option><option value="Dairy">Dairy</option><option value="Parve">Parve</option></select>
+        </div>
+      </div>
+      <div class="modal-row" style="margin-bottom:8px"><label>Cuisine / style</label><input id="lead-cuisine" placeholder="e.g. traditional, Mediterranean…"></div>
+      <div class="modal-row" style="margin-bottom:8px"><label>Is this over Shabbos?</label>
+        <select id="lead-shabbos"><option value="No">No</option><option value="Yes">Yes</option></select>
+      </div>
+      <div class="modal-row" style="margin-bottom:8px"><label>How did you find us?</label><input id="lead-howFound" placeholder="Referral, website, event…"></div>
+      <div class="modal-row" style="margin-bottom:8px"><label>Referred by</label><input id="lead-referredBy" placeholder="Name"></div>
+      <div class="modal-row" style="margin-bottom:8px"><label>Party planner</label><input id="lead-plannerName" placeholder="Planner name"></div>
+      <div class="modal-row" style="margin-bottom:8px"><label>Notes / comments</label><textarea id="lead-notes" placeholder="Any details..." style="min-height:60px"></textarea></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+        <button onclick="closeAddLeadModal()" style="padding:8px 16px;border:1px solid var(--border2);border-radius:var(--radius);background:#fff;color:var(--text2);cursor:pointer">Cancel</button>
+        <button onclick="saveNewLead()" style="padding:8px 16px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-weight:600;cursor:pointer">Add as new lead</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function closeAddLeadModal(){
+  const m = document.getElementById('addLeadModal');
+  if(m) m.remove();
+}
+
+function saveNewLead(){
+  const get = id => (document.getElementById(id)||{}).value || '';
+  const fn = get('lead-firstName').trim();
+  const ln = get('lead-lastName').trim();
+  const org = get('lead-organization').trim();
+  if(!fn && !ln && !org){
+    alert('Please enter at least a first name, last name, or organization.');
+    return;
+  }
+  const inq = {
+    id: Date.now()+'',
+    firstName: fn, lastName: ln,
+    organization: org,
+    eventName: get('lead-eventName').trim(),
+    eventType: get('lead-eventType'),
+    eventDate: get('lead-eventDate'),
+    phone: get('lead-phone').trim(),
+    email: get('lead-email').trim(),
+    venueName: get('lead-venueName').trim(),
+    venueLocation: get('lead-venueLocation').trim(),
+    guestCount: get('lead-guestCount').trim(),
+    cuisine: get('lead-cuisine').trim(),
+    meatDairy: get('lead-meatDairy'),
+    shabbos: get('lead-shabbos') || 'No',
+    howFound: get('lead-howFound').trim(),
+    referredBy: get('lead-referredBy').trim(),
+    plannerName: get('lead-plannerName').trim(),
+    comments: get('lead-notes').trim(),
+    source: 'manual',
+    menuAutomationTriggered: false,
+    stage: 'new',
+    submittedAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+  };
+  inquiries.push(inq);
+  _saveInquiry(inq);
+  try{
+    const nm = ((inq.firstName||'')+' '+(inq.lastName||'')).trim() || inq.organization || inq.eventName || 'Lead';
+    logActivity(inq.id,'inquiry','New lead added manually — '+nm+(inq.eventType?(' ('+inq.eventType+')'):''), {source:'manual'});
+  }catch(e){}
+  closeAddLeadModal();
+  showView('pipeline');
+  showToast('New lead added to the pipeline ✓');
+  updatePipelineBadge();
+  if(currentView==='pipeline') render();
+}
+
+// Paste an email/notes — send to relay for AI parsing — fill the new-lead form
+async function aiParseLeadPrompt(){
+  const text = prompt('Paste an email, message, or notes about this potential client:\n\n(The app will extract first name, event type, date, guest count, etc.)');
+  if(!text) return;
+  const relay = localStorage.getItem('scriptUrl');
+  if(!relay){
+    alert('Connect the Apps Script URL in Settings first.');
+    return;
+  }
+  showToast('Parsing email/notes with AI...', 3000);
+  try {
+    const url = relay + (relay.includes('?')?'&':'?') + 'action=aiParseInquiry';
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'aiParseInquiry', text: text })
+    });
+    const data = await r.json();
+    if(!data.ok){
+      showToast('Error: ' + (data.error || 'unknown error'), 5000);
+      console.error('aiParseInquiry error:', data);
+      return;
+    }
+    const result = data.result || {};
+    const setIf = (id, val) => { if(val){ const el = document.getElementById(id); if(el) el.value = val; } };
+    setIf('lead-firstName', result.firstName);
+    setIf('lead-lastName', result.lastName);
+    setIf('lead-organization', result.organization);
+    setIf('lead-email', result.email);
+    setIf('lead-phone', result.phone);
+    setIf('lead-eventName', result.eventName);
+    setIf('lead-eventType', result.eventType);
+    setIf('lead-eventDate', result.eventDate);
+    setIf('lead-venueName', result.venueName);
+    setIf('lead-venueLocation', result.venueLocation);
+    setIf('lead-guestCount', result.guestCount);
+    setIf('lead-meatDairy', result.meatDairy);
+    setIf('lead-shabbos', result.shabbos);
+    setIf('lead-howFound', result.howFound);
+    setIf('lead-referredBy', result.referredBy);
+    setIf('lead-plannerName', result.plannerName);
+    setIf('lead-cuisine', result.cuisine);
+    setIf('lead-notes', result.comments);
+    const filled = Object.keys(result).filter(k => result[k]).length;
+    showToast('Extracted ' + filled + ' field(s) — review and complete the rest', 4000);
+  } catch(err){
+    showToast('Network error: ' + err.message, 5000);
+    console.error('aiParseInquiry fetch error:', err);
   }
 }
+window.openAddInquiryModal = openAddInquiryModal;
+window.closeAddLeadModal = closeAddLeadModal;
+window.saveNewLead = saveNewLead;
+window.aiParseLeadPrompt = aiParseLeadPrompt;
 
 function renderSchedule(){
   const depts = [
@@ -9329,61 +9493,6 @@ function openModal(){
   document.getElementById('addModal').classList.add('open');
 }
 function closeModal(){ document.getElementById('addModal').classList.remove('open'); }
-// Click "Paste email/notes" button — prompt for text, send to relay for AI parsing, fill form
-async function aiParseInquiryPrompt(){
-  const text = prompt('Paste an email, message, or notes about the inquiry:\n\n(The app will extract first name, event type, date, guest count, etc.)');
-  if(!text) return;
-  
-  const relay = localStorage.getItem('scriptUrl');
-  if(!relay){
-    alert('Connect the Apps Script URL in Settings first.');
-    return;
-  }
-  
-  showToast('Parsing email/notes with AI...', 3000);
-  try {
-    const url = relay + (relay.includes('?')?'&':'?') + 'action=aiParseInquiry';
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'aiParseInquiry', text: text })
-    });
-    const data = await r.json();
-    if(!data.ok){
-      showToast('Error: ' + (data.error || 'unknown error'), 5000);
-      console.error('aiParseInquiry error:', data);
-      return;
-    }
-    const result = data.result || {};
-    // Fill the form fields with parsed data (only if not empty)
-    if(result.firstName)      document.getElementById('m-firstName').value = result.firstName;
-    if(result.lastName)       document.getElementById('m-lastName').value = result.lastName;
-    if(result.organization)   document.getElementById('m-organization').value = result.organization;
-    if(result.email)          document.getElementById('m-email').value = result.email;
-    if(result.phone)          document.getElementById('m-phone').value = result.phone;
-    if(result.eventName)      document.getElementById('m-eventName').value = result.eventName;
-    if(result.eventType)      document.getElementById('m-type').value = result.eventType;
-    if(result.eventDate)      document.getElementById('m-eventDate').value = result.eventDate;
-    if(result.venueName)      document.getElementById('m-venueName').value = result.venueName;
-    if(result.venueLocation)  document.getElementById('m-venueLocation').value = result.venueLocation;
-    if(result.guestCount)     document.getElementById('m-guestCount').value = result.guestCount;
-    if(result.meatDairy)      document.getElementById('m-meatDairy').value = result.meatDairy;
-    if(result.shabbos)        document.getElementById('m-shabbos').value = result.shabbos;
-    if(result.howFound)       document.getElementById('m-howFound').value = result.howFound;
-    if(result.referredBy)     document.getElementById('m-referredBy').value = result.referredBy;
-    if(result.eventAttended)  document.getElementById('m-eventAttended').value = result.eventAttended;
-    if(result.plannerName)    document.getElementById('m-plannerName').value = result.plannerName;
-    if(result.cuisine)        document.getElementById('m-cuisine').value = result.cuisine;
-    if(result.comments)       document.getElementById('m-notes').value = result.comments;
-    
-    // List what was extracted
-    const filled = Object.keys(result).filter(k => result[k]).length;
-    showToast('Extracted ' + filled + ' field(s) — review and complete the rest', 4000);
-  } catch(err){
-    showToast('Network error: ' + err.message, 5000);
-    console.error('aiParseInquiry fetch error:', err);
-  }
-}
 
 function addEvent(){
   try{
