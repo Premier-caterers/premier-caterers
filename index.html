@@ -4861,7 +4861,7 @@ async function aiParseLeadPrompt(){
     const url = relay + (relay.includes('?')?'&':'?') + 'action=aiParseInquiry';
     const r = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ action: 'aiParseInquiry', text: text })
     });
     const data = await r.json();
