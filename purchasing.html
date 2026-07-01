@@ -451,6 +451,50 @@ const firebaseConfig = {
 if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
+// ── SHARED SETTINGS (Firestore-backed, device-independent) ──
+// Mirrors the main app: relay URLs live at settings/app in Firestore so every
+// device just picks them up. localStorage is kept as a fallback for first-load
+// and offline. See index.html for the full pattern.
+const _PC_SHARED_KEYS = ['pcEventsRelay','pcOrdersRelay'];
+let pcSharedSettings = {};
+function pcGetShared(key){
+  if(pcSharedSettings && Object.prototype.hasOwnProperty.call(pcSharedSettings,key) && pcSharedSettings[key]!=null) return pcSharedSettings[key];
+  try { return localStorage.getItem(key) || ''; } catch(_){ return ''; }
+}
+async function pcSetShared(key, value){
+  pcSharedSettings[key] = value;
+  try { localStorage.setItem(key, value); } catch(_){}
+  try { await db.collection('settings').doc('app').set({ [key]: value, _updatedAt: Date.now() }, { merge:true }); }
+  catch(err){ console.warn('Shared settings write failed:', err); }
+}
+function pcStartSharedSettings(){
+  try {
+    db.collection('settings').doc('app').onSnapshot(snap => {
+      const data = snap.exists ? (snap.data()||{}) : {};
+      const next = {};
+      _PC_SHARED_KEYS.forEach(k => { if(data[k] != null) next[k] = data[k]; });
+      // First-time seed from local storage if Firestore is empty
+      if(!snap.exists || Object.keys(next).length===0){
+        const seed = {};
+        _PC_SHARED_KEYS.forEach(k => {
+          const v = (function(){ try { return localStorage.getItem(k)||''; } catch(_){ return ''; } })();
+          if(v) seed[k] = v;
+        });
+        if(Object.keys(seed).length){
+          db.collection('settings').doc('app').set(Object.assign({ _updatedAt: Date.now() }, seed), { merge:true });
+        }
+      }
+      pcSharedSettings = next;
+      _PC_SHARED_KEYS.forEach(k => { if(next[k]!=null){ try { localStorage.setItem(k, next[k]); } catch(_){} } });
+      // Refresh settings UI if it's open
+      if(typeof view !== 'undefined' && view === 'settings' && typeof render === 'function'){
+        try { render(); } catch(_){}
+      }
+    });
+  } catch(err){ console.warn('Could not start shared settings:', err); }
+}
+pcStartSharedSettings();
+
 // ════════ AUTH (shared with the main app) ════════
 const roles = { admin:{canEdit:true}, kenny:{canEdit:true}, shelley:{canEdit:true}, josh:{canEdit:false}, kitchen:{canEdit:false} };
 const OWNER_HASH   = 'd4ae28692a6a51cd93378a6ae5d3c004920edfaaa688e4dbeefb8cbe4730dcae';
@@ -1541,11 +1585,11 @@ window.scanSaveAll = scanSaveAll;
 // ════════ ORDERS RELAY SETTINGS ════════
 // The orders@thepremiercaterer.com Apps Script URL lives in localStorage so each
 // browser/device can be pointed at the same deployment without hardcoding it.
-function getOrdersRelayUrl(){ try{ return localStorage.getItem('pcOrdersRelay')||''; }catch(e){ return ''; } }
-function setOrdersRelayUrl(url){ try{ localStorage.setItem('pcOrdersRelay', url||''); }catch(e){} }
+function getOrdersRelayUrl(){ return pcGetShared('pcOrdersRelay'); }
+function setOrdersRelayUrl(url){ pcSetShared('pcOrdersRelay', url||''); }
 // Events@ relay — used for the AI invoice scan (where ANTHROPIC_KEY lives).
-function getEventsRelayUrl(){ try{ return localStorage.getItem('pcEventsRelay')||''; }catch(e){ return ''; } }
-function setEventsRelayUrl(url){ try{ localStorage.setItem('pcEventsRelay', url||''); }catch(e){} }
+function getEventsRelayUrl(){ return pcGetShared('pcEventsRelay'); }
+function setEventsRelayUrl(url){ pcSetShared('pcEventsRelay', url||''); }
 function openOrdersSettings(){
   const curOrders=getOrdersRelayUrl();
   const curEvents=getEventsRelayUrl();
