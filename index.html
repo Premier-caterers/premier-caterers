@@ -49,6 +49,17 @@
   #userBar .ub-out{padding:5px 12px;border:0.5px solid var(--border2,#ccc);border-radius:8px;background:var(--bg2,#f3f3f3);color:var(--text2,#444);font-size:12px;cursor:pointer}
   /* Wider hub drawer — overrides styles.css (loads later in the document) */
   #hubDrawer{width:min(1040px,96vw)!important;max-width:96vw!important}
+  /* Mobile top-bar: prevent the Live sync button from covering Log out on iPhone.
+     Row wraps to a second line when there isn't horizontal room, and the
+     timestamp hides so the two important controls stay side by side. */
+  @media (max-width: 700px){
+    .topbar-spacer{flex:1 0 auto}
+    #userBar{display:inline-flex;align-items:center;gap:6px;flex-wrap:nowrap;order:2}
+    #userBar .ub-name{margin-right:6px}
+    #userBar .ub-out{padding:6px 10px}
+    .ts-stamp{display:none!important}
+    .sync-btn{order:3;margin-left:auto}
+  }
   .drow.add-hover{cursor:pointer;border-radius:6px}
   .drow.add-hover .add-cta{color:var(--text3,#999)}
   .drow.add-hover:hover{background:var(--bg2,#f3f3f3)}
