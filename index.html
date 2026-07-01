@@ -211,6 +211,86 @@ let trash = [];
 let invoices = {}; // keyed by eventId
 let savedLineItems = JSON.parse(localStorage.getItem('savedLineItems')||'[]');
 let venues = []; // venues database
+
+// ── SHARED SETTINGS (Firestore-backed, device-independent) ──
+// These live in Firestore at `settings/app` so every device signed in reads
+// the same values — no more pasting the Apps Script URL into every phone and
+// browser. localStorage is still written as a fallback for the split second
+// before Firestore comes back, and for genuinely-offline first loads.
+// PER-DEVICE things (login role, per-device auth tokens, checkbox toggles
+// like "use Twilio") intentionally stay in localStorage.
+const _SHARED_KEYS = ['scriptUrl','gmailClientId','githubToken'];
+let sharedSettings = {};
+let _sharedSettingsReady = false;
+let _sharedSettingsListener = null;
+
+// Read a shared setting. Prefers the Firestore copy once loaded; falls back to
+// localStorage so nothing breaks during the first ~1 second before Firestore
+// returns, and so offline still works.
+function getSharedSetting(key){
+  if(sharedSettings && Object.prototype.hasOwnProperty.call(sharedSettings, key) && sharedSettings[key] != null){
+    return sharedSettings[key];
+  }
+  try { return localStorage.getItem(key) || ''; } catch(_){ return ''; }
+}
+
+// Write a shared setting. Updates the local cache immediately (so the UI sees
+// the change without waiting for Firestore), writes localStorage as a fallback,
+// then pushes to Firestore so other devices pick it up.
+async function setSharedSetting(key, value){
+  sharedSettings[key] = value;
+  try { localStorage.setItem(key, value); } catch(_){}
+  if(!db){ return; } // Firestore not up yet — local write is enough for now
+  try {
+    await db.collection('settings').doc('app').set({ [key]: value, _updatedAt: Date.now() }, { merge:true });
+  } catch(err){
+    console.warn('Shared settings write failed:', err);
+  }
+}
+
+// One-time on Firestore init: pull the shared doc and subscribe to changes.
+function startSharedSettings(){
+  if(!db) return;
+  try {
+    _sharedSettingsListener = db.collection('settings').doc('app').onSnapshot(snap => {
+      const data = snap.exists ? (snap.data()||{}) : {};
+      const before = JSON.stringify(sharedSettings);
+      const next = {};
+      _SHARED_KEYS.forEach(k => { if(data[k] != null) next[k] = data[k]; });
+      // First-time sync: if Firestore has nothing yet but localStorage does,
+      // seed Firestore from localStorage so this device's existing setup
+      // becomes the shared source. Only runs once.
+      if(!snap.exists || Object.keys(next).length===0){
+        const seed = {};
+        _SHARED_KEYS.forEach(k => {
+          const v = (function(){ try { return localStorage.getItem(k)||''; } catch(_){ return ''; } })();
+          if(v) seed[k] = v;
+        });
+        if(Object.keys(seed).length){
+          db.collection('settings').doc('app').set(Object.assign({ _updatedAt: Date.now() }, seed), { merge:true });
+        }
+      }
+      sharedSettings = next;
+      _sharedSettingsReady = true;
+      // Mirror to localStorage as a fallback (helps offline / cold-start).
+      _SHARED_KEYS.forEach(k => {
+        if(next[k] != null){
+          try { localStorage.setItem(k, next[k]); } catch(_){}
+        }
+      });
+      // Re-render Settings if that's the current view so a change on another
+      // device shows up here without a manual refresh.
+      if(JSON.stringify(sharedSettings) !== before && typeof currentView !== 'undefined' && currentView === 'settings'){
+        try { render(); } catch(_){}
+      }
+    }, err => {
+      console.warn('Shared settings listener error:', err);
+    });
+  } catch(err){
+    console.warn('Could not start shared settings:', err);
+  }
+}
+
 let roadmap = []; // roadmap / feature backlog
 
 // Toast
@@ -3020,7 +3100,7 @@ function openTemplatePicker(id){
   const inq = inquiries.find(x=>x.id===id);
   if(!inq){ return; }
   const _e = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  const scriptUrl = localStorage.getItem('scriptUrl');
+  const scriptUrl = getSharedSetting('scriptUrl');
   if(!scriptUrl){ alert('No Apps Script URL is saved in Settings, so menus can’t be created automatically. You can still paste a link manually.'); return; }
   const opts = MENU_TEMPLATES.map(t=>`<option value="${t.num}">${_e(t.name)}</option>`).join('');
   const wrap = document.createElement('div');
@@ -3042,7 +3122,7 @@ function openTemplatePicker(id){
 function closeTemplatePicker(){ const o=document.getElementById('tmplPickerOverlay'); if(o) o.remove(); }
 async function createMenuFromTemplate(id){
   const inq = inquiries.find(x=>x.id===id); if(!inq) return;
-  const scriptUrl = localStorage.getItem('scriptUrl'); if(!scriptUrl){ closeTemplatePicker(); return; }
+  const scriptUrl = getSharedSetting('scriptUrl'); if(!scriptUrl){ closeTemplatePicker(); return; }
   const sel = document.getElementById('tmplPickSelect'); if(!sel) return;
   const num = sel.value;
   const tmplName = (MENU_TEMPLATES.find(t=>String(t.num)===String(num))||{}).name || 'Menu';
@@ -3125,7 +3205,7 @@ async function deleteInqMenu(id, idx){
   render();
 
   // Then trash the Drive file via Apps Script
-  const scriptUrl = localStorage.getItem('scriptUrl');
+  const scriptUrl = getSharedSetting('scriptUrl');
   if(!fileId){ showToast('Removed from card (no Drive file id found)'); return; }
   if(!scriptUrl){ showToast('Removed from card. Connect the Apps Script URL in Settings to also delete from Drive.'); return; }
   try{
@@ -3473,7 +3553,7 @@ async function loadClientEmails(silent){
   const email = inq && inq.email ? inq.email.trim() : '';
   const btn=document.getElementById('actLoadEmailsBtn');
   if(!email){ if(!silent) alert('No email address on file for this client.'); return; }
-  const relay = (typeof gmailRelayUrl==='function') ? gmailRelayUrl() : (localStorage.getItem('scriptUrl')||'');
+  const relay = (typeof gmailRelayUrl==='function') ? gmailRelayUrl() : (getSharedSetting('scriptUrl')||'');
   if(!relay){ if(!silent) alert('Connect the Apps Script URL in Settings to pull emails.'); return; }
   if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i>Pulling\u2026'; }
   try{
@@ -3653,7 +3733,7 @@ async function summarizeClient(force){
   var email=inq&&inq.email?inq.email.trim():'';
   if(!email){ renderAiPanel('No email address on file for this client, so there\u2019s nothing to summarize yet.'); return; }
   if(inq.aiSummary && !force){ renderAiPanel(); return; }
-  var relay=(typeof gmailRelayUrl==='function')?gmailRelayUrl():(localStorage.getItem('scriptUrl')||'');
+  var relay=(typeof gmailRelayUrl==='function')?gmailRelayUrl():(getSharedSetting('scriptUrl')||'');
   if(!relay){ renderAiPanel('Connect the Apps Script URL in Settings first.'); return; }
   var btn=document.getElementById('aiSumBtn'); if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i>Reading\u2026'; }
   renderAiPanel('Claude is reading the email thread\u2026');
@@ -3697,7 +3777,7 @@ async function hubSummarize(inqId){
   var body=document.getElementById('hubAiBody');
   var email=inq.email?inq.email.trim():'';
   if(!email){ if(body) body.innerHTML='<div class="hub-ai-msg">No email address on file for this client, so there\u2019s nothing to summarize yet.</div>'; return; }
-  var relay=(typeof gmailRelayUrl==='function')?gmailRelayUrl():(localStorage.getItem('scriptUrl')||'');
+  var relay=(typeof gmailRelayUrl==='function')?gmailRelayUrl():(getSharedSetting('scriptUrl')||'');
   if(!relay){ if(body) body.innerHTML='<div class="hub-ai-msg">Connect the Apps Script URL in Settings first.</div>'; return; }
   var btn=document.getElementById('hubAiBtn'); if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i>Reading\u2026'; }
   if(body) body.innerHTML='<div class="hub-ai-msg">Claude is reading the email thread\u2026</div>';
@@ -4013,7 +4093,7 @@ function contactChips(e){
 
 // ── SHEET SYNC ────────────────────────────────
 function syncBookingToSheet(inq, inv){
-  const scriptUrl = localStorage.getItem('scriptUrl'); if(!scriptUrl) return;
+  const scriptUrl = getSharedSetting('scriptUrl'); if(!scriptUrl) return;
   const ed = inq.eventDate||'';
   let dateStr = '';
   if(ed && ed.includes('-')){ const p=ed.split('-'); dateStr=(parseInt(p[1]))+'/'+parseInt(p[2]); }
@@ -4040,7 +4120,7 @@ function syncBookingToSheet(inq, inv){
 // account and has full Calendar access — so no browser permission is needed.
 // Banana (color 5) = menu sent. Blueberry (color 9) = booked.
 async function _gcalCall(params){
-  const scriptUrl = localStorage.getItem('scriptUrl');
+  const scriptUrl = getSharedSetting('scriptUrl');
   if(!scriptUrl) return { success:false, error:'No Apps Script URL saved' };
   const qs = Object.keys(params).map(k=>k+'='+encodeURIComponent(params[k])).join('&');
   const url = scriptUrl + (scriptUrl.includes('?')?'&':'?') + qs;
@@ -4884,7 +4964,7 @@ function saveNewLead(){
 async function aiParseLeadPrompt(){
   const text = prompt('Paste an email, message, or notes about this potential client:\n\n(The app will extract first name, event type, date, guest count, etc.)');
   if(!text) return;
-  const relay = localStorage.getItem('scriptUrl');
+  const relay = getSharedSetting('scriptUrl');
   if(!relay){
     alert('Connect the Apps Script URL in Settings first.');
     return;
@@ -6094,7 +6174,7 @@ async function generateGroceryFromMenu(eventId){
   showToast('Reading menu and generating grocery list...');
 
   try{
-    const scriptUrl = localStorage.getItem('scriptUrl');
+    const scriptUrl = getSharedSetting('scriptUrl');
     if(!scriptUrl){ alert('Please save your Apps Script URL in Settings first.'); return; }
 
     // Build the station database context to send to script
@@ -9372,8 +9452,8 @@ function printList(id) {
 
 // ── SETTINGS ──
 function renderSettings(){
-  const connected=!!localStorage.getItem('scriptUrl');
-  const ghToken = localStorage.getItem('githubToken');
+  const connected=!!getSharedSetting('scriptUrl');
+  const ghToken = getSharedSetting('githubToken');
   return `
   <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
     <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Team logins</div>
@@ -9411,10 +9491,10 @@ function renderSettings(){
     <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Gmail Integration</div>
     <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Connect events@thepremiercaterer.com to send and receive emails in the app.</div>
     <label style="display:flex;align-items:flex-start;gap:9px;padding:11px 13px;border:0.5px solid ${gmailViaScript()?'var(--green-border)':'var(--border2)'};border-radius:var(--radius);background:${gmailViaScript()?'var(--green-bg)':'var(--bg2)'};margin-bottom:1rem;cursor:pointer">
-      <input type="checkbox" ${gmailViaScript()?'checked':''} ${localStorage.getItem('scriptUrl')?'':'disabled'} onchange="localStorage.setItem('gmailViaScript',this.checked?'1':'0');if(this.checked){gmailUser='events@thepremiercaterer.com';} render()" style="margin-top:2px;width:16px;height:16px;accent-color:var(--green-text);cursor:pointer">
+      <input type="checkbox" ${gmailViaScript()?'checked':''} ${getSharedSetting('scriptUrl')?'':'disabled'} onchange="localStorage.setItem('gmailViaScript',this.checked?'1':'0');if(this.checked){gmailUser='events@thepremiercaterer.com';} render()" style="margin-top:2px;width:16px;height:16px;accent-color:var(--green-text);cursor:pointer">
       <div>
         <div style="font-size:13px;font-weight:500;color:var(--text)">Route Gmail through Apps Script <span style="font-size:11px;color:var(--green-text)">(recommended — never disconnects)</span></div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px;line-height:1.5">Sends &amp; reads mail via your Apps Script (authorized once as events@), so the hourly OAuth drop on iPhone/laptop goes away. ${localStorage.getItem('scriptUrl')?'':'<strong>Save your Apps Script URL below first to enable.</strong>'} Requires the Gmail relay code added to your Apps Script.</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;line-height:1.5">Sends &amp; reads mail via your Apps Script (authorized once as events@), so the hourly OAuth drop on iPhone/laptop goes away. ${getSharedSetting('scriptUrl')?'':'<strong>Save your Apps Script URL below first to enable.</strong>'} Requires the Gmail relay code added to your Apps Script.</div>
       </div>
     </label>
     ${isGmailConnected()
@@ -9425,8 +9505,8 @@ function renderSettings(){
       : `<div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Enter your Google OAuth Client ID:</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-            <input type="text" id="gmailClientIdInput" placeholder="xxxx.apps.googleusercontent.com" value="${localStorage.getItem('gmailClientId')||''}" style="flex:1;min-width:200px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px 12px;font-size:13px;color:var(--text);font-family:inherit">
-            <button onclick="localStorage.setItem('gmailClientId',document.getElementById('gmailClientIdInput').value.trim());showToast('Client ID saved ✓')" class="btn-save">Save</button>
+            <input type="text" id="gmailClientIdInput" placeholder="xxxx.apps.googleusercontent.com" value="${getSharedSetting('gmailClientId')||''}" style="flex:1;min-width:200px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px 12px;font-size:13px;color:var(--text);font-family:inherit">
+            <button onclick="setSharedSetting('gmailClientId',document.getElementById('gmailClientIdInput').value.trim());showToast('Client ID saved ✓')" class="btn-save">Save</button>
           </div>
           <button onclick="gmailSignIn()" style="padding:9px 18px;border:none;border-radius:var(--radius);background:#4285f4;color:#fff;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:7px"><i class="ti ti-brand-google" style="font-size:15px"></i> Connect Gmail</button>
           <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.6">To get a Client ID: <strong>console.cloud.google.com → New Project → APIs & Services → Credentials → Create OAuth 2.0 Client ID → Web Application</strong>. Add <strong>${window.location.origin}</strong> as an authorized JavaScript origin.</div>
@@ -9496,7 +9576,7 @@ function renderSettings(){
   <div class="settings-card">
     <h3>Paste your web app URL here</h3>
     <p>After deploying the Apps Script, paste the URL it gives you below. This is what connects the platform to your live sheet data.</p>
-    <input id="scriptUrlInput" placeholder="https://script.google.com/macros/s/..." value="${localStorage.getItem('scriptUrl')||''}">
+    <input id="scriptUrlInput" placeholder="https://script.google.com/macros/s/..." value="${getSharedSetting('scriptUrl')||''}">
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn-save" onclick="saveScriptUrl()">Save & connect</button>
       ${connected?`<button class="btn-cancel" onclick="testConnection()">Test connection</button>`:''}
@@ -9518,7 +9598,7 @@ function copyScript(){
 
 function saveScriptUrl(){
   const url=document.getElementById('scriptUrlInput')?.value||'';
-  localStorage.setItem('scriptUrl',url);
+  setSharedSetting('scriptUrl',url);
   const btn=document.getElementById('syncBtn');
   if(btn){btn.classList.toggle('connected',!!url);document.getElementById('syncLabel').textContent=url?'Sheet connected':'Connect Sheets';}
   if(url) loadFromSheet(url);
@@ -9526,7 +9606,7 @@ function saveScriptUrl(){
 }
 
 function testConnection(){
-  const url=localStorage.getItem('scriptUrl');
+  const url=getSharedSetting('scriptUrl');
   if(!url) return;
   fetch(url).then(r=>r.json()).then(data=>{
     alert('Connection successful! Found '+data.events?.length+' events in your sheet.');
@@ -9961,7 +10041,7 @@ async function pushToGitHub(){
   const _warn = _kb < 600 ? ('\n\n*** WARNING: this version is only '+_kb+' KB. Your full app is about 641 KB. If this looks too small it may be missing features — Cancel and check before publishing. ***') : '';
   if(!confirm('Publish this version to your live site?\n\nSize going live: '+_kb+' KB\nDate / time: '+_when+_warn+'\n\nOK = publish    Cancel = stop')){ return; }
   /* ---- end deploy confirmation ---- */
-  const token = localStorage.getItem('githubToken');
+  const token = getSharedSetting('githubToken');
   const repo = 'Premier-caterers/premier-caterers';
   const path = 'index.html';
 
@@ -10032,7 +10112,7 @@ async function pushToGitHub(){
 function saveGitHubToken(){
   const token = document.getElementById('githubTokenInput')?.value?.trim();
   if(!token){ alert('Please enter your token.'); return; }
-  localStorage.setItem('githubToken', token);
+  setSharedSetting('githubToken',token);
   showToast('Token saved ✓');
   render();
 }
@@ -10056,12 +10136,12 @@ let gmailMessages = [];          // cached inbox messages
 let gmailTokenClient = null;     // built once, reused for every refresh
 let _gmailTokenPromise = null;   // de-dupes concurrent refresh attempts
 
-function gmailClientId(){ return localStorage.getItem('gmailClientId') || ''; }
+function gmailClientId(){ return getSharedSetting('gmailClientId') || ''; }
 // Apps Script relay: when enabled (and a Script URL is saved), Gmail send/read go through
 // Apps Script (authorized once as events@), so the browser OAuth token is never needed and
 // the connection can't silently drop. Falls back to direct OAuth when off.
-function gmailViaScript(){ return localStorage.getItem('gmailViaScript')==='1' && !!localStorage.getItem('scriptUrl'); }
-function gmailRelayUrl(){ const u=localStorage.getItem('scriptUrl')||''; return u; }
+function gmailViaScript(){ return localStorage.getItem('gmailViaScript')==='1' && !!getSharedSetting('scriptUrl'); }
+function gmailRelayUrl(){ const u=getSharedSetting('scriptUrl')||''; return u; }
 function isGmailConnected(){ return gmailViaScript() ? true : !!gmailToken; }
 
 // Load the GIS library once.
@@ -10328,7 +10408,7 @@ async function fetchMenuPdfBase64(link){
 
   // 1) Preferred: export via your Apps Script. It runs as your Google account,
   //    which already has Drive access — so no extra Google permission is needed.
-  const scriptUrl = localStorage.getItem('scriptUrl');
+  const scriptUrl = getSharedSetting('scriptUrl');
   let scriptErr = '';
   if(scriptUrl){
     try{
@@ -10646,7 +10726,7 @@ async function sendTextViaEmail(number, carrier, body){
 
 // Send a real text via Twilio, through the Apps Script relay (token stays server-side).
 async function sendTextViaTwilio(number, body){
-  const base = localStorage.getItem('scriptUrl');
+  const base = getSharedSetting('scriptUrl');
   if(!base) return false;
   let digits = String(number||'').replace(/[^0-9]/g,'');
   if(digits.length===10) digits = '1'+digits;
@@ -10707,7 +10787,7 @@ async function sendChangeNotifications(change, notifyDepts){
     showToast('Connect Gmail in Settings to send text notifications', 6000);
     return [];
   }
-  if(useTwilio && !localStorage.getItem('scriptUrl')){
+  if(useTwilio && !getSharedSetting('scriptUrl')){
     showToast('Add your Apps Script URL in Settings to send Twilio texts', 6000);
     return [];
   }
@@ -11050,6 +11130,7 @@ function _startApp() {
   trashCol     = db.collection('trash');
   groceryStationsCol = db.collection('groceryStations');
   groceryListsCol    = db.collection('groceryLists');
+  startSharedSettings();     // pull shared Settings from Firestore + subscribe to changes
   (function(){
     const role = roles[currentRole]||{};
     const invNav = document.getElementById('nav-invoices');
