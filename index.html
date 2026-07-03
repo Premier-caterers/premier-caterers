@@ -6723,6 +6723,57 @@ function getFullEventDate(e){
   }
   return fullDay;
 }
+// ── PAYMENT HISTORY ──
+// Payments used to be stored as scalar fields on the invoice (`deposit` sum
+// plus a single overwritten `paymentMethod` / `checkNumber`). This gives us a
+// proper per-payment list without breaking anything: each entry is
+//   { id, date, amount, method, checkNumber, note, recordedAt }
+// `deposit` is still the running total so all existing code keeps working.
+// Old invoices are backfilled (once, on read) from the scalar fields so their
+// history isn't blank.
+
+function _uid(){ return String(Date.now())+'-'+Math.random().toString(36).slice(2,7); }
+
+// If this invoice has money paid but no payments[] array yet, create ONE
+// entry from what we know so old records aren't visually empty. Idempotent:
+// once the array exists — even empty — this is a no-op.
+function ensurePaymentsArray(inv){
+  if(!inv) return;
+  if(Array.isArray(inv.payments)) return;
+  inv.payments = [];
+  const dep = parseFloat(inv.deposit||0);
+  if(dep > 0){
+    inv.payments.push({
+      id: _uid(),
+      date: inv.lastPaymentDate || inv.paidDate || '',
+      amount: dep,
+      method: inv.paymentMethod || 'Unknown',
+      checkNumber: inv.checkNumber || '',
+      note: 'Legacy — combined earlier payments',
+      recordedAt: Date.now()
+    });
+  }
+}
+
+// Sum of all real payment rows — used for consistency checking, not for
+// display (display always uses `deposit`).
+function sumPayments(inv){
+  if(!inv || !Array.isArray(inv.payments)) return 0;
+  return inv.payments.reduce((s,p)=>s + (parseFloat(p.amount)||0), 0);
+}
+
+// Human-readable date for a payment row. Accepts either an ISO date
+// ("2026-07-05") or something already formatted; falls back gracefully.
+function fmtPaymentDate(d){
+  if(!d) return '';
+  const s = String(d);
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)){
+    try { return new Date(s+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+    catch(_){ return s; }
+  }
+  return s;
+}
+
 function calcInvoiceTotals(inv){
   const amt = l => parseFloat(l.qty||0)*parseFloat(l.price||0);
   const subtotal = inv.lines.reduce((s,l)=>s+amt(l),0);
@@ -7067,6 +7118,39 @@ function renderInvoiceDetail(){
           <span>Balance due</span>
           <span>$${tots.balance.toFixed(2)}</span>
         </div>
+        ${(function(){
+          ensurePaymentsArray(inv);
+          if(!inv.payments || !inv.payments.length) return '';
+          const rows = inv.payments.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))||(a.recordedAt||0)-(b.recordedAt||0));
+          return `<div style="margin-top:12px;padding:12px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius)">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-cash" style="font-size:13px;color:var(--green-text)"></i>Payment history</div>
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead>
+                <tr style="border-bottom:0.5px solid var(--border2);color:var(--text3);text-align:left">
+                  <th style="padding:4px 6px;font-weight:500">Date</th>
+                  <th style="padding:4px 6px;font-weight:500">Method</th>
+                  <th style="padding:4px 6px;font-weight:500">Check #</th>
+                  <th style="padding:4px 6px;font-weight:500;text-align:right">Amount</th>
+                  ${canEdit?'<th style="padding:4px 6px;width:24px"></th>':''}
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map(p=>`<tr style="border-bottom:0.5px dashed var(--border)">
+                  <td style="padding:6px">${_actEsc(fmtPaymentDate(p.date)||'—')}</td>
+                  <td style="padding:6px">${_actEsc(p.method||'')}</td>
+                  <td style="padding:6px">${_actEsc(p.checkNumber||'—')}</td>
+                  <td style="padding:6px;text-align:right;font-variant-numeric:tabular-nums">$${(parseFloat(p.amount)||0).toFixed(2)}</td>
+                  ${canEdit?`<td style="padding:6px;text-align:right"><button title="Delete this payment" onclick="deletePaymentRow('${eid}','${p.id}')" style="border:0;background:none;color:var(--crimson,#8B1A1A);cursor:pointer;font-size:14px;padding:0">×</button></td>`:''}
+                </tr>`).join('')}
+                <tr style="font-weight:600">
+                  <td colspan="3" style="padding:8px 6px 4px;text-align:right;color:var(--text2)">Total paid</td>
+                  <td style="padding:8px 6px 4px;text-align:right;font-variant-numeric:tabular-nums">$${(parseFloat(inv.deposit)||0).toFixed(2)}</td>
+                  ${canEdit?'<td></td>':''}
+                </tr>
+              </tbody>
+            </table>
+          </div>`;
+        })()}
       </div>
     </div>
 
@@ -7412,9 +7496,19 @@ async function confirmPayment(eid){
   if(!amount){ alert('Please enter an amount.'); return; }
   const d = new Date(date+'T12:00:00');
   const tots = calcInvoiceTotals(invoices[eid]);
-  // Add to deposit (cumulative payments)
+  // Add to deposit (cumulative payments total) and append a per-payment history row
+  ensurePaymentsArray(invoices[eid]);
   const prevDeposit = parseFloat(invoices[eid].deposit||0);
   invoices[eid].deposit = prevDeposit + amount;
+  invoices[eid].payments.push({
+    id: _uid(),
+    date: date,                              // ISO YYYY-MM-DD as entered
+    amount: amount,
+    method: method,
+    checkNumber: method==='Check' ? (checkNum||'') : '',
+    note: '',
+    recordedAt: Date.now()
+  });
   // Mark as paid only if fully paid
   const newBalance = tots.grand - invoices[eid].deposit;
   invoices[eid].status = newBalance <= 0.01 ? 'paid' : 'invoice';
@@ -7430,9 +7524,138 @@ async function confirmPayment(eid){
   document.getElementById('paymentModal')?.remove();
   renderInvoiceDetail();
   render();
+  // Offer to email the client a payment confirmation with the updated invoice attached.
+  // Only prompt when we have somewhere to send it — no email on file = no prompt.
+  try{
+    const bid = baseEventIdOf(eid);
+    const inqId = (bid && bid.indexOf('inq_')===0) ? bid.slice(4) : null;
+    const inq = inqId ? _findInq(inqId) : null;
+    const clientEmail = (inq && inq.email) || '';
+    if(clientEmail && isGmailConnected()){
+      setTimeout(()=>{
+        if(confirm('Email ' + clientEmail + ' a payment confirmation with the updated invoice attached?')){
+          try { openPaymentConfirmEmail(eid, amount, method, checkNum); } catch(err){ console.warn('payment-confirm email open failed:', err); }
+        }
+      }, 100);
+    }
+  }catch(_){}
 }
 
 async function markPaid(eid){ openPaymentModal(eid); }
+
+// Compose a "we received your payment" email to the client, with the updated
+// invoice PDF attached. Pre-fills a nice starter body Kenny can edit before send.
+function openPaymentConfirmEmail(eid, amount, method, checkNum){
+  if(!isGmailConnected()){ alert('Please connect Gmail first in Settings.'); showView('settings'); return; }
+  const inv = invoices[eid]; if(!inv) return;
+  const bid = baseEventIdOf(eid);
+  const inqId = (bid && bid.indexOf('inq_')===0) ? bid.slice(4) : null;
+  const inq = inqId ? _findInq(inqId) : null;
+  if(!inq){ alert('Could not find the client record.'); return; }
+  const to = inq.email || '';
+  const clientName = ((inq.firstName||'')+' '+(inq.lastName||'')).trim();
+  const eventName = inq.eventName || (inq.eventType||'Event');
+  const dateStr = inq.eventDate ? formatDate(inq.eventDate) : '';
+  const tots = calcInvoiceTotals(inv);
+  const balStr = '$' + Math.max(0, tots.balance).toFixed(2);
+  const amtStr = '$' + (parseFloat(amount)||0).toFixed(2);
+  const methodStr = method + (method==='Check' && checkNum ? (' #' + checkNum) : '');
+  const isFullyPaid = tots.balance <= 0.01;
+  const subject = 'Payment received \u2014 ' + clientName + (dateStr?(' ('+dateStr+')'):'') + ' Premier Caterers';
+  const body =
+`Dear ${inq.firstName || clientName || 'Valued Client'},
+
+Thank you \u2014 we've received your payment of ${amtStr} (${methodStr}) for your ${eventName}${dateStr?' on '+dateStr:''}.
+
+${isFullyPaid
+  ? 'Your account is now paid in full. We look forward to serving you.'
+  : ('Remaining balance: ' + balStr + '. An updated invoice is attached for your records.')}
+
+Please don't hesitate to reach out with any questions.
+
+Warm regards,
+Premier Caterers
+events@thepremiercaterer.com
+thepremiercaterer.com`;
+
+  document.getElementById('sendEmailModal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'sendEmailModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
+  m.innerHTML = '<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:560px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">'
+    +'<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem"><i class="ti ti-cash" style="font-size:16px;color:var(--green-text)"></i> Payment Confirmation Email</div>'
+    +'<div class="modal-row"><label>To</label><input type="email" id="pmt-email-to" value="'+to.replace(/"/g,'&quot;')+'" placeholder="client@email.com"></div>'
+    +'<div class="modal-row"><label>Subject</label><input type="text" id="pmt-email-subject" value="'+subject.replace(/"/g,'&quot;')+'"></div>'
+    +'<div class="modal-row"><label>Message</label><textarea id="pmt-email-body" style="min-height:220px">'+body+'</textarea></div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-bottom:1rem">The updated invoice — showing this payment in the history and the new balance — will be attached as a PDF.</div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end">'
+    +'<button class="btn-cancel" onclick="document.getElementById(\'sendEmailModal\').remove()">Cancel</button>'
+    +'<button class="btn-save" id="pmt-email-send" onclick="confirmSendPaymentEmail(\''+eid+'\')"><i class="ti ti-send" style="font-size:13px"></i> Send</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+  setTimeout(()=>document.getElementById('pmt-email-to')?.focus(),50);
+}
+window.openPaymentConfirmEmail = openPaymentConfirmEmail;
+
+async function confirmSendPaymentEmail(eid){
+  const to = document.getElementById('pmt-email-to')?.value?.trim();
+  const subject = document.getElementById('pmt-email-subject')?.value?.trim();
+  const body = document.getElementById('pmt-email-body')?.value?.trim();
+  if(!to){ alert('Please enter a recipient email.'); return; }
+  const btn = document.getElementById('pmt-email-send');
+  if(btn){ btn.disabled=true; btn.textContent='Building invoice PDF...'; }
+  let attachments = [];
+  try {
+    // Build the updated invoice as a PDF (uses the same HTML the print/save uses).
+    const html = buildInvoiceHTML(eid);
+    const b64 = await htmlToPdfBase64(html, invoiceFileName(eid));
+    attachments = [{ filename: invoiceFileName(eid)+'.pdf', mime:'application/pdf', base64:b64 }];
+  } catch(err){
+    // Fall back to sending the email without an attachment rather than failing outright.
+    console.warn('Invoice PDF build failed, sending without attachment:', err);
+  }
+  if(btn) btn.textContent='Sending...';
+  const htmlBody = '<div style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap;line-height:1.6">'+body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1">$1</a>')+'</div>';
+  const ok = await sendGmailEmail(to, subject, body, htmlBody, attachments);
+  if(ok){
+    try{
+      const bid = baseEventIdOf(eid);
+      const inqId = (bid && bid.indexOf('inq_')===0) ? bid.slice(4) : null;
+      if(inqId) logActivity(inqId,'email_sent','Payment confirmation emailed to '+to,{to:to,subject:subject});
+    }catch(_){}
+    document.getElementById('sendEmailModal')?.remove();
+  } else {
+    if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-send" style="font-size:13px"></i> Send'; }
+  }
+}
+window.confirmSendPaymentEmail = confirmSendPaymentEmail;
+
+// Delete a single payment row. Adjusts the running deposit total so everything
+// stays consistent. Confirms first because it's a data-loss action.
+async function deletePaymentRow(eid, paymentId){
+  const inv = invoices[eid]; if(!inv) return;
+  ensurePaymentsArray(inv);
+  const idx = inv.payments.findIndex(p=>String(p.id)===String(paymentId));
+  if(idx<0) return;
+  const p = inv.payments[idx];
+  const amt = parseFloat(p.amount)||0;
+  if(!confirm('Delete this payment?\n\n'
+      + fmtPaymentDate(p.date) + ' \u2014 $' + amt.toFixed(2) + ' (' + (p.method||'') + (p.checkNumber?(' #'+p.checkNumber):'') + ')\n\n'
+      + 'The balance will go back up by $' + amt.toFixed(2) + '.')) return;
+  inv.payments.splice(idx, 1);
+  inv.deposit = Math.max(0, (parseFloat(inv.deposit)||0) - amt);
+  // Recompute status: if there's still a balance, this is an unpaid invoice again
+  const tots = calcInvoiceTotals(inv);
+  if(tots.balance > 0.01 && inv.status === 'paid'){
+    inv.status = 'invoice';
+    inv.paidDate = '';
+  }
+  await _saveInvoice(eid, inv);
+  try{ const bid=baseEventIdOf(eid); const inqId=(bid&&bid.indexOf('inq_')===0)?bid.slice(4):bid; logActivity(inqId,'payment','Payment deleted: $'+amt.toFixed(2)+' ('+(p.method||'')+(p.checkNumber?(' #'+p.checkNumber):'')+')',{amount:-amt}); }catch(_){}
+  renderInvoiceDetail();
+  render();
+}
+window.deletePaymentRow = deletePaymentRow;
 
 function invoiceFileName(eid){
   const e = events.find(x=>x.id===baseEventIdOf(eid));
@@ -7538,6 +7761,28 @@ function buildInvoiceHTML(eid){
       '<div class="tot-row"><span>Deposit paid</span><span>$'+parseFloat(inv.deposit||0).toFixed(2)+'</span></div>'+
       '<div class="tot-row balance"><span>Balance due</span><span>$'+tots.balance.toFixed(2)+'</span></div>'+
     '</div></div>'+
+    (function(){
+      ensurePaymentsArray(inv);
+      if(!inv.payments || !inv.payments.length) return '';
+      const rows = inv.payments.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||(a.recordedAt||0)-(b.recordedAt||0));
+      return '<div style="margin:0 0 20px 0;padding:14px 16px;border:0.5px solid #ddd;border-radius:4px;background:#fafafa">'+
+        '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#666;font-weight:bold;margin-bottom:8px">Payments Received</div>'+
+        '<table style="width:100%;border-collapse:collapse;margin:0"><thead><tr>'+
+          '<th style="background:none;color:#555;padding:6px 4px;font-size:11px;border-bottom:0.5px solid #ccc;text-align:left">Date</th>'+
+          '<th style="background:none;color:#555;padding:6px 4px;font-size:11px;border-bottom:0.5px solid #ccc;text-align:left">Method</th>'+
+          '<th style="background:none;color:#555;padding:6px 4px;font-size:11px;border-bottom:0.5px solid #ccc;text-align:left">Check #</th>'+
+          '<th style="background:none;color:#555;padding:6px 4px;font-size:11px;border-bottom:0.5px solid #ccc;text-align:right">Amount</th>'+
+        '</tr></thead><tbody>'+
+        rows.map(function(p){ return '<tr>'+
+          '<td style="padding:6px 4px;font-size:12px;border-bottom:0.5px dashed #eee;background:none">'+(fmtPaymentDate(p.date)||'&mdash;')+'</td>'+
+          '<td style="padding:6px 4px;font-size:12px;border-bottom:0.5px dashed #eee;background:none">'+(p.method||'')+'</td>'+
+          '<td style="padding:6px 4px;font-size:12px;border-bottom:0.5px dashed #eee;background:none">'+(p.checkNumber||'&mdash;')+'</td>'+
+          '<td style="padding:6px 4px;font-size:12px;border-bottom:0.5px dashed #eee;background:none;text-align:right">$'+(parseFloat(p.amount)||0).toFixed(2)+'</td>'+
+          '</tr>'; }).join('')+
+        '<tr><td colspan="3" style="padding:8px 4px 0;text-align:right;font-weight:bold;font-size:12px">Total received</td>'+
+          '<td style="padding:8px 4px 0;text-align:right;font-weight:bold;font-size:12px">$'+parseFloat(inv.deposit||0).toFixed(2)+'</td></tr>'+
+        '</tbody></table></div>';
+    })()+
     (inv.notes?'<div class="notes"><strong>Notes:</strong> '+inv.notes+'</div>':'')+
     (!isInvoice ? '<div style="margin:20px 0;padding:14px 16px;border:1.5px solid #8B1A1A;border-radius:6px;background:#fdf8f8;font-size:10px;color:#555;line-height:1.7;text-align:center"><strong style="color:#8B1A1A;font-size:11px">ESTIMATE DISCLAIMER</strong><br>THIS IS AN ESTIMATE. FINAL FOOD COST AND LABOR COSTS TO BE DETERMINED AFTER FINAL MENU, GUEST COUNT, EVENT DETAILS AND LOGISTICS ARE DETERMINED.<br>STAFF GRATUITIES ARE NOT INCLUDED IN THIS ESTIMATE.</div>' : '')+
     '<div class="footer">Premier Caterers · Kosher supervision provided by the OU and the PCK · thepremiercaterer.com · Thank you for your business!</div>'+
@@ -7998,6 +8243,21 @@ async function _htmlToPdfArrayBuffer(html){
   } finally { try{ document.body.removeChild(f); }catch(e){} }
   return ab;
 }
+// Base64 wrapper around _htmlToPdfArrayBuffer, used by the payment-confirm
+// email. Same guts, but returns the base64 string a Gmail attachment expects.
+async function htmlToPdfBase64(html /*, filename */){
+  const ab = await _htmlToPdfArrayBuffer(html);
+  if(!ab) throw new Error('PDF build returned no bytes');
+  const bytes = new Uint8Array(ab);
+  // Chunked conversion — safe for any file size (avoids "call stack size" errors).
+  let bin = '';
+  const CHUNK = 0x8000;
+  for(let i=0; i<bytes.length; i+=CHUNK){
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i+CHUNK));
+  }
+  return btoa(bin);
+}
+window.htmlToPdfBase64 = htmlToPdfBase64;
 // Draw the cover/contents/BEO/invoice as TRUE vector PDF pages (jsPDF), then merge
 // the menu PDF (pdf-lib) — honoring a per-part copy count. Returns {bytes, menuFailed}.
 async function buildPacketPdfBytes(eventId, opts){
