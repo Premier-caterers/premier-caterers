@@ -223,6 +223,202 @@ let invoices = {}; // keyed by eventId
 let savedLineItems = JSON.parse(localStorage.getItem('savedLineItems')||'[]');
 let venues = []; // venues database
 
+// ── EMAIL TEMPLATES ──
+// Shared across devices via Firestore (settings/emailTemplates). Kenny can add
+// new templates and edit any of the built-in ones through the "Manage
+// templates" button on the send-email modal. Placeholders like {firstName}
+// and {balance} get filled in from the current inquiry/invoice when a
+// template is chosen. Contract signing links auto-append when a contract
+// exists — no checkbox needed, per Kenny's spec.
+const DEFAULT_EMAIL_TEMPLATES = [
+  { id:'tpl_menu_proposal', builtIn:true, name:'Menu proposal', attachEstimate:true, includeContract:true,
+    subject:'{clientName} - {eventName}{eventDateParen} Premier Caterers',
+    body:
+`Dear {firstName},
+
+Thank you for considering Premier Caterers for your {eventName}{eventDateOn}.
+
+Please find your proposed menu and cost estimate attached as a PDF. We would be delighted to review it with you, make any adjustments to suit your taste and guest count, and answer any questions you may have.
+
+Looking forward to working with you.
+
+Warm regards,
+Premier Caterers
+events@thepremiercaterer.com
+thepremiercaterer.com` },
+
+  { id:'tpl_followup', builtIn:true, name:'Follow-up: still deciding?', attachEstimate:false, includeContract:true,
+    subject:'Checking in — {eventName}{eventDateParen}',
+    body:
+`Dear {firstName},
+
+Just a friendly follow-up on your upcoming {eventName}{eventDateOn}. We wanted to check in and see if you had any questions about the menu or estimate we sent, or if there's anything we can adjust to better fit what you have in mind.
+
+We'd love to work with you and are happy to hop on a quick call whenever it's convenient.
+
+Warm regards,
+Premier Caterers
+events@thepremiercaterer.com` },
+
+  { id:'tpl_confirm', builtIn:true, name:'Final confirmation', attachEstimate:true, includeContract:false,
+    subject:'Final details for your {eventName}{eventDateParen}',
+    body:
+`Dear {firstName},
+
+We're looking forward to catering your {eventName}{eventDateOn}. Attached is the final invoice reflecting all agreed-upon details.
+
+Please review and confirm everything looks correct. If any last-minute changes come up (guest count, timing, dietary), just let us know as soon as you can.
+
+Balance due at this time: {balance}.
+
+Thank you again for choosing Premier Caterers — we can't wait to serve you and your guests.
+
+Warm regards,
+Premier Caterers
+events@thepremiercaterer.com` },
+
+  { id:'tpl_thanks_booking', builtIn:true, name:'Thanks for booking', attachEstimate:true, includeContract:false,
+    subject:'Welcome aboard — {eventName}{eventDateParen}',
+    body:
+`Dear {firstName},
+
+Thank you for booking Premier Caterers for your {eventName}{eventDateOn}. We're honored you chose us.
+
+Your signed contract and confirmed estimate are attached for your records. As we get closer to the event, we'll be in touch to lock in final details.
+
+If anything comes up in the meantime, don't hesitate to reach out.
+
+Warm regards,
+Premier Caterers
+events@thepremiercaterer.com` },
+
+  { id:'tpl_payment_received', builtIn:true, name:'Payment received', attachEstimate:false, includeContract:false,
+    subject:'Payment received \u2014 {clientName}{eventDateParen} Premier Caterers',
+    body:
+`Dear {firstName},
+
+Thank you \u2014 we've received your payment for your {eventName}{eventDateOn}.
+
+An updated invoice is attached showing the payment applied. Your current balance is {balance}.
+
+Please don't hesitate to reach out with any questions.
+
+Warm regards,
+Premier Caterers
+events@thepremiercaterer.com
+thepremiercaterer.com` },
+
+  { id:'tpl_payment_reminder', builtIn:true, name:'Payment reminder', attachEstimate:true, includeContract:false,
+    subject:'Friendly reminder — balance for {eventName}{eventDateParen}',
+    body:
+`Dear {firstName},
+
+A friendly reminder that a balance of {balance} is currently outstanding for your {eventName}{eventDateOn}. Please find the updated invoice attached for your reference.
+
+If you've already sent the payment, please disregard this note. Otherwise, we'd appreciate you settling the balance at your convenience.
+
+Warm regards,
+Premier Caterers
+events@thepremiercaterer.com` }
+];
+
+let emailTemplates = DEFAULT_EMAIL_TEMPLATES.slice();
+let _emailTemplatesReady = false;
+
+// Fill in {placeholder} tokens from inquiry + invoice context.
+function applyTemplatePlaceholders(text, ctx){
+  if(!text) return '';
+  const c = ctx || {};
+  const map = {
+    firstName:   c.firstName || (c.clientName ? c.clientName.split(' ')[0] : '') || 'Valued Client',
+    lastName:    c.lastName || '',
+    clientName:  c.clientName || ((c.firstName||'')+' '+(c.lastName||'')).trim() || 'Valued Client',
+    eventName:   c.eventName || c.eventType || 'Event',
+    eventDate:   c.eventDateFmt || '',
+    // A pair of convenience tokens so the same template reads naturally with
+    // OR without a date: "for your Bar Mitzvah on May 3" vs "for your Bar Mitzvah".
+    eventDateOn:    c.eventDateFmt ? (' on ' + c.eventDateFmt) : '',
+    eventDateParen: c.eventDateFmt ? (' (' + c.eventDateFmt + ')') : '',
+    guestCount:  c.guestCount || '',
+    venueName:   c.venueName || '',
+    balance:     (c.balance != null) ? ('$' + Number(c.balance).toFixed(2)) : '',
+    grandTotal:  (c.grandTotal != null) ? ('$' + Number(c.grandTotal).toFixed(2)) : '',
+    deposit:     (c.deposit != null) ? ('$' + Number(c.deposit).toFixed(2)) : '',
+    signLink:    c.signLink || ''
+  };
+  return String(text).replace(/\{(\w+)\}/g, (m,k) => Object.prototype.hasOwnProperty.call(map,k) ? map[k] : m);
+}
+
+// Build the context object we hand to applyTemplatePlaceholders. Pulls from
+// inquiry + invoice + contract; safe with missing pieces.
+function buildTemplateContext(inq, opts){
+  opts = opts || {};
+  const ctx = {
+    firstName: inq && inq.firstName || '',
+    lastName:  inq && inq.lastName  || '',
+    clientName: ((inq && inq.firstName)||'') + ' ' + ((inq && inq.lastName)||''),
+    eventName:  inq && (inq.eventName || inq.eventType) || '',
+    eventDateFmt: (inq && inq.eventDate) ? formatDate(inq.eventDate) : '',
+    guestCount: inq && inq.guestCount || '',
+    venueName:  inq && inq.venueName || ''
+  };
+  ctx.clientName = ctx.clientName.trim();
+  // Money context: prefer the current invoice if there is one; fall back to the estimate.
+  const invEid = opts.invoiceEid || (inq ? ('inq_' + inq.id) : null);
+  const inv = invEid ? invoices[invEid] : null;
+  if(inv){
+    const t = calcInvoiceTotals(inv);
+    ctx.grandTotal = t.grand;
+    ctx.deposit    = parseFloat(inv.deposit||0);
+    ctx.balance    = Math.max(0, t.balance);
+  } else if(inq && inq.estimate && Array.isArray(inq.estimate.lines)){
+    const t = calcInvoiceTotals(inq.estimate);
+    ctx.grandTotal = t.grand;
+    ctx.deposit    = parseFloat(inq.estimate.deposit||0);
+    ctx.balance    = Math.max(0, t.balance);
+  }
+  // Contract signing link — only present if a contract has actually been created.
+  if(invEid && typeof contractSignLink === 'function'){
+    const link = contractSignLink(invEid);
+    if(link) ctx.signLink = link;
+  }
+  return ctx;
+}
+
+// Live-sync the templates list from Firestore. Same pattern as sharedSettings.
+function startEmailTemplates(){
+  if(!db) return;
+  try {
+    db.collection('settings').doc('emailTemplates').onSnapshot(snap => {
+      const data = snap.exists ? (snap.data()||{}) : {};
+      const list = Array.isArray(data.templates) ? data.templates : null;
+      if(list && list.length){
+        // Merge: built-in templates always exist (in case Firestore doc drops them);
+        // Firestore versions override any built-in with the same id.
+        const byId = {}; DEFAULT_EMAIL_TEMPLATES.forEach(t => byId[t.id] = Object.assign({}, t));
+        list.forEach(t => { if(t && t.id) byId[t.id] = t; });
+        emailTemplates = Object.values(byId);
+      } else {
+        emailTemplates = DEFAULT_EMAIL_TEMPLATES.slice();
+        // Seed Firestore with defaults on first run.
+        db.collection('settings').doc('emailTemplates').set({ templates: DEFAULT_EMAIL_TEMPLATES, _updatedAt: Date.now() }, { merge:true });
+      }
+      _emailTemplatesReady = true;
+      // If the manage-templates modal is open, refresh it.
+      if(document.getElementById('tplManageModal')){
+        try { openManageTemplates(); } catch(_){}
+      }
+    }, err => { console.warn('emailTemplates listener error:', err); });
+  } catch(err){ console.warn('Could not start emailTemplates:', err); }
+}
+
+async function saveEmailTemplates(){
+  if(!db) return;
+  try {
+    await db.collection('settings').doc('emailTemplates').set({ templates: emailTemplates, _updatedAt: Date.now() }, { merge:true });
+  } catch(err){ console.error('Save templates failed:', err); alert('Could not save templates: ' + err.message); }
+}
+
 // ── SHARED SETTINGS (Firestore-backed, device-independent) ──
 // These live in Firestore at `settings/app` so every device signed in reads
 // the same values — no more pasting the Apps Script URL into every phone and
@@ -3243,9 +3439,6 @@ function emailMenuLink(id){
   if(!inq) return;
   openMenuEmail(inq, inq.menuLink);
 }
-let _menuEmailLink = '';
-let _menuEmailFilename = 'Menu.pdf';
-let _menuEmailInqId = '';
 function openMenuEmail(inq, link){
   if(!isGmailConnected()){ alert('Please connect Gmail first in Settings.'); showView('settings'); return; }
   document.getElementById('sendEmailModal')?.remove();
@@ -3256,35 +3449,46 @@ function openMenuEmail(inq, link){
   const eventName = inq.eventName || (inq.eventType||'Event');
   const dateStr = inq.eventDate ? formatDate(inq.eventDate) : '';
   _menuEmailFilename = ((clientName||'Premier Caterers')+' - Menu').replace(/[\\/:*?"<>|]/g,' ').trim()+'.pdf';
-  // Subject: "client name" - "event name" (date of event) Premier Caterers
-  const subject = `${clientName} - ${eventName}${dateStr?' ('+dateStr+')':''} Premier Caterers`;
-  const body =
-`Dear ${inq.firstName || clientName || 'Valued Client'},
 
-Thank you for considering Premier Caterers for your ${eventName}${dateStr?' on '+dateStr:''}.
+  // Build template context (client + invoice/estimate money + optional contract link)
+  const ctx = buildTemplateContext(inq, { invoiceEid: 'inq_'+inq.id });
+  const hasSignLink = !!ctx.signLink;
 
-Please find your proposed menu${(inq.estimate && Array.isArray(inq.estimate.lines) && inq.estimate.lines.length)?' and cost estimate':''} attached as a PDF.
+  // Pick the default template (Menu proposal) as the starting point.
+  const defaultTpl = emailTemplates.find(t=>t.id==='tpl_menu_proposal') || emailTemplates[0];
+  const subject = applyTemplatePlaceholders(defaultTpl?.subject || '', ctx);
+  let body = applyTemplatePlaceholders(defaultTpl?.body || '', ctx);
+  // Auto-append contract signing link if we have one and the template opts in.
+  if(hasSignLink && defaultTpl && defaultTpl.includeContract !== false){
+    body = _appendSignLink(body, ctx.signLink);
+  }
+  const defaultAttachEstimate = defaultTpl ? (defaultTpl.attachEstimate !== false) : true;
 
-We would be delighted to review it with you, make any adjustments to suit your taste and guest count, and answer any questions you may have.
-
-Looking forward to working with you.
-
-Warm regards,
-Premier Caterers
-events@thepremiercaterer.com
-thepremiercaterer.com`;
+  // Template dropdown options
+  const tplOptionsHtml = emailTemplates.map(t =>
+    '<option value="'+t.id+'"'+(t.id===defaultTpl?.id?' selected':'')+'>'+_actEsc(t.name)+'</option>'
+  ).join('');
 
   const m = document.createElement('div');
   m.id = 'sendEmailModal';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
   m.innerHTML = '<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:560px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">'
     +'<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Send Menu by Email</div>'
+    +'<div class="modal-row" style="display:flex;align-items:center;gap:8px">'
+      +'<label style="flex:0 0 auto;margin:0">Template</label>'
+      +'<select id="menu-email-tpl" onchange="applyChosenTemplate(this.value)" style="flex:1">'+tplOptionsHtml+'</select>'
+      +'<button onclick="openManageTemplates()" title="Add / edit / delete templates" style="padding:6px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;white-space:nowrap"><i class="ti ti-settings" style="font-size:12px"></i> Manage</button>'
+    +'</div>'
     +'<div class="modal-row"><label>To</label><input type="email" id="menu-email-to" value="'+to.replace(/"/g,'&quot;')+'" placeholder="client@email.com"></div>'
     +'<div class="modal-row"><label>Subject</label><input type="text" id="menu-email-subject" value="'+subject.replace(/"/g,'&quot;')+'"></div>'
     +'<div class="modal-row"><label>Message</label><textarea id="menu-email-body" style="min-height:220px">'+body+'</textarea></div>'
     +((inq.estimate && Array.isArray(inq.estimate.lines) && inq.estimate.lines.length)
-      ? '<div class="modal-row" style="display:flex;align-items:center;gap:8px;margin-bottom:.5rem"><input type="checkbox" id="menu-email-estimate" checked style="width:auto;flex:none"><label for="menu-email-estimate" style="margin:0;cursor:pointer;font-weight:400">Also attach the cost estimate as a PDF</label></div>'
+      ? '<div class="modal-row" style="display:flex;align-items:center;gap:8px;margin-bottom:.5rem"><input type="checkbox" id="menu-email-estimate"'+(defaultAttachEstimate?' checked':'')+' style="width:auto;flex:none"><label for="menu-email-estimate" style="margin:0;cursor:pointer;font-weight:400">Also attach the cost estimate as a PDF</label></div>'
       : '')
+    +(hasSignLink
+      ? '<div style="font-size:11px;color:var(--green-text);margin-bottom:.5rem;display:flex;align-items:center;gap:5px"><i class="ti ti-file-certificate" style="font-size:12px"></i> Contract signing link included in message body</div>'
+      : (contracts[('inq_'+inq.id)] || (typeof contractSignLink==='function' && contractSignLink('inq_'+inq.id))) ? ''
+        : '<div style="font-size:11px;color:var(--text3);margin-bottom:.5rem;display:flex;align-items:center;gap:5px"><i class="ti ti-info-circle" style="font-size:12px"></i> No contract yet for this event \u2014 create one to include a signing link automatically.</div>')
     +'<div style="font-size:11px;color:var(--text3);margin-bottom:1rem">The current menu will be attached as a PDF file — the client gets it directly, with no Google Drive permission needed.</div>'
     +'<div style="display:flex;gap:8px;justify-content:flex-end">'
     +'<button class="btn-cancel" onclick="document.getElementById(\'sendEmailModal\').remove()">Cancel</button>'
@@ -3293,6 +3497,152 @@ thepremiercaterer.com`;
   document.body.appendChild(m);
   setTimeout(()=>document.getElementById('menu-email-to')?.focus(),50);
 }
+
+// Append the signing link block to a template body — keeps a consistent format
+// so it's easy for the client to spot.
+function _appendSignLink(body, link){
+  if(!link) return body;
+  if(body && body.indexOf(link) >= 0) return body;   // already there
+  const block = '\n\n\u2500\u2500\u2500\nContract signing link (click to review and sign):\n' + link + '\n\u2500\u2500\u2500';
+  // Try to insert just before the sign-off ("Warm regards," or "Best,") so it
+  // reads naturally. Fall back to appending at the end.
+  const m = body.match(/\n(Warm regards|Best regards|Best|Sincerely|Thanks|Thank you)[,\n]/i);
+  if(m){
+    const idx = m.index;
+    return body.slice(0, idx) + block + body.slice(idx);
+  }
+  return body + block;
+}
+
+// Called from the send-menu template dropdown when the user picks a different template.
+function applyChosenTemplate(tplId){
+  const inq = _findInq(_menuEmailInqId); if(!inq) return;
+  const tpl = emailTemplates.find(t => t.id === tplId); if(!tpl) return;
+  const ctx = buildTemplateContext(inq, { invoiceEid: 'inq_'+inq.id });
+  const subject = applyTemplatePlaceholders(tpl.subject || '', ctx);
+  let body = applyTemplatePlaceholders(tpl.body || '', ctx);
+  if(ctx.signLink && tpl.includeContract !== false){
+    body = _appendSignLink(body, ctx.signLink);
+  }
+  const subEl = document.getElementById('menu-email-subject');
+  const bodyEl = document.getElementById('menu-email-body');
+  const estChk = document.getElementById('menu-email-estimate');
+  if(subEl) subEl.value = subject;
+  if(bodyEl) bodyEl.value = body;
+  if(estChk) estChk.checked = tpl.attachEstimate !== false;
+}
+window.applyChosenTemplate = applyChosenTemplate;
+
+let _menuEmailLink = '';
+let _menuEmailFilename = 'Menu.pdf';
+let _menuEmailInqId = '';
+function openMenuEmail_OLD_UNUSED(){}
+
+// ── MANAGE EMAIL TEMPLATES ──
+function openManageTemplates(){
+  document.getElementById('tplManageModal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'tplManageModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1001;display:flex;align-items:center;justify-content:center;padding:2rem';
+  const rows = emailTemplates.map(t => `
+    <div style="display:flex;gap:8px;align-items:center;padding:10px;border:0.5px solid var(--border);border-radius:var(--radius);margin-bottom:6px;background:var(--bg)">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:500;font-size:13px;color:var(--text);display:flex;align-items:center;gap:6px">
+          ${_actEsc(t.name)}
+          ${t.builtIn ? '<span style="font-size:10px;background:var(--bg2);color:var(--text3);padding:1px 6px;border-radius:8px;font-weight:400">built-in</span>' : ''}
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_actEsc(t.subject||'')}</div>
+      </div>
+      <button onclick="editEmailTemplate('${t.id}')" style="padding:5px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:11px;cursor:pointer">Edit</button>
+      ${t.builtIn ? '' : `<button onclick="deleteEmailTemplate('${t.id}')" style="padding:5px 10px;border:0.5px solid var(--red-border,#dcc);border-radius:var(--radius);background:var(--red-bg,#fdf3f3);color:var(--crimson,#8B1A1A);font-size:11px;cursor:pointer">Delete</button>`}
+    </div>
+  `).join('');
+  m.innerHTML = `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.5rem;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div style="font-size:16px;font-weight:600">Manage email templates</div>
+      <button onclick="editEmailTemplate('')" style="padding:6px 12px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:12px;font-weight:500;cursor:pointer"><i class="ti ti-plus" style="font-size:12px"></i> New template</button>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.5">
+      Built-in templates can be edited but not deleted (they'll always exist as starting points). Any template you add is shared with your whole team.
+    </div>
+    ${rows}
+    <div style="display:flex;justify-content:flex-end;margin-top:14px">
+      <button onclick="document.getElementById('tplManageModal').remove()" style="padding:8px 16px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:13px;cursor:pointer">Close</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+window.openManageTemplates = openManageTemplates;
+
+// Edit an existing template (by id) or add a new one (empty id).
+function editEmailTemplate(tplId){
+  document.getElementById('tplEditModal')?.remove();
+  const isNew = !tplId;
+  const t = isNew
+    ? { id:'tpl_custom_'+Date.now(), name:'', subject:'', body:'', attachEstimate:true, includeContract:true, builtIn:false }
+    : emailTemplates.find(x=>x.id===tplId);
+  if(!t) return;
+  const m = document.createElement('div');
+  m.id = 'tplEditModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1002;display:flex;align-items:center;justify-content:center;padding:2rem';
+  m.innerHTML = `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.5rem;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+    <div style="font-size:16px;font-weight:600;margin-bottom:1rem">${isNew ? 'New template' : 'Edit template'}${t.builtIn ? ' <span style="font-size:11px;background:var(--bg2);color:var(--text3);padding:2px 8px;border-radius:8px;font-weight:400;margin-left:6px">built-in</span>' : ''}</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px;line-height:1.5;padding:10px 12px;background:var(--bg2);border-radius:var(--radius)">
+      <strong>You can use these placeholders</strong> — they'll be filled in when the template is chosen:<br>
+      <code>{firstName}</code> <code>{clientName}</code> <code>{eventName}</code> <code>{eventDate}</code> <code>{eventDateOn}</code> <code>{eventDateParen}</code> <code>{guestCount}</code> <code>{venueName}</code> <code>{balance}</code> <code>{grandTotal}</code> <code>{deposit}</code>
+    </div>
+    <div class="modal-row"><label>Template name</label><input id="tpl-name" type="text" value="${_actEsc(t.name)}" placeholder="e.g. Follow-up: menu review"></div>
+    <div class="modal-row"><label>Subject line</label><input id="tpl-subject" type="text" value="${_actEsc(t.subject)}" placeholder="Subject with placeholders"></div>
+    <div class="modal-row"><label>Message body</label><textarea id="tpl-body" style="min-height:220px;font-family:inherit">${_actEsc(t.body)}</textarea></div>
+    <div style="display:flex;gap:16px;align-items:center;margin:8px 0 16px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer">
+        <input type="checkbox" id="tpl-attachEstimate" ${t.attachEstimate !== false ? 'checked' : ''}> Attach cost estimate by default
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer">
+        <input type="checkbox" id="tpl-includeContract" ${t.includeContract !== false ? 'checked' : ''}> Include contract signing link (when a contract exists)
+      </label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button onclick="document.getElementById('tplEditModal').remove()" style="padding:8px 16px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:13px;cursor:pointer">Cancel</button>
+      <button onclick="saveEditedTemplate('${t.id}')" style="padding:8px 18px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:13px;font-weight:500;cursor:pointer">Save</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  setTimeout(()=>document.getElementById('tpl-name')?.focus(),50);
+}
+window.editEmailTemplate = editEmailTemplate;
+
+async function saveEditedTemplate(tplId){
+  const name = (document.getElementById('tpl-name')?.value||'').trim();
+  const subject = (document.getElementById('tpl-subject')?.value||'').trim();
+  const body = (document.getElementById('tpl-body')?.value||'');
+  const attachEstimate = !!document.getElementById('tpl-attachEstimate')?.checked;
+  const includeContract = !!document.getElementById('tpl-includeContract')?.checked;
+  if(!name){ alert('Please give the template a name.'); return; }
+  if(!subject && !body){ alert('Please add a subject or a body.'); return; }
+  const existing = emailTemplates.find(x=>x.id===tplId);
+  const preservedBuiltIn = existing && existing.builtIn;
+  const record = { id: tplId, name, subject, body, attachEstimate, includeContract, builtIn: !!preservedBuiltIn };
+  const idx = emailTemplates.findIndex(x=>x.id===tplId);
+  if(idx>=0) emailTemplates[idx] = record; else emailTemplates.push(record);
+  await saveEmailTemplates();
+  document.getElementById('tplEditModal')?.remove();
+  if(document.getElementById('tplManageModal')) openManageTemplates();   // refresh manage view
+  showToast('Template saved \u2713');
+}
+window.saveEditedTemplate = saveEditedTemplate;
+
+async function deleteEmailTemplate(tplId){
+  const t = emailTemplates.find(x=>x.id===tplId);
+  if(!t){ return; }
+  if(t.builtIn){ alert('Built-in templates can\'t be deleted, but you can edit them.'); return; }
+  if(!confirm('Delete the "' + t.name + '" template?')) return;
+  emailTemplates = emailTemplates.filter(x=>x.id!==tplId);
+  await saveEmailTemplates();
+  if(document.getElementById('tplManageModal')) openManageTemplates();
+  showToast('Template deleted');
+}
+window.deleteEmailTemplate = deleteEmailTemplate;
 
 async function confirmSendMenuEmail(){
   const to = document.getElementById('menu-email-to')?.value?.trim();
@@ -7557,26 +7907,40 @@ function openPaymentConfirmEmail(eid, amount, method, checkNum){
   const eventName = inq.eventName || (inq.eventType||'Event');
   const dateStr = inq.eventDate ? formatDate(inq.eventDate) : '';
   const tots = calcInvoiceTotals(inv);
-  const balStr = '$' + Math.max(0, tots.balance).toFixed(2);
-  const amtStr = '$' + (parseFloat(amount)||0).toFixed(2);
-  const methodStr = method + (method==='Check' && checkNum ? (' #' + checkNum) : '');
-  const isFullyPaid = tots.balance <= 0.01;
-  const subject = 'Payment received \u2014 ' + clientName + (dateStr?(' ('+dateStr+')'):'') + ' Premier Caterers';
-  const body =
-`Dear ${inq.firstName || clientName || 'Valued Client'},
+  // Pull the "Payment received" template if the user hasn't renamed/deleted it;
+  // fall back to a hardcoded default so nothing ever breaks.
+  const tpl = emailTemplates.find(t=>t.id==='tpl_payment_received');
+  const ctx = buildTemplateContext(inq, { invoiceEid: eid });
+  let subject, body;
+  if(tpl){
+    subject = applyTemplatePlaceholders(tpl.subject, ctx);
+    body    = applyTemplatePlaceholders(tpl.body, ctx);
+    // Also inject specifics that aren't in general placeholders: the exact
+    // payment info we just recorded, so the client sees what they paid.
+    const amtStr = '$' + (parseFloat(amount)||0).toFixed(2);
+    const methodStr = method + (method==='Check' && checkNum ? (' #' + checkNum) : '');
+    // Prepend a one-line summary right after "Dear {name}," if present, else at top.
+    const inject = '\n\nPayment received: ' + amtStr + ' (' + methodStr + ').';
+    body = body.replace(/(Dear [^\n]+\n)/, '$1' + inject + '\n');
+  } else {
+    const balStr = '$' + Math.max(0, tots.balance).toFixed(2);
+    const amtStr = '$' + (parseFloat(amount)||0).toFixed(2);
+    const methodStr = method + (method==='Check' && checkNum ? (' #' + checkNum) : '');
+    const isFullyPaid = tots.balance <= 0.01;
+    subject = 'Payment received \u2014 ' + ctx.clientName + (ctx.eventDateFmt?(' ('+ctx.eventDateFmt+')'):'') + ' Premier Caterers';
+    body =
+`Dear ${ctx.firstName || ctx.clientName || 'Valued Client'},
 
-Thank you \u2014 we've received your payment of ${amtStr} (${methodStr}) for your ${eventName}${dateStr?' on '+dateStr:''}.
+Thank you \u2014 we've received your payment of ${amtStr} (${methodStr}) for your ${ctx.eventName}${ctx.eventDateFmt?' on '+ctx.eventDateFmt:''}.
 
-${isFullyPaid
-  ? 'Your account is now paid in full. We look forward to serving you.'
-  : ('Remaining balance: ' + balStr + '. An updated invoice is attached for your records.')}
+${isFullyPaid ? 'Your account is now paid in full. We look forward to serving you.' : ('Remaining balance: ' + balStr + '. An updated invoice is attached for your records.')}
 
 Please don't hesitate to reach out with any questions.
 
 Warm regards,
 Premier Caterers
-events@thepremiercaterer.com
-thepremiercaterer.com`;
+events@thepremiercaterer.com`;
+  }
 
   document.getElementById('sendEmailModal')?.remove();
   const m = document.createElement('div');
@@ -11402,6 +11766,7 @@ function _startApp() {
   groceryStationsCol = db.collection('groceryStations');
   groceryListsCol    = db.collection('groceryLists');
   startSharedSettings();     // pull shared Settings from Firestore + subscribe to changes
+  startEmailTemplates();     // pull email templates from Firestore + subscribe to changes
   (function(){
     const role = roles[currentRole]||{};
     const invNav = document.getElementById('nav-invoices');
