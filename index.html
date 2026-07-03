@@ -5048,8 +5048,12 @@ function openClientEmailModal(inqId){
   const to=(inq.email||'').trim();
   if(!to){ alert('No email address on file for this client. Add one in Edit first.'); return; }
   _cliEmailAttachments = [];
+  _cliEmailInqId = inqId;
   const datePart = _shortDateForSubject(inq.eventDate);
   const subject = _eventNameForSubject(inq) + (datePart?(' ('+datePart+')'):'');
+  // Build template dropdown — same list as the menu-email modal.
+  const tplOptionsHtml = '<option value="">— Blank message —</option>'
+    + emailTemplates.map(t => '<option value="'+t.id+'">'+_actEsc(t.name)+'</option>').join('');
   const m=document.createElement('div'); m.id='clientEmailModal';
   m.style.cssText='position:fixed;inset:0;background:rgba(43,36,32,.4);z-index:700;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto';
   m.innerHTML = `<div style="background:var(--bg);border-radius:14px;width:100%;max-width:580px;box-shadow:0 20px 60px rgba(43,36,32,.3);overflow:hidden">
@@ -5058,6 +5062,12 @@ function openClientEmailModal(inqId){
       <button onclick="document.getElementById('clientEmailModal').remove()" style="border:none;background:transparent;color:var(--text3);cursor:pointer;font-size:18px">&times;</button>
     </div>
     <div style="padding:18px 20px;max-height:70vh;overflow-y:auto">
+      <div style="margin-bottom:12px"><label style="display:block;font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:4px">Template</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="cem_tpl" onchange="applyClientEmailTemplate(this.value)" style="flex:1;padding:9px 11px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:14px">${tplOptionsHtml}</select>
+          <button type="button" onclick="openManageTemplates()" title="Add / edit / delete templates" style="padding:8px 12px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;white-space:nowrap;font-family:inherit"><i class="ti ti-settings" style="font-size:12px"></i> Manage</button>
+        </div>
+      </div>
       <div style="margin-bottom:12px"><label style="display:block;font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:4px">To</label>
         <input id="cem_to" value="${(to||'').replace(/"/g,'&quot;')}" style="width:100%;padding:9px 11px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:14px"></div>
       <div style="margin-bottom:12px"><label style="display:block;font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:4px">Subject</label>
@@ -5081,6 +5091,30 @@ function openClientEmailModal(inqId){
   document.body.appendChild(m);
   setTimeout(()=>{ const ta=document.getElementById('cem_body'); if(ta){ ta.focus(); ta.setSelectionRange(0,0); } },80);
 }
+
+// Called from the Contact-email template dropdown when the user picks a template.
+// Blank option ("") resets the body to just the signature (starting fresh).
+let _cliEmailInqId = '';
+function applyClientEmailTemplate(tplId){
+  const inq = _findInq(_cliEmailInqId); if(!inq) return;
+  const subEl = document.getElementById('cem_subject');
+  const bodyEl = document.getElementById('cem_body');
+  if(!tplId){
+    // Reset to a blank message with just the signature
+    if(bodyEl) bodyEl.value = _signatureHtmlFor(authUser);
+    return;
+  }
+  const tpl = emailTemplates.find(t => t.id === tplId); if(!tpl) return;
+  const ctx = buildTemplateContext(inq, { invoiceEid: 'inq_'+inq.id });
+  const subject = applyTemplatePlaceholders(tpl.subject || '', ctx);
+  let body = applyTemplatePlaceholders(tpl.body || '', ctx);
+  if(ctx.signLink && tpl.includeContract !== false){
+    body = _appendSignLink(body, ctx.signLink);
+  }
+  if(subEl && subject) subEl.value = subject;
+  if(bodyEl) bodyEl.value = body;
+}
+window.applyClientEmailTemplate = applyClientEmailTemplate;
 async function _cemHandleFiles(fileList){
   if(!fileList || !fileList.length) return;
   const TOTAL_MAX = 24*1024*1024; // soft cap ~24 MB total
@@ -7946,8 +7980,17 @@ events@thepremiercaterer.com`;
   const m = document.createElement('div');
   m.id = 'sendEmailModal';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
+  _pmtEmailEid = eid; _pmtEmailInqId = inqId; _pmtEmailAmount = amount; _pmtEmailMethod = method; _pmtEmailCheckNum = checkNum;
+  const tplOptionsHtml = emailTemplates.map(t =>
+    '<option value="'+t.id+'"'+(t.id==='tpl_payment_received'?' selected':'')+'>'+_actEsc(t.name)+'</option>'
+  ).join('');
   m.innerHTML = '<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:560px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">'
     +'<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem"><i class="ti ti-cash" style="font-size:16px;color:var(--green-text)"></i> Payment Confirmation Email</div>'
+    +'<div class="modal-row" style="display:flex;align-items:center;gap:8px">'
+      +'<label style="flex:0 0 auto;margin:0">Template</label>'
+      +'<select id="pmt-email-tpl" onchange="applyPaymentEmailTemplate(this.value)" style="flex:1">'+tplOptionsHtml+'</select>'
+      +'<button onclick="openManageTemplates()" title="Add / edit / delete templates" style="padding:6px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;white-space:nowrap"><i class="ti ti-settings" style="font-size:12px"></i> Manage</button>'
+    +'</div>'
     +'<div class="modal-row"><label>To</label><input type="email" id="pmt-email-to" value="'+to.replace(/"/g,'&quot;')+'" placeholder="client@email.com"></div>'
     +'<div class="modal-row"><label>Subject</label><input type="text" id="pmt-email-subject" value="'+subject.replace(/"/g,'&quot;')+'"></div>'
     +'<div class="modal-row"><label>Message</label><textarea id="pmt-email-body" style="min-height:220px">'+body+'</textarea></div>'
@@ -7960,6 +8003,32 @@ events@thepremiercaterer.com`;
   setTimeout(()=>document.getElementById('pmt-email-to')?.focus(),50);
 }
 window.openPaymentConfirmEmail = openPaymentConfirmEmail;
+
+// Payment-modal template state so applyPaymentEmailTemplate can re-inject the
+// specific amount/method after a template switch.
+let _pmtEmailEid = '', _pmtEmailInqId = '', _pmtEmailAmount = 0, _pmtEmailMethod = '', _pmtEmailCheckNum = '';
+function applyPaymentEmailTemplate(tplId){
+  const inq = _pmtEmailInqId ? _findInq(_pmtEmailInqId) : null;
+  if(!inq) return;
+  const tpl = emailTemplates.find(t => t.id === tplId); if(!tpl) return;
+  const ctx = buildTemplateContext(inq, { invoiceEid: _pmtEmailEid });
+  const subject = applyTemplatePlaceholders(tpl.subject || '', ctx);
+  let body = applyTemplatePlaceholders(tpl.body || '', ctx);
+  if(ctx.signLink && tpl.includeContract !== false){
+    body = _appendSignLink(body, ctx.signLink);
+  }
+  // If this is the payment-received template, inject the specific amount+method line.
+  if(tplId === 'tpl_payment_received'){
+    const amtStr = '$' + (parseFloat(_pmtEmailAmount)||0).toFixed(2);
+    const methodStr = _pmtEmailMethod + (_pmtEmailMethod==='Check' && _pmtEmailCheckNum ? (' #' + _pmtEmailCheckNum) : '');
+    body = body.replace(/(Dear [^\n]+\n)/, '$1\n\nPayment received: ' + amtStr + ' (' + methodStr + ').\n');
+  }
+  const subEl = document.getElementById('pmt-email-subject');
+  const bodyEl = document.getElementById('pmt-email-body');
+  if(subEl) subEl.value = subject;
+  if(bodyEl) bodyEl.value = body;
+}
+window.applyPaymentEmailTemplate = applyPaymentEmailTemplate;
 
 async function confirmSendPaymentEmail(eid){
   const to = document.getElementById('pmt-email-to')?.value?.trim();
@@ -11091,26 +11160,48 @@ function openSendInvoiceEmail(eid){
   document.getElementById('sendEmailModal')?.remove();
   // Resolve the client's email: invoice -> event -> originating inquiry
   let toEmail = inv.clientEmail || e.email || '';
-  if(!toEmail){
-    const inqId = e.inquiryId || (typeof e.id==='string' && e.id.indexOf('inq_')===0 ? e.id.slice(4) : null);
-    const inq = inqId ? inquiries.find(x=>x.id===inqId) : null;
-    if(inq && inq.email) toEmail = inq.email;
-  }
+  const inqId = e.inquiryId || (typeof e.id==='string' && e.id.indexOf('inq_')===0 ? e.id.slice(4) : null);
+  const inq = inqId ? inquiries.find(x=>x.id===inqId) : null;
+  if(!toEmail && inq && inq.email) toEmail = inq.email;
   // Remember it on the invoice so it's there next time
   if(toEmail && !inv.clientEmail){ inv.clientEmail = toEmail; }
   const tots = calcInvoiceTotals(inv);
   const isInvoice = inv.status==='invoice'||inv.status==='paid';
   const docType = isInvoice ? 'Invoice' : 'Estimate';
-  const defaultSubject = docType+' from Premier Caterers — '+e.name;
-  const defaultBody = 'Dear '+e.name+',\n\nPlease find your '+docType.toLowerCase()+' attached below.\n\nEvent: '+getFullEventDate(e)+'\nTotal: $'+tots.grand.toFixed(2)+(tots.balance>0?'\nBalance due: $'+tots.balance.toFixed(2):'\nStatus: Paid in full')+'\n\nThank you for choosing Premier Caterers!\n\nBest regards,\nPremier Caterers\nevents@thepremiercaterer.com\nthepremiercaterer.com';
+  _invEmailEid = eid;
+  // Pick a sensible default template based on state:
+  //   Balance still due  -> Payment reminder
+  //   Otherwise (approved/paid) -> Final confirmation
+  const defaultTplId = (tots.balance > 0.01 && isInvoice) ? 'tpl_payment_reminder' : 'tpl_confirm';
+  const defaultTpl = emailTemplates.find(t=>t.id===defaultTplId) || emailTemplates[0];
+  const ctx = inq ? buildTemplateContext(inq, { invoiceEid: eid }) : {};
+  let subject, body;
+  if(defaultTpl && inq){
+    subject = applyTemplatePlaceholders(defaultTpl.subject || '', ctx);
+    body = applyTemplatePlaceholders(defaultTpl.body || '', ctx);
+    if(ctx.signLink && defaultTpl.includeContract !== false){
+      body = _appendSignLink(body, ctx.signLink);
+    }
+  } else {
+    subject = docType+' from Premier Caterers \u2014 '+e.name;
+    body = 'Dear '+e.name+',\n\nPlease find your '+docType.toLowerCase()+' attached below.\n\nEvent: '+getFullEventDate(e)+'\nTotal: $'+tots.grand.toFixed(2)+(tots.balance>0?'\nBalance due: $'+tots.balance.toFixed(2):'\nStatus: Paid in full')+'\n\nThank you for choosing Premier Caterers!\n\nBest regards,\nPremier Caterers\nevents@thepremiercaterer.com\nthepremiercaterer.com';
+  }
+  const tplOptionsHtml = emailTemplates.map(t =>
+    '<option value="'+t.id+'"'+(t.id===defaultTpl?.id?' selected':'')+'>'+_actEsc(t.name)+'</option>'
+  ).join('');
   const m = document.createElement('div');
   m.id = 'sendEmailModal';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
   m.innerHTML = '<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:560px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">'
     +'<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Send '+docType+' by Email</div>'
+    +'<div class="modal-row" style="display:flex;align-items:center;gap:8px">'
+      +'<label style="flex:0 0 auto;margin:0">Template</label>'
+      +'<select id="inv-email-tpl" onchange="applyInvoiceEmailTemplate(this.value)" style="flex:1">'+tplOptionsHtml+'</select>'
+      +'<button onclick="openManageTemplates()" title="Add / edit / delete templates" style="padding:6px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;white-space:nowrap"><i class="ti ti-settings" style="font-size:12px"></i> Manage</button>'
+    +'</div>'
     +'<div class="modal-row"><label>To</label><input type="email" id="email-to" value="'+toEmail.replace(/"/g,'&quot;')+'" placeholder="client@email.com"></div>'
-    +'<div class="modal-row"><label>Subject</label><input type="text" id="email-subject" value="'+defaultSubject+'"></div>'
-    +'<div class="modal-row"><label>Message</label><textarea id="email-body" style="min-height:180px">'+defaultBody+'</textarea></div>'
+    +'<div class="modal-row"><label>Subject</label><input type="text" id="email-subject" value="'+subject.replace(/"/g,'&quot;')+'"></div>'
+    +'<div class="modal-row"><label>Message</label><textarea id="email-body" style="min-height:180px">'+body+'</textarea></div>'
     +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem"><input type="checkbox" id="email-attach-invoice" checked style="accent-color:var(--blue-mid)"><label for="email-attach-invoice" style="font-size:13px;color:var(--text2)">Include invoice details in email body</label></div>'
     +'<div style="display:flex;gap:8px;justify-content:flex-end">'
     +'<button class="btn-cancel" onclick="document.getElementById(\'sendEmailModal\').remove()">Cancel</button>'
@@ -11119,6 +11210,28 @@ function openSendInvoiceEmail(eid){
   document.body.appendChild(m);
   setTimeout(()=>document.getElementById('email-to')?.focus(),50);
 }
+
+// Called from the invoice-email template dropdown when the user picks a template.
+let _invEmailEid = '';
+function applyInvoiceEmailTemplate(tplId){
+  const eid = _invEmailEid; if(!eid) return;
+  const e = events.find(x=>x.id===baseEventIdOf(eid)); if(!e) return;
+  const inqId = e.inquiryId || (typeof e.id==='string' && e.id.indexOf('inq_')===0 ? e.id.slice(4) : null);
+  const inq = inqId ? inquiries.find(x=>x.id===inqId) : null;
+  if(!inq) return;
+  const tpl = emailTemplates.find(t => t.id === tplId); if(!tpl) return;
+  const ctx = buildTemplateContext(inq, { invoiceEid: eid });
+  const subject = applyTemplatePlaceholders(tpl.subject || '', ctx);
+  let body = applyTemplatePlaceholders(tpl.body || '', ctx);
+  if(ctx.signLink && tpl.includeContract !== false){
+    body = _appendSignLink(body, ctx.signLink);
+  }
+  const subEl = document.getElementById('email-subject');
+  const bodyEl = document.getElementById('email-body');
+  if(subEl) subEl.value = subject;
+  if(bodyEl) bodyEl.value = body;
+}
+window.applyInvoiceEmailTemplate = applyInvoiceEmailTemplate;
 
 async function confirmSendInvoiceEmail(eid){
   const to = document.getElementById('email-to')?.value?.trim();
@@ -11137,6 +11250,16 @@ async function confirmSendInvoiceEmail(eid){
   if(ok){
     // Save sent record
     if(invoices[eid]){ invoices[eid].lastEmailedDate = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+    // Log to the client's activity history (same as the other send flows).
+    try {
+      const bid = baseEventIdOf(eid);
+      const inqId = (bid && bid.indexOf('inq_')===0) ? bid.slice(4) : null;
+      if(inqId){
+        const inv = invoices[eid];
+        const docType = (inv && (inv.status==='invoice' || inv.status==='paid')) ? 'Invoice' : 'Estimate';
+        logActivity(inqId, 'email_sent', docType+' emailed to '+to+': '+subject, { to:to, subject:subject, invoiceId:eid });
+      }
+    } catch(_){}
     document.getElementById('sendEmailModal')?.remove();
     renderInvoiceDetail();
   } else {
@@ -11185,7 +11308,14 @@ async function renderEmail(){
 }
 
 function renderComposeForm(replyTo, replySubject, replyBody){
+  const tplOptionsHtml = '<option value="">\u2014 Blank message \u2014</option>'
+    + emailTemplates.map(t => '<option value="'+t.id+'">'+_actEsc(t.name)+'</option>').join('');
   return '<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem">'
+    +'<div class="modal-row" style="display:flex;align-items:center;gap:8px">'
+      +'<label style="flex:0 0 auto;margin:0">Template</label>'
+      +'<select id="compose-tpl" onchange="applyComposeTemplate(this.value)" style="flex:1">'+tplOptionsHtml+'</select>'
+      +'<button onclick="openManageTemplates()" title="Add / edit / delete templates" style="padding:6px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;white-space:nowrap"><i class="ti ti-settings" style="font-size:12px"></i> Manage</button>'
+    +'</div>'
     +'<div class="modal-row"><label>To</label><input type="email" id="compose-to" value="'+(replyTo||'')+'" placeholder="recipient@email.com"></div>'
     +'<div class="modal-row"><label>Subject</label><input type="text" id="compose-subject" value="'+(replySubject||'')+'" placeholder="Subject..."></div>'
     +'<div class="modal-row"><label>Message</label><textarea id="compose-body" style="min-height:200px">'+(replyBody||'')+'</textarea></div>'
@@ -11199,6 +11329,31 @@ function renderComposeForm(replyTo, replySubject, replyBody){
     +'<button onclick="sendComposedEmail()" class="btn-save"><i class="ti ti-send" style="font-size:13px"></i> Send</button>'
     +'</div></div>';
 }
+
+// Template picker for the standalone Compose view. If the "To" address matches
+// a known client we use their inquiry for placeholder context; otherwise
+// placeholders stay as {firstName}-style tokens for the user to hand-edit.
+function applyComposeTemplate(tplId){
+  const subEl = document.getElementById('compose-subject');
+  const bodyEl = document.getElementById('compose-body');
+  if(!tplId){
+    if(bodyEl) bodyEl.value = '';
+    if(subEl)  subEl.value = '';
+    return;
+  }
+  const tpl = emailTemplates.find(t => t.id === tplId); if(!tpl) return;
+  const toEmail = (document.getElementById('compose-to')?.value||'').trim().toLowerCase();
+  const inq = toEmail ? inquiries.find(x => (x.email||'').trim().toLowerCase() === toEmail) : null;
+  const ctx = inq ? buildTemplateContext(inq, { invoiceEid: 'inq_'+inq.id }) : {};
+  const subject = applyTemplatePlaceholders(tpl.subject || '', ctx);
+  let body = applyTemplatePlaceholders(tpl.body || '', ctx);
+  if(inq && ctx.signLink && tpl.includeContract !== false){
+    body = _appendSignLink(body, ctx.signLink);
+  }
+  if(subEl) subEl.value = subject;
+  if(bodyEl) bodyEl.value = body;
+}
+window.applyComposeTemplate = applyComposeTemplate;
 
 function renderComposeAttachList(){
   const list = window._composeAttachments || [];
@@ -11304,7 +11459,19 @@ async function sendComposedEmail(){
   const html = '<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap">'+body+'</pre>';
   const attachments = window._composeAttachments || [];
   const ok = await sendGmailEmail(to, subject, body, html, attachments);
-  if(ok){ window._composeAttachments=[]; window._emailTab='sent'; render(); setTimeout(refreshInbox, 500); }
+  if(ok){
+    // If the recipient matches a client we know, log it against their history.
+    // Silent no-op if it's a vendor / unknown address — the email still sends.
+    try {
+      const toLc = (to||'').trim().toLowerCase();
+      const matchInq = toLc ? inquiries.find(x => (x.email||'').trim().toLowerCase() === toLc) : null;
+      if(matchInq){
+        const attBit = attachments.length ? (' \u2014 ' + attachments.length + ' attachment' + (attachments.length>1?'s':'')) : '';
+        logActivity(matchInq.id, 'email_sent', 'Email to '+to+': '+subject+attBit, { to:to, subject:subject, attachments: attachments.map(a=>({filename:a.filename,size:a.size||0})) });
+      }
+    } catch(_){}
+    window._composeAttachments=[]; window._emailTab='sent'; render(); setTimeout(refreshInbox, 500);
+  }
   else if(btn){ btn.disabled=false; btn.textContent='Send'; }
 }
 
