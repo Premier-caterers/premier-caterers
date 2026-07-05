@@ -330,6 +330,46 @@ function getSalespeople(){
 // Legacy accessor kept for spots that reference SALESPEOPLE directly.
 Object.defineProperty(window, 'SALESPEOPLE', { get: getSalespeople });
 
+// ── SEND-MAIL-AS DELEGATION ──
+// Which salespeople have completed the Gmail "Send mail as" delegation from
+// events@. Set from the Settings panel. Only names in this set can send
+// email as themselves; everyone else silently falls back to events@.
+function delegationReadyFor(name){
+  const flags = sharedSettings.delegationReady || {};
+  return !!flags[name];
+}
+// The "default from" for a compose modal, given the currently logged-in
+// user. Returns 'events' if the user has no matching salesperson, or if their
+// delegation isn't set up yet.
+function defaultFromAddress(){
+  const sp = _defaultSalesperson();
+  if(!sp) return 'events';
+  return delegationReadyFor(sp) ? sp : 'events';
+}
+// The visible email address associated with each From choice.
+function fromAddressEmail(choice){
+  if(!choice || choice === 'events') return 'events@thepremiercaterer.com';
+  const map = sharedSettings.salespersonEmails || {};
+  return map[choice] || 'events@thepremiercaterer.com';
+}
+// Dropdown HTML for the "From:" selector shown at the top of every compose
+// modal. Non-ready salespeople appear disabled with an explanation.
+function _fromAddressDropdown(elementId, currentChoice){
+  const cur = currentChoice || defaultFromAddress();
+  const salespeople = getSalespeople();
+  const options = ['<option value="events"'+(cur==='events'?' selected':'')+'>Premier Caterers &lt;events@thepremiercaterer.com&gt;</option>'];
+  salespeople.forEach(sp => {
+    const email = fromAddressEmail(sp);
+    const ready = delegationReadyFor(sp);
+    if(ready){
+      options.push('<option value="'+sp+'"'+(cur===sp?' selected':'')+'>'+_actEsc(sp)+' &lt;'+_actEsc(email)+'&gt;</option>');
+    } else {
+      options.push('<option value="'+sp+'" disabled>'+_actEsc(sp)+' (delegation not set up in Settings)</option>');
+    }
+  });
+  return '<select id="'+elementId+'" style="flex:1;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;color:var(--text);font-family:inherit">'+options.join('')+'</select>';
+}
+
 // Populate a salesperson <select> from the dynamic list. Called by each modal
 // after it's opened. Preserves the currently selected value where possible.
 function _populateSalespersonSelect(elId, currentValue){
@@ -836,7 +876,7 @@ async function saveEmailTemplates(){
 // before Firestore comes back, and for genuinely-offline first loads.
 // PER-DEVICE things (login role, per-device auth tokens, checkbox toggles
 // like "use Twilio") intentionally stay in localStorage.
-const _SHARED_KEYS = ['scriptUrl','gmailClientId','githubToken','followupsPaused','salespersonEmails'];
+const _SHARED_KEYS = ['scriptUrl','gmailClientId','githubToken','followupsPaused','salespersonEmails','delegationReady'];
 let sharedSettings = {};
 let _sharedSettingsReady = false;
 let _sharedSettingsListener = null;
@@ -4119,6 +4159,9 @@ function openMenuEmail(inq, link){
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
   m.innerHTML = '<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:560px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">'
     +'<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Send Menu by Email</div>'
+    +'<div class="modal-row" style="display:flex;align-items:center;gap:8px"><label style="flex:0 0 auto;margin:0">From</label>'
+      +_fromAddressDropdown('menu-email-from')
+    +'</div>'
     +'<div class="modal-row" style="display:flex;align-items:center;gap:8px">'
       +'<label style="flex:0 0 auto;margin:0">Template</label>'
       +'<select id="menu-email-tpl" onchange="applyChosenTemplate(this.value)" style="flex:1">'+tplOptionsHtml+'</select>'
@@ -4327,7 +4370,9 @@ async function confirmSendMenuEmail(){
   }
   if(btn) btn.textContent='Sending...';
   const htmlBody = '<div style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap;line-height:1.6">'+body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1">$1</a>')+'</div>';
-  const ok = await sendGmailEmail(to, subject, body, htmlBody, attachments);
+  const fromChoice = (document.getElementById('menu-email-from')||{}).value || 'events';
+  const sendAs = fromChoice === 'events' ? '' : fromAddressEmail(fromChoice);
+  const ok = await sendGmailEmail(to, subject, body, htmlBody, attachments, sendAs);
   if(ok){
     try{ if(typeof _menuEmailInqId!=='undefined' && _menuEmailInqId) logActivity(_menuEmailInqId,'email_sent','Menu emailed to '+to+(attachments&&attachments.length>1?' (with estimate attached)':''),{to:to,subject:subject}); }catch(e){}
     // Schedule the 24-hour follow-up reminder. Silent no-op if the inquiry has
@@ -5721,6 +5766,9 @@ function openClientEmailModal(inqId){
       <button onclick="document.getElementById('clientEmailModal').remove()" style="border:none;background:transparent;color:var(--text3);cursor:pointer;font-size:18px">&times;</button>
     </div>
     <div style="padding:18px 20px;max-height:70vh;overflow-y:auto">
+      <div style="margin-bottom:12px"><label style="display:block;font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:4px">From</label>
+        ${_fromAddressDropdown('cem_from')}
+      </div>
       <div style="margin-bottom:12px"><label style="display:block;font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:4px">Template</label>
         <div style="display:flex;gap:6px;align-items:center">
           <select id="cem_tpl" onchange="applyClientEmailTemplate(this.value)" style="flex:1;padding:9px 11px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:14px">${tplOptionsHtml}</select>
@@ -5815,7 +5863,9 @@ async function sendClientEmailFromModal(inqId){
   if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i>Sending…'; }
   let ok=false;
   try{
-    ok = await sendGmailEmail(to, subject, bodyText, htmlBody, _cliEmailAttachments);
+    const fromChoice = (document.getElementById('cem_from')||{}).value || 'events';
+    const sendAs = fromChoice === 'events' ? '' : fromAddressEmail(fromChoice);
+    ok = await sendGmailEmail(to, subject, bodyText, htmlBody, _cliEmailAttachments, sendAs);
   }catch(e){ ok=false; alert('Could not send: '+(e&&e.message||e)); }
   if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-send"></i>Send'; }
   if(ok){
@@ -8666,6 +8716,9 @@ events@thepremiercaterer.com`;
   ).join('');
   m.innerHTML = '<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:560px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">'
     +'<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem"><i class="ti ti-cash" style="font-size:16px;color:var(--green-text)"></i> Payment Confirmation Email</div>'
+    +'<div class="modal-row" style="display:flex;align-items:center;gap:8px"><label style="flex:0 0 auto;margin:0">From</label>'
+      +_fromAddressDropdown('pmt-email-from')
+    +'</div>'
     +'<div class="modal-row" style="display:flex;align-items:center;gap:8px">'
       +'<label style="flex:0 0 auto;margin:0">Template</label>'
       +'<select id="pmt-email-tpl" onchange="applyPaymentEmailTemplate(this.value)" style="flex:1">'+tplOptionsHtml+'</select>'
@@ -8729,7 +8782,9 @@ async function confirmSendPaymentEmail(eid){
   }
   if(btn) btn.textContent='Sending...';
   const htmlBody = '<div style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap;line-height:1.6">'+body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1">$1</a>')+'</div>';
-  const ok = await sendGmailEmail(to, subject, body, htmlBody, attachments);
+  const fromChoice = (document.getElementById('pmt-email-from')||{}).value || 'events';
+  const sendAs = fromChoice === 'events' ? '' : fromAddressEmail(fromChoice);
+  const ok = await sendGmailEmail(to, subject, body, htmlBody, attachments, sendAs);
   if(ok){
     try{
       const bid = baseEventIdOf(eid);
@@ -10856,7 +10911,7 @@ function _renderFollowupSettings(){
     </div>
 
     <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.4px">Salespeople</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">Each row is a salesperson who can be assigned to inquiries and receive follow-up approval emails. Add or remove as your team changes. Deleting a salesperson doesn't affect existing assignments \u2014 old inquiries keep their tag and can still be re-selected if you re-add the name.</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">Each row is a salesperson who can be assigned to inquiries and receive follow-up approval emails. Add or remove as your team changes. Deleting a salesperson doesn't affect existing assignments \u2014 old inquiries keep their tag and can still be re-selected if you re-add the name. Check "Send-as ready" once that person's Gmail Send-mail-as delegation has been set up so emails can go out from their address; unchecked salespeople fall back to sending from events@.</div>
     <div id="salespeople-list" style="display:flex;flex-direction:column;gap:6px">
       ${_renderSalespeopleRows()}
     </div>
@@ -10871,13 +10926,18 @@ function _renderFollowupSettings(){
 // row has a Name field, Email field, and a Delete button.
 function _renderSalespeopleRows(){
   const map = sharedSettings.salespersonEmails || {};
+  const readyFlags = sharedSettings.delegationReady || {};
   const names = Object.keys(map);
   // Show at least an empty row if the list is fresh so Kenny knows what to do.
   const list = names.length ? names : [''];
   return list.map((name, i) => `
-    <div class="sp-row" data-idx="${i}" style="display:flex;align-items:center;gap:8px">
+    <div class="sp-row" data-idx="${i}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <input class="sp-name" type="text" value="${_actEsc(name)}" placeholder="Salesperson name" style="width:130px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;color:var(--text);font-family:inherit">
-      <input class="sp-email" type="email" value="${_actEsc(map[name]||'')}" placeholder="email@thepremiercaterer.com" style="flex:1;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;color:var(--text);font-family:inherit">
+      <input class="sp-email" type="email" value="${_actEsc(map[name]||'')}" placeholder="email@thepremiercaterer.com" style="flex:1;min-width:200px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;color:var(--text);font-family:inherit">
+      <label title="Check when this person's Gmail Send-mail-as delegation is set up (events@ can send as them). Until checked, emails from them fall back to events@." style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);cursor:pointer;user-select:none;padding:4px 8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:${readyFlags[name]?'#E1F5EE':'var(--bg2)'}">
+        <input class="sp-ready" type="checkbox" ${readyFlags[name]?'checked':''} style="cursor:pointer;margin:0">
+        <span style="white-space:nowrap">${readyFlags[name]?'\u2713 Send-as ready':'Send-as pending'}</span>
+      </label>
       <button onclick="removeSalespersonRow(this)" title="Remove this salesperson" style="padding:6px 8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--crimson,#8B1A1A);font-size:14px;cursor:pointer;line-height:1">&times;</button>
     </div>
   `).join('');
@@ -10888,10 +10948,14 @@ function addSalespersonRow(){
   if(!list) return;
   const row = document.createElement('div');
   row.className = 'sp-row';
-  row.style.cssText = 'display:flex;align-items:center;gap:8px';
+  row.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap';
   row.innerHTML =
     '<input class="sp-name" type="text" value="" placeholder="Salesperson name" style="width:130px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;color:var(--text);font-family:inherit">' +
-    '<input class="sp-email" type="email" value="" placeholder="email@thepremiercaterer.com" style="flex:1;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;color:var(--text);font-family:inherit">' +
+    '<input class="sp-email" type="email" value="" placeholder="email@thepremiercaterer.com" style="flex:1;min-width:200px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;color:var(--text);font-family:inherit">' +
+    '<label title="Check when this person\'s Gmail Send-mail-as delegation is set up." style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);cursor:pointer;user-select:none;padding:4px 8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2)">' +
+      '<input class="sp-ready" type="checkbox" style="cursor:pointer;margin:0">' +
+      '<span style="white-space:nowrap">Send-as pending</span>' +
+    '</label>' +
     '<button onclick="removeSalespersonRow(this)" title="Remove this salesperson" style="padding:6px 8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--crimson,#8B1A1A);font-size:14px;cursor:pointer;line-height:1">&times;</button>';
   list.appendChild(row);
   row.querySelector('.sp-name').focus();
@@ -10914,12 +10978,18 @@ window.toggleFollowupsPaused = toggleFollowupsPaused;
 
 async function saveSalespersonEmails(){
   const map = {};
+  const ready = {};
   document.querySelectorAll('#salespeople-list .sp-row').forEach(row => {
     const name = (row.querySelector('.sp-name')?.value || '').trim();
     const email = (row.querySelector('.sp-email')?.value || '').trim();
-    if(name) map[name] = email;   // email may be blank — that's a valid "no follow-up emails" setting
+    const isReady = !!row.querySelector('.sp-ready')?.checked;
+    if(name){
+      map[name] = email;   // email may be blank — that's a valid "no follow-up emails" setting
+      if(isReady) ready[name] = true;
+    }
   });
   await setSharedSetting('salespersonEmails', map);
+  await setSharedSetting('delegationReady', ready);
   showToast('Salespeople saved \u2713');
   render();
 }
@@ -11801,25 +11871,47 @@ async function fetchMessageBody(id){
   }catch(e){ return ''; }
 }
 
-async function sendGmailEmail(to, subject, body, htmlBody, attachments){
+// Optional `sendAs` is the address to send from (e.g. 'shelley@thepremiercaterer.com').
+// When omitted or set to events@, sends from events@ as before. When set to a
+// salesperson's address, the app requests the relay to send as that address —
+// which only actually works once (a) events@ has Gmail Send-mail-as delegation
+// for that address, and (b) the Apps Script pcGmailSend_ has been updated to
+// honor the sendAs field. Until the Apps Script is updated, sendAs is silently
+// ignored by the relay (emails still send from events@).
+async function sendGmailEmail(to, subject, body, htmlBody, attachments, sendAs){
   if(gmailViaScript()){
     try{
       const payload = {
         action:'gmailSend', to, subject:subject||'',
         body: body||'', htmlBody: htmlBody||body||'',
+        sendAs: sendAs||'',
         attachments: (attachments||[]).map(a=>({ filename:a.filename, mimeType:a.mime||'application/pdf', base64:a.base64 }))
       };
       // text/plain keeps this a "simple" cross-origin request (no preflight to Apps Script)
       const r = await fetch(gmailRelayUrl(), { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
       const d = await r.json();
-      if(d.ok){ showToast('Email sent ✓'); return true; }
+      if(d.ok){ showToast('Email sent \u2713'); return true; }
       alert('Email error: '+(d.error||'send failed')); return false;
     }catch(e){ alert('Email error: '+e.message); return false; }
   }
   try{ await ensureGmailToken(); }
   catch(e){ alert('Please connect Gmail first in Settings.'); gmailSignIn(); return false; }
   try{
-    const from = gmailUser || 'events@thepremiercaterer.com';
+    // Direct Gmail-API path — respects sendAs by putting it in the From header.
+    // Requires the token's account to have Send-mail-as configured for that address.
+    const from = sendAs || gmailUser || 'events@thepremiercaterer.com';
+    // Choose a display name that matches the address. events@ shows the
+    // company name; a salesperson address shows the salesperson's name.
+    let fromName = 'Premier Caterers';
+    try {
+      if(sendAs && sendAs !== 'events@thepremiercaterer.com'){
+        // Find which salesperson owns this address
+        const map = sharedSettings.salespersonEmails || {};
+        for(const name in map){
+          if((map[name]||'').toLowerCase() === (sendAs||'').toLowerCase()){ fromName = name; break; }
+        }
+      }
+    } catch(_){}
     let mime;
     if(attachments && attachments.length){
       // multipart/mixed: HTML body part + one part per attachment
@@ -11841,7 +11933,7 @@ async function sendGmailEmail(to, subject, body, htmlBody, attachments){
       }
       parts.push('--'+boundary+'--');
       mime = [
-        'From: Premier Caterers <'+from+'>',
+        'From: '+fromName+' <'+from+'>',
         'To: '+to,
         'Subject: '+subject,
         'MIME-Version: 1.0',
@@ -11851,7 +11943,7 @@ async function sendGmailEmail(to, subject, body, htmlBody, attachments){
       ].join('\r\n');
     } else {
       mime = [
-        'From: Premier Caterers <'+from+'>',
+        'From: '+fromName+' <'+from+'>',
         'To: '+to,
         'Subject: '+subject,
         'MIME-Version: 1.0',
@@ -11967,6 +12059,9 @@ function openSendInvoiceEmail(eid){
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
   m.innerHTML = '<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:560px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">'
     +'<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Send '+docType+' by Email</div>'
+    +'<div class="modal-row" style="display:flex;align-items:center;gap:8px"><label style="flex:0 0 auto;margin:0">From</label>'
+      +_fromAddressDropdown('inv-email-from')
+    +'</div>'
     +'<div class="modal-row" style="display:flex;align-items:center;gap:8px">'
       +'<label style="flex:0 0 auto;margin:0">Template</label>'
       +'<select id="inv-email-tpl" onchange="applyInvoiceEmailTemplate(this.value)" style="flex:1">'+tplOptionsHtml+'</select>'
@@ -12019,7 +12114,9 @@ async function confirmSendInvoiceEmail(eid){
     const invHtml = buildInvoiceHTML(eid);
     htmlBody = '<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap">'+body+'</pre><br><hr><br>' + invHtml;
   }
-  const ok = await sendGmailEmail(to, subject, body, htmlBody);
+  const fromChoice = (document.getElementById('inv-email-from')||{}).value || 'events';
+  const sendAs = fromChoice === 'events' ? '' : fromAddressEmail(fromChoice);
+  const ok = await sendGmailEmail(to, subject, body, htmlBody, undefined, sendAs);
   if(ok){
     // Save sent record
     if(invoices[eid]){ invoices[eid].lastEmailedDate = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
@@ -12084,6 +12181,10 @@ function renderComposeForm(replyTo, replySubject, replyBody){
   const tplOptionsHtml = '<option value="">\u2014 Blank message \u2014</option>'
     + emailTemplates.map(t => '<option value="'+t.id+'">'+_actEsc(t.name)+'</option>').join('');
   return '<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem">'
+    +'<div class="modal-row" style="display:flex;align-items:center;gap:8px">'
+      +'<label style="flex:0 0 auto;margin:0">From</label>'
+      +_fromAddressDropdown('compose-from')
+    +'</div>'
     +'<div class="modal-row" style="display:flex;align-items:center;gap:8px">'
       +'<label style="flex:0 0 auto;margin:0">Template</label>'
       +'<select id="compose-tpl" onchange="applyComposeTemplate(this.value)" style="flex:1">'+tplOptionsHtml+'</select>'
@@ -12231,7 +12332,9 @@ async function sendComposedEmail(){
   if(btn){ btn.disabled=true; btn.textContent='Sending...'; }
   const html = '<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap">'+body+'</pre>';
   const attachments = window._composeAttachments || [];
-  const ok = await sendGmailEmail(to, subject, body, html, attachments);
+  const fromChoice = (document.getElementById('compose-from')||{}).value || 'events';
+  const sendAs = fromChoice === 'events' ? '' : fromAddressEmail(fromChoice);
+  const ok = await sendGmailEmail(to, subject, body, html, attachments, sendAs);
   if(ok){
     // If the recipient matches a client we know, log it against their history.
     // Silent no-op if it's a vendor / unknown address — the email still sends.
