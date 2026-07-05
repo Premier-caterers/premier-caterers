@@ -950,9 +950,25 @@ function startSharedSettings(){
         }
       });
       // Re-render Settings if that's the current view so a change on another
-      // device shows up here without a manual refresh.
+      // device shows up here without a manual refresh. BUT — if the user has
+      // unsaved edits in the salespeople rows (typing didn't match Firestore
+      // state), skip the re-render so we don't wipe them out mid-edit.
       if(JSON.stringify(sharedSettings) !== before && typeof currentView !== 'undefined' && currentView === 'settings'){
-        try { render(); } catch(_){}
+        let hasUnsavedRows = false;
+        try {
+          const saved = sharedSettings.salespersonEmails || {};
+          const rows = document.querySelectorAll('#salespeople-list .sp-row');
+          rows.forEach(row => {
+            const name = (row.querySelector('.sp-name')?.value || '').trim();
+            const email = (row.querySelector('.sp-email')?.value || '').trim();
+            // If a row has any content that isn't already in Firestore, it's unsaved
+            if(name && (saved[name] === undefined || saved[name] !== email)) hasUnsavedRows = true;
+            if(name && email && saved[name] !== email) hasUnsavedRows = true;
+          });
+        } catch(_){}
+        if(!hasUnsavedRows){
+          try { render(); } catch(_){}
+        }
       }
     }, err => {
       console.warn('Shared settings listener error:', err);
@@ -10912,8 +10928,11 @@ function _renderFollowupSettings(){
 
     <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.4px">Salespeople</div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">Each row is a salesperson who can be assigned to inquiries and receive follow-up approval emails. Add or remove as your team changes. Deleting a salesperson doesn't affect existing assignments \u2014 old inquiries keep their tag and can still be re-selected if you re-add the name. Check "Send-as ready" once that person's Gmail Send-mail-as delegation has been set up so emails can go out from their address; unchecked salespeople fall back to sending from events@.</div>
-    <div id="salespeople-list" style="display:flex;flex-direction:column;gap:6px">
+    <div id="salespeople-list" style="display:flex;flex-direction:column;gap:6px" oninput="_markSalespeopleDirty()" onchange="_markSalespeopleDirty()">
       ${_renderSalespeopleRows()}
+    </div>
+    <div id="sp-unsaved-note" style="display:none;margin-top:8px;padding:8px 12px;background:var(--amber-bg,#FFF3D6);border:1.5px dashed var(--amber-text,#A66900);border-radius:var(--radius);color:var(--amber-text,#7A4A00);font-size:12px;font-weight:600">
+      <i class="ti ti-alert-triangle" style="font-size:13px"></i> You have unsaved changes to salespeople \u2014 click "Save changes" below or they will be lost.
     </div>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
       <button onclick="addSalespersonRow()" style="padding:7px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-plus" style="font-size:12px"></i> Add salesperson</button>
@@ -10921,6 +10940,14 @@ function _renderFollowupSettings(){
     </div>
   </div>`;
 }
+
+// Reveal the "unsaved changes" note as soon as the user types in any row.
+// Save() hides it. Keeps you from losing typed rows to a background re-render.
+function _markSalespeopleDirty(){
+  const note = document.getElementById('sp-unsaved-note');
+  if(note) note.style.display = 'block';
+}
+window._markSalespeopleDirty = _markSalespeopleDirty;
 
 // Render the current list of salesperson rows for the Settings panel. Each
 // row has a Name field, Email field, and a Delete button.
@@ -10990,6 +11017,8 @@ async function saveSalespersonEmails(){
   });
   await setSharedSetting('salespersonEmails', map);
   await setSharedSetting('delegationReady', ready);
+  const note = document.getElementById('sp-unsaved-note');
+  if(note) note.style.display = 'none';
   showToast('Salespeople saved \u2713');
   render();
 }
