@@ -3200,6 +3200,7 @@ function renderInqDetail(inq, role){
         ${role.canEdit?`<button class="hub-hbtn" onclick="openEditInquiryModal('${inq.id}')"><i class="ti ti-edit"></i>Edit</button>`:''}
         ${role.canEdit?`<button class="hub-hbtn" onclick="openContactMenu('${inq.id}')" title="Contact this client"><i class="ti ti-send"></i>Contact</button>`:''}
         ${role.canViewInvoices?`<button class="hub-hbtn" onclick="viewClientQuote('${inq.id}')"><i class="ti ti-file-invoice"></i>Quote / Invoice</button>`:''}
+        ${role.canEdit?`<button class="hub-hbtn" onclick="openDuplicateInquiryModal('${inq.id}')" title="Duplicate this event for another date (repeat clients)"><i class="ti ti-copy"></i>Duplicate</button>`:''}
         <button class="hub-hbtn x" onclick="closeInqDetail()" title="Close">\u00d7</button>
       </div>
       <div class="hub-eyebrow">${evNum?('#'+pcEsc(evNum)+' \u00b7 '):''}${stageName}${contact?' \u00b7 '+contact:''}</div>
@@ -3260,6 +3261,178 @@ function toggleEstimate(id){
   if(typeof syncHubDrawer==='function') syncHubDrawer();
 }
 function _findInq(id){ return inquiries.find(x=>x.id===id); }
+
+// ── DUPLICATE INQUIRY (for repeat drop-off clients) ──
+// Bnai Shalom, CBY etc. have a drop-off almost every week. This flow lets
+// Kenny click "Duplicate for another date" and get a fresh independent event
+// with everything copied over: client info, address, menu items, estimate,
+// salesperson, notes. Fresh contract, fresh invoice, fresh payment history.
+// Menu doc is copied in Google Drive so each week has its own snapshot.
+function openDuplicateInquiryModal(inqId){
+  const inq = _findInq(inqId);
+  if(!inq){ alert('Could not find that inquiry.'); return; }
+  document.getElementById('dupInqModal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'dupInqModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1002;display:flex;align-items:center;justify-content:center;padding:2rem';
+  const clientLabel = clientPrimary(inq) || 'this client';
+  // Default the new date to a week from the current event date (most repeat
+  // drop-offs are weekly). Fall back to next Friday if there's no date.
+  let defaultDate;
+  if(inq.eventDate){
+    const d = new Date(inq.eventDate + 'T12:00:00');
+    d.setDate(d.getDate() + 7);
+    defaultDate = d.toISOString().split('T')[0];
+  } else {
+    const d = new Date();
+    d.setDate(d.getDate() + (5 - d.getDay() + 7) % 7 || 7);   // next Friday
+    defaultDate = d.toISOString().split('T')[0];
+  }
+  const menuCount = Array.isArray(inq.menus) ? inq.menus.length : (inq.menuLink ? 1 : 0);
+  const estimateCount = (inq.estimate && Array.isArray(inq.estimate.lines)) ? inq.estimate.lines.filter(l=>l.qty||l.price).length : 0;
+  m.innerHTML = `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:0.5rem"><i class="ti ti-copy" style="font-size:16px;color:#8B1A1A"></i> Duplicate for another date</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:1.25rem;line-height:1.5">Creates a fresh, independent event for <strong>${_actEsc(clientLabel)}</strong>. Everything copies over except payments and the contract.</div>
+    <div class="modal-row"><label>New event date</label><input type="date" id="dup-date" value="${defaultDate}"></div>
+    <div style="background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:11px 13px;margin:12px 0 16px;font-size:12px;color:var(--text2);line-height:1.8">
+      <div style="font-weight:600;color:var(--text);margin-bottom:5px;font-size:11px;text-transform:uppercase;letter-spacing:0.4px">What gets copied</div>
+      <div>\u2713 Client contact info, address, event type</div>
+      <div>\u2713 Salesperson${inq.salesperson?(' \u2014 '+_actEsc(inq.salesperson)):''}</div>
+      ${menuCount ? `<div>\u2713 Menu (fresh copy of the Google Doc will be created)</div>` : `<div style="color:var(--text3)">\u2013 No menu on the original</div>`}
+      ${estimateCount ? `<div>\u2713 Estimate line items (${estimateCount} line${estimateCount>1?'s':''})</div>` : `<div style="color:var(--text3)">\u2013 No estimate on the original</div>`}
+      <div>\u2713 Notes${inq.plannerName?', party planner':''}</div>
+      <div style="color:var(--text3);margin-top:5px">\u2717 Payments, contract, past emails, activity log</div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="document.getElementById('dupInqModal').remove()" style="padding:8px 16px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);cursor:pointer">Cancel</button>
+      <button id="dup-inq-go" onclick="duplicateInquiry('${inqId}')" style="padding:8px 18px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-copy" style="font-size:13px"></i> Duplicate</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  setTimeout(() => document.getElementById('dup-date')?.focus(), 50);
+}
+window.openDuplicateInquiryModal = openDuplicateInquiryModal;
+
+async function duplicateInquiry(sourceId){
+  const src = _findInq(sourceId);
+  if(!src){ alert('Source inquiry not found.'); return; }
+  const dateEl = document.getElementById('dup-date');
+  const newDate = dateEl && dateEl.value;
+  if(!newDate){ alert('Please pick a date for the new event.'); dateEl?.focus(); return; }
+  const btn = document.getElementById('dup-inq-go');
+  if(btn){ btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Duplicating\u2026'; }
+  try {
+    // 1. Build the deep-copied inquiry. We deliberately DO NOT copy payment,
+    //    contract, activity-log, deposit, or menuAutomationTriggered flags.
+    const newId = String(Date.now()) + '-' + Math.random().toString(36).slice(2, 6);
+    const newInq = {
+      id: newId,
+      // Client info — copied verbatim
+      firstName: src.firstName || '',
+      lastName:  src.lastName  || '',
+      organization: src.organization || '',
+      email:     src.email || '',
+      phone:     src.phone || '',
+      // Event details — copied, with the NEW date
+      eventName: src.eventName || '',
+      eventType: src.eventType || '',
+      eventDate: newDate,
+      venueName: src.venueName || '',
+      venueLocation: src.venueLocation || '',
+      guestCount: src.guestCount || '',
+      cuisine:   src.cuisine || '',
+      meatDairy: src.meatDairy || '',
+      shabbos:   src.shabbos || 'No',
+      // Attribution
+      howFound:  src.howFound || '',
+      referredBy: src.referredBy || '',
+      plannerName: src.plannerName || '',
+      salesperson: src.salesperson || '',
+      // Notes
+      comments:  src.comments || '',
+      // Housekeeping
+      source: 'duplicate',
+      duplicateOf: sourceId,
+      menuAutomationTriggered: !!(src.menus && src.menus.length) || !!src.menuLink,   // suppress auto-generation; we'll copy the doc ourselves
+      stage: 'booked',
+      submittedAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+    };
+    // 2. Deep-copy the estimate. Fresh deposit ($0) and empty payments[].
+    if(src.estimate && Array.isArray(src.estimate.lines)){
+      newInq.estimate = JSON.parse(JSON.stringify(src.estimate));
+      newInq.estimate.deposit = 0;
+      newInq.estimate.payments = [];
+    }
+    // 3. If the source has a menu doc, ask the Apps Script to copy it in Drive
+    //    with the new date in the filename. We do this BEFORE saving so if the
+    //    copy fails, we can decide whether to still save (yes — a menu can be
+    //    regenerated later; blocking the whole duplicate on a Drive hiccup
+    //    would be worse than leaving the new event menu-less).
+    const sourceMenu = (src.menus && src.menus[0]) || (src.menuLink ? { url: src.menuLink } : null);
+    if(sourceMenu && sourceMenu.url){
+      const relay = getSharedSetting('scriptUrl');
+      if(relay){
+        try {
+          const srcFileId = (sourceMenu.fileId || (sourceMenu.url.match(/[-\w]{25,}/)||[''])[0]);
+          const dateFmt = _fmtMenuDate(newDate);
+          const baseName = (src.organization || ((src.firstName||'')+' '+(src.lastName||''))).trim() || 'Menu';
+          const newName  = (baseName + ' ' + (src.eventType||'') + ' ' + dateFmt).replace(/\s+/g,' ').trim();
+          const params = new URLSearchParams({
+            action: 'duplicateMenuDoc',
+            sourceFileId: srcFileId,
+            newName: newName
+          });
+          const r = await fetch(relay + '?' + params.toString());
+          const d = await r.json();
+          if(d && d.success && d.url){
+            newInq.menus = [{ name: newName, url: d.url, fileId: d.fileId || '' }];
+            newInq.menuLink = d.url;
+          } else {
+            console.warn('duplicateMenuDoc failed:', d && d.error);
+            showToast('Duplicated event but menu doc couldn\u2019t be copied \u2014 create one manually', 5000);
+          }
+        } catch(err){
+          console.warn('duplicateMenuDoc error:', err);
+          showToast('Duplicated event but menu doc couldn\u2019t be copied \u2014 create one manually', 5000);
+        }
+      }
+    }
+    // 4. Save the new inquiry.
+    inquiries.push(newInq);
+    await _saveInquiry(newInq);
+    // 5. Create the matching event (uses the standard function so this event
+    //    lands on the right week's cover sheet and gets its own #NN number).
+    createEventFromInquiry(newInq);
+    // 6. Log activity on BOTH inquiries for traceability.
+    try {
+      const nameLabel = clientPrimary(src) || 'client';
+      logActivity(newInq.id, 'note', 'Duplicated from ' + nameLabel + ' event on ' + (src.eventDate || 'unknown date'), { sourceInquiryId: sourceId, newDate: newDate });
+      logActivity(sourceId, 'note', 'Duplicated for new event on ' + newDate, { newInquiryId: newInq.id });
+    } catch(_){}
+    // 7. Close the dialog, jump to the new inquiry so Kenny can review.
+    document.getElementById('dupInqModal')?.remove();
+    selectedInqId = newInq.id;
+    showView('pipeline');
+    render();
+    updatePipelineBadge();
+    showToast('Event duplicated for ' + _fmtMenuDate(newDate) + ' \u2713');
+  } catch(err){
+    console.error('duplicateInquiry failed:', err);
+    alert('Could not duplicate: ' + (err.message || err));
+    if(btn){ btn.disabled = false; btn.innerHTML = '<i class="ti ti-copy" style="font-size:13px"></i> Duplicate'; }
+  }
+}
+window.duplicateInquiry = duplicateInquiry;
+
+// Human-friendly date for the menu-doc filename (e.g. "Jul 12 2026")
+function _fmtMenuDate(iso){
+  if(!iso) return '';
+  try {
+    const d = new Date(iso + 'T12:00:00');
+    if(isNaN(d)) return iso;
+    return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  } catch(_){ return iso; }
+}
 // ── Estimate live-edit helpers: update math in place instead of re-rendering the
 // whole drawer, so typing a qty/price never bounces the scroll position. ──
 let _estimateDirtyUntil = 0;     // while > now, skip snapshot-driven drawer rebuilds
