@@ -230,7 +230,7 @@ let venues = []; // venues database
 // when we can, otherwise leaves it unassigned so Kenny sets it explicitly.
 function _defaultSalesperson(){
   const user = String(authUser||'').toLowerCase();
-  if(user === 'kenny')   return 'Kenny';
+  if(user === 'owner' || user === 'kenny')   return 'Kenny';  // Kenny logs in as 'owner'
   if(user === 'shelley') return 'Shelley';
   if(user === 'josh')    return 'Josh';
   return '';
