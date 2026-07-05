@@ -175,12 +175,7 @@
     <div class="modal-row"><label>Event attended (if referred from one)</label><input id="m-eventAttended" placeholder="Whose event"></div>
     <div class="modal-row"><label>Party planner</label><input id="m-plannerName" placeholder="Planner name"></div>
     <div class="modal-row"><label>Salesperson</label>
-      <select id="m-salesperson">
-        <option value="">— Unassigned —</option>
-        <option value="Kenny">Kenny</option>
-        <option value="Shelley">Shelley</option>
-        <option value="Josh">Josh</option>
-      </select>
+      <select id="m-salesperson"></select>
     </div>
     <div class="modal-row"><label>Job # (optional)</label><input id="m-job" placeholder="Auto-generated (or enter custom #)"></div>
     <div class="modal-row"><label>Notes / comments</label><textarea id="m-notes" placeholder="Any details..."></textarea></div>
@@ -280,11 +275,75 @@ function _unansweredHubBanner(inq){
   </div>`;
 }
 
+// Small pill on the client card showing follow-up state. Pending is the loud
+// one (Kenny/Shelley need to see it); sent is quieter; skipped is a warning
+// tone. Each uses a distinct icon + border pattern so colorblind users can
+// distinguish states without relying on hue.
+function _followupBadge(inq){
+  if(!inq) return '';
+  const pending = pendingFollowupFor(inq.id);
+  const last = pending ? null : lastCompletedFollowupFor(inq.id);
+  if(pending){
+    // Show ETA to next email. sendAt might be in the past if the relay has
+    // sent it but not yet rewritten sendAt for the next nudge.
+    const sendAt = parseInt(pending.sendAt||0,10);
+    const now = Date.now();
+    const notifiedAt = parseInt(pending.lastNotifiedAt||0,10);
+    const label = notifiedAt ? ('Nudge '+(pending.nudgeCount||1)+' sent') : (sendAt > now ? 'Follow-up in '+_hrsUntil(sendAt) : 'Follow-up due');
+    return `<span title="${_actEsc(label)} \u2014 salesperson: ${_actEsc(pending.salesperson||'?')}" style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:8px;background:#FEF1D6;border:1.5px dashed #A66900;color:#7A4A00;font-size:10px;font-weight:600;margin-left:6px;flex-shrink:0"><i class="ti ti-hourglass" style="font-size:10px"></i>${label}</span>`;
+  }
+  if(last){
+    if(last.status === 'sent'){
+      return `<span title="Follow-up sent" style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:8px;background:#E1F5EE;border:0.5px solid #0F6E56;color:#0F6E56;font-size:10px;font-weight:600;margin-left:6px;flex-shrink:0"><i class="ti ti-mail-check" style="font-size:10px"></i>Follow-up sent</span>`;
+    }
+    if(last.status === 'skipped_in_contact' || last.status === 'skipped_not_needed' || last.status === 'auto_skipped'){
+      const short = last.status === 'skipped_in_contact' ? 'Skipped: in contact' :
+                    last.status === 'skipped_not_needed' ? 'Skipped: not needed' :
+                    'Auto-skipped';
+      // "Loud" skipped variant per Kenny — dotted brass border + bell-off icon
+      return `<span title="Follow-up ${short}" style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:8px;background:#F1EFE8;border:1.5px dotted #8B6914;color:#5F4508;font-size:10px;font-weight:600;margin-left:6px;flex-shrink:0"><i class="ti ti-bell-off" style="font-size:10px"></i>${short}</span>`;
+    }
+  }
+  return '';
+}
+function _hrsUntil(ts){
+  const diff = ts - Date.now();
+  if(diff <= 0) return 'now';
+  const hrs = Math.round(diff / (3600*1000));
+  if(hrs < 1) return '<1h';
+  if(hrs < 48) return hrs+'h';
+  return Math.round(hrs/24) + 'd';
+}
+
 // ── SALESPEOPLE ──
-// Who can be assigned as the "owning" salesperson on an inquiry. Matches the
-// role list from the login system but excludes admin (a role, not a person)
-// and kitchen (not a salesperson).
-const SALESPEOPLE = ['Kenny', 'Shelley', 'Josh'];
+// Who can be assigned as the "owning" salesperson on an inquiry. Derived
+// from sharedSettings.salespersonEmails — whoever has an email address in
+// Settings appears as an option in the dropdowns. Starter list of Kenny,
+// Shelley, and Josh is what appears if Settings is still empty.
+const _DEFAULT_SALESPEOPLE = ['Kenny', 'Shelley', 'Josh'];
+function getSalespeople(){
+  const map = sharedSettings.salespersonEmails || {};
+  const names = Object.keys(map).filter(k => k && String(k).trim().length);
+  if(names.length) return names.sort();
+  return _DEFAULT_SALESPEOPLE;
+}
+// Legacy accessor kept for spots that reference SALESPEOPLE directly.
+Object.defineProperty(window, 'SALESPEOPLE', { get: getSalespeople });
+
+// Populate a salesperson <select> from the dynamic list. Called by each modal
+// after it's opened. Preserves the currently selected value where possible.
+function _populateSalespersonSelect(elId, currentValue){
+  const el = document.getElementById(elId); if(!el) return;
+  const cur = currentValue != null ? currentValue : el.value;
+  const opts = ['<option value="">\u2014 Unassigned \u2014</option>']
+    .concat(getSalespeople().map(sp => '<option value="'+sp+'"'+(sp===cur?' selected':'')+'>'+sp+'</option>'));
+  // If cur isn't in the list (e.g. a removed salesperson still on an old
+  // inquiry), append it so we don't silently lose the assignment.
+  if(cur && !getSalespeople().includes(cur)){
+    opts.push('<option value="'+cur+'" selected>'+cur+' (removed)</option>');
+  }
+  el.innerHTML = opts.join('');
+}
 
 // ── UNANSWERED-EMAIL TRACKING ──
 // Every 2 minutes we pull the recent inbox + sent folders and figure out, per
@@ -295,6 +354,141 @@ const SALESPEOPLE = ['Kenny', 'Shelley', 'Josh'];
 let unansweredMap = {};           // email(lowercase) -> {lastInboundAt, lastOutboundAt, unanswered:bool, subject}
 let _unansweredTimer = null;
 let _lastUnansweredCheckAt = 0;
+
+// ── 24-HOUR MENU FOLLOW-UP REMINDERS ──
+// When a menu email is sent, we record a "reminder" in Firestore. A separate
+// Apps Script trigger (added in the events@ relay) checks the collection each
+// minute and, when a reminder is 24h old, emails the assigned salesperson an
+// approval prompt with four buttons (send / skip-in-contact / skip-not-needed
+// / edit). Re-nudges every 8h, capped at 3 nudges then auto-skip.
+//
+// Firestore shape (settings/followupReminders/{id}):
+//   { inquiryId, salesperson, salespersonEmail, status, createdAt, sendAt,
+//     lastNotifiedAt, nudgeCount, clientEmail, clientName, eventName,
+//     eventDate, subject, body, token }
+// status transitions:
+//   pending  -> sent | skipped_in_contact | skipped_not_needed | auto_skipped | cancelled
+//
+// The token is a signed random string the Apps Script uses to verify button-
+// click URLs came from a real reminder record. NEVER expose it in the app UI.
+
+let followupReminders = {};
+function startFollowupReminders(){
+  if(!db) return;
+  try {
+    db.collection('followupReminders').onSnapshot(snap => {
+      const next = {};
+      snap.forEach(d => { next[d.id] = Object.assign({ id: d.id }, d.data()); });
+      followupReminders = next;
+      try { render(); } catch(_){}
+    }, err => console.warn('followupReminders listener error:', err));
+  } catch(err) { console.warn('Could not start followupReminders:', err); }
+}
+
+// Salesperson name -> email address. Used so the Apps Script knows who to send
+// the approval email to. Kept in Firestore settings/app so Kenny can update
+// them from one place.
+function _salespersonEmail(name){
+  if(!name) return '';
+  const map = sharedSettings.salespersonEmails || {};
+  return (map[name] || map[name.toLowerCase()] || '').trim();
+}
+
+// Called after a menu email successfully sends. Writes a pending reminder to
+// Firestore. If follow-ups are paused (kill switch) or the inquiry has no
+// salesperson, we skip — no error, just a silent no-op with a console note.
+async function recordMenuFollowup(inqId, clientEmail){
+  if(!db || !inqId) return;
+  const inq = _findInq(inqId); if(!inq) return;
+  // Kill switch (set in Settings) — if paused, don't create reminders at all.
+  if(sharedSettings.followupsPaused === true){
+    console.log('[followup] paused globally, skipping reminder for '+inqId);
+    return;
+  }
+  const sp = inq.salesperson || _defaultSalesperson();
+  const spEmail = _salespersonEmail(sp);
+  if(!sp){
+    console.log('[followup] no salesperson set, skipping reminder for '+inqId);
+    return;
+  }
+  if(!spEmail){
+    // Not an error — just means we can't email an approval prompt. We still
+    // record the reminder so it shows up in the client card as "pending
+    // (missing salesperson email)" and Kenny can fix it in Settings.
+    console.warn('[followup] no email address for salesperson "'+sp+'"');
+  }
+  // Cancel any pre-existing pending reminder for this inquiry — a fresh menu
+  // send resets the clock; we never want two pending reminders for one client.
+  await cancelPendingFollowupsFor(inqId, 'menu re-sent');
+  // Build the follow-up body using the same template the salesperson would
+  // pick manually. Fills placeholders now so the preview matches what actually
+  // gets sent 24h from now.
+  const tpl = emailTemplates.find(t => t.id === 'tpl_followup') || emailTemplates.find(t => t.id === 'tpl_menu_proposal') || emailTemplates[0];
+  const ctx = buildTemplateContext(inq, { invoiceEid: 'inq_'+inq.id });
+  const subject = applyTemplatePlaceholders(tpl.subject || '', ctx);
+  let body = applyTemplatePlaceholders(tpl.body || '', ctx);
+  if(ctx.signLink && tpl.includeContract !== false){
+    body = _appendSignLink(body, ctx.signLink);
+  }
+  const now = Date.now();
+  const token = _uid() + _uid();                                // random per reminder
+  const record = {
+    inquiryId: inqId,
+    salesperson: sp,
+    salespersonEmail: spEmail,
+    status: 'pending',
+    createdAt: now,
+    sendAt: now + 24*60*60*1000,                                 // when relay should first email the salesperson
+    lastNotifiedAt: 0,
+    nudgeCount: 0,
+    clientEmail: clientEmail || inq.email || '',
+    clientName: ((inq.firstName||'') + ' ' + (inq.lastName||'')).trim() || inq.organization || 'Client',
+    eventName: inq.eventName || (inq.eventType || 'Event'),
+    eventDate: inq.eventDate || '',
+    subject: subject,
+    body: body,
+    token: token
+  };
+  try {
+    const ref = await db.collection('followupReminders').add(record);
+    logActivity(inqId, 'followup', 'Follow-up reminder scheduled for '+sp+' (24h)', { salesperson: sp, reminderId: ref.id });
+  } catch(err){
+    console.error('Failed to save follow-up reminder:', err);
+  }
+}
+
+// Cancel any pending reminders tied to this inquiry. Called when the client is
+// booked, marked lost, or the menu is re-sent.
+async function cancelPendingFollowupsFor(inqId, reason){
+  if(!db) return;
+  try {
+    const snap = await db.collection('followupReminders').where('inquiryId','==',inqId).where('status','==','pending').get();
+    const batch = db.batch();
+    let n = 0;
+    snap.forEach(d => { batch.update(d.ref, { status: 'cancelled', cancelReason: reason||'', cancelledAt: Date.now() }); n++; });
+    if(n > 0){
+      await batch.commit();
+      logActivity(inqId, 'followup', 'Cancelled '+n+' pending follow-up reminder'+(n>1?'s':'')+' ('+(reason||'no reason')+')', { count: n });
+    }
+  } catch(err) {
+    console.warn('cancelPendingFollowupsFor failed:', err);
+  }
+}
+
+// Convenience: get the currently pending reminder for an inquiry (there should
+// only ever be one).
+function pendingFollowupFor(inqId){
+  const list = Object.values(followupReminders).filter(r => r.inquiryId === inqId && r.status === 'pending');
+  return list[0] || null;
+}
+// Also expose the most-recent NON-pending reminder for display purposes (e.g.
+// "Follow-up sent 2 days ago" badge).
+function lastCompletedFollowupFor(inqId){
+  const list = Object.values(followupReminders)
+    .filter(r => r.inquiryId === inqId && r.status !== 'pending')
+    .sort((a,b) => (b.updatedAt||b.createdAt||0) - (a.updatedAt||a.createdAt||0));
+  return list[0] || null;
+}
 
 // Explicit "I handled this outside email" override, stored on the inquiry so
 // it syncs across devices. Cleared automatically when a NEW inbound arrives.
@@ -642,7 +836,7 @@ async function saveEmailTemplates(){
 // before Firestore comes back, and for genuinely-offline first loads.
 // PER-DEVICE things (login role, per-device auth tokens, checkbox toggles
 // like "use Twilio") intentionally stay in localStorage.
-const _SHARED_KEYS = ['scriptUrl','gmailClientId','githubToken'];
+const _SHARED_KEYS = ['scriptUrl','gmailClientId','githubToken','followupsPaused','salespersonEmails'];
 let sharedSettings = {};
 let _sharedSettingsReady = false;
 let _sharedSettingsListener = null;
@@ -654,15 +848,26 @@ function getSharedSetting(key){
   if(sharedSettings && Object.prototype.hasOwnProperty.call(sharedSettings, key) && sharedSettings[key] != null){
     return sharedSettings[key];
   }
-  try { return localStorage.getItem(key) || ''; } catch(_){ return ''; }
+  try {
+    const raw = localStorage.getItem(key) || '';
+    // Auto-decode JSON for object/boolean settings that were written via setSharedSetting.
+    if(raw.startsWith('{') || raw.startsWith('[') || raw === 'true' || raw === 'false'){
+      try { return JSON.parse(raw); } catch(_){ return raw; }
+    }
+    return raw;
+  } catch(_){ return ''; }
 }
 
 // Write a shared setting. Updates the local cache immediately (so the UI sees
 // the change without waiting for Firestore), writes localStorage as a fallback,
-// then pushes to Firestore so other devices pick it up.
+// then pushes to Firestore so other devices pick it up. Handles primitives,
+// booleans, and small objects (e.g. salespersonEmails map).
 async function setSharedSetting(key, value){
   sharedSettings[key] = value;
-  try { localStorage.setItem(key, value); } catch(_){}
+  try {
+    const asStr = (typeof value === 'string') ? value : JSON.stringify(value);
+    localStorage.setItem(key, asStr);
+  } catch(_){}
   if(!db){ return; } // Firestore not up yet — local write is enough for now
   try {
     await db.collection('settings').doc('app').set({ [key]: value, _updatedAt: Date.now() }, { merge:true });
@@ -698,7 +903,10 @@ function startSharedSettings(){
       // Mirror to localStorage as a fallback (helps offline / cold-start).
       _SHARED_KEYS.forEach(k => {
         if(next[k] != null){
-          try { localStorage.setItem(k, next[k]); } catch(_){}
+          try {
+            const asStr = (typeof next[k] === 'string') ? next[k] : JSON.stringify(next[k]);
+            localStorage.setItem(k, asStr);
+          } catch(_){}
         }
       });
       // Re-render Settings if that's the current view so a change on another
@@ -875,6 +1083,50 @@ function startFirebaseListeners(){
         return;
       }
     }
+    // Coming in from an "Edit before sending" link in an approval email? Wait
+    // until the followupReminders collection has loaded, then open the client
+    // contact modal pre-populated with the reminder's draft subject/body.
+    if(_pendingFollowupId){
+      const tryOpen = () => {
+        const r = followupReminders[_pendingFollowupId];
+        if(!r) return false;
+        const inq = inquiries.find(x=>x.id===r.inquiryId);
+        if(!inq) return false;
+        _pendingFollowupId = null;
+        selectedInqId = inq.id;
+        showView('pipeline');
+        setTimeout(()=>{
+          try {
+            openClientEmailModal(inq.id);
+            setTimeout(()=>{
+              const subEl = document.getElementById('cem_subject');
+              const bodyEl = document.getElementById('cem_body');
+              if(subEl && r.subject) subEl.value = r.subject;
+              if(bodyEl && r.body)   bodyEl.value = r.body;
+              // Small banner at the top of the modal so Kenny/Shelley remember
+              // this was the follow-up prompt.
+              const modal = document.getElementById('clientEmailModal');
+              if(modal && !document.getElementById('cem_followup_banner')){
+                const banner = document.createElement('div');
+                banner.id = 'cem_followup_banner';
+                banner.style.cssText = 'padding:10px 14px;background:#FEF1D6;border:1px dashed #A66900;color:#7A4A00;font-size:12px;margin:0 20px 12px;border-radius:8px;display:flex;gap:8px;align-items:center';
+                banner.innerHTML = '<i class="ti ti-hourglass" style="font-size:14px"></i> Editing the follow-up reminder for '+_actEsc(r.clientName||'')+'. Sending here will mark the reminder as done.';
+                const body = modal.querySelector('div[style*="padding:18px 20px"]');
+                if(body) body.insertBefore(banner, body.firstChild);
+              }
+              // Stash the reminder ID so the send handler can mark it "sent"
+              window._activeFollowupReminderId = r.id;
+            }, 150);
+          } catch(err){ console.warn('Could not open follow-up edit:', err); }
+        }, 200);
+        return true;
+      };
+      // Try now, and again once followupReminders arrives (Firestore listener fires async).
+      if(!tryOpen()){
+        const waitTimer = setInterval(() => { if(tryOpen()) clearInterval(waitTimer); }, 500);
+        setTimeout(() => clearInterval(waitTimer), 15000); // give up after 15s
+      }
+    }
     if(currentView==='pipeline' || currentView==='events'){
       if((currentView==='pipeline'||currentView==='events') && _estimateOpenId && Date.now() < _estimateDirtyUntil){ /* user is editing the estimate — don't rebuild the drawer under them */ }
       else render();
@@ -948,6 +1200,10 @@ let inquiries = [];
 // If the app is opened via a ...?card=<inquiryId> link (e.g. from the new-inquiry
 // email), remember it and open that client card once inquiries have loaded.
 let _pendingCardId = (function(){ try{ return new URLSearchParams(window.location.search).get('card') || null; }catch(e){ return null; } })();
+// If Kenny/Shelley clicked "Edit before sending" in a follow-up approval email,
+// the URL includes ?followup=<reminderId>. We remember it and, once inquiries
+// load, open the client's contact-email modal pre-filled with the draft.
+let _pendingFollowupId = (function(){ try{ return new URLSearchParams(window.location.search).get('followup') || null; }catch(e){ return null; } })();
 // Stages: 'new' | 'menu_sent' | 'booked'
 
 let changes = [
@@ -2667,7 +2923,7 @@ function renderPipeline(){
         if(compact){
           return `<div class="inq-card compact ${selectedInqId===inq.id?'selected':''}" ${plBorderStyle(inq,s.key)} ${plPayTitle(inq,s.key)} onclick="selectInquiry('${inq.id}')">
             ${allergyBanner(inq,true)}
-            <div class="pl-card-head"><div class="inq-name">${nm}${_unansweredBadge(inq)}${_salespersonBadge(inq)}</div>${chev}</div>
+            <div class="pl-card-head"><div class="inq-name">${nm}${_unansweredBadge(inq)}${_salespersonBadge(inq)}${_followupBadge(inq)}</div>${chev}</div>
             <div class="pl-compact-meta">
               ${inq.eventType ? `<span><i class="ti ti-tag" style="font-size:11px"></i>${inq.eventType}</span>` : ''}
               ${inq.eventDate ? `<span><i class="ti ti-calendar" style="font-size:11px"></i>${formatDate(inq.eventDate)}</span>` : ''}
@@ -2677,7 +2933,7 @@ function renderPipeline(){
         return `
       <div class="inq-card ${selectedInqId===inq.id?'selected':''}" ${plBorderStyle(inq,s.key)} ${plPayTitle(inq,s.key)} onclick="selectInquiry('${inq.id}')">
         ${allergyBanner(inq,false)}
-        <div class="pl-card-head"><div class="inq-name">${nm}${_unansweredBadge(inq)}${_salespersonBadge(inq)}</div>${chev}</div>
+        <div class="pl-card-head"><div class="inq-name">${nm}${_unansweredBadge(inq)}${_salespersonBadge(inq)}${_followupBadge(inq)}</div>${chev}</div>
         ${contact ? `<div style="font-size:11px;color:var(--text3);margin:-2px 0 4px"><i class="ti ti-user" style="font-size:10px"></i> ${contact}</div>` : ''}
         ${inq.eventName ? `<div class="inq-event-name">${inq.eventName}</div>` : ''}
         <div class="inq-meta">
@@ -3901,6 +4157,9 @@ async function confirmSendMenuEmail(){
   const ok = await sendGmailEmail(to, subject, body, htmlBody, attachments);
   if(ok){
     try{ if(typeof _menuEmailInqId!=='undefined' && _menuEmailInqId) logActivity(_menuEmailInqId,'email_sent','Menu emailed to '+to+(attachments&&attachments.length>1?' (with estimate attached)':''),{to:to,subject:subject}); }catch(e){}
+    // Schedule the 24-hour follow-up reminder. Silent no-op if the inquiry has
+    // no salesperson or follow-ups are globally paused.
+    try{ if(typeof _menuEmailInqId!=='undefined' && _menuEmailInqId) recordMenuFollowup(_menuEmailInqId, to); }catch(e){ console.warn('recordMenuFollowup failed:', e); }
     document.getElementById('sendEmailModal')?.remove();
   } else {
     if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-send" style="font-size:13px"></i> Send'; }
@@ -3923,6 +4182,11 @@ function moveInquiry(id, stage){
     if(ev0 && ev0.lost){ ev0.lost=false; _saveEvent(ev0); }
     createEventFromInquiry(inq);
     gcalBooked(inq);
+  }
+  // Auto-cancel pending follow-up reminders when the client is booked or lost
+  // (no need to nag the salesperson about following up on a settled client).
+  if(stage==='booked' || stage==='lost'){
+    try{ cancelPendingFollowupsFor(id, 'stage \u2192 '+stage); }catch(_){}
   }
   render(); updatePipelineBadge();
 }
@@ -5386,6 +5650,21 @@ async function sendClientEmailFromModal(inqId){
       const attBit = _cliEmailAttachments.length ? (' \u2014 '+_cliEmailAttachments.length+' attachment'+(_cliEmailAttachments.length>1?'s':'')) : '';
       logActivity(inqId,'email_sent','Email to '+to+': '+subject+attBit, { to, subject, attachments: _cliEmailAttachments.map(a=>({filename:a.filename,size:a.size})) });
     }catch(e){}
+    // If this send came from the "Edit before sending" follow-up flow, mark
+    // the reminder as complete so the salesperson isn't nudged further.
+    try {
+      if(window._activeFollowupReminderId && db){
+        const rid = window._activeFollowupReminderId;
+        window._activeFollowupReminderId = null;
+        await db.collection('followupReminders').doc(rid).update({
+          status: 'sent',
+          sentByEdit: true,
+          sentAt: Date.now(),
+          updatedAt: Date.now()
+        });
+        logActivity(inqId, 'followup', 'Follow-up sent to client (edited before send)', { reminderId: rid });
+      }
+    } catch(err){ console.warn('Could not mark reminder sent:', err); }
     _cliEmailAttachments = [];
     document.getElementById('clientEmailModal')?.remove();
   }
@@ -5518,12 +5797,7 @@ function openAddInquiryModal(){
       <div class="modal-row" style="margin-bottom:8px"><label>Referred by</label><input id="lead-referredBy" placeholder="Name"></div>
       <div class="modal-row" style="margin-bottom:8px"><label>Party planner</label><input id="lead-plannerName" placeholder="Planner name"></div>
       <div class="modal-row" style="margin-bottom:8px"><label>Salesperson</label>
-        <select id="lead-salesperson">
-          <option value="">— Unassigned —</option>
-          <option value="Kenny">Kenny</option>
-          <option value="Shelley">Shelley</option>
-          <option value="Josh">Josh</option>
-        </select>
+        <select id="lead-salesperson"></select>
       </div>
       <div class="modal-row" style="margin-bottom:8px"><label>Notes / comments</label><textarea id="lead-notes" placeholder="Any details..." style="min-height:60px"></textarea></div>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
@@ -5533,6 +5807,7 @@ function openAddInquiryModal(){
     </div>
   `;
   document.body.appendChild(modal);
+  _populateSalespersonSelect('lead-salesperson', _defaultSalesperson());
 }
 
 function closeAddLeadModal(){
@@ -10387,6 +10662,96 @@ function printList(id) {
 
 
 // ── SETTINGS ──
+// ── FOLLOW-UP SETTINGS PANEL ──
+function _renderFollowupSettings(){
+  const paused = sharedSettings.followupsPaused === true;
+  const pendingCount = Object.values(followupReminders).filter(r=>r.status==='pending').length;
+  return `
+  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
+    <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Menu follow-up reminders</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem;line-height:1.5">
+      24 hours after a menu is sent, the assigned salesperson gets an email asking whether to send a follow-up to the client. They can approve, skip, or edit before sending. If nobody answers, up to 3 nudges are sent 8 hours apart, then auto-skipped. No emails are sent during quiet hours (11:30\u202fPM\u20136:30\u202fAM daily, plus Friday 6\u202fPM\u2013Saturday 6\u202fPM ET).
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;padding:12px;background:${paused?'#FFF3F3':'var(--bg2)'};border:${paused?'1.5px dashed #8B1A1A':'0.5px solid var(--border2)'};border-radius:var(--radius);margin-bottom:14px">
+      <i class="ti ti-${paused?'player-pause-filled':'player-play-filled'}" style="font-size:20px;color:${paused?'#8B1A1A':'var(--green-text)'};flex-shrink:0"></i>
+      <div style="flex:1">
+        <div style="font-weight:600;color:var(--text);font-size:13px">${paused?'Follow-ups are PAUSED':'Follow-ups are running'}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">${paused?'No approval emails or client follow-ups are being sent. Pending reminders remain queued.':(pendingCount+' reminder'+(pendingCount===1?'':'s')+' pending')}</div>
+      </div>
+      <button onclick="toggleFollowupsPaused()" style="padding:7px 14px;border:none;border-radius:var(--radius);background:${paused?'#0F6E56':'#8B1A1A'};color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">${paused?'Resume':'Pause all'}</button>
+    </div>
+
+    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.4px">Salespeople</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">Each row is a salesperson who can be assigned to inquiries and receive follow-up approval emails. Add or remove as your team changes. Deleting a salesperson doesn't affect existing assignments \u2014 old inquiries keep their tag and can still be re-selected if you re-add the name.</div>
+    <div id="salespeople-list" style="display:flex;flex-direction:column;gap:6px">
+      ${_renderSalespeopleRows()}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button onclick="addSalespersonRow()" style="padding:7px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-plus" style="font-size:12px"></i> Add salesperson</button>
+      <button onclick="saveSalespersonEmails()" style="padding:7px 14px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:12px;font-weight:500;cursor:pointer">Save changes</button>
+    </div>
+  </div>`;
+}
+
+// Render the current list of salesperson rows for the Settings panel. Each
+// row has a Name field, Email field, and a Delete button.
+function _renderSalespeopleRows(){
+  const map = sharedSettings.salespersonEmails || {};
+  const names = Object.keys(map);
+  // Show at least an empty row if the list is fresh so Kenny knows what to do.
+  const list = names.length ? names : [''];
+  return list.map((name, i) => `
+    <div class="sp-row" data-idx="${i}" style="display:flex;align-items:center;gap:8px">
+      <input class="sp-name" type="text" value="${_actEsc(name)}" placeholder="Salesperson name" style="width:130px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;color:var(--text);font-family:inherit">
+      <input class="sp-email" type="email" value="${_actEsc(map[name]||'')}" placeholder="email@thepremiercaterer.com" style="flex:1;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;color:var(--text);font-family:inherit">
+      <button onclick="removeSalespersonRow(this)" title="Remove this salesperson" style="padding:6px 8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--crimson,#8B1A1A);font-size:14px;cursor:pointer;line-height:1">&times;</button>
+    </div>
+  `).join('');
+}
+
+function addSalespersonRow(){
+  const list = document.getElementById('salespeople-list');
+  if(!list) return;
+  const row = document.createElement('div');
+  row.className = 'sp-row';
+  row.style.cssText = 'display:flex;align-items:center;gap:8px';
+  row.innerHTML =
+    '<input class="sp-name" type="text" value="" placeholder="Salesperson name" style="width:130px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;color:var(--text);font-family:inherit">' +
+    '<input class="sp-email" type="email" value="" placeholder="email@thepremiercaterer.com" style="flex:1;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;color:var(--text);font-family:inherit">' +
+    '<button onclick="removeSalespersonRow(this)" title="Remove this salesperson" style="padding:6px 8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--crimson,#8B1A1A);font-size:14px;cursor:pointer;line-height:1">&times;</button>';
+  list.appendChild(row);
+  row.querySelector('.sp-name').focus();
+}
+window.addSalespersonRow = addSalespersonRow;
+
+function removeSalespersonRow(btn){
+  const row = btn.closest('.sp-row');
+  if(row) row.remove();
+}
+window.removeSalespersonRow = removeSalespersonRow;
+
+async function toggleFollowupsPaused(){
+  const nowPaused = !(sharedSettings.followupsPaused === true);
+  await setSharedSetting('followupsPaused', nowPaused);
+  showToast(nowPaused ? 'Follow-ups paused' : 'Follow-ups resumed \u2713');
+  render();
+}
+window.toggleFollowupsPaused = toggleFollowupsPaused;
+
+async function saveSalespersonEmails(){
+  const map = {};
+  document.querySelectorAll('#salespeople-list .sp-row').forEach(row => {
+    const name = (row.querySelector('.sp-name')?.value || '').trim();
+    const email = (row.querySelector('.sp-email')?.value || '').trim();
+    if(name) map[name] = email;   // email may be blank — that's a valid "no follow-up emails" setting
+  });
+  await setSharedSetting('salespersonEmails', map);
+  showToast('Salespeople saved \u2713');
+  render();
+}
+window.saveSalespersonEmails = saveSalespersonEmails;
+
 function renderSettings(){
   const connected=!!getSharedSetting('scriptUrl');
   const ghToken = getSharedSetting('githubToken');
@@ -10399,6 +10764,7 @@ function renderSettings(){
       <button onclick="resetUserPassword('josh')" style="padding:8px 14px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-size:13px;cursor:pointer">Reset Josh&rsquo;s password</button>
     </div>
   </div>
+  ${_renderFollowupSettings()}
   <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1rem">
       <div>
@@ -10569,6 +10935,7 @@ function openModal(){
   const de = document.getElementById('m-eventDate');
   if(de) de.value = we.toISOString().split('T')[0];
   document.getElementById('addModal').classList.add('open');
+  _populateSalespersonSelect('m-salesperson', _defaultSalesperson());
 }
 function closeModal(){ document.getElementById('addModal').classList.remove('open'); }
 
@@ -12168,6 +12535,7 @@ function _startApp() {
   startSharedSettings();     // pull shared Settings from Firestore + subscribe to changes
   startEmailTemplates();     // pull email templates from Firestore + subscribe to changes
   startUnansweredEmailWatcher();  // every 2 minutes: which clients have written to us and we haven't replied?
+  startFollowupReminders();       // subscribe to follow-up reminders (the 24h approval system)
   (function(){
     const role = roles[currentRole]||{};
     const invNav = document.getElementById('nav-invoices');
