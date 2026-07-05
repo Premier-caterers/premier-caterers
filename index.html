@@ -385,6 +385,37 @@ function _populateSalespersonSelect(elId, currentValue){
   el.innerHTML = opts.join('');
 }
 
+// Always-visible Salesperson cell for the client card. Unlike a plain fact
+// row, this never disappears when unassigned — so there's always a place to
+// set who owns the inquiry, right on the card. Editable dropdown for staff who
+// can edit (Kenny/Shelley); read-only text for everyone else.
+function _salespersonHubCell(inq, role){
+  const cur = inq && inq.salesperson ? inq.salesperson : '';
+  if(!role || !role.canEdit){
+    return '<div class="hub-fact"><div class="k">Salesperson</div><div class="v">'+(cur?pcEsc(cur):'\u2014 Unassigned \u2014')+'</div></div>';
+  }
+  const people = getSalespeople();
+  let opts = '<option value=""'+(!cur?' selected':'')+'>\u2014 Unassigned \u2014</option>';
+  people.forEach(sp => { opts += '<option value="'+pcEsc(sp)+'"'+(sp===cur?' selected':'')+'>'+pcEsc(sp)+'</option>'; });
+  if(cur && !people.includes(cur)){ opts += '<option value="'+pcEsc(cur)+'" selected>'+pcEsc(cur)+' (removed)</option>'; }
+  const sel = '<select onchange="setInqSalesperson(\''+inq.id+'\', this.value)" '+
+    'style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:5px 8px;font-size:13px;color:var(--text);font-family:inherit;font-weight:600;cursor:pointer">'+opts+'</select>';
+  return '<div class="hub-fact"><div class="k">Salesperson</div><div class="v">'+sel+'</div></div>';
+}
+
+// Save an inline salesperson change made from the client card, then refresh.
+async function setInqSalesperson(id, value){
+  const inq = inquiries.find(x => x.id === id); if(!inq) return;
+  const prev = inq.salesperson || '';
+  const next = (value || '').trim();
+  if(prev === next) return;
+  inq.salesperson = next;
+  try{ await _saveInquiry(inq); }catch(e){ console.error('[salesperson] save failed', e); }
+  try{ logActivity(id, 'inquiry', next ? ('Salesperson set to '+next) : 'Salesperson cleared', {salesperson: next, prev: prev}); }catch(e){}
+  try{ render(); }catch(e){}   // render() also refreshes the open drawer via syncHubDrawer()
+}
+window.setInqSalesperson = setInqSalesperson;
+
 // ── UNANSWERED-EMAIL TRACKING ──
 // Every 2 minutes we pull the recent inbox + sent folders and figure out, per
 // known client email address, whether their most recent message is *from them*
@@ -3280,7 +3311,7 @@ function renderInqDetail(inq, role){
       ${_hubCard('Menu', `<div style="display:flex;flex-direction:column;gap:10px">${menuHtml}<div style="margin-top:2px"><button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:inherit"><i class="ti ti-link" style="font-size:14px"></i>${(Array.isArray(inq.menus)&&inq.menus.length)||inq.menuLink?'Add another link':'Attach menu manually'}</button><button onclick="openTemplatePicker('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-left:6px;font-family:inherit"><i class="ti ti-file-plus" style="font-size:14px"></i>Create menu from template</button></div></div>`)}
       ${ev ? _hubCard('Staff &amp; event details', drawerStaffDetails(inq, ev, role)) : ''}
       ${_hubCardWrap(drawerVenue(inq))}
-      ${_hubCard('Details', `<div class="hub-facts">${fact('Client', name)}${fact('Phone', inq.phone)}${fact('Email', inq.email)}${fact('Event type', inq.eventType)}${fact('Party planner', inq.plannerName)}${fact('Salesperson', inq.salesperson)}</div>${_unansweredHubBanner(inq)}${hubAiCard(inq)||''}${refHtml}${notesHtml}`)}
+      ${_hubCard('Details', `<div class="hub-facts">${fact('Client', name)}${fact('Phone', inq.phone)}${fact('Email', inq.email)}${fact('Event type', inq.eventType)}${fact('Party planner', inq.plannerName)}${_salespersonHubCell(inq, role)}</div>${_unansweredHubBanner(inq)}${hubAiCard(inq)||''}${refHtml}${notesHtml}`)}
       ${_hubCard('Activity', `${hubTimeline(inq,6)}<div style="margin-top:11px"><button onclick="openActivityLog('${inq.id}')" style="font-size:12px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:inherit"><i class="ti ti-history" style="font-size:15px"></i>Full activity log${_actCountFor(inq.id)?(' (' + _actCountFor(inq.id) + ')'):''}</button></div>`)}
     </div>
   </div>`;
