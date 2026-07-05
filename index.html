@@ -174,6 +174,14 @@
     <div class="modal-row"><label>Referred by</label><input id="m-referredBy" placeholder="Name"></div>
     <div class="modal-row"><label>Event attended (if referred from one)</label><input id="m-eventAttended" placeholder="Whose event"></div>
     <div class="modal-row"><label>Party planner</label><input id="m-plannerName" placeholder="Planner name"></div>
+    <div class="modal-row"><label>Salesperson</label>
+      <select id="m-salesperson">
+        <option value="">— Unassigned —</option>
+        <option value="Kenny">Kenny</option>
+        <option value="Shelley">Shelley</option>
+        <option value="Josh">Josh</option>
+      </select>
+    </div>
     <div class="modal-row"><label>Job # (optional)</label><input id="m-job" placeholder="Auto-generated (or enter custom #)"></div>
     <div class="modal-row"><label>Notes / comments</label><textarea id="m-notes" placeholder="Any details..."></textarea></div>
     <div class="modal-actions">
@@ -222,6 +230,214 @@ let trash = [];
 let invoices = {}; // keyed by eventId
 let savedLineItems = JSON.parse(localStorage.getItem('savedLineItems')||'[]');
 let venues = []; // venues database
+
+// Default salesperson for a new inquiry — matches the logged-in user's name
+// when we can, otherwise leaves it unassigned so Kenny sets it explicitly.
+function _defaultSalesperson(){
+  const user = String(authUser||'').toLowerCase();
+  if(user === 'kenny')   return 'Kenny';
+  if(user === 'shelley') return 'Shelley';
+  if(user === 'josh')    return 'Josh';
+  return '';
+}
+
+// Small pill showing who owns this inquiry — colored per salesperson but with
+// their initial as text so it reads on any theme and is colorblind-safe.
+function _salespersonBadge(inq){
+  if(!inq || !inq.salesperson) return '';
+  const sp = inq.salesperson;
+  const initial = sp.charAt(0).toUpperCase();
+  // Colors chosen to be distinguishable in luminance too
+  const palette = { Kenny:'#8B1A1A', Shelley:'#0F6E56', Josh:'#3B4A85' };
+  const bg = palette[sp] || '#5F5E5A';
+  return `<span title="Salesperson: ${sp}" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:${bg};color:#fff;font-size:10px;font-weight:600;margin-left:6px;flex-shrink:0;letter-spacing:0">${initial}</span>`;
+}
+
+// The illuminated "unanswered email" indicator. Uses two visual signals so it
+// reads for colorblind users: a filled envelope icon AND a red dot on the
+// corner, plus a dashed outline. Clicking it opens the mark-as-handled menu.
+function _unansweredBadge(inq){
+  if(!inquiryHasUnansweredEmail(inq)) return '';
+  return `<span title="Client emailed — no reply yet. Click to mark handled." onclick="event.stopPropagation();markEmailHandled('${inq.id}')" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#FFE9DC;border:1.5px dashed #B44100;color:#B44100;margin-left:6px;flex-shrink:0;cursor:pointer;position:relative"><i class="ti ti-mail-filled" style="font-size:11px"></i><span style="position:absolute;top:-2px;right:-2px;width:7px;height:7px;background:#B44100;border-radius:50%;border:1.5px solid var(--bg)"></span></span>`;
+}
+
+// Larger banner version shown in the client detail view (hub). Includes
+// the subject of the last unanswered message so Kenny sees what came in.
+function _unansweredHubBanner(inq){
+  if(!inquiryHasUnansweredEmail(inq)) return '';
+  const em = (inq.email||'').trim().toLowerCase();
+  const rec = unansweredMap[em] || {};
+  const subj = rec.subject ? String(rec.subject).slice(0, 80) : '';
+  const when = rec.lastInboundAt ? new Date(rec.lastInboundAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+  return `<div style="margin-top:12px;padding:12px 14px;background:#FFE9DC;border:1.5px dashed #B44100;border-radius:var(--radius);display:flex;gap:12px;align-items:center">
+    <i class="ti ti-mail-filled" style="font-size:20px;color:#B44100;flex-shrink:0"></i>
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:600;color:#B44100;font-size:13px">Client emailed \u2014 no reply sent yet</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${when}${subj?(' \u2014 "'+_actEsc(subj)+'"'):''}</div>
+    </div>
+    <button onclick="event.stopPropagation();openClientEmail('${inq.id}')" style="padding:6px 10px;border:none;border-radius:var(--radius);background:#B44100;color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap"><i class="ti ti-send" style="font-size:11px"></i> Reply</button>
+    <button onclick="event.stopPropagation();markEmailHandled('${inq.id}')" title="Mark as handled if you replied by phone / text" style="padding:6px 10px;border:0.5px solid #B44100;border-radius:var(--radius);background:transparent;color:#B44100;font-size:11px;cursor:pointer;white-space:nowrap"><i class="ti ti-check" style="font-size:11px"></i> Handled</button>
+  </div>`;
+}
+
+// ── SALESPEOPLE ──
+// Who can be assigned as the "owning" salesperson on an inquiry. Matches the
+// role list from the login system but excludes admin (a role, not a person)
+// and kitchen (not a salesperson).
+const SALESPEOPLE = ['Kenny', 'Shelley', 'Josh'];
+
+// ── UNANSWERED-EMAIL TRACKING ──
+// Every 2 minutes we pull the recent inbox + sent folders and figure out, per
+// known client email address, whether their most recent message is *from them*
+// and we haven't replied since. If so their card shows an unanswered indicator.
+// Kenny can also "mark as handled" (e.g. after a phone call) which sets a
+// per-client override that only clears on the next inbound message.
+let unansweredMap = {};           // email(lowercase) -> {lastInboundAt, lastOutboundAt, unanswered:bool, subject}
+let _unansweredTimer = null;
+let _lastUnansweredCheckAt = 0;
+
+// Explicit "I handled this outside email" override, stored on the inquiry so
+// it syncs across devices. Cleared automatically when a NEW inbound arrives.
+function isEmailHandled(inq){
+  if(!inq) return false;
+  const em = (inq.email||'').trim().toLowerCase();
+  if(!em) return false;
+  const u = unansweredMap[em];
+  if(!u || !u.lastInboundAt) return false;
+  const handledAt = parseInt(inq.emailHandledAt||0, 10);
+  if(handledAt && handledAt >= u.lastInboundAt) return true;
+  return false;
+}
+function inquiryHasUnansweredEmail(inq){
+  if(!inq) return false;
+  const em = (inq.email||'').trim().toLowerCase();
+  if(!em) return false;
+  const u = unansweredMap[em];
+  if(!u || !u.unanswered) return false;
+  if(isEmailHandled(inq)) return false;
+  return true;
+}
+async function markEmailHandled(inqId){
+  const inq = _findInq(inqId); if(!inq) return;
+  inq.emailHandledAt = Date.now();
+  await _saveInquiry(inq);
+  try{ logActivity(inq.id, 'note', 'Marked incoming email as handled outside app', {}); }catch(_){}
+  render();
+  showToast('Marked as handled \u2713');
+}
+window.markEmailHandled = markEmailHandled;
+
+// Kick off the every-2-minute background check. Started after Firestore init
+// so we already have inquiries/emailTemplates loaded.
+function startUnansweredEmailWatcher(){
+  if(_unansweredTimer) return;
+  const check = async () => {
+    try { await checkUnansweredEmails(); } catch(err){ console.warn('Unanswered check failed:', err); }
+  };
+  // First check after a short delay (lets the initial page render finish),
+  // then every 2 minutes.
+  setTimeout(check, 5000);
+  _unansweredTimer = setInterval(check, 120 * 1000);
+}
+async function checkUnansweredEmails(){
+  if(!isGmailConnected()) return;
+  if(!inquiries || !inquiries.length) return;
+  // Pull recent inbox + recent sent. 100 each is plenty for spotting fresh
+  // conversation state; older stuff would already be settled.
+  const [inbox, sent] = await Promise.all([
+    _fetchGmailRaw('in:inbox', 100),
+    _fetchGmailRaw('in:sent', 100)
+  ]);
+  // Build a per-address timeline: latest inbound and latest outbound.
+  const latest = {};       // email -> {inAt, inSubject, outAt}
+  function extractEmail(header){
+    if(!header) return '';
+    const m = String(header).match(/<([^>]+)>/);
+    return (m ? m[1] : String(header)).trim().toLowerCase();
+  }
+  (inbox||[]).forEach(m => {
+    const em = extractEmail(m.from);
+    if(!em) return;
+    const t = m.date ? Date.parse(m.date) : 0;
+    if(!t) return;
+    if(!latest[em]) latest[em] = {};
+    if(!latest[em].inAt || t > latest[em].inAt){
+      latest[em].inAt = t;
+      latest[em].inSubject = m.subject || '';
+    }
+  });
+  (sent||[]).forEach(m => {
+    const em = extractEmail(m.to);
+    if(!em) return;
+    const t = m.date ? Date.parse(m.date) : 0;
+    if(!t) return;
+    if(!latest[em]) latest[em] = {};
+    if(!latest[em].outAt || t > latest[em].outAt){
+      latest[em].outAt = t;
+    }
+  });
+  // Filter down to just addresses we recognize as clients, so we don't waste
+  // memory on every stranger who's ever emailed events@.
+  const clientEmails = new Set(
+    inquiries.map(x => (x.email||'').trim().toLowerCase()).filter(Boolean)
+  );
+  const next = {};
+  Object.keys(latest).forEach(em => {
+    if(!clientEmails.has(em)) return;
+    const rec = latest[em];
+    const inAt = rec.inAt || 0;
+    const outAt = rec.outAt || 0;
+    next[em] = {
+      lastInboundAt: inAt,
+      lastOutboundAt: outAt,
+      subject: rec.inSubject || '',
+      // Unanswered = they wrote last AND we haven't replied since.
+      unanswered: !!(inAt && inAt > outAt)
+    };
+  });
+  const changed = JSON.stringify(next) !== JSON.stringify(unansweredMap);
+  unansweredMap = next;
+  _lastUnansweredCheckAt = Date.now();
+  if(changed){
+    // A cheap re-render so any indicators update. We use render() rather than
+    // patching DOM directly because the icon can appear in many places.
+    try { render(); } catch(_){}
+  }
+}
+// Thin helper that hits the same Gmail relay/API path as fetchInboxMessages
+// but returns a compact array — used only by the unanswered watcher.
+async function _fetchGmailRaw(query, max){
+  max = max || 40;
+  if(gmailViaScript()){
+    try {
+      const u = gmailRelayUrl();
+      const url = u + (u.includes('?')?'&':'?') + 'action=gmailList&max='+max+'&q='+encodeURIComponent(query);
+      const r = await fetch(url);
+      const d = await r.json();
+      if(!d.ok) return [];
+      return d.messages || [];
+    } catch(_){ return []; }
+  }
+  try { await ensureGmailToken(); } catch(_){ return []; }
+  try {
+    const resp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults='+max+'&q='+encodeURIComponent(query), {
+      headers: { Authorization: 'Bearer ' + gmailToken }
+    });
+    const list = await resp.json();
+    if(!list.messages) return [];
+    // Batch-fetch headers only — we don't need bodies here.
+    const detailed = await Promise.all(list.messages.slice(0, max).map(async m => {
+      const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/'+m.id+'?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date', {
+        headers: { Authorization: 'Bearer ' + gmailToken }
+      });
+      const md = await r.json();
+      const hdr = (md.payload && md.payload.headers) || [];
+      const find = n => (hdr.find(h => h.name===n)||{}).value || '';
+      return { id:m.id, from:find('From'), to:find('To'), subject:find('Subject'), date:find('Date') };
+    }));
+    return detailed;
+  } catch(_){ return []; }
+}
 
 // ── EMAIL TEMPLATES ──
 // Shared across devices via Firestore (settings/emailTemplates). Kenny can add
@@ -2451,7 +2667,7 @@ function renderPipeline(){
         if(compact){
           return `<div class="inq-card compact ${selectedInqId===inq.id?'selected':''}" ${plBorderStyle(inq,s.key)} ${plPayTitle(inq,s.key)} onclick="selectInquiry('${inq.id}')">
             ${allergyBanner(inq,true)}
-            <div class="pl-card-head"><div class="inq-name">${nm}</div>${chev}</div>
+            <div class="pl-card-head"><div class="inq-name">${nm}${_unansweredBadge(inq)}${_salespersonBadge(inq)}</div>${chev}</div>
             <div class="pl-compact-meta">
               ${inq.eventType ? `<span><i class="ti ti-tag" style="font-size:11px"></i>${inq.eventType}</span>` : ''}
               ${inq.eventDate ? `<span><i class="ti ti-calendar" style="font-size:11px"></i>${formatDate(inq.eventDate)}</span>` : ''}
@@ -2461,7 +2677,7 @@ function renderPipeline(){
         return `
       <div class="inq-card ${selectedInqId===inq.id?'selected':''}" ${plBorderStyle(inq,s.key)} ${plPayTitle(inq,s.key)} onclick="selectInquiry('${inq.id}')">
         ${allergyBanner(inq,false)}
-        <div class="pl-card-head"><div class="inq-name">${nm}</div>${chev}</div>
+        <div class="pl-card-head"><div class="inq-name">${nm}${_unansweredBadge(inq)}${_salespersonBadge(inq)}</div>${chev}</div>
         ${contact ? `<div style="font-size:11px;color:var(--text3);margin:-2px 0 4px"><i class="ti ti-user" style="font-size:10px"></i> ${contact}</div>` : ''}
         ${inq.eventName ? `<div class="inq-event-name">${inq.eventName}</div>` : ''}
         <div class="inq-meta">
@@ -2751,7 +2967,7 @@ function renderInqDetail(inq, role){
       ${_hubCard('Menu', `<div style="display:flex;flex-direction:column;gap:10px">${menuHtml}<div style="margin-top:2px"><button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:inherit"><i class="ti ti-link" style="font-size:14px"></i>${(Array.isArray(inq.menus)&&inq.menus.length)||inq.menuLink?'Add another link':'Attach menu manually'}</button><button onclick="openTemplatePicker('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-left:6px;font-family:inherit"><i class="ti ti-file-plus" style="font-size:14px"></i>Create menu from template</button></div></div>`)}
       ${ev ? _hubCard('Staff &amp; event details', drawerStaffDetails(inq, ev, role)) : ''}
       ${_hubCardWrap(drawerVenue(inq))}
-      ${_hubCard('Details', `<div class="hub-facts">${fact('Client', name)}${fact('Phone', inq.phone)}${fact('Email', inq.email)}${fact('Event type', inq.eventType)}${fact('Party planner', inq.plannerName)}</div>${hubAiCard(inq)||''}${refHtml}${notesHtml}`)}
+      ${_hubCard('Details', `<div class="hub-facts">${fact('Client', name)}${fact('Phone', inq.phone)}${fact('Email', inq.email)}${fact('Event type', inq.eventType)}${fact('Party planner', inq.plannerName)}${fact('Salesperson', inq.salesperson)}</div>${_unansweredHubBanner(inq)}${hubAiCard(inq)||''}${refHtml}${notesHtml}`)}
       ${_hubCard('Activity', `${hubTimeline(inq,6)}<div style="margin-top:11px"><button onclick="openActivityLog('${inq.id}')" style="font-size:12px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:inherit"><i class="ti ti-history" style="font-size:15px"></i>Full activity log${_actCountFor(inq.id)?(' (' + _actCountFor(inq.id) + ')'):''}</button></div>`)}
     </div>
   </div>`;
@@ -5000,6 +5216,12 @@ function openEditInquiryModal(id){
       <div class="modal-row" style="margin-bottom:0"><label>Event attended</label><input id="ie-eventAttended" value="${esc(inq.eventAttended)}"></div>
       <div class="modal-row" style="margin-bottom:0"><label>Party planner</label><input id="ie-plannerName" value="${esc(inq.plannerName)}"></div>
     </div>
+    <div class="modal-row"><label>Salesperson</label>
+      <select id="ie-salesperson">
+        <option value=""${!inq.salesperson?' selected':''}>— Unassigned —</option>
+        ${SALESPEOPLE.map(sp => `<option value="${sp}"${inq.salesperson===sp?' selected':''}>${sp}</option>`).join('')}
+      </select>
+    </div>
     <div class="modal-row"><label>Notes / comments</label><textarea id="ie-comments" style="min-height:70px">${esc(inq.comments)}</textarea></div>
     <div class="modal-row"><label>Stage</label><select id="ie-stage">${sel(stageOpts, inq.stage)}</select></div>
     ${evSec}
@@ -5187,6 +5409,7 @@ function saveInquiryEdits(id){
   inq.venueName=g('venueName'); inq.venueLocation=g('venueLocation');
   inq.phone=g('phone'); inq.email=g('email');
   inq.howFound=g('howFound'); inq.referredBy=g('referredBy'); inq.eventAttended=g('eventAttended'); inq.plannerName=g('plannerName');
+  inq.salesperson=g('salesperson');
   inq.comments=g('comments');
   const newStage=g('stage')||inq.stage;
   inq.stage=newStage;
@@ -5294,6 +5517,14 @@ function openAddInquiryModal(){
       <div class="modal-row" style="margin-bottom:8px"><label>How did you find us?</label><input id="lead-howFound" placeholder="Referral, website, event…"></div>
       <div class="modal-row" style="margin-bottom:8px"><label>Referred by</label><input id="lead-referredBy" placeholder="Name"></div>
       <div class="modal-row" style="margin-bottom:8px"><label>Party planner</label><input id="lead-plannerName" placeholder="Planner name"></div>
+      <div class="modal-row" style="margin-bottom:8px"><label>Salesperson</label>
+        <select id="lead-salesperson">
+          <option value="">— Unassigned —</option>
+          <option value="Kenny">Kenny</option>
+          <option value="Shelley">Shelley</option>
+          <option value="Josh">Josh</option>
+        </select>
+      </div>
       <div class="modal-row" style="margin-bottom:8px"><label>Notes / comments</label><textarea id="lead-notes" placeholder="Any details..." style="min-height:60px"></textarea></div>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
         <button onclick="closeAddLeadModal()" style="padding:8px 16px;border:1px solid var(--border2);border-radius:var(--radius);background:#fff;color:var(--text2);cursor:pointer">Cancel</button>
@@ -5336,6 +5567,7 @@ function saveNewLead(){
     howFound: get('lead-howFound').trim(),
     referredBy: get('lead-referredBy').trim(),
     plannerName: get('lead-plannerName').trim(),
+    salesperson: get('lead-salesperson') || _defaultSalesperson(),
     comments: get('lead-notes').trim(),
     source: 'manual',
     menuAutomationTriggered: false,
@@ -10382,6 +10614,7 @@ function addEvent(){
       referredBy: document.getElementById('m-referredBy')?.value?.trim()||'',
       eventAttended: document.getElementById('m-eventAttended')?.value?.trim()||'',
       plannerName: document.getElementById('m-plannerName')?.value?.trim()||'',
+      salesperson: document.getElementById('m-salesperson')?.value?.trim() || _defaultSalesperson(),
       comments: document.getElementById('m-notes')?.value?.trim()||'',
       source: 'website',
       menuAutomationTriggered: false,
@@ -11934,6 +12167,7 @@ function _startApp() {
   groceryListsCol    = db.collection('groceryLists');
   startSharedSettings();     // pull shared Settings from Firestore + subscribe to changes
   startEmailTemplates();     // pull email templates from Firestore + subscribe to changes
+  startUnansweredEmailWatcher();  // every 2 minutes: which clients have written to us and we haven't replied?
   (function(){
     const role = roles[currentRole]||{};
     const invNav = document.getElementById('nav-invoices');
