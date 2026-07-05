@@ -876,7 +876,7 @@ async function saveEmailTemplates(){
 // before Firestore comes back, and for genuinely-offline first loads.
 // PER-DEVICE things (login role, per-device auth tokens, checkbox toggles
 // like "use Twilio") intentionally stay in localStorage.
-const _SHARED_KEYS = ['scriptUrl','gmailClientId','githubToken','followupsPaused','salespersonEmails','delegationReady'];
+const _SHARED_KEYS = ['scriptUrl','gmailClientId','githubToken','followupsPaused','salespersonEmails','delegationReady','followupsTestMode','followupsTestEmail'];
 let sharedSettings = {};
 let _sharedSettingsReady = false;
 let _sharedSettingsListener = null;
@@ -10909,12 +10909,28 @@ function printList(id) {
 // ── FOLLOW-UP SETTINGS PANEL ──
 function _renderFollowupSettings(){
   const paused = sharedSettings.followupsPaused === true;
+  const testMode = sharedSettings.followupsTestMode !== false;   // defaults to TRUE for safety
+  const testEmail = sharedSettings.followupsTestEmail || '';
   const pendingCount = Object.values(followupReminders).filter(r=>r.status==='pending').length;
   return `
   <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
     <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Menu follow-up reminders</div>
     <div style="font-size:12px;color:var(--text3);margin-bottom:1rem;line-height:1.5">
       24 hours after a menu is sent, the assigned salesperson gets an email asking whether to send a follow-up to the client. They can approve, skip, or edit before sending. If nobody answers, up to 3 nudges are sent 8 hours apart, then auto-skipped. No emails are sent during quiet hours (11:30\u202fPM\u20136:30\u202fAM daily, plus Friday 6\u202fPM\u2013Saturday 6\u202fPM ET).
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;padding:12px;background:${testMode?'#EEEDFE':'#E1F5EE'};border:${testMode?'1.5px dashed #534AB7':'1.5px solid #0F6E56'};border-radius:var(--radius);margin-bottom:14px">
+      <i class="ti ti-${testMode?'flask-2':'circle-check-filled'}" style="font-size:22px;color:${testMode?'#534AB7':'#0F6E56'};flex-shrink:0"></i>
+      <div style="flex:1">
+        <div style="font-weight:700;color:${testMode?'#3C3489':'#0F6E56'};font-size:13px">${testMode?'TEST MODE ON \u2014 no real emails to salespeople or clients':'LIVE MODE \u2014 real emails will be sent'}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px;line-height:1.5">${testMode?('All approval emails and client follow-ups are redirected to the test address below. Nothing reaches Shelley, Josh, or any real client. Flip to LIVE only after you\u2019ve seen the flow work end to end.'):('Approval emails go to salespeople. Approved follow-ups go to real clients. Turn on test mode if you want to dress-rehearse changes.')}</div>
+        ${testMode ? `<div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--text2)">Redirect all follow-up emails to:</span>
+          <input id="followup-test-email" type="email" value="${_actEsc(testEmail)}" placeholder="you@example.com" style="flex:1;min-width:180px;background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius);padding:5px 9px;font-size:11px;color:var(--text);font-family:inherit">
+          <button onclick="saveFollowupTestEmail()" style="padding:5px 10px;border:none;border-radius:var(--radius);background:#534AB7;color:#fff;font-size:11px;font-weight:600;cursor:pointer">Save</button>
+        </div>` : ''}
+      </div>
+      <button onclick="toggleFollowupTestMode()" title="${testMode?'Switch to LIVE mode (real emails)':'Switch to TEST mode (safe)'}" style="padding:7px 14px;border:none;border-radius:var(--radius);background:${testMode?'#0F6E56':'#534AB7'};color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">${testMode?'Go LIVE':'Back to TEST'}</button>
     </div>
 
     <div style="display:flex;align-items:center;gap:10px;padding:12px;background:${paused?'#FFF3F3':'var(--bg2)'};border:${paused?'1.5px dashed #8B1A1A':'0.5px solid var(--border2)'};border-radius:var(--radius);margin-bottom:14px">
@@ -11002,6 +11018,31 @@ async function toggleFollowupsPaused(){
   render();
 }
 window.toggleFollowupsPaused = toggleFollowupsPaused;
+
+async function toggleFollowupTestMode(){
+  const currentlyOn = sharedSettings.followupsTestMode !== false;
+  if(currentlyOn){
+    // Going LIVE — extra confirm because this is the moment real emails start
+    const testEmail = sharedSettings.followupsTestEmail || '';
+    if(!confirm('Switch follow-ups to LIVE mode?\n\nFrom this point on:\n\u2022 Approval emails will go to real salespeople (Kenny, Shelley, Josh)\n\u2022 Approved follow-ups will go to real clients\n\nYou can always switch back to TEST mode later.')) return;
+    await setSharedSetting('followupsTestMode', false);
+    showToast('Live mode ON \u2014 real emails will now be sent', 5000);
+  } else {
+    await setSharedSetting('followupsTestMode', true);
+    showToast('Test mode ON \u2014 emails redirected to test address');
+  }
+  render();
+}
+window.toggleFollowupTestMode = toggleFollowupTestMode;
+
+async function saveFollowupTestEmail(){
+  const el = document.getElementById('followup-test-email');
+  if(!el) return;
+  const v = (el.value||'').trim();
+  await setSharedSetting('followupsTestEmail', v);
+  showToast('Test address saved \u2713');
+}
+window.saveFollowupTestEmail = saveFollowupTestEmail;
 
 async function saveSalespersonEmails(){
   const map = {};
