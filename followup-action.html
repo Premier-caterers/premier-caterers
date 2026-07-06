@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Premier Caterers — follow-up action landing page. Lives on GitHub Pages so
+     email button links load cleanly (no Google multi-account routing), then
+     calls the events@ Apps Script as a JSON API in the background. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Premier Caterers — Follow-up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --maroon:#6E1E2A; --maroon-deep:#571622;
+    --brass:#A67C2E; --brass-light:#C9A24B;
+    --paper:#FBF8F2; --ink:#2A2320; --muted:#6B615A; --line:#E4DACB;
+    --ok:#2F7A45; --ok-bg:#EAF4EC;
+    --warn:#B0781E; --warn-bg:#FBF2DE;
+    --stop:#B03A2E; --stop-bg:#FBEAE7;
+  }
+  *{box-sizing:border-box} html,body{margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px 48px}
+  .card{width:100%;max-width:440px;background:#fff;border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 8px 30px rgba(87,22,34,.08);overflow:hidden}
+  .head{background:var(--maroon);color:#fff;padding:20px 22px;display:flex;align-items:center;gap:12px}
+  .brandmark{width:34px;height:34px;flex:0 0 34px;border:2px solid var(--brass-light);border-radius:8px;
+    display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:700;font-size:18px;color:var(--brass-light)}
+  .brand h1{font-family:'Fraunces',serif;font-weight:600;font-size:17px;margin:0;line-height:1.1}
+  .brand p{margin:2px 0 0;font-size:12px;color:#E9CFA6;letter-spacing:.02em}
+  .body{padding:24px 22px 26px}
+  /* Every state is distinguished by BORDER PATTERN + ICON SHAPE + TEXT — never color alone. */
+  .status{border-radius:12px;padding:18px 18px 16px;margin-bottom:18px;display:flex;gap:14px;align-items:flex-start}
+  .status.loading{border:2px dotted var(--warn);background:var(--warn-bg)}
+  .status.confirm{border:2px solid var(--maroon);background:#fff}
+  .status.ok{border:2px solid var(--ok);background:var(--ok-bg)}
+  .status.neutral{border:2px dashed var(--brass);background:#FAF4E7}
+  .status.stop{border:2px dashed var(--stop);background:var(--stop-bg)}
+  .badge{width:40px;height:40px;flex:0 0 40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff}
+  .status.loading .badge{border:2px dotted var(--warn)}
+  .status.confirm .badge{border:2px solid var(--maroon)}
+  .status.ok .badge{border:2px solid var(--ok)}
+  .status.neutral .badge{border:2px dashed var(--brass)}
+  .status.stop .badge{border:2px dashed var(--stop)}
+  .badge svg{width:22px;height:22px}
+  .status h2{margin:0 0 4px;font-family:'Fraunces',serif;font-weight:600;font-size:18px}
+  .status p{margin:0;font-size:14px;color:var(--muted);line-height:1.45}
+  .details{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:18px;font-size:14px}
+  .details .row{display:flex;justify-content:space-between;gap:12px;padding:5px 0}
+  .details .row + .row{border-top:1px dashed var(--line)}
+  .details .k{color:var(--muted)} .details .v{font-weight:600;text-align:right}
+  .preview{margin-top:12px;padding:12px 14px;background:var(--paper);border:1px dashed var(--line);border-radius:8px;
+    font-size:13px;color:var(--ink);line-height:1.5;white-space:pre-wrap;max-height:170px;overflow:auto}
+  .preview .plabel{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--brass);margin-bottom:6px;font-weight:600}
+  .actions{display:flex;flex-direction:column;gap:10px}
+  button{font-family:'Inter',sans-serif;font-size:15px;font-weight:600;padding:13px 16px;border-radius:10px;
+    cursor:pointer;border:1px solid transparent;transition:transform .05s ease,box-shadow .15s ease}
+  button:active{transform:translateY(1px)} button:focus-visible{outline:3px solid var(--brass-light);outline-offset:2px}
+  .btn-primary{background:var(--maroon);color:#fff} .btn-primary:hover{background:var(--maroon-deep)}
+  .btn-ghost{background:#fff;color:var(--maroon);border-color:var(--line)} .btn-ghost:hover{border-color:var(--maroon)}
+  button[disabled]{opacity:.55;cursor:not-allowed}
+  .foot{text-align:center;font-size:12px;color:var(--muted);padding:14px 22px 2px;line-height:1.4}
+  .demoflag{background:var(--warn-bg);border:1px dotted var(--warn);color:#7a5410;font-size:12px;text-align:center;
+    padding:8px 12px;border-radius:8px;margin-bottom:16px;font-weight:600}
+  .spin{animation:spin 1.1s linear infinite;transform-origin:center}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion: reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="head">
+    <div class="brandmark">P</div>
+    <div class="brand"><h1>Premier Caterers</h1><p>Follow-up action</p></div>
+  </div>
+  <div class="body" id="body"></div>
+  <div class="foot">This link is safe to close once you see a confirmation.</div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — must match your events@ Apps Script.
+   ============================================================ */
+// The events@ Apps Script /exec URL (same one your email relay uses).
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvCdYApcKEuBG41Zy730jHhEC7vWQStNRz4DNvspYUnDut9OMUWb732hKJm3PT09RfVQ/exec";
+
+// Choice codes must match the ones your Apps Script handler expects.
+// isSend:true  -> a real client email goes out, so require an explicit click.
+// isSend:false -> just updates the reminder's status (no client email).
+const ACTIONS = {
+  send:     { verb:"Send now",         isSend:true  },
+  skip_in:  { verb:"Mark in contact",  isSend:false },
+  skip_not: { verb:"Skip",             isSend:false },
+  edit:     { verb:"Open to edit",     isSend:false }
+};
+
+/* ============================================================ */
+const ICON = {
+  hourglass:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spin"><path d="M6 2h12M6 22h12M8 2c0 4 8 6 8 10s-8 6-8 10M16 2c0 4-8 6-8 10s8 6 8 10"/></svg>',
+  hourglassStill:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--brass)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12M6 22h12M8 2c0 4 8 6 8 10s-8 6-8 10M16 2c0 4-8 6-8 10s8 6 8 10"/></svg>',
+  question:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--maroon)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.1 9a3 3 0 1 1 5 2.2c-.8.7-1.6 1.2-1.6 2.3"/><circle cx="12" cy="17.5" r="1"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>',
+  belloff:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--brass)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M18 16v-5a6 6 0 0 0-6-6M6 8v3l-2 3h11M9 20a2 2 0 0 0 4 0"/></svg>',
+  alert:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--stop)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5"/><circle cx="12" cy="17" r=".9" fill="var(--stop)"/><path d="M12 3l9 16H3z"/></svg>'
+};
+
+const $body = document.getElementById('body');
+const qs = new URLSearchParams(location.search);
+const id = qs.get('id') || '';
+const t  = qs.get('t')  || '';
+const c  = qs.get('c')  || '';
+const action = ACTIONS[c] || null;
+
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+function statusBlock(tone, icon, title, htmlText){
+  return '<div class="status '+tone+'"><div class="badge">'+icon+'</div>'+
+         '<div><h2>'+esc(title)+'</h2><p>'+htmlText+'</p></div></div>';
+}
+function detailsBlock(r){
+  if(!r) return '';
+  let rows='';
+  if(r.clientName)  rows+='<div class="row"><span class="k">Client</span><span class="v">'+esc(r.clientName)+'</span></div>';
+  let ev=r.eventName||''; if(r.eventDate) ev+=(ev?' — ':'')+r.eventDate;
+  if(ev)            rows+='<div class="row"><span class="k">Event</span><span class="v">'+esc(ev)+'</span></div>';
+  if(r.salesperson) rows+='<div class="row"><span class="k">Salesperson</span><span class="v">'+esc(r.salesperson)+'</span></div>';
+  let prev=''; if(r.preview) prev='<div class="preview"><span class="plabel">Follow-up preview</span>'+esc(r.preview)+'</div>';
+  return '<div class="details">'+rows+prev+'</div>';
+}
+
+// GET keeps this a "simple" cross-origin request (no preflight) and sends no
+// Google cookies — which is exactly what dodges the multi-account routing bug.
+async function callApi(choice){
+  const url = SCRIPT_URL + '?action=followupApi'
+    + '&c=' + encodeURIComponent(choice)
+    + '&id=' + encodeURIComponent(id)
+    + '&t='  + encodeURIComponent(t);
+  const res = await fetch(url, { method:'GET', redirect:'follow' });
+  const txt = await res.text();
+  let data; try{ data = JSON.parse(txt); }catch(e){ throw new Error('The server sent back something unexpected.'); }
+  if(data && data.ok === false) throw new Error(data.error || 'The server declined that action.');
+  return data;
+}
+
+function renderLoading(msg){ $body.innerHTML = statusBlock('loading', ICON.hourglass, 'One moment', esc(msg||'Checking this reminder…')); }
+function renderStop(title,msg){ $body.innerHTML = statusBlock('stop', ICON.alert, title, esc(msg)); }
+
+function renderConfirm(r){
+  $body.innerHTML =
+    statusBlock('confirm', ICON.question, 'Confirm before it sends',
+      "You're about to send this follow-up. A real email will go to the client. Nothing has been sent yet.") +
+    detailsBlock(r) +
+    '<div class="actions">'+
+      '<button class="btn-primary" id="go">Send now</button>'+
+      '<button class="btn-ghost" id="cancel">Not now — leave it pending</button>'+
+    '</div>';
+  document.getElementById('go').onclick = doSend;
+  document.getElementById('cancel').onclick = function(){
+    $body.innerHTML = statusBlock('neutral', ICON.belloff, 'Left pending',
+      'Nothing was sent. The reminder is still in your list — you can act on it later.');
+  };
+}
+
+function renderResult(data){
+  const st = String(data.status||'').toLowerCase();
+  if(st === 'sent'){
+    $body.innerHTML = statusBlock('ok', ICON.check, 'Follow-up sent',
+      'The email is on its way'+(data.testMode?' (test mode)':'')+'. '+esc(data.message||''));
+  } else if(st.indexOf('skipped') === 0 || data.alreadyHandled){
+    $body.innerHTML = statusBlock('neutral', ICON.belloff, 'Marked handled', esc(data.message||'No follow-up will be sent for this one.'));
+  } else {
+    $body.innerHTML = statusBlock('neutral', ICON.hourglassStill, 'Done', esc(data.message||'The reminder was updated.'));
+  }
+}
+
+async function doSend(){
+  const b=document.getElementById('go'); if(b) b.disabled=true;
+  renderLoading('Sending…');
+  try{ renderResult(await callApi('send')); }
+  catch(err){ renderStop("Couldn't send", err.message+' You can still send it from the app.'); }
+}
+
+// Edit fallback: open the app deep-link directly if the API path fails.
+function appEditFallback(){
+  const dir = location.pathname.replace(/followup-action\.html.*$/, '');
+  location.href = location.origin + dir + '?followup=' + encodeURIComponent(id);
+}
+
+async function start(){
+  // Preview mode: open with no parameters to see the design with sample data.
+  if(!id || !t || !c){
+    $body.innerHTML =
+      '<div class="demoflag">Preview mode — sample data (no live reminder)</div>' +
+      statusBlock('confirm', ICON.question, 'Confirm before it sends',
+        "You're about to send this follow-up. A real email will go to the client. Nothing has been sent yet.") +
+      detailsBlock({clientName:'David Zelingher', eventName:'Bas mitzvah party', eventDate:'Mar 28, 2027', salesperson:'Kenny',
+        preview:'Hi David — just circling back on the menu we sent over. Happy to walk through any changes, and the signing link is ready whenever you are.'}) +
+      '<div class="actions"><button class="btn-primary" disabled>Send now</button>'+
+      '<button class="btn-ghost" disabled>Not now — leave it pending</button></div>';
+    return;
+  }
+  if(!action){ renderStop('Unknown action', 'This link is missing a valid action. Open the reminder in the app instead.'); return; }
+
+  renderLoading('Checking this reminder…');
+  let info;
+  try{ info = await callApi('info'); }
+  catch(err){ renderStop("Couldn't load this reminder", err.message+' You can still handle it in the app.'); return; }
+
+  const r = (info && info.reminder) || {};
+  if(r.actionable === false){
+    const s = String(r.status||'done');
+    const nice = s === 'sent' ? 'already sent' : (s.indexOf('skipped')===0 ? 'already skipped' : (s==='auto_skipped'?'auto-skipped':('marked '+s)));
+    renderStop('Already handled', 'This follow-up was '+nice+' — no further action needed. You can close this.');
+    return;
+  }
+
+  if(c === 'send'){
+    renderConfirm(r);                       // wait for an explicit click
+  } else if(c === 'edit'){
+    renderLoading('Opening the app…');
+    try{
+      const res = await callApi('edit');
+      if(res && res.redirect){ location.href = res.redirect; }
+      else appEditFallback();
+    }catch(e){ appEditFallback(); }
+  } else {                                   // skip_in / skip_not — no client email
+    renderLoading('Applying…');
+    try{ renderResult(await callApi(c)); }
+    catch(err){ renderStop("Couldn't update this", err.message+' You can handle it in the app.'); }
+  }
+}
+
+start();
+</script>
+</body>
+</html>
