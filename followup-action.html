@@ -131,16 +131,37 @@ function detailsBlock(r){
 
 // GET keeps this a "simple" cross-origin request (no preflight) and sends no
 // Google cookies — which is exactly what dodges the multi-account routing bug.
-async function callApi(choice){
-  const url = SCRIPT_URL + '?action=followupApi'
-    + '&c=' + encodeURIComponent(choice)
-    + '&id=' + encodeURIComponent(id)
-    + '&t='  + encodeURIComponent(t);
-  const res = await fetch(url, { method:'GET', redirect:'follow' });
-  const txt = await res.text();
-  let data; try{ data = JSON.parse(txt); }catch(e){ throw new Error('The server sent back something unexpected.'); }
-  if(data && data.ok === false) throw new Error(data.error || 'The server declined that action.');
-  return data;
+// JSONP call — loads the Apps Script response via a <script> tag instead of
+// fetch. Script tags are exempt from CORS, so there is no Access-Control
+// header to be missing. Still a signed GET; works through the doGet route.
+function callApi(choice){
+  return new Promise(function(resolve, reject){
+    const cbName = '__pcfu_' + Date.now() + '_' + Math.floor(Math.random()*1e6);
+    let s = null, done = false;
+    const timer = setTimeout(function(){ finish(function(){ reject(new Error('The request timed out.')); }); }, 20000);
+    function finish(fn){
+      if(done) return; done = true;
+      clearTimeout(timer);
+      try{ delete window[cbName]; }catch(e){ window[cbName] = undefined; }
+      if(s && s.parentNode) s.parentNode.removeChild(s);
+      fn();
+    }
+    window[cbName] = function(data){
+      finish(function(){
+        if(data && data.ok === false) reject(new Error(data.error || 'The server declined that action.'));
+        else resolve(data);
+      });
+    };
+    const url = SCRIPT_URL + '?action=followupApi'
+      + '&c=' + encodeURIComponent(choice)
+      + '&id=' + encodeURIComponent(id)
+      + '&t='  + encodeURIComponent(t)
+      + '&callback=' + encodeURIComponent(cbName);
+    s = document.createElement('script');
+    s.src = url;
+    s.onerror = function(){ finish(function(){ reject(new Error('Could not reach the server.')); }); };
+    document.head.appendChild(s);
+  });
 }
 
 function renderLoading(msg){ $body.innerHTML = statusBlock('loading', ICON.hourglass, 'One moment', esc(msg||'Checking this reminder…')); }
