@@ -1,15 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- Premier Caterers — follow-up action landing page. Lives on GitHub Pages so
-     email button links load cleanly (no Google multi-account routing), then
-     calls the events@ Apps Script as a JSON API in the background. -->
+<!-- Premier Caterers — follow-up action page. Writes the decision straight to
+     Firebase (same open Firestore the app uses). No Apps Script web app is
+     involved, so there is no Google login wall and no CORS. The every-minute
+     Apps Script timer picks up "approved" reminders and sends the client email. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Premier Caterers — Follow-up</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --maroon:#6E1E2A; --maroon-deep:#571622;
@@ -30,7 +33,6 @@
   .brand h1{font-family:'Fraunces',serif;font-weight:600;font-size:17px;margin:0;line-height:1.1}
   .brand p{margin:2px 0 0;font-size:12px;color:#E9CFA6;letter-spacing:.02em}
   .body{padding:24px 22px 26px}
-  /* Every state is distinguished by BORDER PATTERN + ICON SHAPE + TEXT — never color alone. */
   .status{border-radius:12px;padding:18px 18px 16px;margin-bottom:18px;display:flex;gap:14px;align-items:flex-start}
   .status.loading{border:2px dotted var(--warn);background:var(--warn-bg)}
   .status.confirm{border:2px solid var(--maroon);background:#fff}
@@ -80,25 +82,23 @@
 
 <script>
 /* ============================================================
-   CONFIG — must match your events@ Apps Script.
+   Firebase — same project/config the app uses. Open Firestore,
+   so no sign-in is needed. This is why there's no login wall.
    ============================================================ */
-// The events@ Apps Script /exec URL (same one your email relay uses).
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvCdYApcKEuBG41Zy730jHhEC7vWQStNRz4DNvspYUnDut9OMUWb732hKJm3PT09RfVQ/exec";
-
-// Choice codes must match the ones your Apps Script handler expects.
-// isSend:true  -> a real client email goes out, so require an explicit click.
-// isSend:false -> just updates the reminder's status (no client email).
-const ACTIONS = {
-  send:     { verb:"Send now",         isSend:true  },
-  skip_in:  { verb:"Mark in contact",  isSend:false },
-  skip_not: { verb:"Skip",             isSend:false },
-  edit:     { verb:"Open to edit",     isSend:false }
+const firebaseConfig = {
+  apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
+  authDomain: "premier-caterers-internal-app.firebaseapp.com",
+  projectId: "premier-caterers-internal-app",
+  storageBucket: "premier-caterers-internal-app.firebasestorage.app",
+  messagingSenderId: "471701398759",
+  appId: "1:471701398759:web:559a7bee3b645ce545ee42"
 };
 
-/* ============================================================ */
+const REMINDERS = 'followupReminders';
+const ACT = { send:{isSend:true}, skip_in:{}, skip_not:{}, edit:{} };
+
 const ICON = {
   hourglass:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spin"><path d="M6 2h12M6 22h12M8 2c0 4 8 6 8 10s-8 6-8 10M16 2c0 4-8 6-8 10s8 6 8 10"/></svg>',
-  hourglassStill:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--brass)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12M6 22h12M8 2c0 4 8 6 8 10s-8 6-8 10M16 2c0 4-8 6-8 10s8 6 8 10"/></svg>',
   question:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--maroon)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.1 9a3 3 0 1 1 5 2.2c-.8.7-1.6 1.2-1.6 2.3"/><circle cx="12" cy="17.5" r="1"/></svg>',
   check:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>',
   belloff:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--brass)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M18 16v-5a6 6 0 0 0-6-6M6 8v3l-2 3h11M9 20a2 2 0 0 0 4 0"/></svg>',
@@ -108,147 +108,142 @@ const ICON = {
 const $body = document.getElementById('body');
 const qs = new URLSearchParams(location.search);
 const id = qs.get('id') || '';
-const t  = qs.get('t')  || '';
 const c  = qs.get('c')  || '';
-const action = ACTIONS[c] || null;
+const action = ACT[c] || null;
+
+let db = null, testMode = true;
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-
-function statusBlock(tone, icon, title, htmlText){
-  return '<div class="status '+tone+'"><div class="badge">'+icon+'</div>'+
-         '<div><h2>'+esc(title)+'</h2><p>'+htmlText+'</p></div></div>';
+function statusBlock(tone, icon, title, html){
+  return '<div class="status '+tone+'"><div class="badge">'+icon+'</div><div><h2>'+esc(title)+'</h2><p>'+html+'</p></div></div>';
 }
 function detailsBlock(r){
   if(!r) return '';
   let rows='';
   if(r.clientName)  rows+='<div class="row"><span class="k">Client</span><span class="v">'+esc(r.clientName)+'</span></div>';
-  let ev=r.eventName||''; if(r.eventDate) ev+=(ev?' — ':'')+r.eventDate;
+  let ev=r.eventName||''; if(r.eventDate) ev+=(ev?' \u2014 ':'')+r.eventDate;
   if(ev)            rows+='<div class="row"><span class="k">Event</span><span class="v">'+esc(ev)+'</span></div>';
   if(r.salesperson) rows+='<div class="row"><span class="k">Salesperson</span><span class="v">'+esc(r.salesperson)+'</span></div>';
-  let prev=''; if(r.preview) prev='<div class="preview"><span class="plabel">Follow-up preview</span>'+esc(r.preview)+'</div>';
+  let prev=''; if(r.body) prev='<div class="preview"><span class="plabel">Follow-up preview</span>'+esc(String(r.body).slice(0,260))+'</div>';
   return '<div class="details">'+rows+prev+'</div>';
 }
+function renderLoading(m){ $body.innerHTML = statusBlock('loading', ICON.hourglass, 'One moment', esc(m||'Checking this reminder\u2026')); }
+function renderStop(t,m){ $body.innerHTML = statusBlock('stop', ICON.alert, t, esc(m)); }
 
-// GET keeps this a "simple" cross-origin request (no preflight) and sends no
-// Google cookies — which is exactly what dodges the multi-account routing bug.
-// JSONP call — loads the Apps Script response via a <script> tag instead of
-// fetch. Script tags are exempt from CORS, so there is no Access-Control
-// header to be missing. Still a signed GET; works through the doGet route.
-function callApi(choice){
-  return new Promise(function(resolve, reject){
-    const cbName = '__pcfu_' + Date.now() + '_' + Math.floor(Math.random()*1e6);
-    let s = null, done = false;
-    const timer = setTimeout(function(){ finish(function(){ reject(new Error('The request timed out.')); }); }, 20000);
-    function finish(fn){
-      if(done) return; done = true;
-      clearTimeout(timer);
-      try{ delete window[cbName]; }catch(e){ window[cbName] = undefined; }
-      if(s && s.parentNode) s.parentNode.removeChild(s);
-      fn();
-    }
-    window[cbName] = function(data){
-      finish(function(){
-        if(data && data.ok === false) reject(new Error(data.error || 'The server declined that action.'));
-        else resolve(data);
-      });
-    };
-    const url = SCRIPT_URL + '?action=followupApi'
-      + '&c=' + encodeURIComponent(choice)
-      + '&id=' + encodeURIComponent(id)
-      + '&t='  + encodeURIComponent(t)
-      + '&callback=' + encodeURIComponent(cbName);
-    s = document.createElement('script');
-    s.src = url;
-    s.onerror = function(){ finish(function(){ reject(new Error('Could not reach the server.')); }); };
-    document.head.appendChild(s);
-  });
+function reminderRef(){ return db.collection(REMINDERS).doc(id); }
+
+function logActivity(inquiryId, message){
+  try{
+    if(!inquiryId) return;
+    db.collection('activityLog').add({
+      inquiryId: String(inquiryId), type:'followup', message:String(message||''),
+      ts: Date.now(), source:'followup-page'
+    });
+  }catch(e){ /* non-blocking */ }
 }
 
-function renderLoading(msg){ $body.innerHTML = statusBlock('loading', ICON.hourglass, 'One moment', esc(msg||'Checking this reminder…')); }
-function renderStop(title,msg){ $body.innerHTML = statusBlock('stop', ICON.alert, title, esc(msg)); }
-
 function renderConfirm(r){
+  const where = testMode ? 'your test address' : 'the client';
   $body.innerHTML =
-    statusBlock('confirm', ICON.question, 'Confirm before it sends',
-      "You're about to send this follow-up. A real email will go to the client. Nothing has been sent yet.") +
+    statusBlock('confirm', ICON.question, 'Confirm the follow-up',
+      'You\u2019re about to approve this follow-up. It will be sent to <strong>'+where+'</strong> within about a minute. Nothing goes out until you tap the button.') +
     detailsBlock(r) +
     '<div class="actions">'+
-      '<button class="btn-primary" id="go">Send now</button>'+
-      '<button class="btn-ghost" id="cancel">Not now — leave it pending</button>'+
+      '<button class="btn-primary" id="go">Approve &amp; send</button>'+
+      '<button class="btn-ghost" id="cancel">Not now \u2014 leave it pending</button>'+
     '</div>';
-  document.getElementById('go').onclick = doSend;
+  document.getElementById('go').onclick = function(){ doApprove(r); };
   document.getElementById('cancel').onclick = function(){
     $body.innerHTML = statusBlock('neutral', ICON.belloff, 'Left pending',
-      'Nothing was sent. The reminder is still in your list — you can act on it later.');
+      'Nothing was sent. The reminder is still in your list \u2014 you can act on it later.');
   };
 }
 
-function renderResult(data){
-  const st = String(data.status||'').toLowerCase();
-  if(st === 'sent'){
-    $body.innerHTML = statusBlock('ok', ICON.check, 'Follow-up sent',
-      'The email is on its way'+(data.testMode?' (test mode)':'')+'. '+esc(data.message||''));
-  } else if(st.indexOf('skipped') === 0 || data.alreadyHandled){
-    $body.innerHTML = statusBlock('neutral', ICON.belloff, 'Marked handled', esc(data.message||'No follow-up will be sent for this one.'));
-  } else {
-    $body.innerHTML = statusBlock('neutral', ICON.hourglassStill, 'Done', esc(data.message||'The reminder was updated.'));
+async function doApprove(r){
+  const b=document.getElementById('go'); if(b) b.disabled=true;
+  renderLoading('Approving\u2026');
+  try{
+    await reminderRef().update({ status:'approved', approvedAt: Date.now(), updatedAt: Date.now() });
+    logActivity(r.inquiryId, 'Follow-up approved to send' + (testMode?' (test mode)':''));
+    const where = testMode ? 'your test address' : 'the client';
+    $body.innerHTML = statusBlock('ok', ICON.check, 'Approved \u2713',
+      'The follow-up will be sent to '+esc(where)+' within about a minute.');
+  }catch(err){
+    renderStop("Couldn't approve", 'Something went wrong saving that. You can still send it from the app.');
   }
 }
 
-async function doSend(){
-  const b=document.getElementById('go'); if(b) b.disabled=true;
-  renderLoading('Sending…');
-  try{ renderResult(await callApi('send')); }
-  catch(err){ renderStop("Couldn't send", err.message+' You can still send it from the app.'); }
+async function doSkip(status, msg, logMsg, r){
+  renderLoading('Applying\u2026');
+  try{
+    await reminderRef().update({ status:status, skippedAt: Date.now(), updatedAt: Date.now() });
+    logActivity(r.inquiryId, logMsg);
+    $body.innerHTML = statusBlock('neutral', ICON.belloff, 'Marked handled', esc(msg));
+  }catch(err){
+    renderStop("Couldn't update this", 'Something went wrong saving that. You can handle it in the app.');
+  }
 }
 
-// Edit fallback: open the app deep-link directly if the API path fails.
-function appEditFallback(){
-  const dir = location.pathname.replace(/followup-action\.html.*$/, '');
-  location.href = location.origin + dir + '?followup=' + encodeURIComponent(id);
+function alreadyHandled(status){
+  const s = String(status||'done');
+  const nice = s === 'sent' ? 'already sent' :
+               s === 'approved' ? 'already approved (sending shortly)' :
+               s.indexOf('skipped')===0 ? 'already skipped' :
+               s === 'auto_skipped' ? 'auto-skipped' : ('marked ' + s);
+  renderStop('Already handled', 'This follow-up was '+nice+' \u2014 no further action needed. You can close this.');
 }
 
 async function start(){
-  // Preview mode: open with no parameters to see the design with sample data.
-  if(!id || !t || !c){
+  if(!id || !c){
     $body.innerHTML =
-      '<div class="demoflag">Preview mode — sample data (no live reminder)</div>' +
-      statusBlock('confirm', ICON.question, 'Confirm before it sends',
-        "You're about to send this follow-up. A real email will go to the client. Nothing has been sent yet.") +
+      '<div class="demoflag">Preview mode \u2014 sample data (no live reminder)</div>' +
+      statusBlock('confirm', ICON.question, 'Confirm the follow-up',
+        'You\u2019re about to approve this follow-up. It will be sent within about a minute. Nothing goes out until you tap the button.') +
       detailsBlock({clientName:'David Zelingher', eventName:'Bas mitzvah party', eventDate:'Mar 28, 2027', salesperson:'Kenny',
-        preview:'Hi David — just circling back on the menu we sent over. Happy to walk through any changes, and the signing link is ready whenever you are.'}) +
-      '<div class="actions"><button class="btn-primary" disabled>Send now</button>'+
-      '<button class="btn-ghost" disabled>Not now — leave it pending</button></div>';
+        body:'Hi David \u2014 just circling back on the menu we sent over. Happy to walk through any changes, and the signing link is ready whenever you are.'}) +
+      '<div class="actions"><button class="btn-primary" disabled>Approve &amp; send</button>'+
+      '<button class="btn-ghost" disabled>Not now \u2014 leave it pending</button></div>';
     return;
   }
   if(!action){ renderStop('Unknown action', 'This link is missing a valid action. Open the reminder in the app instead.'); return; }
 
-  renderLoading('Checking this reminder…');
-  let info;
-  try{ info = await callApi('info'); }
-  catch(err){ renderStop("Couldn't load this reminder", err.message+' You can still handle it in the app.'); return; }
+  renderLoading('Checking this reminder\u2026');
+  try{
+    if(typeof firebase === 'undefined'){ renderStop("Couldn't connect", 'Could not load the database library. Check your connection and reopen the link.'); return; }
+    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+  }catch(e){ renderStop("Couldn't connect", 'Could not start the database connection.'); return; }
 
-  const r = (info && info.reminder) || {};
-  if(r.actionable === false){
-    const s = String(r.status||'done');
-    const nice = s === 'sent' ? 'already sent' : (s.indexOf('skipped')===0 ? 'already skipped' : (s==='auto_skipped'?'auto-skipped':('marked '+s)));
-    renderStop('Already handled', 'This follow-up was '+nice+' — no further action needed. You can close this.');
+  try{
+    const s = await db.collection('settings').doc('app').get();
+    if(s.exists) testMode = s.data().followupsTestMode !== false;
+  }catch(e){ /* default testMode stays true */ }
+
+  let r;
+  try{
+    const doc = await reminderRef().get();
+    if(!doc.exists){ renderStop('Reminder not found', 'This reminder no longer exists. You can close this.'); return; }
+    r = doc.data();
+  }catch(err){
+    renderStop("Couldn't load this reminder", 'Could not reach the database. You can still handle it in the app.');
     return;
   }
 
+  if(r.status !== 'pending'){ alreadyHandled(r.status); return; }
+
   if(c === 'send'){
-    renderConfirm(r);                       // wait for an explicit click
+    renderConfirm(r);
   } else if(c === 'edit'){
-    renderLoading('Opening the app…');
-    try{
-      const res = await callApi('edit');
-      if(res && res.redirect){ location.href = res.redirect; }
-      else appEditFallback();
-    }catch(e){ appEditFallback(); }
-  } else {                                   // skip_in / skip_not — no client email
-    renderLoading('Applying…');
-    try{ renderResult(await callApi(c)); }
-    catch(err){ renderStop("Couldn't update this", err.message+' You can handle it in the app.'); }
+    const dir = location.pathname.replace(/followup-action\.html.*$/, '');
+    location.href = location.origin + dir + '?followup=' + encodeURIComponent(id);
+  } else if(c === 'skip_in'){
+    doSkip('skipped_in_contact', 'Marked as already in contact \u2014 no follow-up will be sent.',
+      'Follow-up skipped: already in contact with client', r);
+  } else if(c === 'skip_not'){
+    doSkip('skipped_not_needed', 'Marked as not needed \u2014 no follow-up will be sent.',
+      'Follow-up skipped: not needed', r);
+  } else {
+    renderStop('Unknown action', 'This link\u2019s action wasn\u2019t recognized.');
   }
 }
 
