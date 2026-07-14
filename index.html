@@ -197,6 +197,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
 <script>
 
@@ -1578,6 +1579,20 @@ async function pcHash(s){
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 function loginRoleFor(u){ return u==='owner' ? 'admin' : u; }
+
+// ── Firebase Auth: map app users <-> their sign-in emails (added) ──
+const PC_EMAILS = {
+  owner:   'kenny@thepremiercaterer.com',
+  shelley: 'shelley@thepremiercaterer.com',
+  josh:    'josh@thepremiercaterer.com',
+  kitchen: 'kitchen@thepremiercaterer.com'
+};
+function pcEmailFor(u){ return PC_EMAILS[u] || ''; }
+function pcUserForEmail(email){
+  email = (email||'').toLowerCase();
+  for(const k in PC_EMAILS){ if(PC_EMAILS[k].toLowerCase() === email) return k; }
+  return null;
+}
 function prettyName(u){ return u==='owner'?'Kenny / Admin':(u?u.charAt(0).toUpperCase()+u.slice(1):''); }
 
 // Client naming: when an organization/business name is set, it is the primary
@@ -1616,7 +1631,6 @@ function showLogin(){
   updateUserBar();
 }
 function loginPick(u){
-  if(u==='kitchen'){ finishLogin('kitchen'); return; }
   document.getElementById('loginStep').innerHTML =
     `<div class="lg-title">${prettyName(u)}</div><div class="lg-sub">Enter your password</div>
      <input id="lgPw" type="password" class="lg-input" placeholder="Password" onkeydown="if(event.key==='Enter')loginSubmit('${u}')">
@@ -1628,34 +1642,24 @@ function loginPick(u){
 async function loginSubmit(u){
   const pw=(document.getElementById('lgPw')||{}).value||'';
   const err=document.getElementById('lgErr'); if(err) err.textContent='';
-  const h=await pcHash(pw);
-  if(u==='owner'){ if(h===OWNER_HASH){ settingsUnlocked=true; finishLogin('owner'); } else if(err){ err.textContent='Incorrect password.'; } return; }
-  let doc=null;
-  try{ const s=await db.collection('appAuth').doc(u).get(); if(s.exists) doc=s.data(); }catch(e){}
-  const storedHash = (doc&&doc.hash) ? doc.hash : DEFAULT_HASH;
-  const mustChange = doc ? !!doc.mustChange : true;
-  if(h!==storedHash){ if(err) err.textContent='Incorrect password.'; return; }
-  if(mustChange){
-    document.getElementById('loginStep').innerHTML =
-      `<div class="lg-title">${prettyName(u)}</div><div class="lg-sub">First sign-in &mdash; please create your own password</div>
-       <input id="npw1" type="password" class="lg-input" placeholder="New password">
-       <input id="npw2" type="password" class="lg-input" placeholder="Confirm new password" onkeydown="if(event.key==='Enter')savePw('${u}')">
-       <div id="lgErr" class="lg-err"></div>
-       <button class="lg-go" onclick="savePw('${u}')">Save &amp; sign in</button>`;
-    setTimeout(()=>{const i=document.getElementById('npw1'); if(i)i.focus();},60);
-    return;
+  const email=pcEmailFor(u);
+  if(!email){ if(err) err.textContent='Unknown user.'; return; }
+  const go=document.querySelector('#loginStep .lg-go'); if(go){ go.disabled=true; go.textContent='Signing in…'; }
+  try{
+    // Firebase verifies the password server-side and returns a real token.
+    // The onAuthStateChanged handler (pcAuthGate) finishes the login.
+    await firebase.auth().signInWithEmailAndPassword(email, pw);
+  }catch(e){
+    if(go){ go.disabled=false; go.textContent='Sign in'; }
+    if(err){
+      const c = e && e.code;
+      if(c==='auth/wrong-password' || c==='auth/invalid-credential' || c==='auth/invalid-login-credentials') err.textContent='Incorrect password.';
+      else if(c==='auth/user-not-found') err.textContent='No account set up for this user yet.';
+      else if(c==='auth/too-many-requests') err.textContent='Too many attempts — please wait a moment and try again.';
+      else if(c==='auth/network-request-failed') err.textContent='Network error — check your connection.';
+      else err.textContent='Sign-in error: ' + ((e && e.message) || 'unknown');
+    }
   }
-  finishLogin(u);
-}
-async function savePw(u){
-  const a=(document.getElementById('npw1')||{}).value||'', b=(document.getElementById('npw2')||{}).value||'';
-  const err=document.getElementById('lgErr'); if(err) err.textContent='';
-  if(a.length<4){ if(err) err.textContent='Use at least 4 characters.'; return; }
-  if(a!==b){ if(err) err.textContent='The two passwords do not match.'; return; }
-  const h=await pcHash(a);
-  try{ await db.collection('appAuth').doc(u).set({hash:h,mustChange:false,updated:Date.now()}); }
-  catch(e){ if(err) err.textContent='Could not save — check your connection.'; return; }
-  finishLogin(u);
 }
 function finishLogin(u){
   authUser=u; currentRole=loginRoleFor(u);
@@ -1666,7 +1670,7 @@ function finishLogin(u){
   updateUserBar();
   try{ render(); }catch(e){ console.error(e); }
 }
-function logout(){ authUser=null; currentRole=null; settingsUnlocked=false; try{ localStorage.removeItem('pcSession'); }catch(e){} showLogin(); }
+function logout(){ authUser=null; currentRole=null; settingsUnlocked=false; try{ localStorage.removeItem('pcSession'); }catch(e){} try{ if(window.firebase && firebase.auth) firebase.auth().signOut(); }catch(e){} location.reload(); }
 function updateUserBar(){
   const el=document.getElementById('userBar'); if(!el) return;
   el.innerHTML = authUser
@@ -1681,10 +1685,40 @@ function applyAccess(){
 }
 async function resetUserPassword(u){
   if(currentRole!=='admin' && currentRole!=='kenny') return;
-  if(!confirm('Reset the '+u+' password back to the starting password 1234? They will be asked to create a new one the next time they sign in.')) return;
-  try{ await db.collection('appAuth').doc(u).set({hash:DEFAULT_HASH,mustChange:true,updated:Date.now()}); (window.showToast?showToast(u+' password reset to 1234 \u2713'):alert(u+' password reset to 1234.')); }
-  catch(e){ alert('Could not reset — check your connection.'); }
+  const email=pcEmailFor(u);
+  if(!email){ alert('Unknown user.'); return; }
+  if(!confirm('Send a password-reset email to '+email+'? They can set a new password from the link in that email.')) return;
+  try{ await firebase.auth().sendPasswordResetEmail(email); (window.showToast?showToast('Reset email sent to '+email):alert('Reset email sent to '+email)); }
+  catch(e){ alert('Could not send reset email: '+((e&&e.message)||'unknown')); }
 }
+// ── FIREBASE AUTH GATE (added): single source of truth for who is signed in ──
+// Initializes the app early so auth works, then starts the data app (initNow)
+// only after a recognized user is signed in. Firebase persists the session, so
+// this also auto-restores login on reload.
+window._appStarted = false;
+function pcAuthGate(){
+  if(typeof firebase==='undefined' || !firebase.auth){ setTimeout(pcAuthGate, 150); return; }
+  if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  updateUserBar();
+  firebase.auth().onAuthStateChanged(function(user){
+    const u = user ? pcUserForEmail(user.email) : null;
+    if(user && u){
+      settingsUnlocked = (u==='owner');
+      finishLogin(u);
+      if(!window._appStarted){ window._appStarted = true; initNow(); }
+    } else if(user){
+      // Signed in, but not one of the app's accounts — reject.
+      firebase.auth().signOut();
+      showLogin();
+      const e=document.getElementById('lgErr'); if(e) e.textContent='That account is not set up for this app.';
+    } else {
+      // Signed out.
+      authUser=null; currentRole=null; settingsUnlocked=false;
+      showLogin();
+    }
+  });
+}
+
 /* =================== END LOGIN / ACCESS CONTROL (added) =================== */
 
 let currentView='home', currentRole='admin', selectedId=null, editingId=null, activeDay='all', eventsViewMode='card';
@@ -11102,7 +11136,7 @@ function renderSettings(){
   return `
   <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
     <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Team logins</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Reset a team member's password back to the starting password (1234). They'll be asked to create a new one the next time they sign in.</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Send a team member a password-reset email. They set a new password from the link. (You can also manage passwords directly in the Firebase Console.)</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button onclick="resetUserPassword('shelley')" style="padding:8px 14px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-size:13px;cursor:pointer">Reset Shelley&rsquo;s password</button>
       <button onclick="resetUserPassword('josh')" style="padding:8px 14px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-size:13px;cursor:pointer">Reset Josh&rsquo;s password</button>
@@ -12943,7 +12977,7 @@ function _startApp() {
 document.addEventListener('DOMContentLoaded', ()=>{
   setTimeout(()=>{
     const main = document.getElementById('mainArea');
-    if(main && !main.innerHTML.trim()){
+    if(main && !main.innerHTML.trim() && window._appStarted){
       console.warn('Page was blank — forcing render');
       try{ render(); } catch(e){ 
         main.innerHTML = '<div style="padding:2rem;font-size:14px;color:#666">Loading... if this persists, please open the file from a web server or Netlify.<br><br><button onclick="location.reload()" style="padding:8px 16px;border:none;border-radius:6px;background:#185FA5;color:#fff;cursor:pointer;font-size:13px">Retry</button></div>'; 
@@ -12966,7 +13000,7 @@ function pcRestoreSession(){
     return true;
   }catch(e){ return false; }
 }
-try{ updateUserBar(); if(!pcRestoreSession()) showLogin(); }catch(e){ console.error('login init error', e); }
+try{ pcAuthGate(); }catch(e){ console.error('login init error', e); }
 // Initialize Firebase - retry until firebase global is available
 var _initAttempts = 0;
 function initNow(){
@@ -13006,7 +13040,7 @@ function initNow(){
     console.error('initNow error:', e);
   }
 }
-initNow();
+// initNow() is now started by pcAuthGate() after a successful sign-in (added)
 updateWeekLabel();
 // Build/deploy stamp — reflects when this file was last modified (i.e. last GitHub upload),
 // so it auto-updates on every deploy with no manual editing.
