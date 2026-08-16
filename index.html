@@ -1280,6 +1280,14 @@ function _myDayInject(){
     .md-item-del{flex:0 0 auto;background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:2px}
     .md-empty{font-size:12px;color:var(--text3);padding:8px 2px;font-style:italic}
     .md-clock{font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums}
+    .md-link-row{display:flex;flex-direction:column;gap:6px;padding:8px 10px;background:var(--bg);border:0.5px dashed var(--border2);border-radius:8px;margin-top:-2px}
+    .md-link-toggle{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2);cursor:pointer;user-select:none}
+    .md-link-toggle input[type=checkbox]{width:15px;height:15px;cursor:pointer}
+    .md-link-time{display:none;flex-direction:column;gap:5px;padding-left:22px;font-size:12px;color:var(--text2)}
+    .md-link-time.show{display:flex}
+    .md-link-time label{display:flex;align-items:center;gap:5px}
+    .md-link-time input[type=time]{padding:4px 6px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:12px}
+    .md-item-link-badge{display:inline-flex;align-items:center;gap:3px;background:var(--bg2);color:#6a3fb5;border:1px solid #d8cdf0;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:600}
   `;
   document.head.appendChild(s);
 }
@@ -1307,6 +1315,30 @@ function _myDayIsOverdue(it){
 }
 function _myDayEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// Small badge showing an item is linked to its paired copy in another column.
+function _myDayLinkBadge(it){
+  if(!it.linkedId) return '';
+  const other = myDayItems.find(x=>x.id===it.linkedId);
+  const otherType = other ? other.type : it.linkedType;
+  const label = otherType==='schedule' ? 'Scheduled' : (otherType==='todo' ? 'To-Do' : (otherType==='followup' ? 'Follow-Up' : 'Linked'));
+  return `<span class="md-item-link-badge"><i class="ti ti-link" style="font-size:9px"></i> ${label}</span>`;
+}
+
+// "Also add to Schedule" checkbox + Anytime/At-a-time choice, shown under the
+// add-row for To-Do and Follow-Up columns only (Schedule doesn't link to itself).
+function _myDayLinkControls(type){
+  return `<div class="md-link-row">
+    <label class="md-link-toggle">
+      <input type="checkbox" id="mdLink_${type}" onchange="document.getElementById('mdLinkTime_${type}').classList.toggle('show', this.checked)">
+      Also add to Schedule
+    </label>
+    <div class="md-link-time" id="mdLinkTime_${type}">
+      <label><input type="radio" name="mdLinkWhen_${type}" value="anytime" checked> Anytime</label>
+      <label><input type="radio" name="mdLinkWhen_${type}" value="attime"> At a time: <input type="time" id="mdLinkClock_${type}"></label>
+    </div>
+  </div>`;
+}
+
 function _myDayCol(type, title, icon, placeholder, extraControlsHtml){
   const items = _myDayItemsOf(type);
   const rows = items.length ? items.map(it=>{
@@ -1316,10 +1348,11 @@ function _myDayCol(type, title, icon, placeholder, extraControlsHtml){
     if(it.time) metaBits.push('<i class="ti ti-clock" style="font-size:11px"></i> '+_myDayEsc(it.time));
     if(it.method){ const m=MYDAY_METHODS.find(m=>m.key===it.method); if(m) metaBits.push('<i class="ti '+m.icon+'" style="font-size:11px"></i> '+m.label); }
     if(overdue) metaBits.push('<span style="color:#c0392b;font-weight:600">Overdue</span>');
+    const linkBadge = _myDayLinkBadge(it);
     return `<div class="${cls}">
       <button class="md-item-check" onclick="toggleMyDayItem('${it.id}')" title="${it.status==='done'?'Mark not done':'Mark done'}"><i class="ti ti-check"></i></button>
       <div style="flex:1">
-        <div class="md-item-text">${_myDayEsc(it.text)}</div>
+        <div class="md-item-text">${_myDayEsc(it.text)} ${linkBadge}</div>
         ${metaBits.length?`<div class="md-item-meta">${metaBits.join(' &nbsp; ')}</div>`:''}
       </div>
       <button class="md-item-del" onclick="deleteMyDayItem('${it.id}')" title="Delete"><i class="ti ti-x"></i></button>
@@ -1333,6 +1366,7 @@ function _myDayCol(type, title, icon, placeholder, extraControlsHtml){
       <button class="md-mic" id="mdMic_${type}" onclick="startMyDayVoice('${type}')" title="Voice input"><i class="ti ti-microphone"></i></button>
       <button class="md-add-btn" onclick="addMyDayItem('${type}')">Add</button>
     </div>
+    ${(type==='todo'||type==='followup') ? _myDayLinkControls(type) : ''}
     <div class="md-list">${rows}</div>
   </div>`;
 }
@@ -1376,22 +1410,71 @@ async function addMyDayItem(type){
     const methEl = document.getElementById('mdMethod_followup');
     if(methEl && methEl.value) rec.method = methEl.value;
   }
+  // "Also add to Schedule" — only offered on To-Do / Follow-Up columns.
+  const linkCb = (type==='todo'||type==='followup') ? document.getElementById('mdLink_'+type) : null;
+  const wantsLink = !!(linkCb && linkCb.checked);
   try{
-    await myDayCol.add(rec);
+    const mainRef = await myDayCol.add(rec);
+    if(wantsLink){
+      const whenEl = document.querySelector(`input[name="mdLinkWhen_${type}"]:checked`);
+      const at = whenEl && whenEl.value==='attime';
+      const schedRec = { owner: authUser, type:'schedule', text, status:'pending', createdAt: Date.now(), linkedId: mainRef.id };
+      if(at){
+        const clockEl = document.getElementById('mdLinkClock_'+type);
+        const t = clockEl && clockEl.value;
+        if(t){
+          schedRec.time = t;
+          const [hh,mm] = t.split(':').map(Number);
+          const due = new Date(); due.setHours(hh,mm,0,0);
+          schedRec.dueAtTs = due.getTime();
+        }
+      }
+      const schedRef = await myDayCol.add(schedRec);
+      await mainRef.update({ linkedId: schedRef.id });
+    }
     if(inputEl){ inputEl.value=''; inputEl.focus(); }
     const timeEl = document.getElementById('mdTime_schedule'); if(timeEl) timeEl.value='';
+    if(linkCb){
+      linkCb.checked = false;
+      const timeChoice = document.getElementById('mdLinkTime_'+type); if(timeChoice) timeChoice.classList.remove('show');
+      const clockEl = document.getElementById('mdLinkClock_'+type); if(clockEl) clockEl.value='';
+      const anytimeRadio = document.querySelector(`input[name="mdLinkWhen_${type}"][value="anytime"]`); if(anytimeRadio) anytimeRadio.checked = true;
+    }
   }catch(err){ console.error('My Day add error:', err); (window.showToast?showToast('Could not add — try again'):alert('Could not add — try again')); }
 }
+// Checking off either half of a linked pair marks both done (best-effort —
+// if the linked doc is already gone, the main toggle still succeeds).
 async function toggleMyDayItem(id){
   const it = myDayItems.find(x=>x.id===id); if(!it || !myDayCol) return;
   const nowDone = it.status!=='done';
-  try{ await myDayCol.doc(id).update({ status: nowDone?'done':'pending', doneAt: nowDone?Date.now():null }); }
-  catch(err){ console.error('My Day toggle error:', err); }
+  const patch = { status: nowDone?'done':'pending', doneAt: nowDone?Date.now():null };
+  try{ await myDayCol.doc(id).update(patch); }
+  catch(err){ console.error('My Day toggle error:', err); return; }
+  if(it.linkedId){
+    try{ await myDayCol.doc(it.linkedId).update(patch); }
+    catch(err){ console.warn('Linked item toggle skipped (may be deleted):', err); }
+  }
 }
+// Deleting a linked item asks whether to remove its paired copy too, so you
+// don't end up with an orphaned Schedule/To-Do/Follow-Up entry.
 async function deleteMyDayItem(id){
   if(!myDayCol) return;
-  try{ await myDayCol.doc(id).delete(); }
-  catch(err){ console.error('My Day delete error:', err); }
+  const it = myDayItems.find(x=>x.id===id);
+  const linkedId = it && it.linkedId;
+  let alsoDeleteLinked = false;
+  if(linkedId){
+    alsoDeleteLinked = confirm('This item is linked to a copy in another column. Delete that linked copy too?');
+  }
+  try{
+    await myDayCol.doc(id).delete();
+    if(linkedId && alsoDeleteLinked){
+      try{ await myDayCol.doc(linkedId).delete(); }
+      catch(err){ console.warn('Linked item delete skipped (may already be gone):', err); }
+    } else if(linkedId){
+      try{ await myDayCol.doc(linkedId).update({ linkedId: null }); }
+      catch(err){ console.warn('Could not unlink paired item:', err); }
+    }
+  }catch(err){ console.error('My Day delete error:', err); }
 }
 
 // Voice fills the text field for review — it never adds automatically.
