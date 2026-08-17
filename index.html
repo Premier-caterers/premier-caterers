@@ -222,6 +222,7 @@ let _inqLoadedOnce=false;
 let groceryStationsCol, groceryListsCol, roadmapCol;
 let contractsCol; let contracts={};
 let myDayCol; let myDayItems = []; // [{id, owner, type:'todo'|'schedule'|'followup', text, time, method, status:'pending'|'done', createdAt, doneAt}]
+let followupSuggestionsCol; let mySuggestions = []; // AI-suggested follow-ups awaiting this user's review
 let groceryStations = []; // [{id, eventTypes:[], stationKey, label, items:[{name,code,qty,supplier,notes}]}]
 let groceryLists = {};    // {eventId: {items:[...], generated, lastModified}}
 let trash = [];
@@ -1244,6 +1245,13 @@ function startFirebaseListeners(){
       if(currentView==='myday') render();
     }, err=>{ console.error('My Day listener error:', err); });
   }
+  // AI-suggested follow-ups — scoped to this user, only ones still awaiting review.
+  if(followupSuggestionsCol && authUser){
+    followupSuggestionsCol.where('ownerUser','==',authUser).where('status','==','suggested').onSnapshot( snap=>{
+      mySuggestions = snap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+      if(currentView==='myday') render();
+    }, err=>{ console.error('Follow-up suggestions listener error:', err); });
+  }
 }
 
 /* =================== MY DAY (personal, per-user) =================== */
@@ -1288,6 +1296,19 @@ function _myDayInject(){
     .md-link-time label{display:flex;align-items:center;gap:5px}
     .md-link-time input[type=time]{padding:4px 6px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:12px}
     .md-item-link-badge{display:inline-flex;align-items:center;gap:3px;background:var(--bg2);color:#6a3fb5;border:1px solid #d8cdf0;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:600}
+    .md-sugg-label{font-size:11px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;color:#6a3fb5;margin:2px 0 6px;display:flex;align-items:center;gap:5px}
+    .md-sugg-label .dot{width:6px;height:6px;border-radius:50%;background:#6a3fb5}
+    .md-sugg-card{border:1.5px dashed #6a3fb5;background:var(--bg2);border-radius:8px;padding:10px 11px;margin-bottom:10px}
+    .md-sugg-who{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
+    .md-sugg-why{font-size:11px;color:#6a3fb5;margin-bottom:7px}
+    .md-sugg-card textarea{width:100%;font-family:inherit;font-size:12.5px;border:1px solid #d8cdf0;border-radius:6px;padding:7px 8px;resize:vertical;min-height:64px;background:var(--bg);color:var(--text)}
+    .md-sugg-method{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11.5px;color:var(--text2)}
+    .md-sugg-method select{font-size:11.5px;padding:3px 6px;border-radius:5px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text)}
+    .md-sugg-btns{display:flex;gap:6px;margin-top:8px}
+    .md-sugg-btns button{flex:1;border:none;border-radius:6px;padding:7px 6px;font-size:12px;cursor:pointer;font-weight:600}
+    .md-sugg-send{background:var(--green-text);color:#fff}
+    .md-sugg-dismiss{background:var(--bg);color:var(--text2);border:0.5px solid var(--border2) !important}
+    .md-follow-label{font-size:11px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;color:var(--text3);margin:14px 0 8px}
   `;
   document.head.appendChild(s);
 }
@@ -1339,6 +1360,30 @@ function _myDayLinkControls(type){
   </div>`;
 }
 
+/* ---- AI-suggested follow-ups: rendered above the normal Follow-Ups list ---- */
+function _mySuggestionsBlock(){
+  if(!mySuggestions.length) return '';
+  const cards = mySuggestions.map(s=>{
+    const method = s.method==='text' ? 'text' : 'email';
+    return `<div class="md-sugg-card">
+      <div class="md-sugg-who">${_myDayEsc(s.clientName||'Unknown client')}${s.eventDate?(' — '+_myDayEsc(s.eventDate)):''}</div>
+      <div class="md-sugg-why">${_myDayEsc(s.reason||'')}</div>
+      <textarea id="sugText_${s.id}">${_myDayEsc(s.draftBody||'')}</textarea>
+      <div class="md-sugg-method">Send via:
+        <select id="sugMethod_${s.id}">
+          <option value="email" ${method==='email'?'selected':''}>Email</option>
+          <option value="text" ${method==='text'?'selected':''}>Text</option>
+        </select>
+      </div>
+      <div class="md-sugg-btns">
+        <button class="md-sugg-send" onclick="approveSuggestion('${s.id}')"><i class="ti ti-check"></i> Send</button>
+        <button class="md-sugg-dismiss" onclick="dismissSuggestion('${s.id}')">Dismiss</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="md-sugg-label"><span class="dot"></span>Suggested (${mySuggestions.length})</div>${cards}<div class="md-follow-label">Your Follow-Ups</div>`;
+}
+
 function _myDayCol(type, title, icon, placeholder, extraControlsHtml){
   const items = _myDayItemsOf(type);
   const rows = items.length ? items.map(it=>{
@@ -1367,6 +1412,7 @@ function _myDayCol(type, title, icon, placeholder, extraControlsHtml){
       <button class="md-add-btn" onclick="addMyDayItem('${type}')">Add</button>
     </div>
     ${(type==='todo'||type==='followup') ? _myDayLinkControls(type) : ''}
+    ${type==='followup' ? _mySuggestionsBlock() : ''}
     <div class="md-list">${rows}</div>
   </div>`;
 }
@@ -1498,6 +1544,48 @@ function startMyDayVoice(type){
   rec.onerror = ()=>{ if(micBtn) micBtn.classList.remove('listening'); _myDayRecognition=null; _myDayListeningType=null; };
   rec.onend = ()=>{ if(micBtn) micBtn.classList.remove('listening'); _myDayRecognition=null; _myDayListeningType=null; const inputEl=document.getElementById('mdInput_'+type); if(inputEl) inputEl.focus(); };
   try{ rec.start(); }catch(err){ console.error('Voice start error:', err); if(micBtn) micBtn.classList.remove('listening'); }
+}
+
+/* ---- END MY DAY LINKING ---- */
+
+// Sends an approved/edited AI suggestion using your existing email or text
+// relay, then marks the suggestion 'sent' so it drops off the review list.
+async function approveSuggestion(id){
+  const s = mySuggestions.find(x=>x.id===id);
+  if(!s || !followupSuggestionsCol) return;
+  const textEl = document.getElementById('sugText_'+id);
+  const methodEl = document.getElementById('sugMethod_'+id);
+  const body = (textEl && textEl.value || '').trim();
+  const method = (methodEl && methodEl.value) || 'email';
+  if(!body){ if(textEl) textEl.focus(); return; }
+
+  const btn = document.querySelector(`#sugText_${id}`)?.closest('.md-sugg-card')?.querySelector('.md-sugg-send');
+  if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i> Sending…'; }
+
+  try{
+    let ok = false;
+    if(method==='text'){
+      if(!s.clientPhone){ alert('No phone number on file for this client.'); throw new Error('no phone'); }
+      ok = await sendTextViaTwilio(s.clientPhone, body);
+    } else {
+      if(!s.clientEmail){ alert('No email address on file for this client.'); throw new Error('no email'); }
+      ok = await sendGmailEmail(s.clientEmail, s.draftSubject||'Following up', body, body, [], '');
+    }
+    if(!ok) throw new Error('send failed');
+    await followupSuggestionsCol.doc(id).update({ status:'sent', sentAt:Date.now(), sentBody:body, sentMethod:method });
+    try{ if(s.inquiryId && typeof logActivity==='function') logActivity(s.inquiryId, 'followup', 'AI-suggested follow-up sent ('+method+')', { suggestionId:id }); }catch(e){}
+  }catch(err){
+    console.error('approveSuggestion error:', err);
+    if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-check"></i> Send'; }
+  }
+}
+
+// Dismiss = "not now." The trigger will re-check after its cooldown and can
+// re-suggest later if the underlying situation is still unresolved.
+async function dismissSuggestion(id){
+  if(!followupSuggestionsCol) return;
+  try{ await followupSuggestionsCol.doc(id).update({ status:'dismissed', dismissedAt:Date.now() }); }
+  catch(err){ console.error('dismissSuggestion error:', err); }
 }
 
 /* =================== END MY DAY =================== */
@@ -13294,6 +13382,7 @@ function initNow(){
     groceryStationsCol = db.collection('groceryStations');
     groceryListsCol    = db.collection('groceryLists');
     myDayCol = db.collection('myDayItems');
+    followupSuggestionsCol = db.collection('followupSuggestions');
     console.log('Firebase initialized! db=', !!db);
     render();
     seedIfEmpty().then(function(){
