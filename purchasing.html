@@ -1317,7 +1317,9 @@ function renderScan(){
       <div class="big">Click to choose files — or drag &amp; drop here</div>
       <div class="small">From your phone, you can use your camera too.</div>
     </div>
+    <button class="btn ghost" type="button" style="margin-top:10px" onclick="document.getElementById('scanCameraInput').click()"><i class="ti ti-camera"></i> Scan with Camera</button>
     <input id="scanFileInput" type="file" accept="image/*,application/pdf" multiple capture="environment" style="display:none" onchange="scanHandleFiles(this.files)">
+    <input id="scanCameraInput" type="file" accept="image/*" capture="environment" style="display:none" onchange="scanHandleFiles(this.files)">
     ${filesHtml}
     ${errHtml}
   </div>
