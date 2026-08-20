@@ -333,6 +333,7 @@ tbody tr:hover{background:var(--bg2)}
     <button class="tab" data-view="products" onclick="showView('products')">Our Products</button>
     <button class="tab" data-view="vendors" onclick="showView('vendors')">Vendors</button>
     <button class="tab" data-view="scan" onclick="showView('scan')"><i class="ti ti-scan"></i> Scan Invoice</button>
+    <button class="tab" data-view="jobcosts" onclick="showView('jobcosts')"><i class="ti ti-folder"></i> Job Costs</button>
     <button class="tab" data-view="replies" onclick="showView('replies')"><i class="ti ti-message-circle-2"></i> Vendor Replies <span class="tab-badge" id="repliesBadge"></span></button>
     <button class="tab" data-view="orderhist" onclick="showView('orderhist')">Order History</button>
   </div>
@@ -384,6 +385,11 @@ tbody tr:hover{background:var(--bg2)}
     <div class="view" id="view-scan">
       <div class="row-head"><div class="title">Scan Invoice</div></div>
       <div id="scanBody"></div>
+    </div>
+
+    <div class="view" id="view-jobcosts">
+      <div class="row-head"><div class="title">Job Costs</div><div class="muted" style="font-size:12.5px">Everything scanned against a specific event</div></div>
+      <div id="jobCostsBody"></div>
     </div>
 
     <div class="view" id="view-orders">
@@ -554,19 +560,32 @@ function applyEditPerms(){ const show=canEdit(); ['addItemBtn','addVendorBtn','b
 // priceHistory collection: archived prior prices when you record a new quote.
 //   {itemId, ourName, vendorId, packSize, unit, price, date, by, ts}
 let vendors=[], items=[], priceHistory=[];
+// jobEvents: read-only mirror of the main app's `events` collection — used only
+// to populate the "tie this invoice to an event" picker on Scan Invoice and the
+// Job Costs tab. Purchasing never writes to this collection.
+// eventPurchases: {eventId, eventLabel, vendorId, vendorName, invoiceDate,
+//   invoiceNumber, lines:[{ourName,category,vendorItemName,vendorCode,soldBy,
+//   packSize,price,qty,lineTotal}], totalAmount, createdAt, createdBy, source}
+let jobEvents=[], eventPurchases=[];
 let _started=false;
 function startData(){
   if(_started) return; _started=true;
   db.collection('vendors').onSnapshot(s=>{ vendors=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
   db.collection('vendorItems').onSnapshot(s=>{ items=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
   db.collection('priceHistory').onSnapshot(s=>{ priceHistory=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
+  db.collection('events').onSnapshot(s=>{ jobEvents=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }, err=>{ console.warn('events listener (read-only) error:', err); });
+  db.collection('eventPurchases').onSnapshot(s=>{ eventPurchases=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
   startOrdersCollection();
   startRepliesData();
   startRepliesPolling();
 }
-function renderAll(){ renderDashboard(); renderAlerts(); renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); renderOrderPicker(); renderOrderHistory(); renderReplies(); renderScan(); }
+function renderAll(){ renderDashboard(); renderAlerts(); renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); renderOrderPicker(); renderOrderHistory(); renderReplies(); renderScan(); renderJobCosts(); }
 
 function vendorName(id){ const v=vendors.find(x=>x.id===id); return v?v.name:'(unknown vendor)'; }
+function jobDateLabel(e){ if(!e||!e.eventDate) return ''; const p=String(e.eventDate).split('-'); return p.length===3?(parseInt(p[1])+'/'+parseInt(p[2])+'/'+p[0].slice(-2)):e.eventDate; }
+function jobEventLabel(e){ if(!e) return ''; const nm=e.clientName||e.eventName||'Event'; const ty=e.eventType?(' — '+e.eventType):''; const dt=jobDateLabel(e); return nm+ty+(dt?' ('+dt+')':''); }
+function sortedJobEvents(){ return jobEvents.slice().sort((a,b)=>String(b.eventDate||'').localeCompare(String(a.eventDate||''))); }
+function jobEventById(id){ return jobEvents.find(e=>e.id===id); }
 function fmtMoney(n){ n=parseFloat(n); return isNaN(n)?'—':'$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmtDate(d){ if(!d) return '—'; const p=String(d).split('-'); return p.length===3?(parseInt(p[1])+'/'+parseInt(p[2])+'/'+p[0].slice(-2)):d; }
 function unitCost(price,packSize){ price=parseFloat(price); packSize=parseFloat(packSize); if(isNaN(price)||isNaN(packSize)||packSize<=0) return null; return price/packSize; }
@@ -598,6 +617,74 @@ function ourProducts(){
     if(ts>=g._ts){ g._ts=ts; g.name=x.ourName||g.name; if(x.useFor) g.useFor=x.useFor; if(x.category) g.category=x.category; }
   });
   return Object.values(map).sort((a,b)=>a.name.localeCompare(b.name));
+}
+
+// ════════ JOB COSTS ════════
+let _jobCostsPick = '';
+function renderJobCosts(){
+  const el=document.getElementById('jobCostsBody'); if(!el) return;
+  const evOpts = sortedJobEvents().map(e=>{
+    const n = eventPurchases.filter(p=>p.eventId===e.id).length;
+    return `<option value="${e.id}" ${_jobCostsPick===e.id?'selected':''}>${esc(jobEventLabel(e))}${n?' — '+n+' invoice'+(n===1?'':'s'):''}</option>`;
+  }).join('');
+  const pickerHtml = `<div class="fld" style="max-width:480px"><label>Pick an event</label>
+    <select id="jcPick" onchange="_jobCostsPick=this.value; renderJobCosts()">
+      <option value="">— choose an event —</option>
+      ${evOpts}
+    </select></div>`;
+
+  if(!_jobCostsPick){
+    el.innerHTML = pickerHtml + '<div class="dash-empty" style="margin-top:14px">Pick an event above to see everything scanned against it — total spend, every invoice, and totals by item.</div>';
+    return;
+  }
+  const ev = jobEventById(_jobCostsPick);
+  const purchases = eventPurchases.filter(p=>p.eventId===_jobCostsPick).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  if(!purchases.length){
+    el.innerHTML = pickerHtml + '<div class="dash-empty" style="margin-top:14px">No invoices have been scanned against this event yet. On Scan Invoice, pick this event in the review step before hitting Save.</div>';
+    return;
+  }
+  const grandTotal = purchases.reduce((s,p)=>s+(p.totalAmount||0),0);
+
+  // vendor breakdown
+  const byVendor = {};
+  purchases.forEach(p=>{ const k=p.vendorName||'(unknown vendor)'; byVendor[k]=(byVendor[k]||0)+(p.totalAmount||0); });
+  const vendorRows = Object.entries(byVendor).sort((a,b)=>b[1]-a[1]);
+
+  // per-item totals across all invoices for this event
+  const byItem = {};
+  purchases.forEach(p=>(p.lines||[]).forEach(l=>{
+    const k = normName(l.ourName||'');
+    if(!k) return;
+    if(!byItem[k]) byItem[k]={ name:l.ourName, soldBy:l.soldBy||'', qty:0, total:0 };
+    byItem[k].qty += parseFloat(l.qty)||0;
+    byItem[k].total += parseFloat(l.lineTotal)||0;
+  }));
+  const itemRows = Object.values(byItem).sort((a,b)=>b.total-a.total);
+
+  el.innerHTML = pickerHtml +
+    `<div class="dash-grid" style="margin-top:14px">${tile('Total spent', fmtMoney(grandTotal))}${tile('Invoices', purchases.length)}${tile('Vendors', vendorRows.length)}${tile('Line items', itemRows.length)}</div>` +
+
+    '<div class="dash-sec"><div class="dash-sec-title">By vendor</div><div class="card"><table><thead><tr><th>Vendor</th><th class="num">Total</th></tr></thead><tbody>'+
+      vendorRows.map(([nm,tot])=>`<tr><td>${esc(nm)}</td><td class="num">${fmtMoney(tot)}</td></tr>`).join('')+
+    '</tbody></table></div></div>'+
+
+    '<div class="dash-sec"><div class="dash-sec-title">Totals by item</div><div class="card"><table><thead><tr><th>Item</th><th class="num">Qty</th><th>Sold by</th><th class="num">Total</th></tr></thead><tbody>'+
+      itemRows.map(r=>`<tr><td>${esc(r.name)}</td><td class="num">${r.qty||'—'}</td><td class="muted">${esc(r.soldBy)}</td><td class="num">${fmtMoney(r.total)}</td></tr>`).join('')+
+    '</tbody></table></div></div>'+
+
+    '<div class="dash-sec"><div class="dash-sec-title">Every invoice</div>'+
+      purchases.map(p=>{
+        const lines = p.lines||[];
+        return `<div class="card" style="margin-bottom:10px"><table><thead><tr>
+          <th>${esc(p.vendorName||'(unknown vendor)')}${p.invoiceNumber?' — #'+esc(p.invoiceNumber):''}</th>
+          <th class="muted">${p.invoiceDate?fmtDate(p.invoiceDate):''}</th>
+          <th class="num">${fmtMoney(p.totalAmount)}</th>
+        </tr></thead></table>
+        <table style="margin-top:2px"><tbody>${
+          lines.map(l=>`<tr><td>${esc(l.ourName)}</td><td class="muted">${l.qty?l.qty+' '+esc(l.soldBy):''}</td><td class="num">${fmtMoney(l.lineTotal)}</td></tr>`).join('')
+        }</tbody></table></div>`;
+      }).join('')+
+    '</div>';
 }
 
 function showView(v){
@@ -1294,7 +1381,7 @@ window.manuallyMatchReply = manuallyMatchReply;
 
 // ════════ SCAN INVOICE ════════
 // Workflow states: 'idle' (drop zone), 'scanning' (spinner), 'review' (grid + save).
-let _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', error:'' };
+let _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', jobEventId:'', error:'' };
 
 function renderScan(){
   const el=document.getElementById('scanBody'); if(!el) return;
@@ -1423,6 +1510,13 @@ function renderScanReview(){
         <option value="__new">+ Create new vendor: ${esc(p.vendorName||'(unnamed)')}</option>
       </select>
     </div>
+    <div class="fld">
+      <label>Job / Event (optional) — track this invoice's cost against a specific event</label>
+      <select id="scanJobEvent" onchange="_scanState.jobEventId=this.value">
+        <option value="">— not tied to an event —</option>
+        ${sortedJobEvents().map(e=>`<option value="${e.id}" ${_scanState.jobEventId===e.id?'selected':''}>${esc(jobEventLabel(e))}</option>`).join('')}
+      </select>
+    </div>
   </div>`;
 
   // Lines as a grid (similar to bulk-add). New: Qty column for invoice quantity
@@ -1494,7 +1588,7 @@ window.scanRecalcAll=scanRecalcAll;
 
 function scanCancel(){
   if(!confirm('Discard this scan and start over?')) return;
-  _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', error:'' };
+  _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', jobEventId:'', error:'' };
   renderScan();
 }
 
@@ -1511,6 +1605,7 @@ async function scanSaveAll(){
     }catch(e){ alert('Could not create vendor: '+e.message); return; }
   }
   if(!vendorId){ alert('Pick a vendor at the top of the review.'); return; }
+  const resolvedVendorName = vendorName(vendorId) !== '(unknown vendor)' ? vendorName(vendorId) : ((_scanState.parsed && _scanState.parsed.vendorName) || '');
   // Gather grid rows
   const body = document.getElementById('scanBody2'); if(!body) return;
   const rows = Array.from(body.querySelectorAll('tr')).map(tr=>{
@@ -1572,8 +1667,28 @@ async function scanSaveAll(){
         newItems++;
       }
     }
-    toast('Saved ✓ — '+newItems+' new, '+repriced+' repriced');
-    _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', error:'' };
+    if(_scanState.jobEventId){
+      const ev = jobEventById(_scanState.jobEventId);
+      const purchaseLines = rows.map(r=>{
+        const price=parseFloat(r.price)||0, qty=parseFloat(r.qty)||0;
+        return {
+          ourName:r.ourName||'', category:r.category||'', vendorItemName:r.vendorItemName||'',
+          vendorCode:r.vendorCode||'', soldBy:r.soldBy||'', packSize:parseFloat(r.packSize)||0,
+          price, qty, lineTotal: qty>0 ? price*qty : price
+        };
+      });
+      const purchaseTotal = purchaseLines.reduce((s,l)=>s+(l.lineTotal||0),0);
+      await db.collection('eventPurchases').add({
+        eventId: _scanState.jobEventId,
+        eventLabel: ev ? jobEventLabel(ev) : '',
+        vendorId, vendorName: resolvedVendorName,
+        invoiceDate, invoiceNumber: (_scanState.parsed && _scanState.parsed.invoiceNumber) || '',
+        lines: purchaseLines, totalAmount: purchaseTotal,
+        createdAt: stamp, createdBy: userLabel(), source: 'scan'
+      });
+    }
+    toast('Saved ✓ — '+newItems+' new, '+repriced+' repriced'+(_scanState.jobEventId?' — logged to event':''));
+    _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', jobEventId:'', error:'' };
     renderScan();
   }catch(e){ alert('Could not save: '+e.message); }
 }
