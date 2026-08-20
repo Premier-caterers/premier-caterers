@@ -333,7 +333,7 @@ tbody tr:hover{background:var(--bg2)}
     <button class="tab" data-view="products" onclick="showView('products')">Our Products</button>
     <button class="tab" data-view="vendors" onclick="showView('vendors')">Vendors</button>
     <button class="tab" data-view="scan" onclick="showView('scan')"><i class="ti ti-scan"></i> Scan Invoice</button>
-    <button class="tab" data-view="jobcosts" onclick="showView('jobcosts')"><i class="ti ti-folder"></i> Job Costs</button>
+    <button class="tab" data-view="jobcosts" onclick="showView('jobcosts')"><i class="ti ti-folder"></i> Costs & Invoices</button>
     <button class="tab" data-view="replies" onclick="showView('replies')"><i class="ti ti-message-circle-2"></i> Vendor Replies <span class="tab-badge" id="repliesBadge"></span></button>
     <button class="tab" data-view="orderhist" onclick="showView('orderhist')">Order History</button>
   </div>
@@ -388,7 +388,7 @@ tbody tr:hover{background:var(--bg2)}
     </div>
 
     <div class="view" id="view-jobcosts">
-      <div class="row-head"><div class="title">Job Costs</div><div class="muted" style="font-size:12.5px">Everything scanned against a specific event</div></div>
+      <div class="row-head"><div class="title">Costs & Invoices</div><div class="muted" style="font-size:12.5px">Browse scanned invoices by event or by vendor</div></div>
       <div id="jobCostsBody"></div>
     </div>
 
@@ -619,10 +619,39 @@ function ourProducts(){
   return Object.values(map).sort((a,b)=>a.name.localeCompare(b.name));
 }
 
-// ════════ JOB COSTS ════════
+// ════════ JOB COSTS / INVOICES ════════
+// eventPurchases now doubles as a general invoice log: every scan is recorded
+// here (eventId is '' when a scan wasn't tied to an event). This view lets you
+// browse it either by event (for job-costing) or by vendor (to pull up a past
+// invoice's items/prices without needing the original scanned image).
+let _jcMode = 'event'; // 'event' | 'vendor'
 let _jobCostsPick = '';
+let _jcVendorPick = '';
+
+function _jcInvoiceCard(p){
+  const lines = p.lines||[];
+  return `<div class="card" style="margin-bottom:10px"><table><thead><tr>
+    <th>${esc(p.vendorName||'(unknown vendor)')}${p.invoiceNumber?' — #'+esc(p.invoiceNumber):''}</th>
+    <th class="muted">${p.invoiceDate?fmtDate(p.invoiceDate):''}${p.eventLabel?' · '+esc(p.eventLabel):''}</th>
+    <th class="num">${fmtMoney(p.totalAmount)}</th>
+  </tr></thead></table>
+  <table style="margin-top:2px"><tbody>${
+    lines.map(l=>`<tr><td>${esc(l.ourName)}</td><td class="muted">${l.qty?l.qty+' '+esc(l.soldBy):''}</td><td class="num">${fmtMoney(l.price)}/${esc(l.soldBy||'unit')}</td><td class="num">${fmtMoney(l.lineTotal)}</td></tr>`).join('')
+  }</tbody></table></div>`;
+}
+
 function renderJobCosts(){
   const el=document.getElementById('jobCostsBody'); if(!el) return;
+  const modeToggle = `<div class="fld" style="margin-bottom:10px">
+    <button class="btn ${_jcMode==='event'?'':'ghost'}" onclick="_jcMode='event'; renderJobCosts()">By event</button>
+    <button class="btn ${_jcMode==='vendor'?'':'ghost'}" onclick="_jcMode='vendor'; renderJobCosts()">By vendor</button>
+  </div>`;
+
+  if(_jcMode==='vendor'){ renderJobCostsByVendor(el, modeToggle); return; }
+  renderJobCostsByEvent(el, modeToggle);
+}
+
+function renderJobCostsByEvent(el, modeToggle){
   const evOpts = sortedJobEvents().map(e=>{
     const n = eventPurchases.filter(p=>p.eventId===e.id).length;
     return `<option value="${e.id}" ${_jobCostsPick===e.id?'selected':''}>${esc(jobEventLabel(e))}${n?' — '+n+' invoice'+(n===1?'':'s'):''}</option>`;
@@ -634,57 +663,74 @@ function renderJobCosts(){
     </select></div>`;
 
   if(!_jobCostsPick){
-    el.innerHTML = pickerHtml + '<div class="dash-empty" style="margin-top:14px">Pick an event above to see everything scanned against it — total spend, every invoice, and totals by item.</div>';
+    el.innerHTML = modeToggle + pickerHtml + '<div class="dash-empty" style="margin-top:14px">Pick an event above to see everything scanned against it — total spend, every invoice, and totals by item.</div>';
     return;
   }
-  const ev = jobEventById(_jobCostsPick);
   const purchases = eventPurchases.filter(p=>p.eventId===_jobCostsPick).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   if(!purchases.length){
-    el.innerHTML = pickerHtml + '<div class="dash-empty" style="margin-top:14px">No invoices have been scanned against this event yet. On Scan Invoice, pick this event in the review step before hitting Save.</div>';
+    el.innerHTML = modeToggle + pickerHtml + '<div class="dash-empty" style="margin-top:14px">No invoices have been scanned against this event yet. On Scan Invoice, pick this event in the review step before hitting Save.</div>';
     return;
   }
   const grandTotal = purchases.reduce((s,p)=>s+(p.totalAmount||0),0);
 
-  // vendor breakdown
   const byVendor = {};
   purchases.forEach(p=>{ const k=p.vendorName||'(unknown vendor)'; byVendor[k]=(byVendor[k]||0)+(p.totalAmount||0); });
   const vendorRows = Object.entries(byVendor).sort((a,b)=>b[1]-a[1]);
 
-  // per-item totals across all invoices for this event
   const byItem = {};
   purchases.forEach(p=>(p.lines||[]).forEach(l=>{
-    const k = normName(l.ourName||'');
-    if(!k) return;
+    const k = normName(l.ourName||''); if(!k) return;
     if(!byItem[k]) byItem[k]={ name:l.ourName, soldBy:l.soldBy||'', qty:0, total:0 };
-    byItem[k].qty += parseFloat(l.qty)||0;
-    byItem[k].total += parseFloat(l.lineTotal)||0;
+    byItem[k].qty += parseFloat(l.qty)||0; byItem[k].total += parseFloat(l.lineTotal)||0;
   }));
   const itemRows = Object.values(byItem).sort((a,b)=>b.total-a.total);
 
-  el.innerHTML = pickerHtml +
+  el.innerHTML = modeToggle + pickerHtml +
     `<div class="dash-grid" style="margin-top:14px">${tile('Total spent', fmtMoney(grandTotal))}${tile('Invoices', purchases.length)}${tile('Vendors', vendorRows.length)}${tile('Line items', itemRows.length)}</div>` +
-
     '<div class="dash-sec"><div class="dash-sec-title">By vendor</div><div class="card"><table><thead><tr><th>Vendor</th><th class="num">Total</th></tr></thead><tbody>'+
       vendorRows.map(([nm,tot])=>`<tr><td>${esc(nm)}</td><td class="num">${fmtMoney(tot)}</td></tr>`).join('')+
     '</tbody></table></div></div>'+
-
     '<div class="dash-sec"><div class="dash-sec-title">Totals by item</div><div class="card"><table><thead><tr><th>Item</th><th class="num">Qty</th><th>Sold by</th><th class="num">Total</th></tr></thead><tbody>'+
       itemRows.map(r=>`<tr><td>${esc(r.name)}</td><td class="num">${r.qty||'—'}</td><td class="muted">${esc(r.soldBy)}</td><td class="num">${fmtMoney(r.total)}</td></tr>`).join('')+
     '</tbody></table></div></div>'+
+    '<div class="dash-sec"><div class="dash-sec-title">Every invoice</div>'+ purchases.map(_jcInvoiceCard).join('') +'</div>';
+}
 
-    '<div class="dash-sec"><div class="dash-sec-title">Every invoice</div>'+
-      purchases.map(p=>{
-        const lines = p.lines||[];
-        return `<div class="card" style="margin-bottom:10px"><table><thead><tr>
-          <th>${esc(p.vendorName||'(unknown vendor)')}${p.invoiceNumber?' — #'+esc(p.invoiceNumber):''}</th>
-          <th class="muted">${p.invoiceDate?fmtDate(p.invoiceDate):''}</th>
-          <th class="num">${fmtMoney(p.totalAmount)}</th>
-        </tr></thead></table>
-        <table style="margin-top:2px"><tbody>${
-          lines.map(l=>`<tr><td>${esc(l.ourName)}</td><td class="muted">${l.qty?l.qty+' '+esc(l.soldBy):''}</td><td class="num">${fmtMoney(l.lineTotal)}</td></tr>`).join('')
-        }</tbody></table></div>`;
-      }).join('')+
-    '</div>';
+function renderJobCostsByVendor(el, modeToggle){
+  const vOpts = vendors.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(v=>{
+    const n = eventPurchases.filter(p=>p.vendorId===v.id).length;
+    return `<option value="${v.id}" ${_jcVendorPick===v.id?'selected':''}>${esc(v.name)}${n?' — '+n+' invoice'+(n===1?'':'s'):''}</option>`;
+  }).join('');
+  const pickerHtml = `<div class="fld" style="max-width:480px"><label>Pick a vendor</label>
+    <select id="jcVendorPick" onchange="_jcVendorPick=this.value; renderJobCosts()">
+      <option value="">— choose a vendor —</option>
+      ${vOpts}
+    </select></div>`;
+
+  if(!_jcVendorPick){
+    el.innerHTML = modeToggle + pickerHtml + '<div class="dash-empty" style="margin-top:14px">Pick a vendor above to see every invoice scanned from them — items, prices, and dates, no need to dig up the original scan.</div>';
+    return;
+  }
+  const purchases = eventPurchases.filter(p=>p.vendorId===_jcVendorPick).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  if(!purchases.length){
+    el.innerHTML = modeToggle + pickerHtml + '<div class="dash-empty" style="margin-top:14px">No invoices scanned from this vendor yet.</div>';
+    return;
+  }
+  const grandTotal = purchases.reduce((s,p)=>s+(p.totalAmount||0),0);
+  const byItem = {};
+  purchases.forEach(p=>(p.lines||[]).forEach(l=>{
+    const k = normName(l.ourName||''); if(!k) return;
+    if(!byItem[k]) byItem[k]={ name:l.ourName, soldBy:l.soldBy||'', qty:0, total:0 };
+    byItem[k].qty += parseFloat(l.qty)||0; byItem[k].total += parseFloat(l.lineTotal)||0;
+  }));
+  const itemRows = Object.values(byItem).sort((a,b)=>b.total-a.total);
+
+  el.innerHTML = modeToggle + pickerHtml +
+    `<div class="dash-grid" style="margin-top:14px">${tile('Total spent', fmtMoney(grandTotal))}${tile('Invoices', purchases.length)}${tile('Line items', itemRows.length)}</div>` +
+    '<div class="dash-sec"><div class="dash-sec-title">Totals by item</div><div class="card"><table><thead><tr><th>Item</th><th class="num">Qty</th><th>Sold by</th><th class="num">Total</th></tr></thead><tbody>'+
+      itemRows.map(r=>`<tr><td>${esc(r.name)}</td><td class="num">${r.qty||'—'}</td><td class="muted">${esc(r.soldBy)}</td><td class="num">${fmtMoney(r.total)}</td></tr>`).join('')+
+    '</tbody></table></div></div>'+
+    '<div class="dash-sec"><div class="dash-sec-title">Every invoice</div>'+ purchases.map(_jcInvoiceCard).join('') +'</div>';
 }
 
 function showView(v){
@@ -1511,9 +1557,9 @@ function renderScanReview(){
       </select>
     </div>
     <div class="fld">
-      <label>Job / Event (optional) — track this invoice's cost against a specific event</label>
+      <label>Job / Event — is this invoice for one specific event, or general stock?</label>
       <select id="scanJobEvent" onchange="_scanState.jobEventId=this.value">
-        <option value="">— not tied to an event —</option>
+        <option value="">Non-event specific order</option>
         ${sortedJobEvents().map(e=>`<option value="${e.id}" ${_scanState.jobEventId===e.id?'selected':''}>${esc(jobEventLabel(e))}</option>`).join('')}
       </select>
     </div>
@@ -1618,6 +1664,26 @@ async function scanSaveAll(){
   // (archive current price to priceHistory, update current). Otherwise, create a fresh item.
   const stamp = Date.now();
   const invoiceDate = (_scanState.parsed && _scanState.parsed.invoiceDate) || '';
+  const invoiceNumber = (_scanState.parsed && _scanState.parsed.invoiceNumber) || '';
+
+  // Duplicate check — same vendor + matching invoice number, OR same vendor +
+  // same date + same total (covers invoices where the number wasn't readable).
+  // Blocks by default; only proceeds if the user explicitly confirms.
+  const prelimTotal = rows.reduce((s,r)=>{ const price=parseFloat(r.price)||0, qty=parseFloat(r.qty)||0; return s+(qty>0?price*qty:price); },0);
+  const dupMatch = eventPurchases.find(p=>{
+    if(p.vendorId!==vendorId) return false;
+    if(invoiceNumber && p.invoiceNumber && normName(invoiceNumber)===normName(p.invoiceNumber)) return true;
+    if(invoiceDate && p.invoiceDate===invoiceDate && Math.abs((p.totalAmount||0)-prelimTotal)<0.02) return true;
+    return false;
+  });
+  if(dupMatch){
+    const msg = 'This looks like a duplicate of an invoice already saved from '+resolvedVendorName+
+      (dupMatch.invoiceDate?' on '+fmtDate(dupMatch.invoiceDate):'')+
+      (dupMatch.invoiceNumber?' (#'+dupMatch.invoiceNumber+')':'')+
+      ' totaling '+fmtMoney(dupMatch.totalAmount)+'.\n\nSaving it again will double-count it in your price catalog and invoice history.\n\nSave anyway?';
+    if(!confirm(msg)) return;
+  }
+
   let newItems=0, repriced=0;
   try{
     for(const r of rows){
@@ -1667,8 +1733,8 @@ async function scanSaveAll(){
         newItems++;
       }
     }
-    if(_scanState.jobEventId){
-      const ev = jobEventById(_scanState.jobEventId);
+    {
+      const ev = _scanState.jobEventId ? jobEventById(_scanState.jobEventId) : null;
       const purchaseLines = rows.map(r=>{
         const price=parseFloat(r.price)||0, qty=parseFloat(r.qty)||0;
         return {
@@ -1679,10 +1745,10 @@ async function scanSaveAll(){
       });
       const purchaseTotal = purchaseLines.reduce((s,l)=>s+(l.lineTotal||0),0);
       await db.collection('eventPurchases').add({
-        eventId: _scanState.jobEventId,
+        eventId: _scanState.jobEventId || '',
         eventLabel: ev ? jobEventLabel(ev) : '',
         vendorId, vendorName: resolvedVendorName,
-        invoiceDate, invoiceNumber: (_scanState.parsed && _scanState.parsed.invoiceNumber) || '',
+        invoiceDate, invoiceNumber,
         lines: purchaseLines, totalAmount: purchaseTotal,
         createdAt: stamp, createdBy: userLabel(), source: 'scan'
       });
