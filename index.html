@@ -3289,7 +3289,7 @@ const PAY_META = {
   partial: {label:'Partial payment received', css:'border:3px solid #FFC400'},
   none:    {label:'No payment received',      css:'border:3px dashed #FFC400'},
 };
-function _plIsBooked(colKey){ return ['booked','month_out','two_weeks','this_week','past'].includes(colKey); }
+function _plIsBooked(colKey){ return ['booked','month_out','two_weeks','this_week','past_paid','past_unpaid'].includes(colKey); }
 function plBorderStyle(inq, colKey){
   if(!_plIsBooked(colKey)) return '';
   const st = plPayState(inq);
@@ -3356,6 +3356,8 @@ function closeContactMenu(){ document.getElementById('contactMenuOverlay')?.remo
 
 function renderPipeline(){
   const role = roles[currentRole];
+  // Helper (added): true if the event tied to this inquiry has a fully-paid invoice
+  const inqInvoicePaid = (inq)=> invoices['inq_'+inq.id]?.status==='paid';
   const stages = [
     {key:'new',       label:'New Inquiry',     icon:'ti-mail',          cls:'stage-new',      pcls:'pcol-new'},
     {key:'menu_sent', label:'Menu Sent',       icon:'ti-file-text',     cls:'stage-menu_sent',pcls:'pcol-menu'},
@@ -3363,7 +3365,8 @@ function renderPipeline(){
     {key:'month_out', label:'One Month Out',   icon:'ti-calendar-event',cls:'stage-booked',   pcls:'pcol-booked'},
     {key:'two_weeks', label:'2 Weeks Out',     icon:'ti-calendar-event',cls:'stage-booked',   pcls:'pcol-booked'},
     {key:'this_week', label:'This Week',        icon:'ti-calendar-star', cls:'stage-booked',   pcls:'pcol-booked'},
-    {key:'past',      label:'Past Events',     icon:'ti-calendar-check', cls:'stage-past',     pcls:'pcol-past'},
+    {key:'past_unpaid', label:'Past — Not Paid', icon:'ti-alert-circle',   cls:'stage-lost',   pcls:'pcol-past-unpaid'},
+    {key:'past_paid',   label:'Past — Paid',     icon:'ti-circle-check',   cls:'stage-booked', pcls:'pcol-past-paid'},
     {key:'lost',      label:'Lost / Declined', icon:'ti-circle-x',      cls:'stage-lost',     pcls:'pcol-lost'},
   ];
   const sNew = inquiries.filter(i=>i.stage==='new').length;
@@ -3385,13 +3388,17 @@ function renderPipeline(){
   ${statHtml}
   <div class="pipeline-cols" style="display:flex;flex-wrap:nowrap;gap:12px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch">
   ${stages.map(s=>{
-    const bookedCols = {booked:1, month_out:1, two_weeks:1, this_week:1, past:1};
-    let cards = bookedCols[s.key]
+    const bookedCols = {booked:1, month_out:1, two_weeks:1, this_week:1};
+    let cards;
+    if(s.key==='past_unpaid') cards = inquiries.filter(i=>i.stage==='booked' && plBookedBucket(i)==='past' && !inqInvoicePaid(i));
+    else if(s.key==='past_paid') cards = inquiries.filter(i=>i.stage==='booked' && plBookedBucket(i)==='past' && inqInvoicePaid(i));
+    else cards = bookedCols[s.key]
                 ? inquiries.filter(i=>i.stage==='booked' && plBookedBucket(i)===s.key)
                 : inquiries.filter(i=>i.stage===s.key);
     const sortBy = window._plSort[s.key] || 'date';
     cards = cards.slice().sort(plSortComparator(sortBy));
     const isBooked = (s.key==='booked'||s.key==='month_out'||s.key==='two_weeks'||s.key==='this_week');
+    const isPastCol = (s.key==='past_paid'||s.key==='past_unpaid');
     const colCompact = !!window._plColCollapsed[s.key];
     return `<div class="pipeline-col ${s.pcls||''}" style="flex:0 0 300px;min-width:300px">
       <div class="pipeline-col-header">
@@ -3439,10 +3446,10 @@ function renderPipeline(){
         ${cardDocIcons(inq, role)}
         ${role.canEdit ? `<div class="inq-actions">
           ${s.key==='new' ? `<button class="stage-btn stage-menu_sent" onclick="event.stopPropagation();moveInquiry('${inq.id}','menu_sent')">Mark menu sent</button>` : ''}
-          ${s.key!=='new' && s.key!=='lost' && s.key!=='past' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();moveInquiry('${inq.id}','new')"><i class="ti ti-arrow-back-up" style="font-size:11px"></i> Move to new</button>` : ''}
-          ${!isBooked && s.key!=='lost' && s.key!=='past' ? `<button class="stage-btn stage-booked" onclick="event.stopPropagation();moveInquiry('${inq.id}','booked')">Book event</button>` : ''}
-          ${isBooked || s.key==='past' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">→ Go to event week</button>` : ''}
-          ${s.key!=='lost'&&s.key!=='past' ? `<button class="stage-btn" style="background:var(--amber-bg);color:var(--amber-text)" onclick="event.stopPropagation();markInquiryLost('${inq.id}')">Mark lost</button>` : ''}
+          ${s.key!=='new' && s.key!=='lost' && !isPastCol ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();moveInquiry('${inq.id}','new')"><i class="ti ti-arrow-back-up" style="font-size:11px"></i> Move to new</button>` : ''}
+          ${!isBooked && s.key!=='lost' && !isPastCol ? `<button class="stage-btn stage-booked" onclick="event.stopPropagation();moveInquiry('${inq.id}','booked')">Book event</button>` : ''}
+          ${isBooked || isPastCol ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">→ Go to event week</button>` : ''}
+          ${s.key!=='lost'&&!isPastCol ? `<button class="stage-btn" style="background:var(--amber-bg);color:var(--amber-text)" onclick="event.stopPropagation();markInquiryLost('${inq.id}')">Mark lost</button>` : ''}
           ${s.key==='lost' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();reviveInquiry('${inq.id}')"><i class="ti ti-arrow-back-up" style="font-size:12px"></i> Revive</button>` : ''}
           <button class="stage-btn" style="background:var(--bg2);color:var(--text2);margin-left:auto" onclick="event.stopPropagation();openContactMenu('${inq.id}')" title="Contact client"><i class="ti ti-send" style="font-size:12px"></i> Contact</button>
           <button onclick="event.stopPropagation();deleteInquiry('${inq.id}')" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px"><i class="ti ti-trash"></i></button>
