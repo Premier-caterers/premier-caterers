@@ -1256,6 +1256,9 @@ function startFirebaseListeners(){
       myDayItems = snap.docs.map(d=>({id:d.id, ...d.data()}));
       if(currentView==='myday') render();
     }, err=>{ console.error('My Day listener error:', err); });
+    // Start the reminder checker once per session (added) — runs regardless of
+    // which page is open, so a reminder fires even if you're not on My Day.
+    if(!window._myDayReminderTimer){ window._myDayReminderTimer = setInterval(checkMyDayReminders, 30000); }
   }
   // AI-suggested follow-ups — scoped to this user, only ones still awaiting review.
   if(followupSuggestionsCol && authUser){
@@ -1284,7 +1287,11 @@ function _myDayInject(){
     .md-col{flex:1 1 300px;min-width:280px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:10px}
     .md-col-head{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:600;color:var(--text)}
     .md-add-row{display:flex;gap:6px;flex-wrap:wrap}
-    .md-add-row input[type=text], .md-add-row input[type=time], .md-add-row select{flex:1;min-width:90px;padding:8px 10px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:inherit;font-size:13px}
+    .md-add-row input[type=text], .md-add-row input[type=time], .md-add-row input[type=date], .md-add-row select{flex:1;min-width:90px;padding:8px 10px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:inherit;font-size:13px}
+    .md-remind-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:2px 2px 0}
+    .md-remind-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text2);cursor:pointer;padding:3px 8px;border-radius:12px;border:0.5px solid var(--border2);background:var(--bg);user-select:none}
+    .md-remind-chip input[type=checkbox]{width:12px;height:12px;cursor:pointer;accent-color:var(--maroon)}
+    .md-remind-chip:has(input:checked){background:var(--maroon-tint);border-color:var(--blue-border);color:var(--blue-text);font-weight:600}
     .md-mic{width:34px;height:34px;flex:0 0 auto;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px}
     .md-mic.listening{background:var(--red-bg,#fdf3f3);border-color:var(--red-border,#dcc);color:#c0392b;animation:mdPulse 1s infinite}
     @keyframes mdPulse{0%,100%{opacity:1}50%{opacity:.45}}
@@ -1348,6 +1355,46 @@ function _myDayIsOverdue(it){
 }
 function _myDayEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+/* ---- My Day reminders (added) ----
+   Fires while this app is open in a browser tab. Browser notifications need
+   permission granted once; WhatsApp needs a phone number saved once (asked
+   the first time it's needed); Email goes to the signed-in user's own address
+   automatically, reusing the same Gmail relay the rest of the app uses. */
+function _myDayRequestNotifyPermission(){
+  if(typeof Notification==='undefined') return;
+  if(Notification.permission==='default'){ try{ Notification.requestPermission(); }catch(e){} }
+}
+function _myDayGetWhatsAppNumber(){
+  let n = localStorage.getItem('myDayWhatsAppNumber');
+  if(!n){
+    n = prompt('Enter your WhatsApp number for reminders (include country code, e.g. +12015551234):');
+    if(n){ n=n.trim(); localStorage.setItem('myDayWhatsAppNumber', n); }
+  }
+  return n;
+}
+async function checkMyDayReminders(){
+  if(!myDayItems || !myDayItems.length) return;
+  const now = Date.now();
+  for(const it of myDayItems){
+    if(it.status==='done') continue;
+    if(!it.dueAtTs || it.dueAtTs>now) continue;
+    if(it.notifiedAt) continue;
+    if(!it.reminderMethods || !it.reminderMethods.length) continue;
+    const label = it.text + (it.dueDateLabel?(' — '+it.dueDateLabel):'') + (it.time?(' at '+it.time):'');
+    if(it.reminderMethods.includes('browser') && typeof Notification!=='undefined' && Notification.permission==='granted'){
+      try{ new Notification('My Day reminder', {body: label}); }catch(e){}
+    }
+    if(it.reminderMethods.includes('whatsapp')){
+      const num = _myDayGetWhatsAppNumber();
+      if(num){ try{ await sendWhatsAppMessage(num, 'Reminder: '+label); }catch(e){} }
+    }
+    if(it.reminderMethods.includes('email') && authUser){
+      try{ await sendGmailEmail(authUser, 'My Day reminder', label, label); }catch(e){}
+    }
+    try{ await myDayCol.doc(it.id).update({notifiedAt: now}); }catch(e){}
+  }
+}
+
 // Small badge showing an item is linked to its paired copy in another column.
 function _myDayLinkBadge(it){
   if(!it.linkedId) return '';
@@ -1396,14 +1443,27 @@ function _mySuggestionsBlock(){
   return `<div class="md-sugg-label"><span class="dot"></span>Suggested (${mySuggestions.length})</div>${cards}<div class="md-follow-label">Your Follow-Ups</div>`;
 }
 
+function _myDayReminderPicker(type){
+  // Compact channel picker shared by all three My Day columns (added).
+  // Left blank/unchecked = no reminder, same as before this feature existed.
+  return `<div class="md-remind-row">
+    <span style="font-size:11px;color:var(--text3)">Remind me:</span>
+    <label class="md-remind-chip"><input type="checkbox" id="mdRemindBrowser_${type}"><i class="ti ti-bell"></i>Browser</label>
+    <label class="md-remind-chip"><input type="checkbox" id="mdRemindWhatsapp_${type}"><i class="ti ti-brand-whatsapp"></i>WhatsApp</label>
+    <label class="md-remind-chip"><input type="checkbox" id="mdRemindEmail_${type}"><i class="ti ti-mail"></i>Email</label>
+  </div>`;
+}
+
 function _myDayCol(type, title, icon, placeholder, extraControlsHtml){
   const items = _myDayItemsOf(type);
   const rows = items.length ? items.map(it=>{
     const overdue = _myDayIsOverdue(it);
     const cls = 'md-item' + (it.status==='done'?' md-done':'') + (overdue?' md-overdue':'');
     const metaBits = [];
+    if(it.dueDateLabel) metaBits.push('<i class="ti ti-calendar" style="font-size:11px"></i> '+_myDayEsc(it.dueDateLabel));
     if(it.time) metaBits.push('<i class="ti ti-clock" style="font-size:11px"></i> '+_myDayEsc(it.time));
     if(it.method){ const m=MYDAY_METHODS.find(m=>m.key===it.method); if(m) metaBits.push('<i class="ti '+m.icon+'" style="font-size:11px"></i> '+m.label); }
+    if(it.reminderMethods && it.reminderMethods.length) metaBits.push('<i class="ti ti-bell" style="font-size:11px"></i> '+it.reminderMethods.join('/'));
     if(overdue) metaBits.push('<span style="color:#c0392b;font-weight:600">Overdue</span>');
     const linkBadge = _myDayLinkBadge(it);
     return `<div class="${cls}">
@@ -1423,6 +1483,11 @@ function _myDayCol(type, title, icon, placeholder, extraControlsHtml){
       <button class="md-mic" id="mdMic_${type}" onclick="startMyDayVoice('${type}')" title="Voice input"><i class="ti ti-microphone"></i></button>
       <button class="md-add-btn" onclick="addMyDayItem('${type}')">Add</button>
     </div>
+    ${type!=='schedule' ? `<div class="md-add-row" style="margin-top:4px">
+      <input type="date" id="mdDate_${type}" title="Due date (optional)" style="max-width:140px">
+      <input type="time" id="mdTime_${type}" title="Due time (optional)" style="max-width:110px">
+    </div>` : ''}
+    ${_myDayReminderPicker(type)}
     ${(type==='todo'||type==='followup') ? _myDayLinkControls(type) : ''}
     ${type==='followup' ? _mySuggestionsBlock() : ''}
     <div class="md-list">${rows}</div>
@@ -1431,15 +1496,16 @@ function _myDayCol(type, title, icon, placeholder, extraControlsHtml){
 
 function renderMyDay(){
   _myDayInject();
+  _myDayRequestNotifyPermission();
   const methodOptions = MYDAY_METHODS.map(m=>`<option value="${m.key}">${m.label}</option>`).join('');
   const html = `
     <div style="padding:20px 20px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div style="font-size:18px;font-weight:700;color:var(--text)"><i class="ti ti-sun" style="margin-right:8px"></i>My Day &mdash; ${_myDayEsc(prettyName(authUser))}</div>
       <div class="md-clock" id="myDayClock"></div>
     </div>
-    <div style="padding:0 20px;font-size:12px;color:var(--text3)">Only you can see this. Nothing here is shared with the team.</div>
+    <div style="padding:0 20px;font-size:12px;color:var(--text3)">Only you can see this. Nothing here is shared with the team. Reminders fire while this app is open in a browser tab — they won't wake your phone if the tab is closed.</div>
     <div class="md-wrap">
-      ${_myDayCol('schedule','Schedule','ti-calendar-time','Add to your schedule…', '<input type="time" id="mdTime_schedule" style="max-width:110px">')}
+      ${_myDayCol('schedule','Schedule','ti-calendar-time','Add to your schedule…', '<input type="date" id="mdDate_schedule" title="Date" style="max-width:140px"><input type="time" id="mdTime_schedule" style="max-width:110px">')}
       ${_myDayCol('todo','To&#8209;Do','ti-checklist','Add a to&#8209;do…')}
       ${_myDayCol('followup','Follow&#8209;Ups','ti-phone-outgoing','Who do you need to follow up with?', `<select id="mdMethod_followup">${methodOptions}</select>`)}
     </div>
@@ -1454,15 +1520,28 @@ async function addMyDayItem(type){
   const text = (inputEl && inputEl.value || '').trim();
   if(!text){ if(inputEl) inputEl.focus(); return; }
   const rec = { owner: authUser, type, text, status:'pending', createdAt: Date.now() };
-  if(type==='schedule'){
-    const timeEl = document.getElementById('mdTime_schedule');
-    const t = timeEl && timeEl.value;
-    if(t){
-      rec.time = t;
-      const [hh,mm] = t.split(':').map(Number);
-      const due = new Date(); due.setHours(hh,mm,0,0);
-      rec.dueAtTs = due.getTime();
-    }
+  // Date + time now apply to ALL columns, not just Schedule — this is what
+  // lets a to-do or follow-up be scheduled for a future day (added).
+  const dateEl = document.getElementById('mdDate_'+type);
+  const timeEl0 = document.getElementById('mdTime_'+type);
+  const dStr = dateEl && dateEl.value;
+  const tStr = timeEl0 && timeEl0.value;
+  if(dStr || tStr){
+    const [yy,mm,dd] = (dStr || new Date().toISOString().split('T')[0]).split('-').map(Number);
+    const [hh,mi] = (tStr || '00:00').split(':').map(Number);
+    const due = new Date(yy, mm-1, dd, hh, mi, 0, 0);
+    rec.dueAtTs = due.getTime();
+    if(tStr) rec.time = tStr;
+    if(dStr) rec.dueDateLabel = due.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  }
+  // Reminder channels (added) — any combination of Browser / WhatsApp / Email
+  const reminderMethods = [];
+  if(document.getElementById('mdRemindBrowser_'+type)?.checked) reminderMethods.push('browser');
+  if(document.getElementById('mdRemindWhatsapp_'+type)?.checked) reminderMethods.push('whatsapp');
+  if(document.getElementById('mdRemindEmail_'+type)?.checked) reminderMethods.push('email');
+  if(reminderMethods.length){
+    if(!rec.dueAtTs){ alert('Set a date and/or time above so the reminder knows when to fire.'); return; }
+    rec.reminderMethods = reminderMethods;
   }
   if(type==='followup'){
     const methEl = document.getElementById('mdMethod_followup');
@@ -1491,7 +1570,9 @@ async function addMyDayItem(type){
       await mainRef.update({ linkedId: schedRef.id });
     }
     if(inputEl){ inputEl.value=''; inputEl.focus(); }
-    const timeEl = document.getElementById('mdTime_schedule'); if(timeEl) timeEl.value='';
+    const timeElReset = document.getElementById('mdTime_'+type); if(timeElReset) timeElReset.value='';
+    const dateElReset = document.getElementById('mdDate_'+type); if(dateElReset) dateElReset.value='';
+    ['Browser','Whatsapp','Email'].forEach(ch=>{ const cb=document.getElementById('mdRemind'+ch+'_'+type); if(cb) cb.checked=false; });
     if(linkCb){
       linkCb.checked = false;
       const timeChoice = document.getElementById('mdLinkTime_'+type); if(timeChoice) timeChoice.classList.remove('show');
