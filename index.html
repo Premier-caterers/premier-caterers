@@ -32,6 +32,14 @@
 </div>
 
 <div class="nav-overlay" id="navOverlay" onclick="closeMobileNav()"></div>
+
+<div class="bottom-nav" id="bottomNav">
+  <button class="bottom-nav-item active" id="bnav-home" onclick="showView('home')"><i class="ti ti-home"></i><span>Home</span></button>
+  <button class="bottom-nav-item" id="bnav-events" onclick="showView('events')"><i class="ti ti-calendar"></i><span>This week</span></button>
+  <button class="bottom-nav-item" id="bnav-coversheet" onclick="showView('coversheet')"><i class="ti ti-layout-rows"></i><span>Cover sheet</span></button>
+  <button class="bottom-nav-item" id="bnav-schedule" onclick="showView('schedule')"><i class="ti ti-users"></i><span>Schedule</span></button>
+  <button class="bottom-nav-item" id="bnav-more" onclick="toggleMobileNav()"><i class="ti ti-menu-2"></i><span>More</span></button>
+</div>
 <!-- ===================== LOGIN OVERLAY (added) ===================== -->
 <style>
   #loginOverlay{position:fixed;inset:0;z-index:99999;background:#8B1A1A;display:none;align-items:center;justify-content:center;padding:24px}
@@ -2124,6 +2132,9 @@ function showView(v){
   if(v==='invoices') activeInvoiceId=null; // navigating to the section shows the list; editing keeps the invoice open
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const el=document.getElementById('nav-'+v); if(el) el.classList.add('active');
+  /* ---- mobile bottom nav active-state (added) ---- */
+  document.querySelectorAll('.bottom-nav-item').forEach(n=>n.classList.remove('active'));
+  const bnEl=document.getElementById('bnav-'+v); if(bnEl) bnEl.classList.add('active');
   render();
 }
 
