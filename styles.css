@@ -32,7 +32,7 @@
   --shadow-card:0 1px 2px rgba(35,38,43,.04),0 4px 14px rgba(35,38,43,.05);
   --shadow-card-h:0 8px 26px rgba(35,38,43,.12);
   /* pipeline stage accents */
-  --st-new:#6C7A87;--st-menu:#B98B2E;--st-booked:#37613A;--st-past:#8B8577;--st-lost:#9B7C7C;
+  --st-new:#6C7A87;--st-menu:#B98B2E;--st-booked:#37613A;--st-past:#8B8577;--st-lost:#9B7C7C;--st-past-paid:#3F7A44;--st-past-unpaid:#B15A38;
   /* dark sidebar */
   --nav-bg:#20262A;--nav-bg-hover:#2A3136;--nav-text:#B7BCB4;--nav-text-active:#F3F4F1;
 }
@@ -315,6 +315,7 @@ a{color:var(--blue-mid);text-decoration:none}
 .pipeline-count{font-size:11px;background:var(--bg);border:0.5px solid var(--border);color:var(--text2);padding:2px 8px;border-radius:8px;font-weight:600}
 .pcol-new{--col-accent:var(--st-new)} .pcol-menu{--col-accent:var(--st-menu)}
 .pcol-booked{--col-accent:var(--st-booked)} .pcol-past{--col-accent:var(--st-past)}
+.pcol-past-paid{--col-accent:var(--st-past-paid)} .pcol-past-unpaid{--col-accent:var(--st-past-unpaid)}
 .pcol-lost{--col-accent:var(--st-lost)}
 
 .inq-card{position:relative;overflow:hidden;background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:.9rem 1.05rem;margin-bottom:9px;cursor:pointer;box-shadow:var(--shadow-card);transition:transform .16s,box-shadow .16s,border-color .16s}
