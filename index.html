@@ -3448,6 +3448,58 @@ function openContactMenu(id){
 }
 function closeContactMenu(){ document.getElementById('contactMenuOverlay')?.remove(); }
 
+// ---- Archive folders for Past/Lost pipeline columns (added) ----
+// Best-effort town extraction from a free-text address ("123 Main St, Teaneck, NJ 07666" -> "Teaneck")
+function _plTownOf(inq){
+  const addr = (inq.venueLocation||inq.venueName||'').trim();
+  if(!addr) return 'Unknown town';
+  const parts = addr.split(',').map(s=>s.trim()).filter(Boolean);
+  if(parts.length>=2) return parts[parts.length-2] || 'Unknown town';
+  return parts[0] || 'Unknown town';
+}
+function _plMonthOf(inq){
+  if(!inq.eventDate) return 'Undated';
+  const d = new Date(inq.eventDate);
+  if(isNaN(d)) return 'Undated';
+  return d.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+}
+function _plNameLetterOf(inq){
+  const nm = clientPrimary(inq) || (inq.firstName||'') || '?';
+  const c = nm.trim().charAt(0).toUpperCase();
+  return /[A-Z]/.test(c) ? c : '#';
+}
+const PL_FOLDER_MODES = [
+  {key:'month', label:'By month',    icon:'ti-calendar', fn:_plMonthOf},
+  {key:'name',  label:'By client name', icon:'ti-sort-ascending-letters', fn:_plNameLetterOf},
+  {key:'type',  label:'By event type', icon:'ti-tag', fn:inq=>inq.eventType||'Other'},
+  {key:'town',  label:'By town',     icon:'ti-map-pin', fn:_plTownOf},
+];
+window._plFolderNav = window._plFolderNav || {}; // colKey -> {mode, group} | undefined = top level
+// Groups `cards` per the chosen mode and returns [{group, items}], sorted sensibly per mode.
+function _plGroupCards(cards, modeKey){
+  const mode = PL_FOLDER_MODES.find(m=>m.key===modeKey);
+  const buckets = {};
+  cards.forEach(inq=>{ const g = mode.fn(inq) || 'Other'; (buckets[g] = buckets[g]||[]).push(inq); });
+  let keys = Object.keys(buckets);
+  if(modeKey==='month'){
+    keys.sort((a,b)=>{
+      if(a==='Undated') return 1; if(b==='Undated') return -1;
+      return new Date(a) - new Date(b);
+    });
+  } else {
+    keys.sort((a,b)=>a.localeCompare(b));
+  }
+  return keys.map(g=>({group:g, items:buckets[g]}));
+}
+function plFolderPick(colKey, modeKey){ window._plFolderNav[colKey] = {mode:modeKey, group:null}; render(); }
+function plFolderOpen(colKey, group){ window._plFolderNav[colKey].group = group; render(); }
+function plFolderBack(colKey){
+  const nav = window._plFolderNav[colKey];
+  if(nav && nav.group!=null){ nav.group=null; } else { delete window._plFolderNav[colKey]; }
+  render();
+}
+function plFolderSearch(colKey, val){ window._plFolderSearch = window._plFolderSearch||{}; window._plFolderSearch[colKey]=val; render(); }
+
 function renderPipeline(){
   const role = roles[currentRole];
   // Helper (added): true if the event tied to this inquiry has a fully-paid invoice
@@ -3494,6 +3546,47 @@ function renderPipeline(){
     const isBooked = (s.key==='booked'||s.key==='month_out'||s.key==='two_weeks'||s.key==='this_week');
     const isPastCol = (s.key==='past_paid'||s.key==='past_unpaid');
     const colCompact = !!window._plColCollapsed[s.key];
+
+    // ---- Archive folders for Past-Paid / Past-Unpaid / Lost (added) ----
+    // These columns can grow long over time, so instead of one flat scrolling
+    // list they offer a folder browser (by month / name / type / town) plus
+    // a search box that bypasses folders entirely.
+    const isArchiveCol = (s.key==='past_paid'||s.key==='past_unpaid'||s.key==='lost');
+    let archiveExtraHtml = '';
+    let archiveSuppressCards = false;
+    if(isArchiveCol && cards.length){
+      const allArchiveCards = cards;
+      const searchVal = ((window._plFolderSearch||{})[s.key]||'').trim().toLowerCase();
+      const searchBox = `<div style="margin-bottom:8px"><input type="text" placeholder="Search this column…" value="${searchVal.replace(/"/g,'&quot;')}" oninput="plFolderSearch('${s.key}',this.value)" style="width:100%;font-size:12px;padding:6px 9px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);font-family:inherit"></div>`;
+      if(searchVal){
+        cards = allArchiveCards.filter(inq=>{
+          const nm = (clientPrimary(inq)||`${inq.firstName||''} ${inq.lastName||''}`).toLowerCase();
+          return nm.includes(searchVal) || (inq.eventName||'').toLowerCase().includes(searchVal);
+        });
+        archiveExtraHtml = searchBox + `<div style="font-size:11px;color:var(--text3);margin-bottom:6px">${cards.length} match${cards.length===1?'':'es'}</div>`;
+      } else {
+        const nav = window._plFolderNav[s.key];
+        if(!nav){
+          archiveExtraHtml = searchBox + `<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
+            ${PL_FOLDER_MODES.map(m=>`<button onclick="plFolderPick('${s.key}','${m.key}')" style="display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:8px 10px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text2);cursor:pointer;font-size:12.5px"><i class="ti ${m.icon}" style="font-size:14px;color:var(--text3)"></i>${m.label}</button>`).join('')}
+          </div>`;
+          archiveSuppressCards = true;
+        } else if(nav.group==null){
+          const groups = _plGroupCards(allArchiveCards, nav.mode);
+          archiveExtraHtml = `<button onclick="plFolderBack('${s.key}')" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px;margin-bottom:8px"><i class="ti ti-arrow-left" style="font-size:12px"></i>All folders</button>`
+            + searchBox
+            + `<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
+            ${groups.map(g=>`<button onclick="plFolderOpen('${s.key}','${g.group.replace(/'/g,"\\'")}')" style="display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;padding:8px 10px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text2);cursor:pointer;font-size:12.5px"><span style="display:flex;align-items:center;gap:7px"><i class="ti ti-folder" style="font-size:14px;color:var(--brass)"></i>${g.group}</span><span class="pipeline-count">${g.items.length}</span></button>`).join('')}
+          </div>`;
+          archiveSuppressCards = true;
+        } else {
+          cards = allArchiveCards.filter(inq=>(PL_FOLDER_MODES.find(m=>m.key===nav.mode).fn(inq)||'Other')===nav.group);
+          archiveExtraHtml = `<button onclick="plFolderOpen('${s.key}',null)" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px;margin-bottom:8px"><i class="ti ti-arrow-left" style="font-size:12px"></i>${PL_FOLDER_MODES.find(m=>m.key===nav.mode).label}</button>`
+            + `<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:6px"><i class="ti ti-folder-open" style="color:var(--brass)"></i>${nav.group}</div>`;
+        }
+      }
+    }
+
     return `<div class="pipeline-col ${s.pcls||''}" style="flex:0 0 300px;min-width:300px">
       <div class="pipeline-col-header">
         <div class="pipeline-col-title"><i class="ti ${s.icon}" style="font-size:14px"></i>${s.label}</div>
@@ -3507,8 +3600,9 @@ function renderPipeline(){
           <span class="pipeline-count">${cards.length}</span>
         </div>
       </div>
-      ${cards.length===0 ? `<div style="text-align:center;padding:1.5rem 0;font-size:12px;color:var(--text3)">No clients yet</div>` : ''}
-      ${cards.map(inq=>{
+      ${archiveExtraHtml}
+      ${cards.length===0 && !archiveSuppressCards ? `<div style="text-align:center;padding:1.5rem 0;font-size:12px;color:var(--text3)">No clients yet</div>` : ''}
+      ${archiveSuppressCards ? '' : cards.map(inq=>{
         const compact = plCardCompact(inq, s.key);
         const nm = clientPrimary(inq) || `${inq.firstName||''} ${inq.lastName||''}`.trim();
         const contact = clientContact(inq);
