@@ -35,8 +35,8 @@
 
 <div class="bottom-nav" id="bottomNav">
   <button class="bottom-nav-item active" id="bnav-home" onclick="showView('home')"><i class="ti ti-home"></i><span>Home</span></button>
-  <button class="bottom-nav-item" id="bnav-events" onclick="showView('events')"><i class="ti ti-calendar"></i><span>This week</span></button>
-  <button class="bottom-nav-item" id="bnav-coversheet" onclick="showView('coversheet')"><i class="ti ti-layout-rows"></i><span>Cover sheet</span></button>
+  <button class="bottom-nav-item" id="bnav-events" onclick="goToThisWeek()"><i class="ti ti-calendar"></i><span>This week</span></button>
+  <button class="bottom-nav-item" id="bnav-coversheet" onclick="goToCoverSheetThisWeek()"><i class="ti ti-layout-rows"></i><span>Cover sheet</span></button>
   <button class="bottom-nav-item" id="bnav-schedule" onclick="showView('schedule')"><i class="ti ti-users"></i><span>Schedule</span></button>
   <button class="bottom-nav-item" id="bnav-more" onclick="toggleMobileNav()"><i class="ti ti-menu-2"></i><span>More</span></button>
 </div>
@@ -84,8 +84,8 @@
     <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
     <button class="nav-item" id="nav-clients" onclick="showView('clients')"><i class="ti ti-address-book"></i>Clients</button>
     <button class="nav-item" onclick="window.open('timeclock.html','_blank')"><i class="ti ti-clock-hour-4"></i>Time Clock<i class="ti ti-external-link" style="font-size:11px;margin-left:auto;opacity:.5"></i></button>
-    <button class="nav-item" id="nav-events" onclick="showView('events')"><i class="ti ti-calendar"></i>This week</button>
-    <button class="nav-item" id="nav-coversheet" onclick="showView('coversheet')"><i class="ti ti-layout-rows"></i>Weekly cover sheet</button>
+    <button class="nav-item" id="nav-events" onclick="goToThisWeek()"><i class="ti ti-calendar"></i>This week</button>
+    <button class="nav-item" id="nav-coversheet" onclick="goToCoverSheetThisWeek()"><i class="ti ti-layout-rows"></i>Weekly cover sheet</button>
     <a class="nav-item" href="https://calendar.google.com" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-brand-google"></i>Google Calendar<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
     <a class="nav-item" href="https://premier-caterers.github.io/premier-caterers/premier_caterers_form.html" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-clipboard-text"></i>Link to inquiry form<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
     <button class="nav-item" id="nav-schedule" onclick="showView('schedule')"><i class="ti ti-users"></i>Staff schedule</button>
@@ -2704,12 +2704,15 @@ function renderHome(){
     {key:'reports',    label:'Reports',          icon:'ti-chart-bar'},
   ];
 
-  const tileHtml = tiles.map(t=>`
-    <button class="home-tile" onclick="showView('${t.key}')">
+  const tileHtml = tiles.map(t=>{
+    const onclick = t.key==='events' ? 'goToThisWeek()' : t.key==='coversheet' ? 'goToCoverSheetThisWeek()' : `showView('${t.key}')`;
+    return `
+    <button class="home-tile" onclick="${onclick}">
       <div class="home-tile-icon"><i class="ti ${t.icon}"></i></div>
       <div class="home-tile-label">${t.label}</div>
       ${t.badge?`<span class="home-tile-badge">${t.badge}</span>`:''}
-    </button>`).join('');
+    </button>`;
+  }).join('');
 
   const eventsBox = `
     <div class="home-box">
@@ -3980,7 +3983,12 @@ function renderEstimateBlock(inq, role){
     </div>`;
   if(!open){
     let summary = '';
-    if(has){ const t=calcInvoiceTotals(est); summary = `<div style="font-size:13px;color:var(--text2)">Estimated total: <strong style="color:var(--text)">$${t.grand.toFixed(2)}</strong> · ${est.lines.length} line item${est.lines.length===1?'':'s'}</div>`; }
+    const liveInvoice = invoices['inq_'+inq.id];
+    if(bookedInvoiceExists && liveInvoice){
+      const t=calcInvoiceTotals(liveInvoice);
+      const statusLabel = liveInvoice.status==='paid' ? 'Paid' : liveInvoice.status==='invoice' ? 'Invoiced' : 'Quote';
+      summary = `<div style="font-size:13px;color:var(--text2)">${statusLabel} total: <strong style="color:var(--text)">$${t.grand.toFixed(2)}</strong> · ${(liveInvoice.lines||[]).length} line item${(liveInvoice.lines||[]).length===1?'':'s'}</div>`;
+    } else if(has){ const t=calcInvoiceTotals(est); summary = `<div style="font-size:13px;color:var(--text2)">Estimated total: <strong style="color:var(--text)">$${t.grand.toFixed(2)}</strong> · ${est.lines.length} line item${est.lines.length===1?'':'s'}</div>`; }
     else { summary = `<div style="font-size:12px;color:var(--text3)">No estimate yet — build one to email with the menu and later convert to an invoice.</div>`; }
     return `<div id="estBlock-${inq.id}"><div class="detail-block" style="margin-top:1rem">${header}${summary}</div></div>`;
   }
@@ -11968,6 +11976,20 @@ function updateWeekLabel(){
 function showWeekPicker(){
   const jp = document.getElementById('weekJumper');
   if(jp){ jp.style.display = jp.style.display==='none'?'block':'none'; if(jp.style.display==='block') jp.focus(); }
+}
+
+// ---- Nav helpers (added): always land on the real current week ----
+// Sidebar/bottom-nav "This week" and "Cover sheet" buttons call these,
+// so they always reset to today's week. gotoEvent()/promoteToEvent()
+// still call showView('events') directly to intentionally jump to a
+// specific event's week — that behavior is untouched.
+function goToThisWeek(){
+  currentWeekOffset = CURRENT_WEEK_OFFSET;
+  showView('events');
+}
+function goToCoverSheetThisWeek(){
+  currentWeekOffset = CURRENT_WEEK_OFFSET;
+  showView('coversheet');
 }
 
 function jumpToWeek(val){
