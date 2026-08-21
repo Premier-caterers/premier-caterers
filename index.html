@@ -2224,6 +2224,22 @@ function showView(v){
 }
 
 function render(){
+  // Preserve scroll position across the re-render (added). Nearly every action in
+  // this app calls render(), which fully replaces #mainArea's HTML — without this,
+  // the page scroll AND any internally-scrolling panel (Pipeline board, Cover Sheet
+  // table, Staff Schedule, Home's activity boxes, etc.) snap back to the start on
+  // every single click, which is what made things feel like they "jump away".
+  const _scrollY = window.scrollY;
+  const _mainAreaBefore = document.getElementById('mainArea');
+  const _innerScrolls = [];
+  if(_mainAreaBefore){
+    _mainAreaBefore.querySelectorAll('*').forEach(el=>{
+      if((el.scrollLeft>0 || el.scrollTop>0) && typeof el.className==='string' && el.className.trim()){
+        _innerScrolls.push({cls: el.className.trim(), left: el.scrollLeft, top: el.scrollTop});
+      }
+    });
+  }
+
   let html = '';
   try {
     html = currentView==='home'      ? renderHome()      :
@@ -2275,6 +2291,22 @@ function render(){
     }
   }
   syncHubDrawer();
+
+  // Restore scroll position (added) — page scroll, plus any internal panel
+  // that was scrolled before this render, matched back up by class name.
+  window.scrollTo(0, _scrollY);
+  if(_innerScrolls.length){
+    const _mainAreaAfter = document.getElementById('mainArea');
+    if(_mainAreaAfter){
+      _innerScrolls.forEach(s=>{
+        try{
+          const sel = '.'+s.cls.split(/\s+/).join('.');
+          const match = _mainAreaAfter.querySelector(sel);
+          if(match){ match.scrollLeft = s.left; match.scrollTop = s.top; }
+        }catch(e){ /* class name had characters that don't make a valid selector — skip */ }
+      });
+    }
+  }
 }
 
 // ── WEEKLY COVER SHEET ──
