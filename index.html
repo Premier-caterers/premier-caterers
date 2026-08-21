@@ -10520,12 +10520,126 @@ function downloadSignedContract(eid){ const r=_contractResolve(eid); const key=r
 window.openContract=openContract; window.closeContract=closeContract; window.saveContract=saveContract; window.sendContract=sendContract; window.previewContract=previewContract; window.downloadSignedContract=downloadSignedContract; window.copyContractLink=copyContractLink;
 
 
+// Small helper (added): parse a date-ish string into a sortable month key + display label.
+// Returns null if the string can't be parsed into a real date.
+function _monthKeyFromDateStr(s){
+  if(!s) return null;
+  const d = new Date(s);
+  if(isNaN(d)) return null;
+  const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  const label = d.toLocaleDateString('en-US',{month:'short',year:'numeric'});
+  return {key,label};
+}
+// Same idea but for UTC-anchored week strings ('YYYY-MM-DD'), avoiding local timezone day-shift.
+function _monthKeyFromWeekOf(wk){
+  if(!wk) return null;
+  const d = new Date(wk+'T00:00:00Z');
+  if(isNaN(d)) return null;
+  const key = d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0');
+  const label = d.toLocaleDateString('en-US',{month:'short',year:'numeric',timeZone:'UTC'});
+  return {key,label};
+}
+// Renders a simple horizontal bar-list report row (no charting library needed)
+function _reportBarRow(label, value, maxValue, barColor, valueDisplay){
+  const pct = maxValue>0 ? Math.round((value/maxValue)*100) : 0;
+  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+    <span style="width:88px;flex-shrink:0;font-size:12px;color:var(--text2)">${label}</span>
+    <div style="flex:1;height:10px;background:var(--bg3);border-radius:5px;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:${barColor};border-radius:5px"></div>
+    </div>
+    <span style="width:74px;flex-shrink:0;text-align:right;font-size:12px;font-weight:600;color:var(--text)">${valueDisplay!==undefined?valueDisplay:value}</span>
+  </div>`;
+}
+
 function renderReports(){
+  const money = n => '$'+Math.round(n).toLocaleString('en-US');
+
+  // ---- Revenue (from actual invoice records) ----
+  const allInvoices = Object.values(invoices).filter(Boolean);
+  const paidInvoices = allInvoices.filter(inv=>inv.status==='paid');
+  const billedInvoices = allInvoices.filter(inv=>inv.status==='invoice'||inv.status==='paid');
+  const totalPaid = paidInvoices.reduce((s,inv)=>s+calcInvoiceTotals(inv).grand,0);
+  const totalBilled = billedInvoices.reduce((s,inv)=>s+calcInvoiceTotals(inv).grand,0);
+  const totalOutstanding = Math.max(0, totalBilled-totalPaid);
+
+  const revByMonth = {}; // key -> {label, amt}
+  billedInvoices.forEach(inv=>{
+    const mk = _monthKeyFromDateStr(inv.invoiceDate);
+    if(!mk) return;
+    if(!revByMonth[mk.key]) revByMonth[mk.key] = {label:mk.label, amt:0};
+    revByMonth[mk.key].amt += calcInvoiceTotals(inv).grand;
+  });
+  const revMonthKeys = Object.keys(revByMonth).sort().slice(-12); // last 12 months with data
+  const maxRevMonth = Math.max(1, ...revMonthKeys.map(k=>revByMonth[k].amt));
+
+  // ---- Events (from the active events list) ----
+  const activeEvents = events.filter(e=>!eventInquiryMissing(e));
+  const eventsByType = {};
+  activeEvents.forEach(e=>{ const t=e.typeLabel||e.type||'Other'; eventsByType[t]=(eventsByType[t]||0)+1; });
+  const typeKeys = Object.keys(eventsByType).sort((a,b)=>eventsByType[b]-eventsByType[a]);
+  const maxTypeCount = Math.max(1, ...typeKeys.map(k=>eventsByType[k]));
+  const topType = typeKeys[0] || '—';
+
+  const eventsByMonth = {};
+  activeEvents.forEach(e=>{
+    const mk = _monthKeyFromWeekOf(e.weekOf);
+    if(!mk) return;
+    if(!eventsByMonth[mk.key]) eventsByMonth[mk.key] = {label:mk.label, count:0};
+    eventsByMonth[mk.key].count++;
+  });
+  const evMonthKeys = Object.keys(eventsByMonth).sort().slice(-12);
+  const maxEvMonth = Math.max(1, ...evMonthKeys.map(k=>eventsByMonth[k].count));
+
+  const thisMonthKey = new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
+  const thisMonthCount = eventsByMonth[thisMonthKey]?eventsByMonth[thisMonthKey].count:0;
+
+  // ---- Staff (total assignments across all events — counts, not clock hours;
+  //      actual worked hours live in the separate Time Clock tool, not this app's data) ----
+  let totW=0,totC=0,totB=0,totP=0;
+  activeEvents.forEach(e=>{
+    totW+=parseInt(e.waiters)||0; totC+=parseInt(e.chefs)||0;
+    totB+=parseInt(e.bartenders)||0; totP+=parseInt(e.porters)||0;
+  });
+
   return `<div class="section-header"><div class="section-title">Reports</div></div>
-  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:3rem 2rem;text-align:center;color:var(--text2)">
-    <i class="ti ti-chart-bar" style="font-size:40px;margin-bottom:1rem;display:block;color:var(--text3)"></i>
-    <div style="font-size:16px;font-weight:500;margin-bottom:.5rem;color:var(--text)">Reports coming soon</div>
-    <div style="font-size:13px;color:var(--text3);max-width:380px;margin:0 auto">Once invoice data is populated, you'll be able to view revenue by period, event type, and more.</div>
+
+  <div class="day-label">Revenue</div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-n">${money(totalPaid)}</div><div class="stat-l">Total paid</div></div>
+    <div class="stat-card"><div class="stat-n">${money(totalBilled)}</div><div class="stat-l">Total billed</div></div>
+    <div class="stat-card"><div class="stat-n">${money(totalOutstanding)}</div><div class="stat-l">Outstanding balance</div></div>
+    <div class="stat-card"><div class="stat-n">${paidInvoices.length}</div><div class="stat-l">Paid invoices</div></div>
+  </div>
+  ${revMonthKeys.length ? `<div class="detail-panel" style="margin-bottom:1.5rem">
+    <div class="detail-block-title">Billed revenue by month</div>
+    ${revMonthKeys.map(k=>_reportBarRow(revByMonth[k].label, revByMonth[k].amt, maxRevMonth, 'var(--maroon)', money(revByMonth[k].amt))).join('')}
+  </div>` : `<div style="padding:1.25rem 0;text-align:center;color:var(--text3);font-size:13px;margin-bottom:1.5rem">No billed invoices yet.</div>`}
+
+  <div class="day-label">Events</div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-n">${activeEvents.length}</div><div class="stat-l">Total events</div></div>
+    <div class="stat-card"><div class="stat-n">${thisMonthCount}</div><div class="stat-l">This month</div></div>
+    <div class="stat-card"><div class="stat-n">${venues.length}</div><div class="stat-l">Venues on file</div></div>
+    <div class="stat-card"><div class="stat-n" style="font-size:16px;line-height:1.3">${topType}</div><div class="stat-l">Most common type</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+    <div class="detail-panel" style="margin:0">
+      <div class="detail-block-title">Events by type</div>
+      ${typeKeys.length ? typeKeys.map(t=>_reportBarRow(t, eventsByType[t], maxTypeCount, 'var(--brass)')).join('') : `<div style="padding:.5rem 0;color:var(--text3);font-size:13px">No events yet.</div>`}
+    </div>
+    <div class="detail-panel" style="margin:0">
+      <div class="detail-block-title">Events by month</div>
+      ${evMonthKeys.length ? evMonthKeys.map(k=>_reportBarRow(eventsByMonth[k].label, eventsByMonth[k].count, maxEvMonth, 'var(--teal-solid)')).join('') : `<div style="padding:.5rem 0;color:var(--text3);font-size:13px">No events yet.</div>`}
+    </div>
+  </div>
+
+  <div class="day-label">Staff assignments (all-time totals)</div>
+  <div class="cs-hint"><i class="ti ti-info-circle"></i>Counts of staff assigned across all events — actual clocked hours live in the separate Time Clock tool, not tracked here.</div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-n">${totW}</div><div class="stat-l">Waiters</div></div>
+    <div class="stat-card"><div class="stat-n">${totC}</div><div class="stat-l">Chefs</div></div>
+    <div class="stat-card"><div class="stat-n">${totB}</div><div class="stat-l">Bartenders</div></div>
+    <div class="stat-card"><div class="stat-n">${totP}</div><div class="stat-l">Porters</div></div>
   </div>`;
 }
 
