@@ -2228,6 +2228,9 @@ async function coverSaveMeal(eventId, mealIdx, field, val, isNumber){
   e.meals[mealIdx][field] = isNumber ? (parseInt(val)||0) : val;
   // keep label in sync with jobSuffix if label is blank
   if(field==='jobSuffix' && !e.meals[mealIdx].label) e.meals[mealIdx].label = val;
+  // keep mashgiach/manager counts in sync with Staff Schedule at the meal level too (added)
+  if(field==='mashgiach'){ e.meals[mealIdx].mashgiachNames=val; e.meals[mealIdx].mashgiachCount=staffNum(val); }
+  if(field==='manager'  ){ e.meals[mealIdx].managerCount=staffNum(val); }
   await _saveEvent(e);
 }
 
@@ -2356,9 +2359,10 @@ function coverRemoveLastMeal(eventId){
 
 function coverSaveField(id, field, val, isNumber){
   schedSaveField(id, field, val, isNumber);
-  // keep mashgiach + mashgiachNames in sync
-  if(field==='mashgiach'){ const ev=events.find(x=>x.id===id); if(ev){ ev.mashgiachNames=val; _saveEvent(ev); } }
-  if(field==='manager'  ){ const ev=events.find(x=>x.id===id); if(ev){ ev.managerCount=ev.managerCount||0; } }
+  // keep mashgiach + mashgiachNames + mashgiachCount in sync both ways with Staff Schedule
+  if(field==='mashgiach'){ const ev=events.find(x=>x.id===id); if(ev){ ev.mashgiachNames=val; ev.mashgiachCount=staffNum(val); _saveEvent(ev); } }
+  // keep managerCount in sync so Staff Schedule's count column reflects what's typed here
+  if(field==='manager'  ){ const ev=events.find(x=>x.id===id); if(ev){ ev.managerCount=staffNum(val); _saveEvent(ev); } }
 }
 
 // Derive a numeric count from a staff value that may be a number ("3"), a note ("9+1"),
@@ -2494,7 +2498,7 @@ function renderCoverSheet(){
       <td class="cs-td cs-num">${inpStaff(e.id,'chefs',e.chefs,e.chefNames)}</td>
       <td class="cs-td">${inpTxt(e.id,'chefTime',e.chefTime)}</td>
       <td class="cs-td cs-num">${inpStaff(e.id,'porters',e.porters,e.porterNames)}</td>
-      <td class="cs-td">${inpTxt(e.id,'mashgiach',e.mashgiach||e.mashgiachNames)}</td>
+      <td class="cs-td">${inpTxt(e.id,'mashgiach',e.mashgiachNames||e.mashgiach)}</td>
       <td class="cs-td">${inpTxt(e.id,'manager',e.manager)}</td>
     </tr>`;
 
