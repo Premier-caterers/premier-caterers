@@ -1075,12 +1075,16 @@ async function _saveVenue(v){ try{ await venuesCol.doc(v.id).set(v); }catch(err)
 async function _saveRoadmap(r){ try{ await roadmapCol.doc(r.id).set(r); }catch(err){ console.error(err); } }
 
 function autoSaveVenue(name, addr){
-  if(!name || !addr) return;
-  const existing = venues.find(v=>v.name===name || v.addr===addr);
+  const n = (name||'').trim();
+  const a = (addr||'').trim();
+  if(!n) return; // need at least a venue name — address alone isn't enough to file it usefully
+  const nLow = n.toLowerCase(), aLow = a.toLowerCase();
+  const existing = venues.find(v => (v.name||'').trim().toLowerCase()===nLow || (a && (v.addr||'').trim().toLowerCase()===aLow));
   if(!existing){
-    const v = {id: Date.now()+'', name, addr, notes:'', contact:'', parking:'', createdAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})};
+    const v = {id: Date.now()+'', name:n, addr:a, notes:'', contact:'', parking:'', createdAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})};
     venues.push(v);
     _saveVenue(v);
+    try{ showToast('New venue added: '+n); }catch(e){}
   }
 }
 
@@ -3162,7 +3166,12 @@ function saveEdit(id){
   ['waiters','chefs','porters'].forEach(k=>{const el=document.getElementById('f-'+k);if(el)e[k]=parseInt(el.value)||0;});
   const te=document.getElementById('f-type'); if(te){e.type=te.value;e.typeLabel=typeMap[te.value]||te.value;}
   const de=document.getElementById('f-day'); if(de)e.day=de.value;
-  editingId=null; const _ev=events.find(x=>x.id===id); if(_ev) autoSaveVenue(_ev.name, _ev.addr); _saveEvent(_ev); _closeEventEditModal(); render();
+  editingId=null; const _ev=events.find(x=>x.id===id); if(_ev){
+    const _linkedInq = String(id).indexOf('inq_')===0 ? inquiries.find(x=>x.id===id.slice(4)) : null;
+    if(_linkedInq && _linkedInq.venueName) autoSaveVenue(_linkedInq.venueName, _linkedInq.venueLocation||_ev.addr);
+    _saveEvent(_ev);
+  }
+  _closeEventEditModal(); render();
 }
 
 // ── SCHEDULE ──
@@ -6410,7 +6419,7 @@ function saveInquiryEdits(id){
       const dv=ge('day'); if(dv!==undefined) ev2.day=dv;
       ['addr','notes','menuLink','groceryLink','floorplan','venueLink','logoData','manager','mashgiach','waiterTime','chefTime'].forEach(k=>{ const v=ge(k); if(v!==undefined) ev2[k]=v; });
       ['waiters','bartenders','porters','chefs'].forEach(k=>{ const v=gi(k); if(v!==undefined) ev2[k]=v; });
-      try{ autoSaveVenue(ev2.name, ev2.addr); }catch(e){}
+      if(inq.venueName) autoSaveVenue(inq.venueName, inq.venueLocation||ev2.addr);
       _saveEvent(ev2);
     }
   }catch(e){ console.warn('event edit save skipped:', e); }
@@ -6870,7 +6879,51 @@ function renderChecklists(){
     + '<button onclick="collapseAllChecklists()" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:12px">Collapse all</button>'
     + '</div></div>';
 
-  events.forEach(function(e){
+  // ---- Group into This week / Upcoming / Past archive (added) ----
+  // This week and future weeks stay together on the main page; past events move
+  // to a separate collapsed archive section so they don't clutter the day-to-day view.
+  const clThisWeekStr = getWeekEndDate(CURRENT_WEEK_OFFSET).toISOString().split('T')[0];
+  const clActiveEvents = events.filter(e=>!eventInquiryMissing(e));
+  const clThisWeek  = clActiveEvents.filter(e=>(e.weekOf||'2026-05-31')===clThisWeekStr);
+  const clUpcoming  = clActiveEvents.filter(e=>(e.weekOf||'2026-05-31')>clThisWeekStr)
+                        .sort((a,b)=>(a.weekOf||'').localeCompare(b.weekOf||''));
+  const clPast      = clActiveEvents.filter(e=>(e.weekOf||'2026-05-31')<clThisWeekStr)
+                        .sort((a,b)=>(b.weekOf||'').localeCompare(a.weekOf||'')); // most recent past first
+
+  h += '<div class="day-label">This week</div>';
+  h += clThisWeek.length
+    ? clThisWeek.map(checklistCardHtml).join('')
+    : '<div style="padding:1.25rem 0;text-align:center;color:var(--text3);font-size:13px">No events this week</div>';
+
+  h += '<div class="day-label" style="margin-top:1.5rem">Upcoming</div>';
+  h += clUpcoming.length
+    ? clUpcoming.map(checklistCardHtml).join('')
+    : '<div style="padding:1.25rem 0;text-align:center;color:var(--text3);font-size:13px">No upcoming events</div>';
+
+  window._clArchiveOpen = window._clArchiveOpen || false;
+  h += '<div style="margin-top:1.75rem;border-top:0.5px solid var(--border);padding-top:1rem">'
+    + '<button onclick="toggleChecklistArchive()" style="display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:none;background:none;cursor:pointer;padding:.5rem 0">'
+    + '<i class="ti ti-chevron-'+(window._clArchiveOpen?'down':'right')+'" style="font-size:14px;color:var(--text3)"></i>'
+    + '<i class="ti ti-archive" style="font-size:15px;color:var(--text3)"></i>'
+    + '<span style="font-size:13px;font-weight:600;color:var(--text2)">Past event checklists</span>'
+    + '<span class="nav-badge" style="margin-left:6px">'+clPast.length+'</span>'
+    + '</button>';
+  if(window._clArchiveOpen){
+    h += '<div style="margin-top:.5rem">'
+      + (clPast.length
+          ? clPast.map(checklistCardHtml).join('')
+          : '<div style="padding:1rem 0;text-align:center;color:var(--text3);font-size:13px">No past checklists yet</div>')
+      + '</div>';
+  }
+  h += '</div>';
+
+  return h;
+}
+
+function toggleChecklistArchive(){ window._clArchiveOpen = !window._clArchiveOpen; render(); }
+
+function checklistCardHtml(e){
+  let h = '';
     const eid = e.id;
     const rawItems = checklists[eid]||[];
     const active = rawItems.filter(i=>!i.na);
@@ -6962,8 +7015,6 @@ function renderChecklists(){
       + '</div>';
 
     h += '</div></div></div>'; // close body, card
-  });
-
   return h;
 }
 
@@ -11756,6 +11807,7 @@ function addEvent(){
     };
     inquiries.push(inq);
     _saveInquiry(inq);
+    if(inq.venueName) autoSaveVenue(inq.venueName, inq.venueLocation);
     try{ const nm = ((inq.firstName||'')+' '+(inq.lastName||'')).trim()||inq.eventName||'Inquiry'; logActivity(inq.id,'inquiry','Inquiry created manually \u2014 '+nm+(inq.eventType?(' ('+inq.eventType+')'):''), {source:'manual_booked'}); }catch(e){}
     // Create the event on the correct W/E page (reuses the booking logic)
     createEventFromInquiry(inq);
