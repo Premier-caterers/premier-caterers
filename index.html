@@ -13959,10 +13959,125 @@ window.deleteFromTrashPermanently = deleteFromTrashPermanently;
 window.emptyTrash = emptyTrash;
 window.renderTrash = renderTrash;
 
-// ── Grocery window exposures ──
 function openEventGrocery(eventId){
-  // Old in-app grocery is retired — open the new standalone grocery app instead.
-  window.open('https://premier-caterers.github.io/premier-caterers/grocery.html','_blank');
+  const e = (typeof events!=='undefined' ? events : []).find(x=>x.id===eventId);
+  if(!e){ showToast('Could not find that event.'); return; }
+
+  // The menu doc lives on the event, or on the inquiry behind it.
+  let menuUrl = e.menuLink || (Array.isArray(e.menus)&&e.menus[0] ? e.menus[0].url : '');
+  if(!menuUrl && typeof inquiries!=='undefined'){
+    const inq = inquiries.find(i=>('inq_'+i.id)===eventId || i.id===e.inquiryId);
+    if(inq) menuUrl = (Array.isArray(inq.menus)&&inq.menus[0] ? inq.menus[0].url : '') || inq.menuLink || '';
+  }
+  if(!menuUrl){
+    showToast('No menu is linked to this event yet — attach the menu first.');
+    return;
+  }
+  const fileId = (menuUrl.match(/\/d\/([a-zA-Z0-9_-]+)/)||['',''])[1];
+  if(!fileId){ showToast('That menu link is not a Google Doc.'); return; }
+
+  const relay = getSharedSetting('scriptUrl');
+  if(!relay){ alert('Save your Apps Script URL in Settings first.'); return; }
+
+  pcgShowPanel(`<div style="display:flex;align-items:center;gap:10px;padding:26px 4px">
+      <i class="ti ti-loader-2" style="font-size:19px;color:var(--maroon,#8B1A1A)"></i>
+      <div><div style="font-weight:600">Reading the menu…</div>
+      <div style="font-size:12px;color:var(--text3,#9A8E84);margin-top:2px">Matching the dishes against your master grocery list.</div></div>
+    </div>`);
+
+  const qs = 'action=generateGrocery'
+    + '&fileId='   + encodeURIComponent(fileId)
+    + '&eventName='+ encodeURIComponent(e.name || '')
+    + '&eventType='+ encodeURIComponent(e.typeLabel || e.type || '')
+    + '&eventDate='+ encodeURIComponent(e.dayLabel || '')
+    + '&guests='   + encodeURIComponent(e.guestCount || '');
+
+  fetch(relay + (relay.includes('?') ? '&' : '?') + qs)
+    .then(r=>r.json())
+    .then(d=>{
+      if(!d || !d.success) throw new Error((d && d.error) || 'The script did not answer. Check the Apps Script URL in Settings.');
+      try{ saveEventField(eventId,'groceryLink',d.url); }catch(err){}
+      pcgShowResult(d);
+    })
+    .catch(err=>{
+      pcgShowPanel(`<div style="padding:6px 4px 10px">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:600;color:var(--maroon,#8B1A1A)">
+          <i class="ti ti-alert-triangle" style="font-size:17px"></i>Could not build the list</div>
+        <div style="font-size:13px;color:var(--text2,#6B6058);margin-top:8px;line-height:1.55">${pcgEsc(err.message)}</div>
+        <div style="font-size:12px;color:var(--text3,#9A8E84);margin-top:10px;line-height:1.5">
+          The menu has to be a Google Doc, and the Apps Script needs the Grocery.gs file with a fresh deployment.</div>
+      </div>`);
+    });
+}
+
+function pcgEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function pcgShowPanel(html){
+  let w = document.getElementById('pcgPanel');
+  if(!w){
+    w = document.createElement('div');
+    w.id = 'pcgPanel';
+    w.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(43,36,32,.42);display:flex;align-items:center;justify-content:center;padding:20px';
+    w.onclick = ev => { if(ev.target===w) pcgClosePanel(); };
+    document.body.appendChild(w);
+  }
+  w.innerHTML = `<div style="background:var(--bg,#fff);border:0.5px solid var(--border2,#DDD3C4);border-radius:var(--radius-lg,14px);
+      box-shadow:0 10px 40px rgba(43,36,32,.22);max-width:560px;width:100%;max-height:82vh;overflow:auto;padding:18px 20px"
+      onclick="event.stopPropagation()">${html}</div>`;
+}
+function pcgClosePanel(){ const w=document.getElementById('pcgPanel'); if(w) w.remove(); }
+
+function pcgShowResult(d){
+  const un = d.unmatched || [];
+  const warn = d.isTemplate
+    ? `<div style="display:flex;gap:8px;background:var(--amber-bg,#FDF4E3);border:0.5px solid var(--amber-border,#E8D3A9);
+          border-radius:9px;padding:9px 11px;margin-bottom:12px">
+        <i class="ti ti-alert-triangle" style="font-size:15px;color:var(--amber-text,#8A5B00);flex-shrink:0;margin-top:1px"></i>
+        <div style="font-size:12px;color:var(--amber-text,#8A5B00);line-height:1.5">
+          This menu still lists every option (&ldquo;choose one&rdquo; / &ldquo;~or~&rdquo; are still in it), so the list may
+          include dishes the client did not pick. Check it against their final choices.</div>
+      </div>` : '';
+
+  const unBlock = un.length
+    ? `<div style="border:0.5px solid var(--border2,#DDD3C4);border-radius:9px;overflow:hidden;margin-bottom:14px">
+        <div style="background:var(--maroon-tint,#F3E4E2);color:var(--maroon,#8B1A1A);padding:7px 11px;font-size:11px;
+             font-weight:700;letter-spacing:.05em;display:flex;align-items:center;gap:6px">
+          <i class="ti ti-help-circle" style="font-size:13px"></i>${un.length} ITEM${un.length===1?'':'S'} NOT IN THE MASTER LIST YET</div>
+        <div style="padding:8px 11px;max-height:190px;overflow:auto">
+          ${un.map(u=>`<div style="font-size:12px;color:var(--text2,#6B6058);padding:3px 0;border-bottom:0.5px solid var(--border,#EAE2D6);line-height:1.45">&ndash; ${pcgEsc(u)}</div>`).join('')}
+        </div>
+        <div style="padding:7px 11px;font-size:11px;color:var(--text3,#9A8E84);background:var(--bg2,#FCFAF6);line-height:1.5">
+          These are on the menu but have no rows in the master grocery sheet, so nothing was added for them.
+          They are listed at the top of the sheet too.</div>
+      </div>`
+    : `<div style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--green-text,#216B47);
+          background:var(--green-bg,#E4F1EA);border-radius:9px;padding:8px 11px;margin-bottom:14px">
+        <i class="ti ti-circle-check" style="font-size:14px"></i>Every dish on the menu was found in the master list.</div>`;
+
+  pcgShowPanel(`
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:14px">
+      <i class="ti ti-shopping-cart" style="font-size:20px;color:var(--maroon,#8B1A1A);margin-top:2px"></i>
+      <div style="flex:1;min-width:0">
+        <div style="font-family:'Fraunces',Georgia,serif;font-size:17px;font-weight:600;line-height:1.25">Grocery list ready</div>
+        <div style="font-size:12px;color:var(--text3,#9A8E84);margin-top:3px">
+          ${d.matchedCount} menu item${d.matchedCount===1?'':'s'} matched &middot; ${d.lineCount} grocery lines &middot; master tab &ldquo;${pcgEsc(d.tab)}&rdquo;</div>
+      </div>
+      <button onclick="pcgClosePanel()" style="background:none;border:none;cursor:pointer;color:var(--text3,#9A8E84);font-size:19px;line-height:1;padding:0 2px" aria-label="Close">&times;</button>
+    </div>
+    ${warn}${unBlock}
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a href="${pcgEsc(d.url)}" target="_blank" rel="noopener"
+         style="display:inline-flex;align-items:center;gap:6px;background:var(--maroon,#8B1A1A);color:#fff;
+                text-decoration:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit">
+        <i class="ti ti-external-link" style="font-size:14px"></i>Open the grocery sheet</a>
+      <button onclick="pcgClosePanel()"
+         style="background:var(--bg2,#FCFAF6);border:0.5px solid var(--border2,#DDD3C4);border-radius:8px;
+                padding:8px 14px;font-size:13px;font-family:inherit;cursor:pointer">Done</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3,#9A8E84);margin-top:11px;line-height:1.5">
+      Saved to this event, and filed in Drive with the client's other documents.
+      Quantities marked &ldquo;yes&rdquo; or &ldquo;?&rdquo; in the master come through blank to fill in.</div>
+  `);
 }
 window.openEventGrocery = openEventGrocery;
 window.setGrocTab = setGrocTab;
