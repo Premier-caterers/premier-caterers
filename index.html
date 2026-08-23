@@ -1464,6 +1464,7 @@ function _myDayCol(type, title, icon, placeholder, extraControlsHtml){
     if(it.time) metaBits.push('<i class="ti ti-clock" style="font-size:11px"></i> '+_myDayEsc(it.time));
     if(it.method){ const m=MYDAY_METHODS.find(m=>m.key===it.method); if(m) metaBits.push('<i class="ti '+m.icon+'" style="font-size:11px"></i> '+m.label); }
     if(it.reminderMethods && it.reminderMethods.length) metaBits.push('<i class="ti ti-bell" style="font-size:11px"></i> '+it.reminderMethods.join('/'));
+    if(it.source) metaBits.push('<i class="ti ti-tag" style="font-size:11px"></i> '+_myDayEsc(it.source));
     if(overdue) metaBits.push('<span style="color:#c0392b;font-weight:600">Overdue</span>');
     const linkBadge = _myDayLinkBadge(it);
     return `<div class="${cls}">
@@ -1504,6 +1505,16 @@ function renderMyDay(){
       <div class="md-clock" id="myDayClock"></div>
     </div>
     <div style="padding:0 20px;font-size:12px;color:var(--text3)">Only you can see this. Nothing here is shared with the team. Reminders fire while this app is open in a browser tab — they won't wake your phone if the tab is closed.</div>
+    <div style="padding:12px 20px 0">
+      <button onclick="_myDayToggleImport()" style="padding:7px 12px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer"><i class="ti ti-clipboard-list" style="margin-right:5px"></i>Import triage list</button>
+      <div id="myDayImportPanel" style="display:none;margin-top:8px">
+        <textarea id="myDayImportText" placeholder="Paste triage items here, one per line. Prefix a line with [Email] or [WhatsApp] to tag its source." style="width:100%;min-height:110px;padding:8px 10px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:inherit;font-size:13px;resize:vertical"></textarea>
+        <div style="margin-top:6px;display:flex;gap:8px">
+          <button class="md-add-btn" onclick="importMyDayTriage()">Import as To&#8209;Dos</button>
+          <button onclick="_myDayToggleImport()" style="padding:8px 12px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text2);font-size:13px;cursor:pointer">Cancel</button>
+        </div>
+      </div>
+    </div>
     <div class="md-wrap">
       ${_myDayCol('schedule','Schedule','ti-calendar-time','Add to your schedule…', '<input type="date" id="mdDate_schedule" title="Date" style="max-width:140px"><input type="time" id="mdTime_schedule" style="max-width:110px">')}
       ${_myDayCol('todo','To&#8209;Do','ti-checklist','Add a to&#8209;do…')}
@@ -1580,6 +1591,38 @@ async function addMyDayItem(type){
       const anytimeRadio = document.querySelector(`input[name="mdLinkWhen_${type}"][value="anytime"]`); if(anytimeRadio) anytimeRadio.checked = true;
     }
   }catch(err){ console.error('My Day add error:', err); (window.showToast?showToast('Could not add — try again'):alert('Could not add — try again')); }
+}
+function _myDayToggleImport(){
+  const p = document.getElementById('myDayImportPanel');
+  if(!p) return;
+  const show = p.style.display === 'none';
+  p.style.display = show ? 'block' : 'none';
+  if(show){ const ta = document.getElementById('myDayImportText'); if(ta) ta.focus(); }
+}
+// Bulk-import triage output (e.g. from a Claude Gmail/WhatsApp pass) as
+// individual To-Do items. One line per item; a leading "[Source]" tag
+// (e.g. "[Email]", "[WhatsApp]") is stripped and stored as it.source so it
+// can show as a small badge, same pattern as method/reminder badges.
+async function importMyDayTriage(){
+  if(!myDayCol || !authUser) return;
+  const ta = document.getElementById('myDayImportText');
+  const raw = (ta && ta.value || '').trim();
+  if(!raw) return;
+  const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  let added = 0;
+  for(const line of lines){
+    const m = line.match(/^\[([^\]]+)\]\s*(.+)$/);
+    const source = m ? m[1] : null;
+    const text = m ? m[2] : line;
+    if(!text) continue;
+    const rec = { owner: authUser, type:'todo', text, status:'pending', createdAt: Date.now() };
+    if(source) rec.source = source;
+    try{ await myDayCol.add(rec); added++; }
+    catch(err){ console.error('My Day import item failed:', err); }
+  }
+  if(ta) ta.value = '';
+  _myDayToggleImport();
+  (window.showToast ? showToast(`Imported ${added} item${added===1?'':'s'} to To\u2011Do`) : alert(`Imported ${added} items to To-Do`));
 }
 // Checking off either half of a linked pair marks both done (best-effort —
 // if the linked doc is already gone, the main toggle still succeeds).
