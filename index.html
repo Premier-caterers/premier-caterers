@@ -13990,8 +13990,9 @@ function openEventGrocery(eventId){
     + '&eventName='+ encodeURIComponent(e.name || '')
     + '&eventType='+ encodeURIComponent(e.typeLabel || e.type || '')
     + '&eventDate='+ encodeURIComponent(e.dayLabel || '')
-    + '&guests='   + encodeURIComponent(e.guestCount || '');
-
+    + '&guests='   + encodeURIComponent(e.guestCount || '')
+    + '&job='      + encodeURIComponent(e.job || e.eventNumber || '');
+  
   fetch(relay + (relay.includes('?') ? '&' : '?') + qs)
     .then(r=>r.json())
     .then(d=>{
