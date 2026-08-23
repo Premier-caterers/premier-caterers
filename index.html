@@ -2476,8 +2476,11 @@ function coverRemoveLastMeal(eventId){
 
 function coverSaveField(id, field, val, isNumber){
   schedSaveField(id, field, val, isNumber);
-  // keep mashgiach + mashgiachNames + mashgiachCount in sync both ways with Staff Schedule
-  if(field==='mashgiach'){ const ev=events.find(x=>x.id===id); if(ev){ ev.mashgiachNames=val; ev.mashgiachCount=staffNum(val); _saveEvent(ev); } }
+  // keep mashgiach + mashgiachNames + mashgiachCount in sync both ways with Staff Schedule.
+  // Also update the legacy e.mashgiach field itself — a few older display spots (Events
+  // card chip, printable Cover Sheet export) read e.mashgiach directly/first, so leaving
+  // it untouched made names entered here silently fail to show up there.
+  if(field==='mashgiach'){ const ev=events.find(x=>x.id===id); if(ev){ ev.mashgiach=val; ev.mashgiachNames=val; ev.mashgiachCount=staffNum(val); _saveEvent(ev); } }
   // keep managerCount in sync so Staff Schedule's count column reflects what's typed here
   if(field==='manager'  ){ const ev=events.find(x=>x.id===id); if(ev){ ev.managerCount=staffNum(val); _saveEvent(ev); } }
 }
@@ -2748,7 +2751,7 @@ function printCoverSheet(){
       ${staff(e.chefs,e.chefNames)}
       ${td(e.chefTime)}
       ${staff(e.porters,e.porterNames)}
-      ${td(e.mashgiach||e.mashgiachNames)}
+      ${td(e.mashgiachNames||(e.mashgiach&&e.mashgiach!=='-'?e.mashgiach:''))}
       ${td(e.manager)}
     </tr>`;
     (e.meals||[]).forEach(meal=>{
@@ -2977,7 +2980,7 @@ function renderEvents(){
         e.chefs>0?`<span class="staff-chip"><i class="ti ti-chef-hat"></i>${e.chefs} chef${e.chefs>1?'s':''}</span>`:'',
         e.waiters>0?`<span class="staff-chip"><i class="ti ti-users"></i>${e.waiters} waiter${e.waiters>1?'s':''}</span>`:'',
         e.porters>0?`<span class="staff-chip"><i class="ti ti-package"></i>${e.porters} porter${e.porters>1?'s':''}</span>`:'',
-        (e.mashgiach&&e.mashgiach!=='-')?`<span class="staff-chip"><i class="ti ti-shield-check"></i>${e.mashgiach}</span>`:'',
+        (()=>{ const mg=(e.mashgiach&&e.mashgiach!=='-')?e.mashgiach:(e.mashgiachNames||''); return mg?`<span class="staff-chip"><i class="ti ti-shield-check"></i>${mg}</span>`:''; })(),
         (e.manager&&e.manager!=='-')?`<span class="staff-chip"><i class="ti ti-user-check"></i>${e.manager}</span>`:'',
       ].filter(Boolean).join('');
       // Completion status badges
@@ -3015,31 +3018,39 @@ function renderEvents(){
             : e.menuLink
               ? `<button onclick="event.stopPropagation();createPdfVersion('${e.id}')" style="border:none;background:none;padding:0;cursor:pointer" title="Generate PDF">${statusBadge('PDF menu','missing','')}</button>`
               : ''}
-          ${e.groceryLink ? statusBadge('Grocery','attached',e.groceryLink) : statusBadge('Grocery','missing','')}
+          ${(()=>{
+            // groceryLink is a legacy, manually-pasted external link. groceryLists[e.id] is the
+            // app's own internal Grocery module data (same source the list-view pill already uses
+            // correctly) — check that too so a real in-app grocery list isn't shown as "missing".
+            const gHas = groceryLists[e.id] && groceryLists[e.id].items && groceryLists[e.id].items.length;
+            if(e.groceryLink) return statusBadge('Grocery','attached',e.groceryLink);
+            const badge = statusBadge('Grocery', gHas?'attached':'missing', '');
+            return `<button onclick="event.stopPropagation();openEventGrocery('${e.id}')" style="border:none;background:none;padding:0;cursor:pointer">${badge}</button>`;
+          })()}
           ${e.floorplan ? statusBadge('Floorplan','attached',e.floorplan) : ''}
           ${e.venueLink||true ? statusBadge('Venue', (e.venueLink?'attached':'missing'), e.venueLink||'https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0') : ''}
         </div>
         <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
           <button onclick="goChecklist('${e.id}')" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
           ${(()=>{ const _v=venues.find(v=>v.addr===e.addr||v.name===e.name); return _v ? `<button onclick="showVenuePopup('${e.id}')" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--teal-text);border-radius:6px;background:var(--teal-bg);color:var(--teal-text);cursor:pointer;display:inline-flex;align-items:center;gap:4px" title="View venue info"><i class="ti ti-building" style="font-size:12px"></i>Venue</button>` : ''; })()}
-          ${role.canViewInvoices ? `<button onclick="showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid ${
-            !invoices[e.id]||invoices[e.id].status==='none' ? 'var(--border2)' :
-            invoices[e.id].status==='paid' ? 'var(--green-text)' :
-            invoices[e.id].status==='invoice' ? '#7c3aed' :
+          ${role.canViewInvoices ? (()=>{ const _st = aggregateInvoiceStatus(e.id); return `<button onclick="showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid ${
+            _st==='none' ? 'var(--border2)' :
+            _st==='paid' ? 'var(--green-text)' :
+            _st==='invoice' ? '#7c3aed' :
             'var(--amber-text)'};background:${
-            !invoices[e.id]||invoices[e.id].status==='none' ? 'var(--bg2)' :
-            invoices[e.id].status==='paid' ? 'var(--green-bg)' :
-            invoices[e.id].status==='invoice' ? '#f5f3ff' :
+            _st==='none' ? 'var(--bg2)' :
+            _st==='paid' ? 'var(--green-bg)' :
+            _st==='invoice' ? '#f5f3ff' :
             'var(--amber-bg)'};color:${
-            !invoices[e.id]||invoices[e.id].status==='none' ? 'var(--text2)' :
-            invoices[e.id].status==='paid' ? 'var(--green-text)' :
-            invoices[e.id].status==='invoice' ? '#7c3aed' :
+            _st==='none' ? 'var(--text2)' :
+            _st==='paid' ? 'var(--green-text)' :
+            _st==='invoice' ? '#7c3aed' :
             'var(--amber-text)'}"><i class="ti ti-file-invoice" style="font-size:12px"></i>${
-            !invoices[e.id]||invoices[e.id].status==='none' ? 'No invoice' :
-            invoices[e.id].status==='quote' ? 'Quote sent' :
-            invoices[e.id].status==='approved' ? 'Quote approved' :
-            invoices[e.id].status==='invoice' ? 'Invoice open' :
-            'Paid ✓'}</button>` : ''}
+            _st==='none' ? 'No invoice' :
+            _st==='quote' ? 'Quote sent' :
+            _st==='approved' ? 'Quote approved' :
+            _st==='invoice' ? 'Invoice open' :
+            'Paid ✓'}</button>`; })() : ''}
           <button onclick="deleteEvent('${e.id}')" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
         </div>
       </div>`;
@@ -3058,8 +3069,8 @@ function renderEvents(){
       <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:8px">`;
       byDay[d].forEach((e,i)=>{
         const inv = invoices[e.id];
-        const invStatus = inv?.status;
-        const invColor = !invStatus||invStatus==='none' ? 'var(--text3)' : invStatus==='paid' ? 'var(--green-text)' : invStatus==='invoice' ? '#7c3aed' : 'var(--amber-text)';
+        const invStatus = aggregateInvoiceStatus(e.id);
+        const invColor = invStatus==='none' ? 'var(--text3)' : invStatus==='paid' ? 'var(--green-text)' : invStatus==='invoice' ? '#7c3aed' : 'var(--amber-text)';
         const hasChange = changes.some(c=>c.job===e.job && changeDepts.some(d=>!(c.acks||{})[d]));
         listH += `<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:${i<byDay[d].length-1?'0.5px solid var(--border)':'none'};transition:background .1s;flex-wrap:wrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
           <span class="job-pill" style="flex-shrink:0;cursor:pointer" onclick="selectEvent('${e.id}')">${displayJob(e.job)}</span>
@@ -8492,6 +8503,33 @@ function invoiceSlotsForEvent(evId){
   return keys;
 }
 function invoiceCountForEvent(evId){ return invoiceSlotsForEvent(evId).length; }
+// Aggregate status across every invoice slot for an event, not just the primary one.
+// Returns the same 5-state vocabulary the old single-slot checks used ('none'|'quote'|
+// 'approved'|'invoice'|'paid') so existing badge/color code keeps working unmodified.
+// Logic: if any slot has progressed to invoice/paid, sum grand totals + deposits across
+// those slots (mirrors Pipeline's plPayState) — 'paid' only if that combined balance is
+// settled, otherwise 'invoice' (still needs collecting). If no slot has reached invoice/paid,
+// fall back to the highest-progress state among quote/approved/none.
+function aggregateInvoiceStatus(evId){
+  const slots = (typeof invoiceSlotsForEvent==='function') ? invoiceSlotsForEvent(evId) : (invoices[evId]?[evId]:[]);
+  const rank = {none:0, quote:1, approved:2, invoice:3, paid:4};
+  let best = 'none', grand=0, paid=0, sawInvoice=false;
+  slots.forEach(k=>{
+    const inv = invoices[k]; if(!inv) return;
+    const st = inv.status || 'none';
+    if(rank[st] > rank[best]) best = st;
+    if(st==='invoice' || st==='paid'){
+      sawInvoice = true;
+      const t = calcInvoiceTotals(inv);
+      grand += t.grand; paid += parseFloat(inv.deposit||0);
+    }
+  });
+  if(sawInvoice){
+    const balance = grand - paid;
+    return (grand>0 && balance<=0.01) ? 'paid' : 'invoice';
+  }
+  return best; // 'quote', 'approved', or 'none'
+}
 function nextExtraSlotKey(evId){
   // find first free letter from 'b' onward
   const used = new Set(invoiceSlotsForEvent(evId).map(slotLetterIndex));
@@ -8647,8 +8685,13 @@ function renderInvoices(){
   ];
 
   function filterByStatus(evts){
-    if(invView==='paid')   return evts.filter(e=>invoices[e.id]?.status==='paid');
-    if(invView==='quotes') return evts.filter(e=>!invoices[e.id]||invoices[e.id]?.status==='quote'||invoices[e.id]?.status==='none');
+    // Check every invoice slot for the event (primary + __b/__c extras), not just the
+    // primary slot — an event can have one paid invoice and one still-a-quote invoice.
+    if(invView==='paid')   return evts.filter(e=>invoiceSlotsForEvent(e.id).some(k=>invoices[k]?.status==='paid'));
+    if(invView==='quotes') return evts.filter(e=>{
+      const slots = invoiceSlotsForEvent(e.id);
+      return slots.length===0 || slots.every(k=>!invoices[k]||invoices[k].status==='quote'||invoices[k].status==='none');
+    });
     if(invView==='all')    return evts;
     // default: show all (no status filter)
     return evts;
@@ -9707,7 +9750,30 @@ function _beoInquiryFor(e){
   if(!inq && String(e.id).indexOf('inq_')===0) inq=inquiries.find(x=>x.id===String(e.id).slice(4));
   return inq || {};
 }
-function _beoPayState(inq){
+function _beoPayState(e, inq){
+  // Primary source of truth: the event's actual invoice(s). Aggregates across every
+  // invoice slot (primary + any __b/__c extras) the same way Pipeline's plPayState does,
+  // so a Markovitz-Cohen-style event with real invoices never falls through to "no estimate".
+  try{
+    const evId = e && e.id;
+    const slots = (evId && typeof invoiceSlotsForEvent==='function') ? invoiceSlotsForEvent(evId) : [];
+    let grand=0, paid=0, hasInvoice=false;
+    for(const k of slots){
+      const inv=invoices[k]; if(!inv) continue;
+      if(inv.status==='invoice'||inv.status==='paid'){
+        const t=calcInvoiceTotals(inv);
+        grand += t.grand; paid += parseFloat(inv.deposit||0); hasInvoice=true;
+      }
+    }
+    if(hasInvoice){
+      const balance = grand-paid;
+      const multi = slots.length>1 ? ' \u00b7 '+slots.length+' invoices' : '';
+      if(grand>0 && balance<=0.01) return {label:'PAID IN FULL', sub:'No balance to collect'+multi, css:'color:#0C447C;background:#E6F1FB;border:2px solid #185FA5'};
+      if(paid>0.01) return {label:'PARTIAL \u2014 COLLECT BALANCE', sub:'Confirm balance before service'+multi, css:'color:#854F0B;background:#FAEEDA;border:2px solid #BA7517'};
+      return {label:'NOT PAID \u2014 COLLECT', sub:'Payment due'+multi, css:'color:#854F0B;background:#FAEEDA;border:2px dashed #BA7517'};
+    }
+  }catch(err){ console.warn('beo pay state (invoices):', err); }
+  // Fallback: no invoice exists yet on this event — use the inquiry's estimate if it has one.
   const est = inq && inq.estimate;
   if(est && Array.isArray(est.lines) && est.lines.length){
     const t=calcInvoiceTotals(est); const dep=parseFloat(est.deposit||0); const bal=t.grand-dep;
@@ -9715,7 +9781,7 @@ function _beoPayState(inq){
     if(dep>0.01) return {label:'PARTIAL \u2014 COLLECT BALANCE', sub:'Confirm balance before service', css:'color:#854F0B;background:#FAEEDA;border:2px solid #BA7517'};
     return {label:'NOT PAID \u2014 COLLECT', sub:'Payment due', css:'color:#854F0B;background:#FAEEDA;border:2px dashed #BA7517'};
   }
-  return {label:'NOT PAID \u2014 COLLECT', sub:'No estimate on file', css:'color:#854F0B;background:#FAEEDA;border:2px dashed #BA7517'};
+  return {label:'NOT PAID \u2014 COLLECT', sub:'No estimate or invoice on file', css:'color:#854F0B;background:#FAEEDA;border:2px dashed #BA7517'};
 }
 function beoFileName(eventId){
   const e=_beoResolveEvent(eventId); if(!e) return 'BEO';
@@ -9749,7 +9815,7 @@ function buildBeoHTML(eventId){
   const dateStr = e.dayLabel || (inq.eventDate?formatDate(inq.eventDate):'');
   const contact = e.contactName || clientContact(inq) || [inq.phone,inq.email].filter(Boolean).join(' \u00b7 ');
   const allergy = (typeof inqAllergies==='function') ? inqAllergies(inq) : (inq.allergies||'');
-  const pay = _beoPayState(inq);
+  const pay = _beoPayState(e, inq);
   const eventMenu = inq.menuLink || (Array.isArray(inq.menus)&&inq.menus[0]?inq.menus[0].url:'') || '';
 
   // content-only signature for the revision footer
