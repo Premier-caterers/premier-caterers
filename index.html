@@ -2223,6 +2223,39 @@ function showView(v){
   render();
 }
 
+// ── "BACK TO CLIENT" NAV MEMORY ──────────────────────────────────────────
+// The app is single-view: clicking Invoice/Checklist/Equipment from a client
+// card on Pipeline or Events fully switches currentView with no memory of
+// where you came from. This remembers that origin so a small breadcrumb can
+// jump straight back to the same client (hub drawer or Events detail panel)
+// instead of leaving you stranded in Invoices/Checklists/Equipment.
+let _navReturn = null; // {view, eventId, inqId, label}
+function _navReturnCapture(idOrInqId){
+  try{
+    if(currentView!=='pipeline' && currentView!=='events'){ return; } // only meaningful leaving a client card
+    const ev = events.find(x=>x.id===idOrInqId) || null;
+    const inqId = ev ? (ev.inquiryId || (String(ev.id).indexOf('inq_')===0 ? String(ev.id).slice(4) : null)) : idOrInqId;
+    const inq = inqId ? inquiries.find(x=>x.id===inqId) : null;
+    const label = (ev && ev.name) || (inq ? (((inq.firstName||'')+' '+(inq.lastName||'')).trim()||inq.name) : '') || 'client';
+    _navReturn = { view: currentView, eventId: ev?ev.id:null, inqId: inq?inq.id:null, label };
+  }catch(err){ console.warn('_navReturnCapture:', err); _navReturn=null; }
+}
+function navReturnGo(){
+  if(!_navReturn) return;
+  const r=_navReturn; _navReturn=null;
+  showView(r.view);
+  selectedId = r.eventId || null;
+  selectedInqId = r.inqId || null;
+  render();
+  setTimeout(()=>{ (document.getElementById('hubDrawer')||document.querySelector('.detail-panel'))?.scrollIntoView({behavior:'smooth',block:'nearest'}); },80);
+}
+function navReturnBreadcrumb(){
+  if(!_navReturn) return '';
+  return `<button onclick="navReturnGo()" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:8px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer;margin-bottom:12px"><i class="ti ti-arrow-left" style="font-size:13px"></i>Back to ${pcEsc(_navReturn.label)}</button>`;
+}
+window._navReturnCapture = _navReturnCapture;
+window.navReturnGo = navReturnGo;
+
 function render(){
   // Preserve scroll position across the re-render (added). Nearly every action in
   // this app calls render(), which fully replaces #mainArea's HTML — without this,
@@ -3033,7 +3066,7 @@ function renderEvents(){
         <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
           <button onclick="goChecklist('${e.id}')" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
           ${(()=>{ const _v=venues.find(v=>v.addr===e.addr||v.name===e.name); return _v ? `<button onclick="showVenuePopup('${e.id}')" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--teal-text);border-radius:6px;background:var(--teal-bg);color:var(--teal-text);cursor:pointer;display:inline-flex;align-items:center;gap:4px" title="View venue info"><i class="ti ti-building" style="font-size:12px"></i>Venue</button>` : ''; })()}
-          ${role.canViewInvoices ? (()=>{ const _st = aggregateInvoiceStatus(e.id); return `<button onclick="showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid ${
+          ${role.canViewInvoices ? (()=>{ const _st = aggregateInvoiceStatus(e.id); return `<button onclick="_navReturnCapture('${e.id}');showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid ${
             _st==='none' ? 'var(--border2)' :
             _st==='paid' ? 'var(--green-text)' :
             _st==='invoice' ? '#7c3aed' :
@@ -3257,6 +3290,7 @@ function startEdit(id){ editingId=id; render(); setTimeout(()=>document.querySel
 function cancelEdit(){ editingId=null; _closeEventEditModal(); render(); }
 function setDay(d){ activeDay=d; selectedId=null; render(); }
 function goChecklist(id){
+  _navReturnCapture(id);
   selectedId=null; editingId=null;
   window._pendingChecklistId = id;
   showView('checklists');
@@ -3776,7 +3810,7 @@ function drawerDocuments(inq, role, ev){
   const docs = [
     _docBtn('Menu(s)','ti-file-text',false,`openInqMenuQuick('${id}')`),
     role.canViewInvoices?_docBtn('Estimate / Invoice','ti-file-invoice',false,`viewClientQuote('${id}')`):'',
-    _docBtn('Equipment list','ti-tool', !ev, ev?`showView('equipment')`:''),
+    _docBtn('Equipment list','ti-tool', !ev, ev?`_navReturnCapture('${ev.id}');showView('equipment')`:''),
     _docBtn('Grocery list','ti-shopping-cart', !ev, ev?`openEventGrocery('${ev.id}')`:''),
     _docBtn('Final checklist','ti-checklist', !ev, ev?`goChecklist('${ev.id}')`:''),
     _docBtn('Linen order form','ti-wash',true,''),
@@ -4277,6 +4311,7 @@ function viewClientQuote(id){
   const evId = 'inq_'+inq.id;
   const e = events.find(x=>x.id===evId);
   if(e){
+    _navReturnCapture(evId);
     showView('invoices');
     setTimeout(()=>{ try{ openInvoice(evId); }catch(_){ } }, 250);
   } else {
@@ -5738,7 +5773,7 @@ function renderDocBtns(e, role, inv, invStatus, invColor){
       ? `<a href="${e.menuLink}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:2px 7px;border:0.5px solid var(--green-border);border-radius:8px;background:var(--green-bg);color:var(--green-text);text-decoration:none;display:inline-flex;align-items:center;gap:2px;flex-shrink:0"><i class="ti ti-file-text" style="font-size:11px"></i>Menu</a>`
       : docBtn('No menu','ti-file-text',false,`openAttachModal('${e.id}','menuLink','','Menu')`,null),
     // Invoice
-    role.canViewInvoices ? `<button onclick="event.stopPropagation();showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:2px 9px;border:0.5px solid ${!invStatus||invStatus==='none'?'var(--border2)':invStatus==='paid'?'var(--green-border)':invStatus==='invoice'?'#c4b5fd':'var(--amber-border)'};border-radius:8px;background:${!invStatus||invStatus==='none'?'var(--bg2)':invStatus==='paid'?'var(--green-bg)':invStatus==='invoice'?'#f5f3ff':'var(--amber-bg)'};color:${invColor};cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-file-invoice" style="font-size:11px"></i>${!invStatus||invStatus==='none'?'No invoice':invStatus==='quote'?'Quote':invStatus==='approved'?'Approved':invStatus==='invoice'?'Invoice open':'Paid ✓'}</button>` : '',
+    role.canViewInvoices ? `<button onclick="event.stopPropagation();_navReturnCapture('${e.id}');showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:2px 9px;border:0.5px solid ${!invStatus||invStatus==='none'?'var(--border2)':invStatus==='paid'?'var(--green-border)':invStatus==='invoice'?'#c4b5fd':'var(--amber-border)'};border-radius:8px;background:${!invStatus||invStatus==='none'?'var(--bg2)':invStatus==='paid'?'var(--green-bg)':invStatus==='invoice'?'#f5f3ff':'var(--amber-bg)'};color:${invColor};cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-file-invoice" style="font-size:11px"></i>${!invStatus||invStatus==='none'?'No invoice':invStatus==='quote'?'Quote':invStatus==='approved'?'Approved':invStatus==='invoice'?'Invoice open':'Paid ✓'}</button>` : '',
     // Grocery
     `<button onclick="event.stopPropagation();openEventGrocery('${e.id}')" style="font-size:11px;padding:2px 9px;border:0.5px solid ${gHas?'var(--green-border)':'var(--border2)'};border-radius:8px;background:${gHas?'var(--green-bg)':'var(--bg2)'};color:${gHas?'var(--green-text)':'var(--text3)'};cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-shopping-cart" style="font-size:11px"></i>${gHas?'Grocery ('+gCount+')':'Grocery'}</button>`,
     // Checklist
@@ -7091,7 +7126,7 @@ function renderChecklists(){
   window._clOpen = {};
   if(_pendingId){ window._clOpen[_pendingId] = true; window._pendingChecklistId = null; }
 
-  let h = '<div class="section-header"><div class="section-title">Event checklists</div>'
+  let h = navReturnBreadcrumb() + '<div class="section-header"><div class="section-title">Event checklists</div>'
     + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
     + '<button onclick="expandAllChecklists()" style="border:none;background:none;color:var(--blue-mid);cursor:pointer;font-size:12px">Expand all</button>'
     + '<button onclick="collapseAllChecklists()" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:12px">Collapse all</button>'
@@ -8768,7 +8803,7 @@ function renderInvoices(){
   const wd = getWeekEndDate(currentWeekOffset);
   const wLabel = 'W/E '+months2[wd.getUTCMonth()]+' '+wd.getUTCDate()+', '+String(wd.getUTCFullYear()).slice(2);
 
-  let h = '<div class="section-header" style="margin-bottom:.75rem"><div class="section-title">Quotes & Invoices</div><div style="display:flex;gap:5px;flex-wrap:wrap">'+viewBtnHtml+'</div></div>';
+  let h = navReturnBreadcrumb() + '<div class="section-header" style="margin-bottom:.75rem"><div class="section-title">Quotes & Invoices</div><div style="display:flex;gap:5px;flex-wrap:wrap">'+viewBtnHtml+'</div></div>';
 
   if(invView==='default'){
     h += buildSection(wLabel, thisWeekEvts);
@@ -11390,7 +11425,7 @@ async function saveQuickMenu(eid){
 }
 function renderEquipment() {
   const all = events;
-  let h = `
+  let h = navReturnBreadcrumb() + `
   <div class="section-header">
     <div class="section-title">Equipment — W/E Jun 7</div>
   </div>
