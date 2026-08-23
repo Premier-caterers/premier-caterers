@@ -3084,6 +3084,7 @@ function renderEvents(){
             _st==='approved' ? 'Quote approved' :
             _st==='invoice' ? 'Invoice open' :
             'Paid ✓'}</button>`; })() : ''}
+          ${role.canEdit?`<button onclick="event.stopPropagation();openRepeatEventModal('${e.id}')" title="Repeat this event next week" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-repeat" style="font-size:12px"></i>Repeat</button>`:''}
           <button onclick="deleteEvent('${e.id}')" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
         </div>
       </div>`;
@@ -3160,6 +3161,7 @@ function renderDetail(e,role){
         <button class="icon-btn" onclick="openPaperwork('${e.id}')" title="Create event paperwork"><i class="ti ti-files"></i></button>
         <button class="icon-btn" onclick="openContract('${e.id}')" title="Contract"><i class="ti ti-file-certificate"></i></button>
         <button class="icon-btn" onclick="goChecklist('${e.id}')" title="Open checklist"><i class="ti ti-checklist"></i></button>
+        ${role.canEdit?`<button class="icon-btn" onclick="openRepeatEventModal('${e.id}')" title="Repeat this event next week"><i class="ti ti-repeat"></i></button>`:''}
         <button class="icon-btn" onclick="closeDetail()" title="Close"><i class="ti ti-x"></i></button>
       </div>
     </div>
@@ -5778,6 +5780,8 @@ function renderDocBtns(e, role, inv, invStatus, invColor){
     `<button onclick="event.stopPropagation();openEventGrocery('${e.id}')" style="font-size:11px;padding:2px 9px;border:0.5px solid ${gHas?'var(--green-border)':'var(--border2)'};border-radius:8px;background:${gHas?'var(--green-bg)':'var(--bg2)'};color:${gHas?'var(--green-text)':'var(--text3)'};cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-shopping-cart" style="font-size:11px"></i>${gHas?'Grocery ('+gCount+')':'Grocery'}</button>`,
     // Checklist
     docBtn('Checklist','ti-checklist',false,`goChecklist('${e.id}')`,null),
+    // Repeat this event into a new week (weekly recurring clients)
+    role.canEdit ? `<button onclick="event.stopPropagation();openRepeatEventModal('${e.id}')" style="font-size:11px;padding:2px 9px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text3);cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0"><i class="ti ti-repeat" style="font-size:11px"></i>Repeat</button>` : '',
     // Floorplan
     e.floorplan ? docBtn('Floorplan','ti-layout-2',true,`openAttachModal('${e.id}','floorplan','${e.floorplan}','Floorplan')`,e.floorplan)
                 : docBtn('Floorplan','ti-layout-2',false,`openAttachModal('${e.id}','floorplan','','Floorplan')`,null),
@@ -6084,6 +6088,155 @@ function createEventFromInquiry(inq){
     showToast('Booked ✓ (set an event date to place it on a week)');
   }
 }
+
+// ── REPEAT EVENT (weekly recurring clients) ──────────────────────────────
+// Clones a booked event into a new week — same client, venue, staffing, menu
+// link, notes, and (per Kenny's call) the invoice line items too, copied in
+// as an editable new quote rather than an already-sent/paid invoice — so a
+// client catered weekly doesn't have to be re-entered from scratch each time.
+const _BACK_FROM_SUN = {sunday:0, saturday:1, friday:2, thursday:3, wednesday:4, tuesday:5, monday:6};
+// Inverts weekInfoFromDate(): given the stored weekOf (the week-ending Sunday)
+// and a weekday name, reconstructs that occurrence's actual calendar date.
+function _dateFromWeekOfAndDay(weekOf, day){
+  if(!weekOf) return null;
+  const back = _BACK_FROM_SUN[(day||'').toLowerCase()];
+  if(back==null) return null;
+  const sun = new Date(weekOf+'T12:00:00Z');
+  if(isNaN(sun)) return null;
+  return new Date(sun.getTime() - back*86400000).toISOString().split('T')[0];
+}
+function _repeatSourceDate(e){
+  return e.eventDate || _dateFromWeekOfAndDay(e.weekOf, e.day) || null;
+}
+function openRepeatEventModal(eventId){
+  const src = events.find(x=>x.id===eventId);
+  if(!src){ alert('Could not find that event.'); return; }
+  const baseDate = _repeatSourceDate(src);
+  if(!baseDate){ alert('This event has no date set, so there\u2019s nothing to base a repeat week on \u2014 set a date first.'); return; }
+  const defaultDate = new Date(new Date(baseDate+'T12:00:00Z').getTime() + 7*86400000).toISOString().split('T')[0];
+  const hasInv = !!(invoices[src.id] && Array.isArray(invoices[src.id].lines) && invoices[src.id].lines.length);
+  closeRepeatEventModal();
+  const wrap=document.createElement('div'); wrap.id='repeatEventModal';
+  wrap.setAttribute('style','position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:inherit;padding:18px');
+  wrap.onclick=function(ev){ if(ev.target===wrap) closeRepeatEventModal(); };
+  const btn='display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font-size:14px;font-weight:600;padding:12px;border-radius:9px;cursor:pointer;font-family:inherit;border:none';
+  wrap.innerHTML = '<div style="background:#fff;border-radius:15px;max-width:400px;width:90%;padding:22px 22px 18px;font-family:inherit">'
+    + '<div style="display:flex;align-items:center;gap:9px;margin-bottom:5px"><i class="ti ti-repeat" style="font-size:21px;color:#8B1A1A"></i><span style="font-size:17px;font-weight:700;color:#1a1a1a">Repeat this event</span></div>'
+    + '<div style="font-size:13px;color:#666;margin-bottom:16px">'+pcEsc(src.name||'Client')+(src.job?(' \u00b7 #'+pcEsc(displayJob(src.job))):'')+'</div>'
+    + '<label style="font-size:12px;font-weight:600;color:#444;display:block;margin-bottom:5px">New event date</label>'
+    + '<input type="date" id="repeatEventDate" value="'+defaultDate+'" style="width:100%;padding:9px 10px;border:1px solid #ccc;border-radius:8px;font-size:14px;margin-bottom:12px;font-family:inherit;box-sizing:border-box">'
+    + '<div style="font-size:12px;color:#5a4632;background:#f7efe6;border-radius:8px;padding:10px 12px;margin-bottom:16px;line-height:1.5">'
+      + 'Copies client, venue, staffing, menu link'+(hasInv?', invoice line items (as a new editable quote)':'')+', and notes into a new event on this date. '
+      + '<b>Nothing is locked</b> \u2014 review and edit anything before it goes out. If this week\u2019s notes mention a one-off request, clear them.'
+    + '</div>'
+    + '<div style="display:flex;gap:8px">'
+      + '<button onclick="closeRepeatEventModal()" style="'+btn+';background:#f2f2f2;color:#333;flex:1">Cancel</button>'
+      + '<button onclick="repeatEventCreate(\''+src.id+'\')" style="'+btn+';background:#8B1A1A;color:#fff;flex:1.4"><i class="ti ti-check" style="font-size:15px"></i> Create</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(wrap);
+}
+function closeRepeatEventModal(){ const m=document.getElementById('repeatEventModal'); if(m) m.remove(); }
+
+function repeatEventCreate(eventId){
+  const src = events.find(x=>x.id===eventId);
+  if(!src){ closeRepeatEventModal(); return; }
+  const dateInput = document.getElementById('repeatEventDate');
+  const targetDateStr = dateInput ? dateInput.value : '';
+  if(!targetDateStr){ alert('Pick a date for the new event.'); return; }
+  const wi = weekInfoFromDate(targetDateStr);
+  if(!wi){ alert('That date didn\u2019t parse \u2014 try again.'); return; }
+  const dparts = targetDateStr.split('-');
+  const dayLabel = (wi.dayShort||'') + ' ' + parseInt(dparts[1]) + '/' + parseInt(dparts[2]);
+
+  // The few fields that live only on the inquiry (guest count, cuisine, etc.),
+  // if the source event still has one linked.
+  const srcInqId = src.inquiryId || (String(src.id).indexOf('inq_')===0 ? String(src.id).slice(4) : null);
+  const srcInq = srcInqId ? inquiries.find(x=>x.id===srcInqId) : null;
+
+  // 1) Fresh inquiry — every booked event needs one; this is what keeps
+  //    invoices/contracts/BEO/templates all working exactly like any other event.
+  const newInqId = Date.now()+'';
+  const newInq = {
+    id: newInqId,
+    firstName: (srcInq&&srcInq.firstName)||'', lastName: (srcInq&&srcInq.lastName)||'',
+    organization: src.organization || (srcInq&&srcInq.organization) || '',
+    eventName: (srcInq&&srcInq.eventName) || src.name || '',
+    eventType: (srcInq&&srcInq.eventType) || src.typeLabel || '',
+    eventDate: targetDateStr,
+    phone: src.phone || (srcInq&&srcInq.phone) || '', email: src.email || (srcInq&&srcInq.email) || '',
+    venueName: (srcInq&&srcInq.venueName) || '', venueLocation: src.addr || (srcInq&&srcInq.venueLocation) || '',
+    guestCount: (srcInq&&srcInq.guestCount) || '', cuisine: (srcInq&&srcInq.cuisine) || '',
+    meatDairy: (srcInq&&srcInq.meatDairy) || '', shabbos: (srcInq&&srcInq.shabbos) || 'No',
+    howFound: (srcInq&&srcInq.howFound) || '', referredBy: (srcInq&&srcInq.referredBy) || '',
+    source: 'recurring', repeatedFromEventId: src.id,
+    stage: 'booked',
+    submittedAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+  };
+  inquiries.push(newInq);
+  _saveInquiry(newInq);
+  try{ logActivity(newInq.id,'inquiry','Booked via Repeat \u2014 copied from '+(fullEventNum(src)||src.job||'a previous week'), {source:'recurring'}); }catch(err){}
+
+  // 2) New event, cloning the operational fields that repeat week to week.
+  const newEvId = 'inq_'+newInqId;
+  const job = wi.weekOf ? (nextEventNumber(wi.weekOf) || '') : '';
+  const newEvent = {
+    id: newEvId,
+    job, eventNumber: job,
+    inquiryId: newInqId,
+    name: src.name || '', organization: src.organization || '',
+    contactName: src.contactName || '',
+    addr: src.addr || '', email: src.email||'', phone: src.phone||'',
+    type: src.type, typeLabel: src.typeLabel,
+    day: wi.day, dayLabel,
+    weekOf: wi.weekOf || '',
+    waiters: src.waiters||0, waiterNames: src.waiterNames||'', waiterTime: src.waiterTime||'-', waiterTime2: src.waiterTime2||'',
+    bartenders: src.bartenders||0, bartenderNames: src.bartenderNames||'', bartenderTime: src.bartenderTime||'', bartenderTime2: src.bartenderTime2||'',
+    chefs: src.chefs||0, chefNames: src.chefNames||'', chefTime: src.chefTime||'-', chefTime2: src.chefTime2||'',
+    porters: src.porters||0, porterNames: src.porterNames||'', porterTime: src.porterTime||'',
+    manager: src.manager||'-', mashgiach: src.mashgiach||'-', mashgiachNames: src.mashgiachNames||'',
+    managerCount: src.managerCount||0, mashgiachCount: src.mashgiachCount||0,
+    menuLink: src.menuLink||'', pdfMenuLink: src.pdfMenuLink||'',
+    groceryLink:'', floorplan: src.floorplan||'', venueLink: src.venueLink||'', logoData: src.logoData||'',
+    notes: src.notes||'',
+    repeatedFromEventId: src.id
+  };
+  // Multi-meal events: clone the meal rows too (typical for one weekly occurrence
+  // spanning e.g. a Friday dinner + Saturday lunch under the same client).
+  if(Array.isArray(src.meals) && src.meals.length){
+    newEvent.meals = JSON.parse(JSON.stringify(src.meals)).map(m=>({...m, dayLabel:(m.dayLabel===src.dayLabel ? dayLabel : m.dayLabel)}));
+  }
+  events.push(newEvent);
+  _saveEvent(newEvent);
+
+  // 3) Invoice line items — copied in as an editable new quote, never as an
+  //    already-sent/paid invoice, and never pre-marked as already paid.
+  try{
+    const srcInv = invoices[src.id];
+    if(srcInv && Array.isArray(srcInv.lines) && srcInv.lines.length){
+      const inv = JSON.parse(JSON.stringify(srcInv));
+      inv.eventId = newEvId;
+      inv.status = 'quote';
+      inv.deposit = 0;
+      inv.payments = [];
+      inv.invoiceDate = '';
+      delete inv._editOverride;
+      delete inv._slot;
+      invoices[newEvId] = inv;
+      _saveInvoice(newEvId, inv);
+    }
+  }catch(err){ console.warn('repeat invoice clone:', err); }
+
+  closeRepeatEventModal();
+  showView('events');
+  selectedInqId = newInqId;
+  render();
+  showToast(wi.weekOf ? ('Repeated \u2192 W/E '+ new Date(wi.weekOf+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'})+' \u2713') : 'Event repeated \u2713');
+  setTimeout(()=>document.getElementById('hubDrawer')?.scrollIntoView({behavior:'smooth',block:'nearest'}),150);
+}
+window.openRepeatEventModal = openRepeatEventModal;
+window.closeRepeatEventModal = closeRepeatEventModal;
+window.repeatEventCreate = repeatEventCreate;
 
 function deleteInquiry(id){
   const inq = inquiries.find(x=>x.id===id);
