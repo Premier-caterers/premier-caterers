@@ -1048,6 +1048,28 @@ function updateEventStatus(id, val){
 }
 window.updateEventStatus = updateEventStatus;
 
+// Pipeline inquiry-card status dropdown — same visual concept as the event
+// card's status pill, but drives the REAL stage field that the kanban
+// columns, archive folders, and calendar/sheet sync are already built on.
+// This does not change column logic — it just replaces the row of separate
+// "Mark menu sent / Move to new / Book event / Mark lost / Revive" buttons
+// with one dropdown that calls the same underlying functions.
+const plStatusOptions = [
+  {key:'new',       label:'New inquiry', bg:'var(--bg2)',       fg:'var(--text2)'},
+  {key:'menu_sent', label:'Menu sent',   bg:'var(--brass-tint)',fg:'var(--brass-deep)'},
+  {key:'booked',    label:'Booked',      bg:'var(--green-bg)',  fg:'var(--green-text)'},
+  {key:'lost',      label:'Lost',        bg:'var(--coral-bg)',  fg:'var(--coral-text)'},
+];
+function changeInquiryStage(id, newStage){
+  const inq = inquiries.find(x=>x.id===id); if(!inq) return;
+  const prevStage = inq.stage;
+  if(newStage==='lost'){ markInquiryLost(id); }
+  else if(prevStage==='lost'){ reviveInquiry(id); if(newStage!=='new') moveInquiry(id,newStage); }
+  else { moveInquiry(id,newStage); }
+  render();
+}
+window.changeInquiryStage = changeInquiryStage;
+
 // Firebase save helpers
 async function _saveEvent(e){ 
   try{ 
@@ -3713,12 +3735,14 @@ function renderPipeline(){
         return `
       <div class="inq-card ${selectedInqId===inq.id?'selected':''}" ${plBorderStyle(inq,s.key)} ${plPayTitle(inq,s.key)} onclick="selectInquiry('${inq.id}')">
         ${allergyBanner(inq,false)}
+        <div class="cc-top" style="margin-bottom:6px">
+          <div class="cc-topl">${inq.eventType?`<span class="type-badge" style="background:var(--text3)">${inq.eventType}</span>`:''}</div>
+          ${inq.eventDate?`<div class="cc-date">${formatDate(inq.eventDate)}</div>`:''}
+        </div>
         <div class="pl-card-head"><div class="inq-name">${nm}${_unansweredBadge(inq)}${_salespersonBadge(inq)}${_followupBadge(inq)}</div>${chev}</div>
         ${contact ? `<div style="font-size:11px;color:var(--text3);margin:-2px 0 4px"><i class="ti ti-user" style="font-size:10px"></i> ${contact}</div>` : ''}
         ${inq.eventName ? `<div class="inq-event-name">${inq.eventName}</div>` : ''}
         <div class="inq-meta">
-          ${inq.eventType ? `<span><i class="ti ti-tag" style="font-size:11px"></i>${inq.eventType}</span>` : ''}
-          ${inq.eventDate ? `<span><i class="ti ti-calendar" style="font-size:11px"></i>${formatDate(inq.eventDate)}</span>` : ''}
           ${inq.venueName ? `<span><i class="ti ti-building" style="font-size:11px"></i>${inq.venueName}</span>` : ''}
           ${inq.phone ? `<span><i class="ti ti-phone" style="font-size:11px"></i>${inq.phone}</span>` : ''}
           ${inq.email ? `<span><i class="ti ti-mail" style="font-size:11px"></i>${inq.email}</span>` : ''}
@@ -3726,12 +3750,12 @@ function renderPipeline(){
         ${plCardFoot(inq)}
         ${cardDocIcons(inq, role)}
         ${role.canEdit ? `<div class="inq-actions">
-          ${s.key==='new' ? `<button class="stage-btn stage-menu_sent" onclick="event.stopPropagation();moveInquiry('${inq.id}','menu_sent')">Mark menu sent</button>` : ''}
-          ${s.key!=='new' && s.key!=='lost' && !isPastCol ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();moveInquiry('${inq.id}','new')"><i class="ti ti-arrow-back-up" style="font-size:11px"></i> Move to new</button>` : ''}
-          ${!isBooked && s.key!=='lost' && !isPastCol ? `<button class="stage-btn stage-booked" onclick="event.stopPropagation();moveInquiry('${inq.id}','booked')">Book event</button>` : ''}
+          <div class="cc-status-row" onclick="event.stopPropagation()">
+            ${(()=>{ const cur=plStatusOptions.find(o=>o.key===inq.stage)||plStatusOptions[0]; return `<select class="cc-status" style="background-color:${cur.bg};color:${cur.fg}" onchange="event.stopPropagation();changeInquiryStage('${inq.id}',this.value)">
+              ${plStatusOptions.map(o=>`<option value="${o.key}" ${inq.stage===o.key?'selected':''}>${o.label}</option>`).join('')}
+            </select>`; })()}
+          </div>
           ${isBooked || isPastCol ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">→ Go to event week</button>` : ''}
-          ${s.key!=='lost'&&!isPastCol ? `<button class="stage-btn" style="background:var(--amber-bg);color:var(--amber-text)" onclick="event.stopPropagation();markInquiryLost('${inq.id}')">Mark lost</button>` : ''}
-          ${s.key==='lost' ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();reviveInquiry('${inq.id}')"><i class="ti ti-arrow-back-up" style="font-size:12px"></i> Revive</button>` : ''}
           <button class="stage-btn" style="background:var(--bg2);color:var(--text2);margin-left:auto" onclick="event.stopPropagation();openContactMenu('${inq.id}')" title="Contact client"><i class="ti ti-send" style="font-size:12px"></i> Contact</button>
           <button onclick="event.stopPropagation();deleteInquiry('${inq.id}')" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px"><i class="ti ti-trash"></i></button>
         </div>` : ''}
@@ -11605,9 +11629,13 @@ function renderEquipment() {
       if (stage === 'quantities') statusLabel = '<span style="font-size:11px;color:var(--blue-text);background:var(--blue-bg);padding:3px 8px;border-radius:10px;font-weight:500">Adding quantities</span>';
       if (stage === 'complete')   statusLabel = '<span style="font-size:11px;color:var(--green-text);background:var(--green-bg);padding:3px 8px;border-radius:10px;font-weight:500">List complete</span>';
       return `<div class="event-card" onclick="openEquipEvent('${e.id}')" style="${eq?'border-color:var(--blue-border)':''}">
-        <div class="card-top"><span class="job-pill">${displayJob(e.job)}</span>${statusLabel}</div>
+        <div class="cc-top" style="margin-bottom:6px">
+          <div class="cc-topl"><span class="job-pill">${displayJob(e.job)}</span></div>
+          <div class="cc-date">${e.dayLabel||''}</div>
+        </div>
         <div class="client-name">${e.name}</div>
-        <div style="font-size:12px;color:var(--text3)">${e.dayLabel} · ${e.typeLabel}</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px">${e.typeLabel||''}</div>
+        ${statusLabel}
         <div style="margin-top:10px;font-size:12px;color:var(--blue-mid);display:flex;align-items:center;gap:4px">
           <i class="ti ti-${eq?'edit':'plus'}" style="font-size:13px"></i> ${eq?'Continue / view list':'Start equipment list'}
         </div>
