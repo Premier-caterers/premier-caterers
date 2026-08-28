@@ -1031,6 +1031,23 @@ function showToast(msg,dur=2000){
   if(t&&m){m.textContent=msg;t.classList.add('show');clearTimeout(_toastTimer);_toastTimer=setTimeout(()=>t.classList.remove('show'),dur);}
 }
 
+// Client-card manual status dropdown (independent of the real, calculated
+// invoice status). Defaults to 'booked' for events that predate this field.
+const ccStatusOptions = [
+  {key:'booked',       label:'Booked',       bg:'var(--green-bg)',  fg:'var(--green-text)'},
+  {key:'menu_sent',    label:'Menu sent',    bg:'var(--brass-tint)',fg:'var(--brass-deep)'},
+  {key:'invoice_sent', label:'Invoice sent', bg:'var(--blue-bg)',   fg:'var(--blue-text)'},
+  {key:'paid',         label:'Paid',         bg:'var(--green-solid)',fg:'#fff'},
+  {key:'lost',         label:'Lost',         bg:'var(--coral-bg)',  fg:'var(--coral-text)'},
+];
+function updateEventStatus(id, val){
+  const e = events.find(x=>x.id===id); if(!e) return;
+  e.status = val;
+  _saveEvent(e);
+  render();
+}
+window.updateEventStatus = updateEventStatus;
+
 // Firebase save helpers
 async function _saveEvent(e){ 
   try{ 
@@ -3042,93 +3059,47 @@ function renderEvents(){
       const ewCompact = ewCardCompact(e);
       const ewChev = `<button class="pl-card-toggle" onclick="event.stopPropagation();toggleEwCard('${e.id}')" title="${ewCompact?'Expand':'Minimize'}"><i class="ti ti-chevron-${ewCompact?'down':'up'}"></i></button>`;
       if(ewCompact){
-        h+=`<div class="event-card compact ${selectedId===e.id?'selected':''}" onclick="openEventHub('${e.id}')" style="${e.lost?'background:var(--amber-bg);border-color:var(--amber-border)':''}">
+        const _ccCur = ccStatusOptions.find(o=>o.key===(e.status||'booked'))||ccStatusOptions[0];
+        h+=`<div class="event-card compact ${selectedId===e.id?'selected':''}" onclick="openEventHub('${e.id}')">
           <div class="ew-compact-row">
+            <span class="cc-dot" style="background:${_ccCur.fg}" title="${_ccCur.label}"></span>
             <span class="job-pill">${displayJob(e.job)}</span>
             <span class="client-name" style="flex:1;min-width:0;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.name}</span>
             <span class="type-badge t-${e.type}">${e.typeLabel}</span>
+            <span class="cc-date" style="font-size:11.5px">${e.dayLabel||''}</span>
             ${ewChev}
           </div>
         </div>`;
         return;
       }
-      const chips=[
-        e.chefs>0?`<span class="staff-chip"><i class="ti ti-chef-hat"></i>${e.chefs} chef${e.chefs>1?'s':''}</span>`:'',
-        e.waiters>0?`<span class="staff-chip"><i class="ti ti-users"></i>${e.waiters} waiter${e.waiters>1?'s':''}</span>`:'',
-        e.porters>0?`<span class="staff-chip"><i class="ti ti-package"></i>${e.porters} porter${e.porters>1?'s':''}</span>`:'',
-        (()=>{ const mg=(e.mashgiach&&e.mashgiach!=='-')?e.mashgiach:(e.mashgiachNames||''); return mg?`<span class="staff-chip"><i class="ti ti-shield-check"></i>${mg}</span>`:''; })(),
-        (e.manager&&e.manager!=='-')?`<span class="staff-chip"><i class="ti ti-user-check"></i>${e.manager}</span>`:'',
-      ].filter(Boolean).join('');
-      // Completion status badges
-      const eq = eventEquipment[e.id];
-      const equipStatus = eq?.stage==='complete' ? 'complete' : eq ? 'in-progress' : 'missing';
-      const statusBadge = (label, status, url) => {
-        const colors = {complete:'var(--green-text)',attached:'var(--green-text)','in-progress':'var(--amber-text)',missing:'var(--text3)'};
-        const bgs = {complete:'var(--green-bg)',attached:'var(--green-bg)','in-progress':'var(--amber-bg)',missing:'var(--bg2)'};
-        const icons = {complete:'ti-circle-check',attached:'ti-circle-check','in-progress':'ti-clock',missing:'ti-circle-x'};
-        const s = status;
-        const inner = `<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 7px;border-radius:8px;background:${bgs[s]};color:${colors[s]}"><i class="ti ${icons[s]}" style="font-size:11px"></i>${label}</span>`;
-        return url ? `<a href="${url}" target="_blank" style="text-decoration:none" onclick="event.stopPropagation()">${inner}</a>` : inner;
-      };
-      h+=`<div class="event-card ${selectedId===e.id?'selected':''}" onclick="openEventHub('${e.id}')" style="${e.lost?'background:var(--amber-bg);border-color:var(--amber-border)':''}">
-        <div class="card-top">
-          <span class="job-pill">${displayJob(e.job)}</span>
-          <span class="type-badge t-${e.type}">${e.typeLabel}</span>
-          ${e.lost ? '<span style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:8px;background:var(--amber-text);color:var(--amber-bg);font-weight:600">LOST</span>' : ''}
-          ${!e.lost && changes.some(c=>c.job===e.job && changeDepts.some(d=>!(c.acks||{})[d])) ? '<i class="ti ti-alert-triangle" style="font-size:14px;color:var(--amber-text);margin-left:auto" title="Unacknowledged changes"></i>' : ''}
+      // ── Client card v2 (decluttered): job#/type/date up top, name, venue,
+      // status dropdown, and 3 quick links (Menu/Invoice/Checklist). Grocery,
+      // Equipment, Changes and everything else live one click away in the
+      // event hub (openEventHub), not on the card face.
+      const ccVenueName = (()=>{ const _v=venues.find(v=>v.addr===e.addr||v.name===e.name); return (_v&&_v.name) || e.addr || ''; })();
+      const ccInvStatus = role.canViewInvoices ? aggregateInvoiceStatus(e.id) : 'none';
+      const ccClPct = (()=>{ const items=checklists[e.id]||[]; const active=items.filter(i=>!i.na); if(!active.length) return 0; const done=active.filter(i=>i.assignees&&i.assignees.some(a=>a.done)).length; return Math.round(done/active.length*100); })();
+      const ccLink = (on, icon, label, onclick) => `<button onclick="event.stopPropagation();${onclick}" class="cc-link${on?' on':''}"><i class="ti ${icon}"></i>${label}</button>`;
+      h+=`<div class="event-card ${selectedId===e.id?'selected':''}" onclick="openEventHub('${e.id}')">
+        <div class="cc-top">
+          <div class="cc-topl">
+            <span class="job-pill">${displayJob(e.job)}</span>
+            <span class="type-badge t-${e.type}">${e.typeLabel}</span>
+          </div>
+          <div class="cc-date">${e.dayLabel||''}</div>
+          ${ewChev}
         </div>
-        ${SHOW_FULL_EVENT_NUM && fullEventNum(e) ? `<div style="font-size:10px;color:var(--text3);letter-spacing:.02em;margin:-2px 0 2px" title="New event number">${pcEsc(fullEventNum(e))}</div>` : ''}
-        <div class="pl-card-head"><div class="client-name">${e.name}</div>${ewChev}</div>
-        ${e.contactName ? `<div style="font-size:11px;color:var(--text3);margin:-2px 0 4px"><i class="ti ti-user" style="font-size:10px"></i> ${e.contactName}</div>` : ''}
-        ${e.addr?`<div class="client-addr"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:2px"></i>${e.addr}</div>`:''}
-        ${contactChips(e)}
-        ${role.showStaff&&chips?`<div class="staff-chips">${chips}</div>`:''}
-        ${e.logoData ? `<div style="margin-top:8px;margin-bottom:6px"><img src="${driveImgUrl(e.logoData)}" style="max-height:36px;max-width:80px;object-fit:contain;border-radius:4px;opacity:.9" onerror="this.style.display='none'"></div>` : ''}
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          ${statusBadge('Equipment', equipStatus, '')}
-          ${e.menuLink
-            ? `<a href="${e.menuLink}" target="_blank" onclick="event.stopPropagation()" style="text-decoration:none">${statusBadge('Menu','attached',e.menuLink)}</a>`
-            : `<button onclick="quickPasteMenu('${e.id}',event)" style="border:none;background:none;padding:0;cursor:pointer">${statusBadge('Menu','missing','')}</button>`}
-          ${e.menuLink && e.pdfMenuLink
-            ? `<a href="${e.pdfMenuLink}" target="_blank" onclick="event.stopPropagation()" style="text-decoration:none">${statusBadge('PDF menu','attached',e.pdfMenuLink)}</a>`
-            : e.menuLink
-              ? `<button onclick="event.stopPropagation();createPdfVersion('${e.id}')" style="border:none;background:none;padding:0;cursor:pointer" title="Generate PDF">${statusBadge('PDF menu','missing','')}</button>`
-              : ''}
-          ${(()=>{
-            // groceryLink is a legacy, manually-pasted external link. groceryLists[e.id] is the
-            // app's own internal Grocery module data (same source the list-view pill already uses
-            // correctly) — check that too so a real in-app grocery list isn't shown as "missing".
-            const gHas = groceryLists[e.id] && groceryLists[e.id].items && groceryLists[e.id].items.length;
-            if(e.groceryLink) return statusBadge('Grocery','attached',e.groceryLink);
-            const badge = statusBadge('Grocery', gHas?'attached':'missing', '');
-            return `<button onclick="event.stopPropagation();openEventGrocery('${e.id}')" style="border:none;background:none;padding:0;cursor:pointer">${badge}</button>`;
-          })()}
-          ${e.floorplan ? statusBadge('Floorplan','attached',e.floorplan) : ''}
-          ${e.venueLink||true ? statusBadge('Venue', (e.venueLink?'attached':'missing'), e.venueLink||'https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0') : ''}
+        <div class="pl-card-head"><div class="client-name" style="margin-bottom:0">${e.name}</div></div>
+        ${ccVenueName?`<div class="cc-meta"><i class="ti ti-map-pin"></i>${ccVenueName}</div>`:''}
+        <div class="cc-status-row" onclick="event.stopPropagation()">
+          ${(()=>{ const cur=ccStatusOptions.find(o=>o.key===(e.status||'booked'))||ccStatusOptions[0]; return `<select class="cc-status" style="background-color:${cur.bg};color:${cur.fg}" onchange="event.stopPropagation();updateEventStatus('${e.id}',this.value)">
+            ${ccStatusOptions.map(o=>`<option value="${o.key}" ${(e.status||'booked')===o.key?'selected':''}>${o.label}</option>`).join('')}
+          </select>`; })()}
         </div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <button onclick="goChecklist('${e.id}')" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-checklist" style="font-size:12px"></i>Checklist</button>
-          ${(()=>{ const _v=venues.find(v=>v.addr===e.addr||v.name===e.name); return _v ? `<button onclick="showVenuePopup('${e.id}')" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--teal-text);border-radius:6px;background:var(--teal-bg);color:var(--teal-text);cursor:pointer;display:inline-flex;align-items:center;gap:4px" title="View venue info"><i class="ti ti-building" style="font-size:12px"></i>Venue</button>` : ''; })()}
-          ${role.canViewInvoices ? (()=>{ const _st = aggregateInvoiceStatus(e.id); return `<button onclick="_navReturnCapture('${e.id}');showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-left:4px;border:0.5px solid ${
-            _st==='none' ? 'var(--border2)' :
-            _st==='paid' ? 'var(--green-text)' :
-            _st==='invoice' ? '#7c3aed' :
-            'var(--amber-text)'};background:${
-            _st==='none' ? 'var(--bg2)' :
-            _st==='paid' ? 'var(--green-bg)' :
-            _st==='invoice' ? '#f5f3ff' :
-            'var(--amber-bg)'};color:${
-            _st==='none' ? 'var(--text2)' :
-            _st==='paid' ? 'var(--green-text)' :
-            _st==='invoice' ? '#7c3aed' :
-            'var(--amber-text)'}"><i class="ti ti-file-invoice" style="font-size:12px"></i>${
-            _st==='none' ? 'No invoice' :
-            _st==='quote' ? 'Quote sent' :
-            _st==='approved' ? 'Quote approved' :
-            _st==='invoice' ? 'Invoice open' :
-            'Paid ✓'}</button>`; })() : ''}
-          ${role.canEdit?`<button onclick="event.stopPropagation();openRepeatEventModal('${e.id}')" title="Repeat this event next week" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-repeat" style="font-size:12px"></i>Repeat</button>`:''}
-          <button onclick="deleteEvent('${e.id}')" title="Delete event" style="font-size:11px;padding:3px 8px;border:0.5px solid #e05c5c;border-radius:6px;background:none;color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-trash" style="font-size:12px"></i>Delete</button>
+        <div class="cc-links">
+          ${ccLink(!!e.menuLink,'ti-file-text','Menu', e.menuLink?`window.open('${e.menuLink}','_blank')`:`quickPasteMenu('${e.id}',event)`)}
+          ${ccLink(ccInvStatus!=='none','ti-file-invoice','Invoice', role.canViewInvoices?`_navReturnCapture('${e.id}');showView('invoices');setTimeout(()=>openInvoice('${e.id}'),300)`:'')}
+          ${ccLink(ccClPct===100,'ti-checklist','Checklist', `goChecklist('${e.id}')`)}
         </div>
       </div>`;
     });
