@@ -195,6 +195,10 @@
   </div>
 </div>
 
+<div class="modal-wrap" id="clientReportModal">
+  <div class="modal" id="clientReportModalInner" style="max-width:720px;max-height:88vh;overflow-y:auto"></div>
+</div>
+
 
 
 <div class="saving-toast" id="savingToast">
@@ -2355,6 +2359,17 @@ function render(){
     });
   }
 
+  // Preserve focus + cursor position on a focused text input (added). Same
+  // reasoning as scroll preservation above — render() fully replaces
+  // #mainArea's HTML, which otherwise kicks focus out of a search box the
+  // moment a debounced render fires mid-type, forcing a re-click every
+  // couple of letters.
+  let _focusRestore = null;
+  const _activeEl = document.activeElement;
+  if(_activeEl && _mainAreaBefore && _mainAreaBefore.contains(_activeEl) && (_activeEl.tagName==='INPUT'||_activeEl.tagName==='TEXTAREA') && _activeEl.id){
+    _focusRestore = { id:_activeEl.id, start:_activeEl.selectionStart, end:_activeEl.selectionEnd };
+  }
+
   let html = '';
   try {
     html = currentView==='home'      ? renderHome()      :
@@ -2420,6 +2435,15 @@ function render(){
           if(match){ match.scrollLeft = s.left; match.scrollTop = s.top; }
         }catch(e){ /* class name had characters that don't make a valid selector — skip */ }
       });
+    }
+  }
+  if(_focusRestore){
+    const _refocus = document.getElementById(_focusRestore.id);
+    if(_refocus){
+      _refocus.focus();
+      if(typeof _refocus.setSelectionRange==='function' && _focusRestore.start!=null){
+        try{ _refocus.setSelectionRange(_focusRestore.start, _focusRestore.end); }catch(e){}
+      }
     }
   }
 }
@@ -6380,6 +6404,7 @@ function buildClientGroups(){
 
   // Stash an index for the re-book actions, and sort each client's history newest-first
   window._clientsIndex = {};
+  window._clientsGroups = groups;
   Object.keys(groups).forEach(k=>{
     const g = groups[k];
     g.items.sort((a,b)=> (b.sort||'').localeCompare(a.sort||''));
@@ -6401,9 +6426,12 @@ function renderClients(){
   else if(filter==='booked') list = list.filter(g=>hasStatus(g,'booked'));
   else if(filter==='past') list = list.filter(g=>hasStatus(g,'past'));
 
-  // Search
+  // Search — matches display name, org, first/last name, contact, email, or phone
   const q = (window._clientsSearch||'').trim().toLowerCase();
   if(q) list = list.filter(g=> (g.name||'').toLowerCase().includes(q)
+      || (g.firstName||'').toLowerCase().includes(q)
+      || (g.lastName||'').toLowerCase().includes(q)
+      || (g.organization||'').toLowerCase().includes(q)
       || (g.contact||'').toLowerCase().includes(q)
       || (g.email||'').toLowerCase().includes(q)
       || (g.phone||'').toLowerCase().includes(q));
@@ -6420,6 +6448,9 @@ function renderClients(){
     const m = map[st]||['',' ',' ']; return `<span style="font-size:10px;padding:1px 7px;border-radius:8px;background:${m[1]};color:${m[2]}">${m[0]}</span>`;
   };
 
+  const seenLetters = new Set();
+  const letterOf = (name)=>{ const m=(name||'').trim().charAt(0).toUpperCase(); return /[A-Z]/.test(m) ? m : '#'; };
+
   const cards = list.map(g=>{
     const hist = g.items.map(it=>{
       const click = it.kind==='event' ? `gotoEvent('${it.id}')` : `goToInquiry('${it.id}')`;
@@ -6430,13 +6461,16 @@ function renderClients(){
         <i class="ti ti-chevron-right" style="font-size:13px;color:var(--text3)"></i>
       </div>`;
     }).join('');
-    const actions = role.canEdit ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-        <button onclick="newEventForClient('${g.key}','new')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--amber-border);border-radius:7px;background:var(--amber-bg);color:var(--amber-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-plus" style="font-size:13px"></i>New potential event</button>
-        <button onclick="newEventForClient('${g.key}','booked')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-calendar-plus" style="font-size:13px"></i>New booked event</button>
-      </div>` : '';
+    const actions = `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <button onclick="openClientReport('${g.key}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-report-money" style="font-size:13px"></i>Report</button>
+        ${role.canEdit ? `<button onclick="newEventForClient('${g.key}','new')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--amber-border);border-radius:7px;background:var(--amber-bg);color:var(--amber-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-plus" style="font-size:13px"></i>New potential event</button>` : ''}
+        ${role.canEdit ? `<button onclick="newEventForClient('${g.key}','booked')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-calendar-plus" style="font-size:13px"></i>New booked event</button>` : ''}
+      </div>`;
     const contactLine = g.contact ? `<div style="font-size:12px;color:var(--text3);margin-top:1px"><i class="ti ti-user" style="font-size:11px"></i> ${g.contact}</div>` : '';
     const metaBits = [g.phone?`<i class="ti ti-phone" style="font-size:11px"></i>${g.phone}`:'', g.email?`<i class="ti ti-mail" style="font-size:11px"></i>${g.email}`:''].filter(Boolean).join('&nbsp;&nbsp;');
-    return `<div style="border:0.5px solid var(--border2);border-radius:var(--radius-lg);background:var(--bg);padding:1rem 1.1rem;margin-bottom:.75rem">
+    const L = letterOf(g.name);
+    const anchor = seenLetters.has(L) ? '' : (seenLetters.add(L), `<div id="cl-letter-${L}" style="height:0"></div>`);
+    return `${anchor}<div style="border:0.5px solid var(--border2);border-radius:var(--radius-lg);background:var(--bg);padding:1rem 1.1rem;margin-bottom:.75rem;scroll-margin-top:70px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
         <div style="min-width:0">
           <div style="font-size:15px;font-weight:600;color:var(--text)">${g.name}</div>
@@ -6450,19 +6484,103 @@ function renderClients(){
     </div>`;
   }).join('');
 
+  const alphaBar = `<div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:1rem">
+    ${'#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(L=>{
+      const has = seenLetters.has(L);
+      return `<button ${has?`onclick="document.getElementById('cl-letter-${L}')?.scrollIntoView({behavior:'smooth',block:'start'})"`:'disabled'} style="width:22px;height:22px;font-size:11px;font-weight:600;border:none;border-radius:5px;cursor:${has?'pointer':'default'};background:transparent;color:${has?'var(--text2)':'var(--border2)'}">${L}</button>`;
+    }).join('')}
+  </div>`;
+
   return `<div class="view-pad" style="padding:1.5rem;max-width:900px;margin:0 auto">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:1rem">
       <h2 style="margin:0;font-size:20px;color:var(--text)">Clients</h2>
-      <input type="text" value="${(window._clientsSearch||'').replace(/"/g,'&quot;')}" oninput="window._clientsSearch=this.value;clearTimeout(window._cliT);window._cliT=setTimeout(render,250)" placeholder="Search clients…" style="font-size:13px;padding:7px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);min-width:200px">
+      <input id="clientsSearchInput" type="text" value="${(window._clientsSearch||'').replace(/"/g,'&quot;')}" oninput="window._clientsSearch=this.value;clearTimeout(window._cliT);window._cliT=setTimeout(render,250)" placeholder="Search by name, org, phone, email…" style="font-size:13px;padding:7px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);min-width:220px">
     </div>
-    <div style="display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap">
+    <div style="display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap">
       ${tab('all','All')} ${tab('unbooked','Not booked')} ${tab('booked','Booked')} ${tab('past','Past')}
     </div>
+    ${alphaBar}
     ${list.length? cards : `<div style="text-align:center;padding:3rem 0;color:var(--text3);font-size:13px">No clients match this view yet.</div>`}
   </div>`;
 }
 
 function goToInquiry(id){ showView('pipeline'); selectInquiry(id); }
+
+// ── Client report: every event/inquiry for one client, with invoice totals ──
+function _moneyFmt(n){ return '$'+(Math.round((n||0)*100)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function _itemInvoiceTotals(it){
+  // Returns {grand,paid,balance,statusLabel} for one client-history item, or
+  // null if there's nothing invoiced yet for it.
+  if(it.kind==='event'){
+    const slots = invoiceSlotsForEvent(it.id);
+    if(!slots.length) return null;
+    let grand=0, paid=0;
+    slots.forEach(k=>{ const inv=invoices[k]; if(!inv) return; const t=calcInvoiceTotals(inv); grand+=t.grand; paid+=parseFloat(inv.deposit||0); });
+    const st = aggregateInvoiceStatus(it.id);
+    const label = {none:'No invoice',quote:'Quote sent',approved:'Quote approved',invoice:'Invoice open',paid:'Paid'}[st]||st;
+    return { grand, paid, balance:grand-paid, statusLabel:label };
+  }
+  const inv = invoices['inq_'+it.id];
+  if(!inv) return null;
+  const t = calcInvoiceTotals(inv);
+  const paid = parseFloat(inv.deposit||0);
+  const label = {none:'No invoice',quote:'Quote sent',approved:'Quote approved',invoice:'Invoice open',paid:'Paid'}[inv.status]||(inv.status||'—');
+  return { grand:t.grand, paid, balance:t.grand-paid, statusLabel:label };
+}
+function clientReportHtml(key){
+  const groups = window._clientsGroups || {};
+  const g = groups[key];
+  if(!g) return '<div style="padding:1rem">Client not found — try reopening the report from the Clients list.</div>';
+  const role = roles[currentRole]||{};
+  const canMoney = !!role.canViewInvoices;
+  let totInvoiced=0, totPaid=0;
+  const rows = g.items.map(it=>{
+    const click = it.kind==='event' ? `gotoEvent('${it.id}')` : `goToInquiry('${it.id}')`;
+    const money = canMoney ? _itemInvoiceTotals(it) : null;
+    if(money){ totInvoiced += money.grand; totPaid += money.paid; }
+    return `<tr onclick="${click}" style="cursor:pointer" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+      <td style="padding:7px 8px;border-bottom:0.5px solid var(--border);font-size:12px;color:var(--text3);white-space:nowrap">${it.date||''}</td>
+      <td style="padding:7px 8px;border-bottom:0.5px solid var(--border);font-size:13px;color:var(--text)">${it.label}</td>
+      <td style="padding:7px 8px;border-bottom:0.5px solid var(--border);font-size:12px">${money?money.statusLabel:'—'}</td>
+      ${canMoney?`<td style="padding:7px 8px;border-bottom:0.5px solid var(--border);font-size:12px;text-align:right">${money?_moneyFmt(money.grand):'—'}</td>
+      <td style="padding:7px 8px;border-bottom:0.5px solid var(--border);font-size:12px;text-align:right;color:var(--green-text)">${money?_moneyFmt(money.paid):'—'}</td>
+      <td style="padding:7px 8px;border-bottom:0.5px solid var(--border);font-size:12px;text-align:right;color:${money&&money.balance>0.01?'var(--amber-text)':'var(--text3)'}">${money?_moneyFmt(money.balance):'—'}</td>`:''}
+    </tr>`;
+  }).join('');
+  const totBalance = totInvoiced - totPaid;
+  return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px">
+      <h3 style="margin:0">${g.name}</h3>
+      <button onclick="closeClientReportModal()" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:20px;line-height:1;padding:0 4px">&times;</button>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">${[g.contact,g.phone,g.email].filter(Boolean).join(' · ')||'&nbsp;'}</div>
+    ${canMoney?`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.1rem">
+      <div class="stat-card"><div class="stat-n">${_moneyFmt(totInvoiced)}</div><div class="stat-l">Total invoiced</div></div>
+      <div class="stat-card"><div class="stat-n" style="color:var(--green-text)">${_moneyFmt(totPaid)}</div><div class="stat-l">Total paid</div></div>
+      <div class="stat-card"><div class="stat-n" style="color:${totBalance>0.01?'var(--amber-text)':'var(--text)'}">${_moneyFmt(totBalance)}</div><div class="stat-l">Outstanding</div></div>
+    </div>`:''}
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="text-align:left">
+        <th style="padding:0 8px 6px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Date</th>
+        <th style="padding:0 8px 6px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Event</th>
+        <th style="padding:0 8px 6px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Status</th>
+        ${canMoney?`<th style="padding:0 8px 6px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;text-align:right">Invoiced</th>
+        <th style="padding:0 8px 6px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;text-align:right">Paid</th>
+        <th style="padding:0 8px 6px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;text-align:right">Balance</th>`:''}
+      </tr></thead>
+      <tbody>${rows||`<tr><td colspan="6" style="padding:1.5rem;text-align:center;color:var(--text3);font-size:13px">No events yet.</td></tr>`}</tbody>
+    </table>
+    </div>`;
+}
+function openClientReport(key){
+  const el = document.getElementById('clientReportModalInner');
+  if(!el) return;
+  el.innerHTML = clientReportHtml(key);
+  document.getElementById('clientReportModal').classList.add('open');
+}
+function closeClientReportModal(){ document.getElementById('clientReportModal').classList.remove('open'); }
+window.openClientReport = openClientReport;
+window.closeClientReportModal = closeClientReportModal;
 
 function gotoEvent(eid){
   const ev = events.find(x=>x.id===eid); if(!ev) return;
