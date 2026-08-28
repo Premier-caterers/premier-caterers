@@ -3728,7 +3728,7 @@ function renderPipeline(){
             <div class="pl-card-head"><div class="inq-name">${nm}${_unansweredBadge(inq)}${_salespersonBadge(inq)}${_followupBadge(inq)}</div>${chev}</div>
             <div class="pl-compact-meta">
               ${inq.eventType ? `<span><i class="ti ti-tag" style="font-size:11px"></i>${inq.eventType}</span>` : ''}
-              ${inq.eventDate ? `<span><i class="ti ti-calendar" style="font-size:11px"></i>${formatDate(inq.eventDate)}</span>` : ''}
+              ${inq.eventDate ? `<span><i class="ti ti-calendar" style="font-size:11px"></i>${formatDateWithDay(inq.eventDate)}</span>` : ''}
             </div>
           </div>`;
         }
@@ -3737,7 +3737,7 @@ function renderPipeline(){
         ${allergyBanner(inq,false)}
         <div class="cc-top" style="margin-bottom:6px">
           <div class="cc-topl">${inq.eventType?`<span class="type-badge" style="background:var(--text3)">${inq.eventType}</span>`:''}</div>
-          ${inq.eventDate?`<div class="cc-date">${formatDate(inq.eventDate)}</div>`:''}
+          ${inq.eventDate?`<div class="cc-date">${formatDateWithDay(inq.eventDate)}</div>`:''}
         </div>
         <div class="pl-card-head"><div class="inq-name">${nm}${_unansweredBadge(inq)}${_salespersonBadge(inq)}${_followupBadge(inq)}</div>${chev}</div>
         ${contact ? `<div style="font-size:11px;color:var(--text3);margin:-2px 0 4px"><i class="ti ti-user" style="font-size:10px"></i> ${contact}</div>` : ''}
@@ -3805,13 +3805,9 @@ function gotoVenue(id){ showView('venues'); setTimeout(()=>{ try{ openVenueDetai
 function cardDocIcons(inq, role){
   const id = inq.id;
   const ic = (icon,label,onclick,soon,show=true) => show?`<button onclick="event.stopPropagation();${onclick}" title="${label}${soon?' — coming soon':''}" style="position:relative;width:30px;height:30px;border:0.5px solid var(--border2);border-radius:7px;background:${soon?'var(--bg)':'var(--bg2)'};color:${soon?'var(--text3)':'var(--text2)'};cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><i class="ti ${icon}" style="font-size:15px"></i>${soon?'<span style="position:absolute;top:-3px;right:-3px;width:8px;height:8px;border-radius:50%;background:var(--amber-text);border:1.5px solid var(--bg)"></span>':''}</button>`:'';
-  const soon = `showToast('Coming soon')`;
   return `<div style="display:flex;align-items:center;gap:6px;margin:8px 0 2px">
     ${ic('ti-file-text','Menu(s)',`openInqMenuQuick('${id}')`,false)}
     ${ic('ti-file-invoice','Estimate / Invoice',`viewClientQuote('${id}')`,false,role.canViewInvoices)}
-    ${ic('ti-tool','Equipment list',soon,true)}
-    ${ic('ti-shopping-cart','Grocery list',soon,true)}
-    ${ic('ti-checklist','Final checklist',soon,true)}
     <button onclick="event.stopPropagation();selectInquiry('${id}')" title="Open full details" style="margin-left:auto;width:30px;height:30px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><i class="ti ti-chevron-right" style="font-size:16px"></i></button>
   </div>`;
 }
@@ -4617,6 +4613,11 @@ async function buildEstimatePdfBase64(inq){
 function formatDate(d){
   if(!d) return '';
   try{ return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+  catch(e){ return d; }
+}
+function formatDateWithDay(d){
+  if(!d) return '';
+  try{ return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }
   catch(e){ return d; }
 }
 
