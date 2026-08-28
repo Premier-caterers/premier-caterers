@@ -11170,94 +11170,190 @@ function _reportBarRow(label, value, maxValue, barColor, valueDisplay){
 }
 
 function renderReports(){
-  const money = n => '$'+Math.round(n).toLocaleString('en-US');
+  const money = n => '$'+Math.round(n||0).toLocaleString('en-US');
+  const pct = (a,b)=>{ if(!b) return null; return Math.round(((a-b)/b)*100); };
+  const pctBadge = p => {
+    if(p===null) return '<span style="font-size:11px;color:var(--text3)">—</span>';
+    const up = p>=0; const col = up?'var(--green-text)':'var(--coral-text)';
+    return `<span style="font-size:11px;font-weight:600;color:${col};display:inline-flex;align-items:center;gap:2px"><i class="ti ti-arrow-${up?'up':'down'}-right" style="font-size:12px"></i>${up?'+':''}${p}%</span>`;
+  };
+  // Grand-total-minus-tax: matches how we billed the client. Uses the same
+  // canonical totals as invoices ($subtotal + logistics + tax = grand), so
+  // "revenue" here is grand - tax.
+  const invRevenue = (inv)=>{ const t=calcInvoiceTotals(inv); return t.grand - t.tax; };
+  // Event date from weekOf (last event day in that Sun-Sat week is Sat, close enough
+  // for a monthly bucket — we already use weekOf as the event's date anchor everywhere).
+  const eventYearMonth = (e)=>{ const mk=_monthKeyFromWeekOf(e.weekOf); return mk?mk.key:null; };
+  const eventYear = (e)=>{ const mk=_monthKeyFromWeekOf(e.weekOf); return mk?parseInt(mk.key.slice(0,4)):null; };
 
-  // ---- Revenue (from actual invoice records) ----
-  const allInvoices = Object.values(invoices).filter(Boolean);
-  const paidInvoices = allInvoices.filter(inv=>inv.status==='paid');
-  const billedInvoices = allInvoices.filter(inv=>inv.status==='invoice'||inv.status==='paid');
-  const totalPaid = paidInvoices.reduce((s,inv)=>s+calcInvoiceTotals(inv).grand,0);
-  const totalBilled = billedInvoices.reduce((s,inv)=>s+calcInvoiceTotals(inv).grand,0);
-  const totalOutstanding = Math.max(0, totalBilled-totalPaid);
+  const now = new Date();
+  const thisYear = now.getFullYear();
+  const lastYear = thisYear-1;
+  const thisMonthIdx = now.getMonth(); // 0-based
 
-  const revByMonth = {}; // key -> {label, amt}
-  billedInvoices.forEach(inv=>{
-    const mk = _monthKeyFromDateStr(inv.invoiceDate);
-    if(!mk) return;
-    if(!revByMonth[mk.key]) revByMonth[mk.key] = {label:mk.label, amt:0};
-    revByMonth[mk.key].amt += calcInvoiceTotals(inv).grand;
+  // Match each event to its invoice slots so revenue rolls to the event date's month.
+  const eventRevenue = {};
+  events.forEach(e=>{
+    const slots = invoiceSlotsForEvent(e.id);
+    if(!slots.length) return;
+    let rev = 0;
+    slots.forEach(k=>{ const inv=invoices[k]; if(!inv) return; if(inv.status==='invoice'||inv.status==='paid'||inv.status==='approved') rev += invRevenue(inv); });
+    eventRevenue[e.id] = rev;
   });
-  const revMonthKeys = Object.keys(revByMonth).sort().slice(-12); // last 12 months with data
-  const maxRevMonth = Math.max(1, ...revMonthKeys.map(k=>revByMonth[k].amt));
 
-  // ---- Events (from the active events list) ----
-  const activeEvents = events.filter(e=>!eventInquiryMissing(e));
-  const eventsByType = {};
-  activeEvents.forEach(e=>{ const t=e.typeLabel||e.type||'Other'; eventsByType[t]=(eventsByType[t]||0)+1; });
-  const typeKeys = Object.keys(eventsByType).sort((a,b)=>eventsByType[b]-eventsByType[a]);
-  const maxTypeCount = Math.max(1, ...typeKeys.map(k=>eventsByType[k]));
-  const topType = typeKeys[0] || '—';
-
-  const eventsByMonth = {};
-  activeEvents.forEach(e=>{
-    const mk = _monthKeyFromWeekOf(e.weekOf);
-    if(!mk) return;
-    if(!eventsByMonth[mk.key]) eventsByMonth[mk.key] = {label:mk.label, count:0};
-    eventsByMonth[mk.key].count++;
+  // ── Section 1: business overview ────────────────────────────────
+  const monthRevThis = new Array(12).fill(0);
+  const monthRevLast = new Array(12).fill(0);
+  let totalRevThis = 0, totalRevLast = 0;
+  let evThis = 0, evLast = 0;
+  events.forEach(e=>{
+    const y = eventYear(e); if(y!==thisYear && y!==lastYear) return;
+    const mk = _monthKeyFromWeekOf(e.weekOf); if(!mk) return;
+    const m = parseInt(mk.key.slice(5,7))-1;
+    const rev = eventRevenue[e.id] || 0;
+    if(y===thisYear){ monthRevThis[m]+=rev; totalRevThis+=rev; evThis++; }
+    else            { monthRevLast[m]+=rev; totalRevLast+=rev; evLast++; }
   });
-  const evMonthKeys = Object.keys(eventsByMonth).sort().slice(-12);
-  const maxEvMonth = Math.max(1, ...evMonthKeys.map(k=>eventsByMonth[k].count));
+  // Same-period comparison — only compare months that have already happened this year
+  const totalRevLastToDate = monthRevLast.slice(0, thisMonthIdx+1).reduce((s,x)=>s+x,0);
+  const revYoY = pct(totalRevThis, totalRevLastToDate);
+  const evYoY  = pct(evThis, evLast);
+  // MoM (this month vs last month)
+  const revThisMo = monthRevThis[thisMonthIdx];
+  const revPrevMo = thisMonthIdx>0 ? monthRevThis[thisMonthIdx-1] : monthRevLast[11];
+  const revMoM = pct(revThisMo, revPrevMo);
 
-  const thisMonthKey = new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
-  const thisMonthCount = eventsByMonth[thisMonthKey]?eventsByMonth[thisMonthKey].count:0;
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const maxMo = Math.max(1, ...monthRevThis, ...monthRevLast);
+  const monthlyChartRows = monthNames.map((mn,i)=>{
+    const t = monthRevThis[i], l = monthRevLast[i];
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+      <span style="width:34px;flex-shrink:0;font-size:11px;color:var(--text2)">${mn}</span>
+      <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+        <div style="height:9px;background:var(--bg3);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.round((t/maxMo)*100)}%;background:var(--maroon);border-radius:4px"></div></div>
+        <div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.round((l/maxMo)*100)}%;background:var(--brass);opacity:.55;border-radius:3px"></div></div>
+      </div>
+      <span style="width:74px;flex-shrink:0;text-align:right;font-size:11px;font-weight:600;color:var(--text)">${money(t)}</span>
+    </div>`;
+  }).join('');
 
-  // ---- Staff (total assignments across all events — counts, not clock hours;
-  //      actual worked hours live in the separate Time Clock tool, not this app's data) ----
-  let totW=0,totC=0,totB=0,totP=0;
-  activeEvents.forEach(e=>{
-    totW+=parseInt(e.waiters)||0; totC+=parseInt(e.chefs)||0;
-    totB+=parseInt(e.bartenders)||0; totP+=parseInt(e.porters)||0;
+  // ── Section 2: event type performance ──────────────────────────
+  const byType = {}; // type -> {countThis, countLast, revThis, revLast}
+  events.forEach(e=>{
+    const y = eventYear(e); if(y!==thisYear && y!==lastYear) return;
+    const t = e.typeLabel || e.type || 'Other';
+    if(!byType[t]) byType[t] = {countThis:0, countLast:0, revThis:0, revLast:0};
+    const rev = eventRevenue[e.id] || 0;
+    if(y===thisYear){ byType[t].countThis++; byType[t].revThis+=rev; }
+    else            { byType[t].countLast++; byType[t].revLast+=rev; }
   });
+  const typeRows = Object.keys(byType).map(k=>({key:k, ...byType[k]}))
+    .sort((a,b)=>b.revThis-a.revThis);
+  const grandRevThis = typeRows.reduce((s,r)=>s+r.revThis,0);
+  const typeTable = typeRows.length ? `
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="text-align:left">
+        <th style="padding:0 8px 8px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Event type</th>
+        <th style="padding:0 8px 8px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;text-align:right">Events</th>
+        <th style="padding:0 8px 8px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;text-align:right">Revenue</th>
+        <th style="padding:0 8px 8px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;text-align:right">Avg / event</th>
+        <th style="padding:0 8px 8px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;text-align:right">YoY</th>
+        <th style="padding:0 8px 8px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;text-align:right">% of total</th>
+      </tr></thead>
+      <tbody>${typeRows.map(r=>{
+        const avg = r.countThis>0 ? r.revThis/r.countThis : 0;
+        const share = grandRevThis>0 ? Math.round((r.revThis/grandRevThis)*100) : 0;
+        return `<tr>
+          <td style="padding:8px;border-top:0.5px solid var(--border);color:var(--text);font-weight:500">${r.key}</td>
+          <td style="padding:8px;border-top:0.5px solid var(--border);text-align:right;color:var(--text2)">${r.countThis}</td>
+          <td style="padding:8px;border-top:0.5px solid var(--border);text-align:right;font-weight:600;color:var(--text)">${money(r.revThis)}</td>
+          <td style="padding:8px;border-top:0.5px solid var(--border);text-align:right;color:var(--text2)">${money(avg)}</td>
+          <td style="padding:8px;border-top:0.5px solid var(--border);text-align:right">${pctBadge(pct(r.revThis, r.revLast))}</td>
+          <td style="padding:8px;border-top:0.5px solid var(--border);text-align:right;color:var(--text2)">${share}%</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>` : `<div style="padding:1rem;color:var(--text3);font-size:13px;text-align:center">No event data for ${thisYear} yet.</div>`;
+
+  // ── Section 3: money on the ground (outstanding balances) ──────
+  const nowMs = Date.now();
+  const oneMonth = 31*24*60*60*1000;
+  const outstanding = []; // {clientName, evId, slotKey, evDate, balance, bucket}
+  events.forEach(e=>{
+    const slots = invoiceSlotsForEvent(e.id);
+    slots.forEach(k=>{
+      const inv = invoices[k]; if(!inv) return;
+      if(inv.status!=='invoice') return; // only open invoices
+      const t = calcInvoiceTotals(inv);
+      const balance = t.grand - parseFloat(inv.deposit||0);
+      if(balance <= 0.01) return;
+      const evDate = e.weekOf ? new Date(e.weekOf+'T00:00:00Z') : null;
+      const evDateMs = evDate ? evDate.getTime() : null;
+      let bucket = 'later';
+      if(evDateMs!==null){
+        if(evDateMs < nowMs - oneMonth) bucket = 'overdue';
+        else if(evDateMs < nowMs + oneMonth) bucket = 'this_month';
+      }
+      outstanding.push({ clientName:e.name||'(client)', evId:e.id, slotKey:k, evDateLabel:e.dayLabel||'', evDateMs, balance, bucket });
+    });
+  });
+  const sumBucket = b => outstanding.filter(o=>o.bucket===b).reduce((s,o)=>s+o.balance,0);
+  const totOverdue = sumBucket('overdue');
+  const totThisMo  = sumBucket('this_month');
+  const totLater   = sumBucket('later');
+  const totOutstanding = totOverdue + totThisMo + totLater;
+  outstanding.sort((a,b)=> b.balance-a.balance);
+  const outstandingRows = outstanding.slice(0,25).map(o=>{
+    const bucketColor = o.bucket==='overdue'?'var(--coral-text)':o.bucket==='this_month'?'var(--amber-text)':'var(--text3)';
+    const bucketBg    = o.bucket==='overdue'?'var(--coral-bg)':o.bucket==='this_month'?'var(--amber-bg)':'var(--bg2)';
+    const bucketLbl   = o.bucket==='overdue'?'Overdue':o.bucket==='this_month'?'Due this month':'Due later';
+    return `<tr onclick="_navReturnCapture('${o.evId}');showView('invoices');setTimeout(()=>openInvoice('${o.slotKey}'),300)" style="cursor:pointer" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+      <td style="padding:8px;border-top:0.5px solid var(--border);color:var(--text);font-weight:500">${o.clientName}</td>
+      <td style="padding:8px;border-top:0.5px solid var(--border);color:var(--text3);font-size:12px">${o.evDateLabel}</td>
+      <td style="padding:8px;border-top:0.5px solid var(--border);text-align:right"><span style="font-size:11px;padding:2px 8px;border-radius:8px;background:${bucketBg};color:${bucketColor};font-weight:500">${bucketLbl}</span></td>
+      <td style="padding:8px;border-top:0.5px solid var(--border);text-align:right;font-weight:600;color:var(--text)">${money(o.balance)}</td>
+    </tr>`;
+  }).join('');
 
   return `<div class="section-header"><div class="section-title">Reports</div></div>
 
-  <div class="day-label">Revenue</div>
+  <div class="day-label">Business overview — ${thisYear}</div>
   <div class="stats-row">
-    <div class="stat-card"><div class="stat-n">${money(totalPaid)}</div><div class="stat-l">Total paid</div></div>
-    <div class="stat-card"><div class="stat-n">${money(totalBilled)}</div><div class="stat-l">Total billed</div></div>
-    <div class="stat-card"><div class="stat-n">${money(totalOutstanding)}</div><div class="stat-l">Outstanding balance</div></div>
-    <div class="stat-card"><div class="stat-n">${paidInvoices.length}</div><div class="stat-l">Paid invoices</div></div>
+    <div class="stat-card"><div class="stat-n">${money(totalRevThis)}</div><div class="stat-l">Revenue ${thisYear} to date</div></div>
+    <div class="stat-card"><div class="stat-n" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${money(totalRevLastToDate)} <span style="font-size:12px">${pctBadge(revYoY)}</span></div><div class="stat-l">Same period ${lastYear} (YoY)</div></div>
+    <div class="stat-card"><div class="stat-n" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${money(revThisMo)} <span style="font-size:12px">${pctBadge(revMoM)}</span></div><div class="stat-l">This month (MoM)</div></div>
+    <div class="stat-card"><div class="stat-n" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${evThis} <span style="font-size:12px">${pctBadge(evYoY)}</span></div><div class="stat-l">Events ${thisYear} vs ${lastYear}</div></div>
   </div>
-  ${revMonthKeys.length ? `<div class="detail-panel" style="margin-bottom:1.5rem">
-    <div class="detail-block-title">Billed revenue by month</div>
-    ${revMonthKeys.map(k=>_reportBarRow(revByMonth[k].label, revByMonth[k].amt, maxRevMonth, 'var(--maroon)', money(revByMonth[k].amt))).join('')}
-  </div>` : `<div style="padding:1.25rem 0;text-align:center;color:var(--text3);font-size:13px;margin-bottom:1.5rem">No billed invoices yet.</div>`}
-
-  <div class="day-label">Events</div>
-  <div class="stats-row">
-    <div class="stat-card"><div class="stat-n">${activeEvents.length}</div><div class="stat-l">Total events</div></div>
-    <div class="stat-card"><div class="stat-n">${thisMonthCount}</div><div class="stat-l">This month</div></div>
-    <div class="stat-card"><div class="stat-n">${venues.length}</div><div class="stat-l">Venues on file</div></div>
-    <div class="stat-card"><div class="stat-n" style="font-size:16px;line-height:1.3">${topType}</div><div class="stat-l">Most common type</div></div>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
-    <div class="detail-panel" style="margin:0">
-      <div class="detail-block-title">Events by type</div>
-      ${typeKeys.length ? typeKeys.map(t=>_reportBarRow(t, eventsByType[t], maxTypeCount, 'var(--brass)')).join('') : `<div style="padding:.5rem 0;color:var(--text3);font-size:13px">No events yet.</div>`}
+  <div class="detail-panel" style="margin-bottom:1.5rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="detail-block-title" style="margin:0">Monthly revenue — ${thisYear} vs ${lastYear}</div>
+      <div style="display:flex;align-items:center;gap:14px;font-size:11px">
+        <span style="display:inline-flex;align-items:center;gap:5px;color:var(--text2)"><span style="width:12px;height:8px;background:var(--maroon);border-radius:2px"></span>${thisYear}</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;color:var(--text3)"><span style="width:12px;height:6px;background:var(--brass);opacity:.55;border-radius:2px"></span>${lastYear}</span>
+      </div>
     </div>
-    <div class="detail-panel" style="margin:0">
-      <div class="detail-block-title">Events by month</div>
-      ${evMonthKeys.length ? evMonthKeys.map(k=>_reportBarRow(eventsByMonth[k].label, eventsByMonth[k].count, maxEvMonth, 'var(--teal-solid)')).join('') : `<div style="padding:.5rem 0;color:var(--text3);font-size:13px">No events yet.</div>`}
-    </div>
+    ${monthlyChartRows}
   </div>
 
-  <div class="day-label">Staff assignments (all-time totals)</div>
-  <div class="cs-hint"><i class="ti ti-info-circle"></i>Counts of staff assigned across all events — actual clocked hours live in the separate Time Clock tool, not tracked here.</div>
+  <div class="day-label">Event type performance</div>
+  <div class="detail-panel" style="margin-bottom:1.5rem;overflow-x:auto">${typeTable}</div>
+
+  <div class="day-label">Money on the ground</div>
   <div class="stats-row">
-    <div class="stat-card"><div class="stat-n">${totW}</div><div class="stat-l">Waiters</div></div>
-    <div class="stat-card"><div class="stat-n">${totC}</div><div class="stat-l">Chefs</div></div>
-    <div class="stat-card"><div class="stat-n">${totB}</div><div class="stat-l">Bartenders</div></div>
-    <div class="stat-card"><div class="stat-n">${totP}</div><div class="stat-l">Porters</div></div>
+    <div class="stat-card"><div class="stat-n">${money(totOutstanding)}</div><div class="stat-l">Total outstanding</div></div>
+    <div class="stat-card"><div class="stat-n" style="color:var(--coral-text)">${money(totOverdue)}</div><div class="stat-l">Overdue</div></div>
+    <div class="stat-card"><div class="stat-n" style="color:var(--amber-text)">${money(totThisMo)}</div><div class="stat-l">Due this month</div></div>
+    <div class="stat-card"><div class="stat-n" style="color:var(--text2)">${money(totLater)}</div><div class="stat-l">Due later</div></div>
+  </div>
+  <div class="detail-panel" style="margin-bottom:1.5rem;overflow-x:auto">
+    ${outstanding.length ? `<table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="text-align:left">
+        <th style="padding:0 8px 8px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Client</th>
+        <th style="padding:0 8px 8px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Event date</th>
+        <th style="padding:0 8px 8px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;text-align:right">Status</th>
+        <th style="padding:0 8px 8px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;text-align:right">Balance</th>
+      </tr></thead>
+      <tbody>${outstandingRows}</tbody>
+    </table>${outstanding.length>25?`<div style="padding:.5rem 8px 0;font-size:11px;color:var(--text3);text-align:right">Showing top 25 by balance · ${outstanding.length} total</div>`:''}` : `<div style="padding:1rem;color:var(--text3);font-size:13px;text-align:center">No open balances — nice.</div>`}
   </div>`;
 }
 
