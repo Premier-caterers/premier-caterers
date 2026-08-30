@@ -3992,12 +3992,13 @@ function renderInqDetail(inq, role){
   const menuHtml = (Array.isArray(inq.menus) && inq.menus.length)
     ? inq.menus.map((m,mi)=>`
         <div style="border:0.5px solid var(--border2);border-radius:8px;padding:8px 10px;background:var(--bg2)">
-          <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:6px">${m.name||'Menu'}</div>
+          <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:6px">${pcEsc(m.name||'Menu')}</div>
           <div style="display:flex;flex-wrap:wrap;gap:5px">
             <a href="${m.url}" target="_blank" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--blue-border);border-radius:6px;background:var(--blue-bg);color:var(--blue-text);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-file-text" style="font-size:13px"></i>Open doc</a>
             <a href="${menuPdfUrl(m.url)}" target="_blank" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-file-type-pdf" style="font-size:13px"></i>PDF</a>
             <button onclick="downloadMenuPdf('${inq.id}',${mi})" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-download" style="font-size:13px"></i>Download PDF</button>
             <button onclick="emailMenuPdf('${inq.id}',${mi})" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--green-border);border-radius:6px;background:var(--green-bg);color:var(--green-text);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-mail" style="font-size:13px"></i>Email PDF</button>
+            <button onclick="renameInqMenu('${inq.id}',${mi})" title="Give this menu a name (e.g. Client version / Caterer version)" style="font-size:11px;padding:4px 9px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-pencil" style="font-size:13px"></i>Rename</button>
             <button onclick="deleteInqMenu('${inq.id}',${mi})" title="Remove this menu" style="font-size:11px;padding:4px 9px;border:0.5px solid #e05c5c;border-radius:6px;background:var(--bg);color:#e05c5c;cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-trash" style="font-size:13px"></i>Delete</button>
           </div>
         </div>`).join('')
@@ -4766,6 +4767,23 @@ async function attachInqMenu(id){
   await _saveInquiry(inq);
   logActivity(inq.id,'menu','Menu link added manually',{url:trimmed});
   showToast('Menu added ✓');
+  render();
+}
+
+// ── Rename a menu link (e.g. "Client version" / "Caterer version") ──
+async function renameInqMenu(id, idx){
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq || !Array.isArray(inq.menus) || !inq.menus[idx]) return;
+  const m = inq.menus[idx];
+  const old = m.name || '';
+  const nn = prompt('Name this menu:\n\nExamples: Client version, Caterer version, Final — no prices\n\n(Leave blank to reset to the default name.)', old);
+  if(nn===null) return; // cancelled
+  const nextName = nn.trim().slice(0,60) || 'Menu (added manually)';
+  if(nextName === old) return; // nothing changed
+  m.name = nextName;
+  await _saveInquiry(inq);
+  logActivity(inq.id,'menu','Menu renamed: "'+(old||'Menu')+'" → "'+nextName+'"',{});
+  showToast('Menu renamed ✓');
   render();
 }
 
@@ -14107,6 +14125,7 @@ window.attachInqMenu = attachInqMenu;
 window.menuPdfUrl = menuPdfUrl;
 window.downloadMenuPdf = downloadMenuPdf;
 window.deleteInqMenu = deleteInqMenu;
+window.renameInqMenu = renameInqMenu;
 window.emailMenuPdf = emailMenuPdf;
 window.toggleEstimate = toggleEstimate;
 window.updateEstimateLine = updateEstimateLine;
