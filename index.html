@@ -1279,7 +1279,7 @@ function startFirebaseListeners(){
     }
   });
   checklistCol.onSnapshot( snap=>{ checklists={}; snap.docs.forEach(d=>{ checklists[d.id]=d.data().items||[]; }); if(currentView==='checklists'||currentView==='home') render(); updateBadge(); });
-  clientPortalsCol.onSnapshot( snap=>{ clientPortals={}; snap.docs.forEach(d=>{ clientPortals[d.id]=d.data(); }); if(currentView==='pipeline'||currentView==='events'||currentView==='home') render(); });
+  clientPortalsCol.onSnapshot( snap=>{ clientPortals={}; snap.docs.forEach(d=>{ clientPortals[d.id]=d.data(); }); if(currentView==='pipeline'||currentView==='events'||currentView==='home') render(); try{ if(typeof syncHubDrawer==='function') syncHubDrawer(); }catch(e){} });
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
   invoicesCol.onSnapshot( snap=>{ invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); }); try{ Object.keys(invoices).forEach(k=>{ _actPrevInv[k]=JSON.parse(JSON.stringify(invoices[k])); }); }catch(e){} if(currentView==='invoices') render(); });
   venuesCol.onSnapshot( snap=>{ venues=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='venues') render(); });
@@ -3315,7 +3315,6 @@ function renderDetail(e,role){
             </div>
           </div>
         </div>
-        ${clientPortalDetailBlock(e)}
       </div>
       ${role.showStaff?`<div>
         <div class="detail-block">
@@ -4050,6 +4049,7 @@ function renderInqDetail(inq, role){
         ${_hubChip(inq.cuisine)}
       </div>
       ${_hubCardWrap(drawerDocuments(inq, role, ev))}
+      ${_hubCard('Client portal', clientPortalHubCard(inq, ev, role))}
       ${role.canViewInvoices ? _hubCard('Money &amp; estimate', (moneyHtml||'') + renderEstimateBlock(inq, role)) : ''}
       ${_hubCard('Menu', `<div style="display:flex;flex-direction:column;gap:10px">${menuHtml}<div style="margin-top:2px"><button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:inherit"><i class="ti ti-link" style="font-size:14px"></i>${(Array.isArray(inq.menus)&&inq.menus.length)||inq.menuLink?'Add another link':'Attach menu manually'}</button><button onclick="openTemplatePicker('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-left:6px;font-family:inherit"><i class="ti ti-file-plus" style="font-size:14px"></i>Create menu from template</button></div></div>`)}
       ${ev ? _hubCard('Staff &amp; event details', drawerStaffDetails(inq, ev, role)) : ''}
@@ -12314,48 +12314,46 @@ function _genPortalToken(){
   return Array.from({length:24}, ()=> 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random()*36)]).join('');
 }
 
-function clientPortalDetailBlock(e){
-  const p = e.portalId ? clientPortals[e.portalId] : null;
+function clientPortalHubCard(inq, ev, role){
+  // The drawer is keyed off the inquiry; the portal lives on the event.
+  if(!ev){
+    return `<div style="font-size:12px;color:var(--text3)">A portal link becomes available once this inquiry is booked into an event.</div>`;
+  }
+  const p = ev.portalId ? clientPortals[ev.portalId] : null;
   const contacts = getNotifyContacts();
 
   if(!p){
-    return `<div class="detail-block">
-      <div class="detail-block-title">Client Portal</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Create a client-facing link for invoice/payment, event details form, documents, and a Q&amp;A thread.</div>
+    return `<div style="font-size:12.5px;color:var(--text2);margin-bottom:10px">Create a client-facing link for invoice/payment, the event details form, documents, and a Q&amp;A thread.</div>
       ${contacts.length ? `<div style="margin-bottom:10px">
-        <div class="dkey" style="margin-bottom:6px">Text these contacts when the client sends a message</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">Text these contacts when the client sends a message</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">
           ${contacts.map(c=>`<label style="font-size:12px;display:inline-flex;align-items:center;gap:5px;border:0.5px solid var(--border2);border-radius:7px;padding:4px 9px;cursor:pointer">
-            <input type="checkbox" class="cp-notify-check-${e.id}" value="${(c.phone||'').replace(/"/g,'&quot;')}" style="accent-color:var(--blue-mid)"> ${(c.name||'').replace(/</g,'&lt;')}
+            <input type="checkbox" class="cp-notify-check-${ev.id}" value="${(c.phone||'').replace(/"/g,'&quot;')}" style="accent-color:var(--blue-mid)"> ${(c.name||'').replace(/</g,'&lt;')}
           </label>`).join('')}
         </div>
-      </div>` : `<div style="font-size:11px;color:var(--text3);margin-bottom:10px">No notification contacts saved yet — add some in Settings first if you want text alerts on new messages.</div>`}
-      <button onclick="createClientPortal('${e.id}')" style="font-size:12px;padding:6px 14px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer">Create client portal link</button>
-    </div>`;
+      </div>` : `<div style="font-size:11px;color:var(--text3);margin-bottom:10px">No notification contacts saved yet — add some in Settings if you want text alerts on new messages (Part 2).</div>`}
+      <button onclick="createClientPortal('${ev.id}')" style="font-size:12px;padding:7px 14px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-link" style="font-size:14px"></i>Create client portal link</button>`;
   }
 
   const msgs = p.messages || [];
   const unread = msgs.length && msgs[msgs.length-1].from === 'client';
-  const portalUrl = PORTAL_BASE_URL + '?p=' + encodeURIComponent(e.portalId) + '&t=' + encodeURIComponent(p.token||'');
+  const portalUrl = PORTAL_BASE_URL + '?p=' + encodeURIComponent(ev.portalId) + '&t=' + encodeURIComponent(p.token||'');
 
-  return `<div class="detail-block">
-    <div class="detail-block-title">Client Portal ${unread?'<span style="background:#c0392b;color:#fff;font-size:10px;padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle">unanswered</span>':''}</div>
-    <div class="drow">
-      <span class="dkey">Client link</span>
-      <span class="dval"><button onclick="copyPortalLink('${portalUrl.replace(/'/g,"&#39;")}')" style="font-size:12px;padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);cursor:pointer">Copy link</button></span>
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--text2)">${unread?'<span style="background:#c0392b;color:#fff;font-size:10px;font-weight:600;padding:1px 8px;border-radius:10px;margin-right:6px">unanswered</span>':''}Client link is live</span>
+      <button onclick="copyPortalLink('${portalUrl.replace(/'/g,"&#39;")}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-copy" style="font-size:13px"></i>Copy link</button>
     </div>
-    <div style="max-height:260px;overflow-y:auto;border:0.5px solid var(--border);border-radius:8px;padding:10px;margin:10px 0;display:flex;flex-direction:column;gap:8px;background:var(--bg2)">
+    <div style="max-height:260px;overflow-y:auto;border:0.5px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px;background:var(--bg2)">
       ${msgs.length ? msgs.map(m=>`<div style="align-self:${m.from==='caterer'?'flex-end':'flex-start'};max-width:85%;background:${m.from==='caterer'?'var(--blue-bg)':'#fff'};border:0.5px solid var(--border);border-radius:9px;padding:7px 10px;font-size:12.5px">
-        <div style="font-size:10px;color:var(--text3);margin-bottom:2px">${m.from==='caterer'?'You':'Client'} · ${new Date(m.sentAt).toLocaleString()}</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:2px">${m.from==='caterer'?'You':'Client'} \u00b7 ${new Date(m.sentAt).toLocaleString()}</div>
         <div>${(m.text||'').replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>
-        ${m.attachment?`<div style="margin-top:4px"><a href="${m.attachment.url}" target="_blank" style="font-size:11px">📎 ${(m.attachment.name||'').replace(/</g,'&lt;')}</a></div>`:''}
+        ${m.attachment?`<div style="margin-top:4px"><a href="${m.attachment.url}" target="_blank" style="font-size:11px">\ud83d\udcce ${(m.attachment.name||'').replace(/</g,'&lt;')}</a></div>`:''}
       </div>`).join('') : `<div style="font-size:12px;color:var(--text3);text-align:center;padding:10px">No messages yet.</div>`}
     </div>
     <div style="display:flex;gap:6px">
-      <input type="text" id="cpReply-${e.id}" placeholder="Type a reply…" style="flex:1;font-size:12.5px;padding:7px 10px;border:0.5px solid var(--border2);border-radius:7px;font-family:inherit" onkeydown="if(event.key==='Enter'){event.preventDefault();sendCatererReply('${e.id}');}">
-      <button onclick="sendCatererReply('${e.id}')" style="font-size:12px;padding:7px 14px;border:none;border-radius:7px;background:var(--blue-mid);color:#fff;cursor:pointer">Send</button>
-    </div>
-  </div>`;
+      <input type="text" id="cpReply-${ev.id}" placeholder="Type a reply\u2026" style="flex:1;font-size:12.5px;padding:8px 11px;border:0.5px solid var(--border2);border-radius:7px;font-family:inherit" onkeydown="if(event.key==='Enter'){event.preventDefault();sendCatererReply('${ev.id}');}">
+      <button onclick="sendCatererReply('${ev.id}')" style="font-size:12px;padding:8px 15px;border:none;border-radius:7px;background:var(--blue-mid);color:#fff;cursor:pointer;font-family:inherit">Send</button>
+    </div>`;
 }
 
 function aggregateInvoiceForPortal(evId){
