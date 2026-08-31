@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <style>
   :root{
     --bg3:#F1F2ED; --card:#FFFFFF;
@@ -63,6 +64,54 @@
   .paid-banner{background:var(--green-bg);border:2px solid var(--green-text);border-radius:10px;padding:16px 18px;text-align:center;color:var(--green-text);font-weight:600;margin-top:22px}
 
   .placeholder-note{color:var(--text2);font-size:13.5px;text-align:center;padding:30px 10px}
+
+  .form-progress{display:flex;align-items:center;gap:10px;margin-bottom:22px;font-size:12.5px;color:var(--text2)}
+  .form-progress .bar{flex:1;height:6px;background:var(--border);border-radius:4px;overflow:hidden}
+  .form-progress .bar-fill{height:100%;background:var(--brass);transition:width .3s}
+  .save-status{font-size:11.5px;color:var(--text2);white-space:nowrap}
+  .save-status.saving{color:var(--brass-deep)}
+  .save-status.saved{color:var(--green-text)}
+
+  .submitted-banner{background:var(--green-bg);border:2px solid var(--green-text);border-radius:10px;padding:16px 18px;text-align:center;color:var(--green-text);font-weight:600;margin-bottom:20px}
+
+  .section-block{border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:14px}
+  .section-block h3{font-family:'Fraunces',serif;font-size:15px;font-weight:600;margin:0 0 4px}
+  .helper-link{font-size:12px;color:var(--maroon);text-decoration:none;display:inline-block;margin-bottom:12px}
+  .helper-link:hover{text-decoration:underline}
+
+  .field-row{margin-bottom:12px}
+  .field-row:last-child{margin-bottom:0}
+  .field-row label{display:block;font-size:12px;color:var(--text2);margin-bottom:5px}
+  .field-row input[type=text], .field-row input[type=number], .field-row input[type=time], .field-row textarea{
+    width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:7px;font-family:inherit;font-size:13.5px;background:var(--bg3)
+  }
+  .field-row input:focus, .field-row textarea:focus{outline:none;border-color:var(--maroon);background:#fff}
+  .field-row textarea{resize:vertical;min-height:64px}
+  .field-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .field-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  @media(max-width:520px){ .field-grid-2, .field-grid-3{grid-template-columns:1fr} }
+
+  .upload-slot{border:1px dashed var(--border);border-radius:7px;padding:12px;font-size:12.5px;color:var(--text2);background:var(--bg3)}
+  .upload-slot input[type=file]{display:block;font-size:12px;margin-top:6px}
+  .upload-list{list-style:none;margin-top:8px;padding:0}
+  .upload-list li{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:5px 0;border-top:1px dashed var(--border)}
+  .upload-list a{color:var(--maroon);text-decoration:none}
+  .upload-remove{background:none;border:none;color:#B15A38;font-size:12px;cursor:pointer;font-family:inherit;padding:0 0 0 8px}
+
+  .meal-tag{display:inline-flex;align-items:center;gap:8px;background:var(--nav-bg);color:#fff;font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:20px;margin-bottom:14px}
+  .meal-remove{background:none;border:none;color:#DDBFC5;cursor:pointer;font-size:13px;font-family:inherit;padding:0}
+  .add-meal-link{font-size:13px;color:var(--maroon);font-weight:600;cursor:pointer;background:none;border:none;font-family:inherit;padding:6px 0;display:inline-block}
+
+  .toggle-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  .toggle-btn{padding:7px 14px;border:1px solid var(--border);border-radius:7px;font-size:12.5px;background:var(--bg3);cursor:pointer;font-family:inherit}
+  .toggle-btn.selected{background:var(--maroon);color:#fff;border-color:var(--maroon)}
+
+  .reminder-note{background:var(--brass-tint);border-radius:7px;padding:11px 13px;font-size:12px;color:var(--brass-deep);margin-bottom:12px;line-height:1.5}
+  .reminder-note a{color:var(--maroon);font-weight:600;text-decoration:none}
+  .reminder-note a:hover{text-decoration:underline}
+
+  .submit-bar{display:flex;justify-content:flex-end;margin-top:20px}
+  .autosave-note{text-align:center;color:var(--text2);font-size:11.5px;margin-top:10px}
 
   .state{text-align:center;padding:60px 20px}
   .state .ic{font-size:44px}
@@ -138,11 +187,12 @@ function renderShell(){
       + '<div class="tabs">'
         + '<button class="tab active" data-tab="overview">Overview</button>'
         + '<button class="tab" data-tab="invoice">Invoice &amp; Payment</button>'
-        + '<button class="tab" disabled title="Coming soon">Event Details</button>'
+        + '<button class="tab" data-tab="details">Event Details</button>'
       + '</div>'
     + '</div>'
     + '<div class="panel active" id="panel-overview"></div>'
     + '<div class="panel" id="panel-invoice"></div>'
+    + '<div class="panel" id="panel-details"></div>'
     + '</div>';
 
   document.querySelectorAll('.tab[data-tab]').forEach(function(btn){
@@ -156,6 +206,7 @@ function renderShell(){
 
   renderOverview();
   renderInvoice();
+  renderDetails();
 }
 
 function renderOverview(){
@@ -219,6 +270,342 @@ async function startCheckout(){
     btn.disabled = false; btn.textContent = 'Pay Deposit';
     alert('Online payment isn\'t connected yet. Please contact Premier Caterers at events@thepremiercaterer.com to arrange your deposit.');
   }
+}
+
+// ───────────────────────── Event Details (client intake) ─────────────────────────
+
+const storage = firebase.storage();
+
+function emptyMeal(label){
+  return { label: label||'', guestAdults:'', guestKids:'', startTime:'',
+    floorplanFiles:[], scheduleFiles:[],
+    linenTable:'', linenBuffet:'', linenNapkins:'',
+    clientProvidesLinens:false, clientLinenDetails:'' };
+}
+
+function initIntake(){
+  const existing = portalDoc.clientIntake;
+  if(existing && existing.meals && existing.meals.length) return existing;
+  return {
+    menuConfirmed:null, menuChangeNotes:'',
+    meals:[ emptyMeal('Meal 1') ],
+    wineLiquor:null, liquorListFiles:[],
+    allergies:'', musicianName:'', floristName:'', photographerName:'',
+    logoFiles:[], ceremonyFiles:[], otherNotes:'', otherFiles:[],
+    submittedAt:null
+  };
+}
+
+let intake = null;
+let saveTimer = null;
+let uploadInFlight = 0;
+
+function isWedding(){
+  return /wedding/i.test(portalDoc.eventType||'');
+}
+
+function scheduleSave(){
+  const statusEl = document.getElementById('saveStatus');
+  if(statusEl){ statusEl.textContent = 'Saving…'; statusEl.className = 'save-status saving'; }
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async function(){
+    try{
+      await db.collection('clientPortals').doc(pid).set({ clientIntake: intake }, { merge:true });
+      const s = document.getElementById('saveStatus');
+      if(s){ s.textContent = 'Saved ✓'; s.className = 'save-status saved'; }
+    }catch(e){
+      const s = document.getElementById('saveStatus');
+      if(s){ s.textContent = 'Save failed — check connection'; s.className = 'save-status'; }
+    }
+  }, 700);
+}
+
+function progressPct(){
+  const checks = [];
+  checks.push(intake.menuConfirmed !== null);
+  intake.meals.forEach(function(m){
+    checks.push(!!m.guestAdults, !!m.startTime);
+  });
+  checks.push(intake.wineLiquor !== null);
+  checks.push(!!intake.allergies || intake.allergies === '');
+  checks.push(!!intake.musicianName || !!intake.floristName || !!intake.photographerName);
+  const done = checks.filter(Boolean).length;
+  return Math.round((done/checks.length)*100);
+}
+
+function renderDetails(){
+  intake = initIntake();
+  const el = document.getElementById('panel-details');
+
+  if(intake.submittedAt){
+    el.innerHTML =
+      '<div class="submitted-banner">✓ Your event details were submitted on '+esc(new Date(intake.submittedAt).toLocaleDateString())+'. Need to make a change? Just email us.</div>'
+      + '<div id="detailsFormHost"></div>';
+  } else {
+    el.innerHTML = '<div id="detailsFormHost"></div>';
+  }
+
+  renderDetailsForm(document.getElementById('detailsFormHost'));
+}
+
+function renderDetailsForm(host){
+  let html = '';
+  html += '<div class="form-progress"><span>'+progressPct()+'% complete</span><div class="bar"><div class="bar-fill" style="width:'+progressPct()+'%"></div></div><span class="save-status" id="saveStatus">Saves automatically</span></div>';
+
+  // Menu confirmation
+  html += '<div class="section-block">'
+    + '<h3>Menu confirmation</h3>'
+    + '<div class="toggle-row" data-toggle="menuConfirmed">'
+      + '<button type="button" class="toggle-btn'+(intake.menuConfirmed===true?' selected':'')+'" data-val="true">Confirmed as-is</button>'
+      + '<button type="button" class="toggle-btn'+(intake.menuConfirmed===false?' selected':'')+'" data-val="false">I need a change</button>'
+    + '</div>'
+    + (intake.menuConfirmed===false ? '<div class="field-row"><label>What needs to change?</label><textarea data-field="menuChangeNotes" rows="2">'+esc(intake.menuChangeNotes)+'</textarea></div>' : '')
+    + '</div>';
+
+  // Meal blocks
+  intake.meals.forEach(function(m, i){
+    html += renderMealBlock(m, i);
+  });
+  html += '<button type="button" class="add-meal-link" id="addMealBtn">+ Add another meal / session</button>';
+
+  // Wine & liquor
+  html += '<div class="section-block" style="margin-top:16px">'
+    + '<h3>Wine &amp; liquor</h3>'
+    + '<div class="toggle-row" data-toggle="wineLiquor">'
+      + '<button type="button" class="toggle-btn'+(intake.wineLiquor===true?' selected':'')+'" data-val="true">Yes, there will be alcohol</button>'
+      + '<button type="button" class="toggle-btn'+(intake.wineLiquor===false?' selected':'')+'" data-val="false">No alcohol</button>'
+    + '</div>'
+    + (intake.wineLiquor===true ?
+        ('<div class="reminder-note">All wines must be mevushal, and all liquor must appear on the CRC or Star-K approved list. '
+          + '<a href="https://consumer.crckosher.org/liquor/" target="_blank" rel="noopener">CRC approved list ↗</a> · '
+          + '<a href="https://www.star-k.org/resource/list/W56J90P5/all_liquor" target="_blank" rel="noopener">Star-K approved list ↗</a></div>'
+          + renderUploadField('Upload your wine / liquor list', 'liquorListFiles', 'liquor'))
+      : '')
+    + '</div>';
+
+  // Allergies
+  html += '<div class="section-block"><h3>Allergies</h3>'
+    + '<div class="field-row"><textarea data-field="allergies" rows="2" placeholder="List any guest allergies we should know about">'+esc(intake.allergies)+'</textarea></div></div>';
+
+  // Vendors
+  html += '<div class="section-block"><h3>Vendors</h3>'
+    + '<div class="field-grid-3">'
+      + '<div class="field-row"><label>Musician</label><input type="text" data-field="musicianName" value="'+esc(intake.musicianName)+'" placeholder="Name"></div>'
+      + '<div class="field-row"><label>Florist</label><input type="text" data-field="floristName" value="'+esc(intake.floristName)+'" placeholder="Name"></div>'
+      + '<div class="field-row"><label>Photographer</label><input type="text" data-field="photographerName" value="'+esc(intake.photographerName)+'" placeholder="Name"></div>'
+    + '</div></div>';
+
+  // Logo
+  html += '<div class="section-block"><h3>Logo</h3>' + renderUploadField('Upload your logo, if applicable', 'logoFiles', 'logo') + '</div>';
+
+  // Ceremony (weddings only)
+  if(isWedding()){
+    html += '<div class="section-block"><h3>Ceremony procession &amp; music</h3>' + renderUploadField('Upload procession order and music list', 'ceremonyFiles', 'ceremony') + '</div>';
+  }
+
+  // Other
+  html += '<div class="section-block"><h3>Anything else?</h3>'
+    + '<div class="field-row"><textarea data-field="otherNotes" rows="3" placeholder="Any other important information">'+esc(intake.otherNotes)+'</textarea></div>'
+    + renderUploadField('Upload any other files', 'otherFiles', 'other')
+    + '</div>';
+
+  html += '<div class="submit-bar"><button class="btn-primary" id="submitDetailsBtn">'+(intake.submittedAt?'Update Submission':'Submit Details')+'</button></div>'
+    + '<div class="autosave-note">Your answers save automatically as you go — come back anytime with your link.</div>';
+
+  host.innerHTML = html;
+  wireDetailsEvents(host);
+}
+
+function renderMealBlock(m, i){
+  const canRemove = intake.meals.length > 1;
+  return '<div class="section-block" data-meal-index="'+i+'">'
+    + '<span class="meal-tag">'+esc(m.label||('Meal '+(i+1)))+(canRemove?' <button type="button" class="meal-remove" data-remove-meal="'+i+'">✕ remove</button>':'')+'</span>'
+    + '<div class="field-row"><label>Meal / session label</label><input type="text" data-meal-field="label" data-meal-index="'+i+'" value="'+esc(m.label)+'" placeholder="e.g. Friday Dinner"></div>'
+    + '<div class="field-grid-3">'
+      + '<div class="field-row"><label>Adults</label><input type="number" min="0" data-meal-field="guestAdults" data-meal-index="'+i+'" value="'+esc(m.guestAdults)+'"></div>'
+      + '<div class="field-row"><label>Kids</label><input type="number" min="0" data-meal-field="guestKids" data-meal-index="'+i+'" value="'+esc(m.guestKids)+'"></div>'
+      + '<div class="field-row"><label>Start time</label><input type="time" data-meal-field="startTime" data-meal-index="'+i+'" value="'+esc(m.startTime)+'"></div>'
+    + '</div>'
+    + '<div class="field-grid-2">'
+      + '<div class="field-row"><label>Floorplan / seating list</label>'+renderMealUploadField('floorplanFiles', i)+'</div>'
+      + '<div class="field-row"><label>Event schedule</label>'+renderMealUploadField('scheduleFiles', i)+'</div>'
+    + '</div>'
+    + '<h3 style="margin-top:14px;font-size:13.5px">Linens</h3>'
+    + '<a class="helper-link" href="https://linenswatches.com/fabrics/basic-solids/standard-polyester/" target="_blank" rel="noopener">↗ Browse fabric swatches &amp; colors</a>'
+    + '<div class="field-grid-3">'
+      + '<div class="field-row"><label>Table linen color</label><input type="text" data-meal-field="linenTable" data-meal-index="'+i+'" value="'+esc(m.linenTable)+'"></div>'
+      + '<div class="field-row"><label>Buffet / side tables</label><input type="text" data-meal-field="linenBuffet" data-meal-index="'+i+'" value="'+esc(m.linenBuffet)+'"></div>'
+      + '<div class="field-row"><label>Napkins</label><input type="text" data-meal-field="linenNapkins" data-meal-index="'+i+'" value="'+esc(m.linenNapkins)+'"></div>'
+    + '</div>'
+    + '<div class="toggle-row" data-meal-toggle="clientProvidesLinens" data-meal-index="'+i+'">'
+      + '<button type="button" class="toggle-btn'+(m.clientProvidesLinens?' selected':'')+'" data-val="true">I\'m providing my own linens</button>'
+      + '<button type="button" class="toggle-btn'+(!m.clientProvidesLinens?' selected':'')+'" data-val="false">Using Premier\'s linens</button>'
+    + '</div>'
+    + (m.clientProvidesLinens ? '<div class="field-row"><label>Quantity, style, shape &amp; use</label><textarea data-meal-field="clientLinenDetails" data-meal-index="'+i+'" rows="2">'+esc(m.clientLinenDetails)+'</textarea></div>' : '')
+    + '</div>';
+}
+
+function renderUploadField(labelText, field, pathTag){
+  const files = intake[field] || [];
+  return '<div class="field-row"><label>'+esc(labelText)+'</label>'
+    + '<div class="upload-slot">Drop file or browse<input type="file" data-upload-field="'+field+'" data-upload-path="'+pathTag+'">'
+    + (files.length ? ('<ul class="upload-list">'+files.map(function(f,idx){
+        return '<li><a href="'+esc(f.url)+'" target="_blank" rel="noopener">📄 '+esc(f.name)+'</a><button type="button" class="upload-remove" data-remove-file-field="'+field+'" data-remove-file-idx="'+idx+'">remove</button></li>';
+      }).join('')+'</ul>') : '')
+    + '</div></div>';
+}
+
+function renderMealUploadField(field, mealIndex){
+  const files = (intake.meals[mealIndex][field]) || [];
+  return '<div class="upload-slot">Drop file or browse<input type="file" data-meal-upload-field="'+field+'" data-meal-upload-index="'+mealIndex+'">'
+    + (files.length ? ('<ul class="upload-list">'+files.map(function(f,idx){
+        return '<li><a href="'+esc(f.url)+'" target="_blank" rel="noopener">📄 '+esc(f.name)+'</a><button type="button" class="upload-remove" data-remove-meal-file-field="'+field+'" data-remove-meal-file-meal="'+mealIndex+'" data-remove-meal-file-idx="'+idx+'">remove</button></li>';
+      }).join('')+'</ul>') : '')
+    + '</div>';
+}
+
+function wireDetailsEvents(host){
+  // simple top-level fields
+  host.querySelectorAll('[data-field]').forEach(function(elx){
+    elx.addEventListener('input', function(){
+      intake[elx.dataset.field] = elx.value;
+      scheduleSave();
+    });
+  });
+
+  // top-level toggles (menuConfirmed, wineLiquor)
+  host.querySelectorAll('[data-toggle]').forEach(function(group){
+    group.querySelectorAll('.toggle-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        intake[group.dataset.toggle] = (btn.dataset.val === 'true');
+        scheduleSave();
+        renderDetailsForm(host);
+      });
+    });
+  });
+
+  // meal fields
+  host.querySelectorAll('[data-meal-field]').forEach(function(elx){
+    elx.addEventListener('input', function(){
+      const idx = parseInt(elx.dataset.mealIndex, 10);
+      intake.meals[idx][elx.dataset.mealField] = elx.value;
+      if(elx.dataset.mealField === 'label'){
+        const tag = host.querySelector('[data-meal-index="'+idx+'"] .meal-tag');
+        // label shown live is minor cosmetic; full re-render happens on blur via scheduleSave chain
+      }
+      scheduleSave();
+    });
+  });
+
+  // meal toggles (clientProvidesLinens)
+  host.querySelectorAll('[data-meal-toggle]').forEach(function(group){
+    const idx = parseInt(group.dataset.mealIndex, 10);
+    group.querySelectorAll('.toggle-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        intake.meals[idx][group.dataset.mealToggle] = (btn.dataset.val === 'true');
+        scheduleSave();
+        renderDetailsForm(host);
+      });
+    });
+  });
+
+  // add meal
+  const addBtn = document.getElementById('addMealBtn');
+  if(addBtn){
+    addBtn.addEventListener('click', function(){
+      intake.meals.push(emptyMeal('Meal '+(intake.meals.length+1)));
+      scheduleSave();
+      renderDetailsForm(host);
+    });
+  }
+
+  // remove meal
+  host.querySelectorAll('[data-remove-meal]').forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.removeMeal, 10);
+      intake.meals.splice(idx, 1);
+      scheduleSave();
+      renderDetailsForm(host);
+    });
+  });
+
+  // top-level file uploads
+  host.querySelectorAll('[data-upload-field]').forEach(function(inp){
+    inp.addEventListener('change', function(){
+      const file = inp.files[0];
+      if(!file) return;
+      handleUpload(file, inp.dataset.uploadPath).then(function(meta){
+        intake[inp.dataset.uploadField].push(meta);
+        scheduleSave();
+        renderDetailsForm(host);
+      }).catch(function(){
+        alert('Upload failed. Please check your connection and try again.');
+      });
+    });
+  });
+
+  // meal-level file uploads
+  host.querySelectorAll('[data-meal-upload-field]').forEach(function(inp){
+    inp.addEventListener('change', function(){
+      const file = inp.files[0];
+      if(!file) return;
+      const idx = parseInt(inp.dataset.mealUploadIndex, 10);
+      handleUpload(file, 'meal'+idx).then(function(meta){
+        intake.meals[idx][inp.dataset.mealUploadField].push(meta);
+        scheduleSave();
+        renderDetailsForm(host);
+      }).catch(function(){
+        alert('Upload failed. Please check your connection and try again.');
+      });
+    });
+  });
+
+  // remove top-level file
+  host.querySelectorAll('[data-remove-file-field]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      intake[btn.dataset.removeFileField].splice(parseInt(btn.dataset.removeFileIdx,10), 1);
+      scheduleSave();
+      renderDetailsForm(host);
+    });
+  });
+
+  // remove meal file
+  host.querySelectorAll('[data-remove-meal-file-field]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      const mIdx = parseInt(btn.dataset.removeMealFileMeal,10);
+      intake.meals[mIdx][btn.dataset.removeMealFileField].splice(parseInt(btn.dataset.removeMealFileIdx,10), 1);
+      scheduleSave();
+      renderDetailsForm(host);
+    });
+  });
+
+  // submit
+  const submitBtn = document.getElementById('submitDetailsBtn');
+  if(submitBtn){
+    submitBtn.addEventListener('click', async function(){
+      submitBtn.disabled = true; submitBtn.textContent = 'Submitting…';
+      intake.submittedAt = Date.now();
+      try{
+        await db.collection('clientPortals').doc(pid).set({ clientIntake: intake }, { merge:true });
+        renderDetails();
+      }catch(e){
+        intake.submittedAt = null;
+        submitBtn.disabled = false; submitBtn.textContent = 'Submit Details';
+        alert('Something went wrong submitting. Please check your connection and try again.');
+      }
+    });
+  }
+}
+
+function handleUpload(file, pathTag){
+  const path = 'clientPortals/'+pid+'/intake/'+pathTag+'/'+Date.now()+'_'+file.name;
+  const ref = storage.ref().child(path);
+  return ref.put(file).then(function(snap){
+    return snap.ref.getDownloadURL();
+  }).then(function(url){
+    return { name: file.name, url: url, uploadedAt: Date.now() };
+  });
 }
 </script>
 </body>
