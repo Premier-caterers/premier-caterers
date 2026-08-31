@@ -49,6 +49,22 @@
   .invoice-summary{display:flex;justify-content:space-between;align-items:flex-end;padding:18px 0;border-bottom:1px solid var(--border);margin-bottom:18px;flex-wrap:wrap;gap:12px}
   .invoice-summary .total-label{color:var(--text2);font-size:12.5px}
   .invoice-summary .total-num{font-family:'Fraunces',serif;font-size:30px;font-weight:600;color:var(--maroon)}
+
+  /* Invoice document (mirrors the caterer's printed invoice) */
+  .inv-doc{border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:18px}
+  .inv-doc-head{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);background:var(--bg3)}
+  .inv-doctype{font-family:'Fraunces',serif;font-size:20px;font-weight:600;color:var(--maroon)}
+  .inv-meta-line{font-size:12px;color:var(--text2);margin-top:2px}
+  .inv-table{width:100%;border-collapse:collapse;font-size:13.5px}
+  .inv-table thead th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text2);padding:10px 20px;background:var(--bg3);border-bottom:1px solid var(--border)}
+  .inv-table tbody td{padding:11px 20px;border-bottom:1px solid var(--border)}
+  .inv-table tbody tr:last-child td{border-bottom:none}
+  .inv-empty{padding:24px 20px;text-align:center;color:var(--text2);font-size:13px}
+  .inv-totals{padding:14px 20px;background:var(--bg3);border-top:1px solid var(--border)}
+  .inv-totals .tot-row{display:flex;justify-content:space-between;padding:5px 0;font-size:13.5px;color:var(--text)}
+  .inv-totals .tot-row.grand{font-family:'Fraunces',serif;font-size:16px;font-weight:600;border-top:1px solid var(--border);margin-top:4px;padding-top:9px}
+  .inv-totals .tot-row.paid{color:var(--green-text)}
+  .inv-totals .tot-row.balance{font-weight:700;color:var(--maroon);font-size:15px;border-top:2px solid var(--maroon);margin-top:4px;padding-top:9px}
   table.invoice-table{width:100%;border-collapse:collapse;font-size:13.5px}
   table.invoice-table th{text-align:left;font-weight:600;color:var(--text2);font-size:11.5px;padding:7px 0;border-bottom:1px solid var(--border)}
   table.invoice-table td{padding:11px 0;border-bottom:1px solid var(--border)}
@@ -74,44 +90,55 @@
 
   .submitted-banner{background:var(--green-bg);border:2px solid var(--green-text);border-radius:10px;padding:16px 18px;text-align:center;color:var(--green-text);font-weight:600;margin-bottom:20px}
 
-  .section-block{border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:14px}
-  .section-block h3{font-family:'Fraunces',serif;font-size:15px;font-weight:600;margin:0 0 4px}
+  .details-intro{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid var(--border)}
+
+  .section-block{border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin-bottom:16px;background:var(--card)}
+  .section-block h3{font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin:0 0 14px;padding-bottom:10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+  .section-block h3.tight{margin-bottom:10px;padding-bottom:0;border-bottom:none}
+  .section-block h3 .step-dot{width:22px;height:22px;border-radius:50%;background:var(--brass-tint);color:var(--brass-deep);font-family:'Inter',sans-serif;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
   .helper-link{font-size:12px;color:var(--maroon);text-decoration:none;display:inline-block;margin-bottom:12px}
   .helper-link:hover{text-decoration:underline}
 
-  .field-row{margin-bottom:12px}
+  .field-row{margin-bottom:14px}
   .field-row:last-child{margin-bottom:0}
-  .field-row label{display:block;font-size:12px;color:var(--text2);margin-bottom:5px}
+  .field-row label{display:block;font-size:11.5px;font-weight:500;color:var(--text2);margin-bottom:5px}
   .field-row input[type=text], .field-row input[type=number], .field-row input[type=time], .field-row textarea{
-    width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:7px;font-family:inherit;font-size:13.5px;background:var(--bg3)
+    width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:13.5px;background:var(--bg3);transition:border-color .15s,background .15s
   }
-  .field-row input:focus, .field-row textarea:focus{outline:none;border-color:var(--maroon);background:#fff}
+  .field-row input:focus, .field-row textarea:focus{outline:none;border-color:var(--maroon);background:#fff;box-shadow:0 0 0 3px rgba(122,46,61,.08)}
   .field-row textarea{resize:vertical;min-height:64px}
-  .field-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .field-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .field-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .field-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
   @media(max-width:520px){ .field-grid-2, .field-grid-3{grid-template-columns:1fr} }
 
-  .upload-slot{border:1px dashed var(--border);border-radius:7px;padding:12px;font-size:12.5px;color:var(--text2);background:var(--bg3)}
-  .upload-slot input[type=file]{display:block;font-size:12px;margin-top:6px}
-  .upload-list{list-style:none;margin-top:8px;padding:0}
-  .upload-list li{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:5px 0;border-top:1px dashed var(--border)}
+  .field-subhead{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text2);margin:16px 0 10px}
+
+  .upload-slot{border:1.5px dashed var(--border);border-radius:9px;padding:14px;font-size:12.5px;color:var(--text2);background:var(--bg3);transition:border-color .15s}
+  .upload-slot:hover{border-color:var(--brass)}
+  .upload-slot input[type=file]{display:block;font-size:12px;margin-top:8px}
+  .upload-list{list-style:none;margin-top:10px;padding:0}
+  .upload-list li{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:7px 0;border-top:1px dashed var(--border)}
   .upload-list a{color:var(--maroon);text-decoration:none}
   .upload-remove{background:none;border:none;color:#B15A38;font-size:12px;cursor:pointer;font-family:inherit;padding:0 0 0 8px}
 
-  .meal-tag{display:inline-flex;align-items:center;gap:8px;background:var(--nav-bg);color:#fff;font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:20px;margin-bottom:14px}
+  .meal-block{border:1px solid var(--border);border-left:3px solid var(--brass);border-radius:10px;padding:18px 20px;margin-bottom:16px;background:var(--card)}
+  .meal-tag{display:inline-flex;align-items:center;gap:8px;background:var(--nav-bg);color:#fff;font-size:11.5px;font-weight:600;padding:4px 12px;border-radius:20px;margin-bottom:16px}
   .meal-remove{background:none;border:none;color:#DDBFC5;cursor:pointer;font-size:13px;font-family:inherit;padding:0}
-  .add-meal-link{font-size:13px;color:var(--maroon);font-weight:600;cursor:pointer;background:none;border:none;font-family:inherit;padding:6px 0;display:inline-block}
+  .add-meal-link{font-size:13px;color:var(--maroon);font-weight:600;cursor:pointer;background:var(--brass-tint);border:1px dashed var(--brass);font-family:inherit;padding:10px 16px;display:block;width:100%;border-radius:9px;text-align:center;margin-bottom:16px}
+  .add-meal-link:hover{background:#F6E9CE}
 
-  .toggle-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-  .toggle-btn{padding:7px 14px;border:1px solid var(--border);border-radius:7px;font-size:12.5px;background:var(--bg3);cursor:pointer;font-family:inherit}
+  .toggle-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .toggle-btn{padding:9px 16px;border:1px solid var(--border);border-radius:8px;font-size:12.5px;background:var(--bg3);cursor:pointer;font-family:inherit;transition:all .12s}
+  .toggle-btn:hover{border-color:var(--maroon)}
   .toggle-btn.selected{background:var(--maroon);color:#fff;border-color:var(--maroon)}
 
-  .reminder-note{background:var(--brass-tint);border-radius:7px;padding:11px 13px;font-size:12px;color:var(--brass-deep);margin-bottom:12px;line-height:1.5}
+  .reminder-note{background:var(--brass-tint);border:1px solid #EBD9AE;border-radius:8px;padding:12px 14px;font-size:12px;color:var(--brass-deep);margin-bottom:14px;line-height:1.55}
   .reminder-note a{color:var(--maroon);font-weight:600;text-decoration:none}
   .reminder-note a:hover{text-decoration:underline}
 
-  .submit-bar{display:flex;justify-content:flex-end;margin-top:20px}
-  .autosave-note{text-align:center;color:var(--text2);font-size:11.5px;margin-top:10px}
+  .submit-bar{display:flex;justify-content:flex-end;margin-top:22px}
+  .submit-bar .btn-primary{padding:13px 30px;font-size:14px}
+  .autosave-note{text-align:center;color:var(--text2);font-size:11.5px;margin-top:12px}
 
   .doc-group-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin:20px 0 10px}
   .doc-group-title:first-child{margin-top:0}
@@ -196,23 +223,49 @@ function stateScreen(icon, title, msg){
 
 const pid = qp('p'), tok = qp('t');
 let portalDoc = null;
+let shellBuilt = false;
+let activeTab = 'overview';
 
-(async function(){
+(function(){
   if(!pid || !tok){ stateScreen('🔗','Link incomplete','This portal link is missing information. Please use the exact link from your email.'); return; }
-  let snap;
-  try{
-    snap = await db.collection('clientPortals').doc(pid).get();
-  }catch(e){
-    stateScreen('⚠️','Could not load','Something went wrong loading your event. Please try again, or contact us at events@thepremiercaterer.com.'); return;
-  }
-  if(!snap.exists){ stateScreen('🔍','Event not found','We could not find this event. Please contact Premier Caterers at events@thepremiercaterer.com.'); return; }
-  portalDoc = snap.data();
-  if(String(portalDoc.token||'') !== String(tok)){ stateScreen('🔒','Invalid link','This portal link is not valid. Please use the exact link from your email, or contact us at events@thepremiercaterer.com.'); return; }
 
-  try{ db.collection('clientPortals').doc(pid).update({ lastViewedAt: Date.now() }); }catch(e){}
+  db.collection('clientPortals').doc(pid).onSnapshot(function(snap){
+    if(!snap.exists){ stateScreen('🔍','Event not found','We could not find this event. Please contact Premier Caterers at events@thepremiercaterer.com.'); return; }
+    const data = snap.data();
+    if(String(data.token||'') !== String(tok)){ stateScreen('🔒','Invalid link','This portal link is not valid. Please use the exact link from your email, or contact us at events@thepremiercaterer.com.'); return; }
 
-  renderShell();
+    const firstLoad = !shellBuilt;
+    portalDoc = data;
+
+    if(firstLoad){
+      try{ db.collection('clientPortals').doc(pid).update({ lastViewedAt: Date.now() }); }catch(e){}
+      renderShell();
+      shellBuilt = true;
+    } else {
+      // live update — refresh panels in place without disturbing the active tab
+      refreshPanels();
+    }
+  }, function(err){
+    if(!shellBuilt) stateScreen('⚠️','Could not load','Something went wrong loading your event. Please try again, or contact us at events@thepremiercaterer.com.');
+  });
 })();
+
+function refreshPanels(){
+  // Re-render everything EXCEPT the questions composer if the user is mid-type,
+  // so a live caterer reply doesn't wipe what they're writing.
+  renderOverview();
+  renderInvoice();
+  renderDetails();
+  renderDocuments();
+  const qEl = document.getElementById('questionText');
+  const typing = qEl && document.activeElement === qEl && qEl.value.trim();
+  if(typing){
+    // just refresh the thread list, leave composer alone
+    refreshThreadOnly();
+  } else {
+    renderQuestions();
+  }
+}
 
 function renderShell(){
   root.innerHTML =
@@ -222,22 +275,23 @@ function renderShell(){
       + '<h1>'+esc(portalDoc.eventName||'Your Event')+'</h1>'
       + '<div class="sub">'+esc(fmtDate(portalDoc.eventDate))+(portalDoc.venue?(' · '+esc(portalDoc.venue)):'')+'</div>'
       + '<div class="tabs">'
-        + '<button class="tab active" data-tab="overview">Overview</button>'
-        + '<button class="tab" data-tab="invoice">Invoice &amp; Payment</button>'
-        + '<button class="tab" data-tab="details">Event Details</button>'
-        + '<button class="tab" data-tab="documents">Documents</button>'
-        + '<button class="tab" data-tab="questions">Questions</button>'
+        + '<button class="tab'+(activeTab==='overview'?' active':'')+'" data-tab="overview">Overview</button>'
+        + '<button class="tab'+(activeTab==='invoice'?' active':'')+'" data-tab="invoice">Invoice &amp; Payment</button>'
+        + '<button class="tab'+(activeTab==='details'?' active':'')+'" data-tab="details">Event Details</button>'
+        + '<button class="tab'+(activeTab==='documents'?' active':'')+'" data-tab="documents">Documents</button>'
+        + '<button class="tab'+(activeTab==='questions'?' active':'')+'" data-tab="questions">Questions</button>'
       + '</div>'
     + '</div>'
-    + '<div class="panel active" id="panel-overview"></div>'
-    + '<div class="panel" id="panel-invoice"></div>'
-    + '<div class="panel" id="panel-details"></div>'
-    + '<div class="panel" id="panel-documents"></div>'
-    + '<div class="panel" id="panel-questions"></div>'
+    + '<div class="panel'+(activeTab==='overview'?' active':'')+'" id="panel-overview"></div>'
+    + '<div class="panel'+(activeTab==='invoice'?' active':'')+'" id="panel-invoice"></div>'
+    + '<div class="panel'+(activeTab==='details'?' active':'')+'" id="panel-details"></div>'
+    + '<div class="panel'+(activeTab==='documents'?' active':'')+'" id="panel-documents"></div>'
+    + '<div class="panel'+(activeTab==='questions'?' active':'')+'" id="panel-questions"></div>'
     + '</div>';
 
   document.querySelectorAll('.tab[data-tab]').forEach(function(btn){
     btn.addEventListener('click', function(){
+      activeTab = btn.dataset.tab;
       document.querySelectorAll('.tab[data-tab]').forEach(b=>b.classList.remove('active'));
       document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
       btn.classList.add('active');
@@ -274,31 +328,113 @@ function renderInvoice(){
   const el = document.getElementById('panel-invoice');
   const inv = portalDoc.invoiceSnapshot || {};
   const items = inv.items || [];
-  const balance = balanceRemaining();
+  const isInvoice = (inv.docType || 'invoice') !== 'quote';
+
+  // Prefer the full breakdown pushed from the app; fall back to simple total/paid.
+  const hasBreakdown = inv.subtotal != null || inv.tax != null || inv.logistics != null;
+  const subtotal = parseFloat(inv.subtotal||0);
+  const logistics = parseFloat(inv.logistics||0);
+  const tax = parseFloat(inv.tax||0);
+  const grand = inv.total != null ? parseFloat(inv.total) : (subtotal+logistics+tax);
+  const deposit = parseFloat(inv.paid || portalDoc.depositAmount || 0);
+  const balance = grand - deposit;
 
   let rows = items.map(function(it){
-    return '<tr><td>'+esc(it.name||'')+'</td><td>'+esc(it.qty!=null?it.qty:'')+'</td><td>'+money(it.amount)+'</td></tr>';
+    const amt = it.amount != null ? it.amount : (parseFloat(it.qty||0)*parseFloat(it.price||0));
+    return '<tr><td>'+esc(it.name||it.description||'')+'</td><td style="text-align:center">'+esc(it.qty!=null?it.qty:'')+'</td><td style="text-align:right">'+money(amt)+'</td></tr>';
   }).join('');
 
-  const depositPaid = !!portalDoc.depositPaid;
+  const depositPaid = !!portalDoc.depositPaid || (deposit>0 && balance<=0.01);
   const depositAmt = parseFloat(portalDoc.depositAmount||0);
 
+  let totalsRows = '';
+  if(hasBreakdown){
+    totalsRows =
+      '<div class="tot-row"><span>Subtotal</span><span>'+money(subtotal)+'</span></div>'
+      + (logistics>0 ? '<div class="tot-row"><span>Logistics &amp; service</span><span>'+money(logistics)+'</span></div>' : '')
+      + (tax>0 ? '<div class="tot-row"><span>Tax</span><span>'+money(tax)+'</span></div>' : '');
+  }
+
   el.innerHTML =
-    '<div class="invoice-summary">'
-      + '<div><div class="total-label">Invoice '+esc(inv.number||'')+'</div><div class="total-num">'+money(inv.total)+'</div></div>'
-      + '<div style="text-align:right"><div class="total-label">Balance remaining</div><div style="font-size:17px;font-weight:700;color:var(--maroon)">'+money(balance)+'</div></div>'
+    '<div class="inv-doc">'
+      + '<div class="inv-doc-head">'
+        + '<div><div class="inv-doctype">'+(isInvoice?'Invoice':'Estimate')+'</div>'
+          + '<div class="inv-meta-line">'+esc(inv.number||'')+(portalDoc.eventDate?(' · '+esc(fmtDate(portalDoc.eventDate))):'')+'</div></div>'
+        + '<button class="btn-ghost" id="dlInvoiceBtn">⬇ Download</button>'
+      + '</div>'
+      + (items.length ? ('<table class="inv-table"><thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Amount</th></tr></thead><tbody>'+rows+'</tbody></table>') : '<div class="inv-empty">Your itemized invoice will appear here.</div>')
+      + '<div class="inv-totals">'
+        + totalsRows
+        + '<div class="tot-row grand"><span>'+(isInvoice?'Total':'Estimate total')+'</span><span>'+money(grand)+'</span></div>'
+        + (deposit>0 ? '<div class="tot-row paid"><span>Deposit / paid</span><span>−'+money(deposit)+'</span></div>' : '')
+        + '<div class="tot-row balance"><span>Balance due</span><span>'+money(balance)+'</span></div>'
+      + '</div>'
     + '</div>'
-    + (items.length ? ('<table class="invoice-table"><tr><th>Item</th><th>Qty</th><th>Amount</th></tr>'+rows+'</table>') : '')
     + (depositPaid
-        ? '<div class="paid-banner">✓ Deposit of '+money(depositAmt)+' received — thank you!</div>'
+        ? '<div class="paid-banner">✓ '+(balance<=0.01 && deposit>0 ? 'Paid in full' : 'Deposit of '+money(depositAmt))+' received — thank you!</div>'
         : (depositAmt > 0
-            ? ('<div class="deposit-box"><div><div class="dep-label">Deposit due to confirm date</div><div class="dep-amt">'+money(depositAmt)+'</div></div><button class="btn-primary" id="payBtn">Pay Deposit</button></div>')
+            ? ('<div class="deposit-box"><div><div class="dep-label">Deposit due to confirm your date</div><div class="dep-amt">'+money(depositAmt)+'</div></div><button class="btn-primary" id="payBtn">Pay Deposit</button></div>')
             : ''));
 
   const payBtn = document.getElementById('payBtn');
-  if(payBtn){
-    payBtn.addEventListener('click', startCheckout);
-  }
+  if(payBtn) payBtn.addEventListener('click', startCheckout);
+  const dlBtn = document.getElementById('dlInvoiceBtn');
+  if(dlBtn) dlBtn.addEventListener('click', downloadInvoicePdf);
+}
+
+function downloadInvoicePdf(){
+  const inv = portalDoc.invoiceSnapshot || {};
+  // If the app has pushed a ready-made invoice HTML document, use it verbatim
+  // (this is the exact same document the caterer sees/prints). Otherwise build
+  // a clean one from the snapshot fields.
+  const html = inv.printHtml || buildPortalInvoiceHtml();
+  const w = window.open('','_blank');
+  if(!w){ alert('Please allow pop-ups to download your invoice.'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(function(){ try{ w.print(); }catch(e){} }, 400);
+}
+
+function buildPortalInvoiceHtml(){
+  const inv = portalDoc.invoiceSnapshot || {};
+  const items = inv.items || [];
+  const isInvoice = (inv.docType||'invoice')!=='quote';
+  const subtotal = parseFloat(inv.subtotal||0), logistics = parseFloat(inv.logistics||0), tax = parseFloat(inv.tax||0);
+  const grand = inv.total!=null?parseFloat(inv.total):(subtotal+logistics+tax);
+  const deposit = parseFloat(inv.paid||portalDoc.depositAmount||0);
+  const balance = grand - deposit;
+  const rows = items.map(function(it){
+    const amt = it.amount!=null?it.amount:(parseFloat(it.qty||0)*parseFloat(it.price||0));
+    return '<tr><td>'+esc(it.name||it.description||'')+'</td><td class="c">'+esc(it.qty!=null?it.qty:'')+'</td><td class="r">'+money(amt)+'</td></tr>';
+  }).join('');
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+esc(inv.number||'Invoice')+'</title><style>'
+    + '*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:14px;color:#000;padding:40px 50px;max-width:780px;margin:0 auto}'
+    + '.logo{font-size:22px;font-weight:900;letter-spacing:.05em;margin-bottom:4px}.logo span{color:#8B1A1A}'
+    + '.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:16px;margin-bottom:20px}'
+    + '.doc-type{font-size:28px;font-weight:bold;color:#8B1A1A;letter-spacing:.08em}'
+    + '.meta{margin-bottom:20px;font-size:13px;color:#444}'
+    + 'table{width:100%;border-collapse:collapse;margin-bottom:20px}'
+    + 'th{background:#1a1a1a;color:#fff;padding:10px 12px;text-align:left;font-size:12px;text-transform:uppercase}'
+    + 'th.r,td.r{text-align:right}th.c,td.c{text-align:center}'
+    + 'td{padding:9px 12px;border-bottom:.5px solid #ddd;font-size:13px}tr:nth-child(even) td{background:#f9f9f9}'
+    + '.totals{display:flex;justify-content:flex-end}.totals-inner{min-width:280px}'
+    + '.tot-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:.5px solid #ddd;font-size:13px}'
+    + '.tot-row.grand{font-size:17px;font-weight:bold;border-bottom:2px solid #000;padding:10px 0}'
+    + '.tot-row.balance{font-size:16px;font-weight:bold;color:#8B1A1A}'
+    + '</style></head><body>'
+    + '<div class="header"><div><div class="logo">PREMIER <span>CATERERS</span></div><div style="font-size:12px;color:#666">events@thepremiercaterer.com</div></div>'
+    + '<div class="doc-type">'+(isInvoice?'INVOICE':'ESTIMATE')+'</div></div>'
+    + '<div class="meta"><strong>'+esc(portalDoc.eventName||'')+'</strong> · '+esc(inv.number||'')+' · '+esc(fmtDate(portalDoc.eventDate))+(portalDoc.venue?(' · '+esc(portalDoc.venue)):'')+'</div>'
+    + '<table><thead><tr><th>Item</th><th class="c">Qty</th><th class="r">Amount</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    + '<div class="totals"><div class="totals-inner">'
+    + (subtotal?'<div class="tot-row"><span>Subtotal</span><span>'+money(subtotal)+'</span></div>':'')
+    + (logistics?'<div class="tot-row"><span>Logistics &amp; service</span><span>'+money(logistics)+'</span></div>':'')
+    + (tax?'<div class="tot-row"><span>Tax</span><span>'+money(tax)+'</span></div>':'')
+    + '<div class="tot-row grand"><span>Total</span><span>'+money(grand)+'</span></div>'
+    + (deposit?'<div class="tot-row"><span>Deposit / paid</span><span>−'+money(deposit)+'</span></div>':'')
+    + '<div class="tot-row balance"><span>Balance due</span><span>'+money(balance)+'</span></div>'
+    + '</div></div></body></html>';
 }
 
 async function startCheckout(){
@@ -393,11 +529,12 @@ function renderDetails(){
 
 function renderDetailsForm(host){
   let html = '';
+  html += '<div class="details-intro">Please fill in the final details for your event. Everything saves automatically as you go, so you can complete it in stages — just return any time using your link.</div>';
   html += '<div class="form-progress"><span>'+progressPct()+'% complete</span><div class="bar"><div class="bar-fill" style="width:'+progressPct()+'%"></div></div><span class="save-status" id="saveStatus">Saves automatically</span></div>';
 
   // Menu confirmation
   html += '<div class="section-block">'
-    + '<h3>Menu confirmation</h3>'
+    + '<h3><span class="step-dot">1</span>Menu confirmation</h3>'
     + '<div class="toggle-row" data-toggle="menuConfirmed">'
       + '<button type="button" class="toggle-btn'+(intake.menuConfirmed===true?' selected':'')+'" data-val="true">Confirmed as-is</button>'
       + '<button type="button" class="toggle-btn'+(intake.menuConfirmed===false?' selected':'')+'" data-val="false">I need a change</button>'
@@ -405,6 +542,9 @@ function renderDetailsForm(host){
     + (intake.menuConfirmed===false ? '<div class="field-row"><label>What needs to change?</label><textarea data-field="menuChangeNotes" rows="2">'+esc(intake.menuChangeNotes)+'</textarea></div>' : '')
     + '</div>';
 
+  // Meals intro
+  html += '<div class="section-block"><h3 class="tight"><span class="step-dot">2</span>Guest count, timing, floorplans &amp; linens</h3>'
+    + '<div style="font-size:12px;color:var(--text2);margin-bottom:2px">If your event has more than one meal or session, add a block for each so we get the details right for every part.</div></div>';
   // Meal blocks
   intake.meals.forEach(function(m, i){
     html += renderMealBlock(m, i);
@@ -412,43 +552,41 @@ function renderDetailsForm(host){
   html += '<button type="button" class="add-meal-link" id="addMealBtn">+ Add another meal / session</button>';
 
   // Wine & liquor
-  html += '<div class="section-block" style="margin-top:16px">'
-    + '<h3>Wine &amp; liquor</h3>'
+  html += '<div class="section-block">'
+    + '<h3><span class="step-dot">3</span>Wine &amp; liquor</h3>'
     + '<div class="toggle-row" data-toggle="wineLiquor">'
       + '<button type="button" class="toggle-btn'+(intake.wineLiquor===true?' selected':'')+'" data-val="true">Yes, there will be alcohol</button>'
       + '<button type="button" class="toggle-btn'+(intake.wineLiquor===false?' selected':'')+'" data-val="false">No alcohol</button>'
     + '</div>'
     + (intake.wineLiquor===true ?
         ('<div class="reminder-note">All wines must be mevushal, and all liquor must appear on the CRC or Star-K approved list. '
-          + '<a href="https://consumer.crckosher.org/liquor/" target="_blank" rel="noopener">CRC approved list ↗</a> · '
-          + '<a href="https://www.star-k.org/resource/list/W56J90P5/all_liquor" target="_blank" rel="noopener">Star-K approved list ↗</a></div>'
+          + '<a href="https://consumer.crckosher.org/liquor/" target="_blank" rel="noopener">CRC approved list \u2197</a> \u00b7 '
+          + '<a href="https://www.star-k.org/resource/list/W56J90P5/all_liquor" target="_blank" rel="noopener">Star-K approved list \u2197</a></div>'
           + renderUploadField('Upload your wine / liquor list', 'liquorListFiles', 'liquor'))
       : '')
     + '</div>';
 
   // Allergies
-  html += '<div class="section-block"><h3>Allergies</h3>'
+  html += '<div class="section-block"><h3><span class="step-dot">4</span>Allergies</h3>'
     + '<div class="field-row"><textarea data-field="allergies" rows="2" placeholder="List any guest allergies we should know about">'+esc(intake.allergies)+'</textarea></div></div>';
 
   // Vendors
-  html += '<div class="section-block"><h3>Vendors</h3>'
+  html += '<div class="section-block"><h3><span class="step-dot">5</span>Your vendors</h3>'
     + '<div class="field-grid-3">'
-      + '<div class="field-row"><label>Musician</label><input type="text" data-field="musicianName" value="'+esc(intake.musicianName)+'" placeholder="Name"></div>'
+      + '<div class="field-row"><label>Musician / band</label><input type="text" data-field="musicianName" value="'+esc(intake.musicianName)+'" placeholder="Name"></div>'
       + '<div class="field-row"><label>Florist</label><input type="text" data-field="floristName" value="'+esc(intake.floristName)+'" placeholder="Name"></div>'
       + '<div class="field-row"><label>Photographer</label><input type="text" data-field="photographerName" value="'+esc(intake.photographerName)+'" placeholder="Name"></div>'
     + '</div></div>';
 
-  // Logo
-  html += '<div class="section-block"><h3>Logo</h3>' + renderUploadField('Upload your logo, if applicable', 'logoFiles', 'logo') + '</div>';
-
-  // Ceremony (weddings only)
-  if(isWedding()){
-    html += '<div class="section-block"><h3>Ceremony procession &amp; music</h3>' + renderUploadField('Upload procession order and music list', 'ceremonyFiles', 'ceremony') + '</div>';
-  }
+  // Logo + ceremony (weddings)
+  html += '<div class="section-block"><h3><span class="step-dot">6</span>Logo'+(isWedding()?' &amp; ceremony':'')+'</h3>'
+    + renderUploadField('Upload your logo, if applicable', 'logoFiles', 'logo')
+    + (isWedding() ? ('<div class="field-subhead">Ceremony procession &amp; music</div>' + renderUploadField('Upload procession order and music list', 'ceremonyFiles', 'ceremony')) : '')
+    + '</div>';
 
   // Other
-  html += '<div class="section-block"><h3>Anything else?</h3>'
-    + '<div class="field-row"><textarea data-field="otherNotes" rows="3" placeholder="Any other important information">'+esc(intake.otherNotes)+'</textarea></div>'
+  html += '<div class="section-block"><h3><span class="step-dot">7</span>Anything else?</h3>'
+    + '<div class="field-row"><textarea data-field="otherNotes" rows="3" placeholder="Any other important information you would like us to know">'+esc(intake.otherNotes)+'</textarea></div>'
     + renderUploadField('Upload any other files', 'otherFiles', 'other')
     + '</div>';
 
@@ -461,7 +599,7 @@ function renderDetailsForm(host){
 
 function renderMealBlock(m, i){
   const canRemove = intake.meals.length > 1;
-  return '<div class="section-block" data-meal-index="'+i+'">'
+  return '<div class="meal-block" data-meal-index="'+i+'">'
     + '<span class="meal-tag">'+esc(m.label||('Meal '+(i+1)))+(canRemove?' <button type="button" class="meal-remove" data-remove-meal="'+i+'">✕ remove</button>':'')+'</span>'
     + '<div class="field-row"><label>Meal / session label</label><input type="text" data-meal-field="label" data-meal-index="'+i+'" value="'+esc(m.label)+'" placeholder="e.g. Friday Dinner"></div>'
     + '<div class="field-grid-3">'
@@ -473,7 +611,7 @@ function renderMealBlock(m, i){
       + '<div class="field-row"><label>Floorplan / seating list</label>'+renderMealUploadField('floorplanFiles', i)+'</div>'
       + '<div class="field-row"><label>Event schedule</label>'+renderMealUploadField('scheduleFiles', i)+'</div>'
     + '</div>'
-    + '<h3 style="margin-top:14px;font-size:13.5px">Linens</h3>'
+    + '<div class="field-subhead">Linens</div>'
     + '<a class="helper-link" href="https://linenswatches.com/fabrics/basic-solids/standard-polyester/" target="_blank" rel="noopener">↗ Browse fabric swatches &amp; colors</a>'
     + '<div class="field-grid-3">'
       + '<div class="field-row"><label>Table linen color</label><input type="text" data-meal-field="linenTable" data-meal-index="'+i+'" value="'+esc(m.linenTable)+'"></div>'
@@ -655,22 +793,31 @@ function handleUpload(file, pathTag, folder){
 
 function renderDocuments(){
   const el = document.getElementById('panel-documents');
-  const catererDocs = portalDoc.catererDocuments || {}; // { menu:{name,url}, contract:{name,url}, invoicePdf:{name,url} }
-  const catererEntries = [
-    ['📋','Menu', catererDocs.menu],
-    ['📝','Contract', catererDocs.contract],
-    ['🧾','Invoice', catererDocs.invoicePdf]
-  ].filter(function(e){ return e[2] && e[2].url; });
+  const catererDocs = portalDoc.catererDocuments || {};
 
-  const clientDocs = collectClientDocuments();
+  // Build the "From Premier Caterers" list. Menu uses the PDF export URL, never
+  // the editable doc. Contract and Invoice are generated on demand.
+  const catererEntries = [];
+  if(catererDocs.menuPdf && catererDocs.menuPdf.url){
+    catererEntries.push({ ic:'📋', label:'Menu (PDF)', url: catererDocs.menuPdf.url });
+  } else if(catererDocs.menu && catererDocs.menu.url){
+    catererEntries.push({ ic:'📋', label:'Menu (PDF)', url: toPdfUrl(catererDocs.menu.url) });
+  }
+  if(catererDocs.contract && catererDocs.contract.url){
+    catererEntries.push({ ic:'📝', label:'Contract', url: catererDocs.contract.url });
+  }
 
   let html = '<div class="doc-group-title">From Premier Caterers</div>';
-  html += catererEntries.length
-    ? ('<ul class="doc-list">'+catererEntries.map(function(e){
-        return '<li class="doc-item"><span class="doc-ic">'+e[0]+'</span><a href="'+esc(e[2].url)+'" target="_blank" rel="noopener">'+esc(e[1])+'</a></li>';
-      }).join('')+'</ul>')
-    : '<div class="doc-empty">Nothing shared yet — check back closer to your event.</div>';
+  const invRow = '<li class="doc-item"><span class="doc-ic">🧾</span><a href="#" id="docInvoiceLink">Invoice (PDF)</a><span class="doc-meta">generated</span></li>';
+  html += '<ul class="doc-list">'
+    + catererEntries.map(function(e){
+        return '<li class="doc-item"><span class="doc-ic">'+e.ic+'</span><a href="'+esc(e.url)+'" target="_blank" rel="noopener">'+esc(e.label)+'</a></li>';
+      }).join('')
+    + invRow
+    + '</ul>';
 
+  // Client's own uploads (from the Event Details form)
+  const clientDocs = collectClientDocuments();
   html += '<div class="doc-group-title">Your Uploads</div>';
   html += clientDocs.length
     ? ('<ul class="doc-list">'+clientDocs.map(function(d){
@@ -678,7 +825,51 @@ function renderDocuments(){
       }).join('')+'</ul>')
     : '<div class="doc-empty">Files you upload in the Event Details tab will show up here.</div>';
 
+  // Optional: client can stash their own outside-vendor docs (florist, band contract, etc.)
+  const vendorDocs = (portalDoc.clientVendorDocs || []);
+  html += '<div class="doc-group-title">Other Vendor Documents <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text2)">(optional — keep everything in one place)</span></div>';
+  if(vendorDocs.length){
+    html += '<ul class="doc-list">'+vendorDocs.map(function(d,i){
+      return '<li class="doc-item"><span class="doc-ic">📎</span><a href="'+esc(d.url)+'" target="_blank" rel="noopener">'+esc(d.name)+'</a><button class="upload-remove" data-remove-vendor="'+i+'">remove</button></li>';
+    }).join('')+'</ul>';
+  }
+  html += '<div class="upload-slot" style="margin-top:8px">Add a document (florist, band, photographer, etc.)<input type="file" id="vendorDocInput"></div>';
+
   el.innerHTML = html;
+
+  const invLink = document.getElementById('docInvoiceLink');
+  if(invLink) invLink.addEventListener('click', function(ev){ ev.preventDefault(); downloadInvoicePdf(); });
+
+  const vInput = document.getElementById('vendorDocInput');
+  if(vInput) vInput.addEventListener('change', function(){
+    const file = vInput.files[0]; if(!file) return;
+    handleUpload(file, 'vendor', 'vendorDocs').then(function(meta){
+      const list = (portalDoc.clientVendorDocs||[]).concat([meta]);
+      return db.collection('clientPortals').doc(pid).set({ clientVendorDocs: list }, { merge:true });
+    }).catch(function(){ alert('Upload failed. Please try again.'); });
+  });
+
+  el.querySelectorAll('[data-remove-vendor]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      const idx = parseInt(btn.dataset.removeVendor,10);
+      const list = (portalDoc.clientVendorDocs||[]).slice();
+      list.splice(idx,1);
+      db.collection('clientPortals').doc(pid).set({ clientVendorDocs: list }, { merge:true });
+    });
+  });
+}
+
+// Convert a Google Docs/Sheets/Drive link into its direct PDF-export URL
+// (mirrors the app's menuPdfUrl so clients never see an editable doc).
+function toPdfUrl(link){
+  if(!link) return '#';
+  var doc = link.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
+  var sheet = link.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  var file = link.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if(doc)   return 'https://docs.google.com/document/d/'+doc[1]+'/export?format=pdf';
+  if(sheet) return 'https://docs.google.com/spreadsheets/d/'+sheet[1]+'/export?format=pdf';
+  if(file)  return 'https://drive.google.com/uc?export=download&id='+file[1];
+  return link;
 }
 
 function collectClientDocuments(){
@@ -698,13 +889,9 @@ function collectClientDocuments(){
 
 // ───────────────────────── Questions (chat thread) ─────────────────────────
 
-function renderQuestions(){
-  const el = document.getElementById('panel-questions');
+function threadHtml(){
   const msgs = portalDoc.messages || [];
-
-  let html = '<div class="thread-toolbar"><button type="button" class="btn-ghost" id="printThreadBtn">🖨 Print this thread</button></div>';
-
-  html += '<div class="thread" id="threadList">';
+  let html = '';
   if(!msgs.length){
     html += '<div class="thread-empty">No questions yet — ask us anything about your event below.</div>';
   } else {
@@ -718,8 +905,19 @@ function renderQuestions(){
         + '</div>';
     });
   }
-  html += '</div>';
+  return html;
+}
 
+function refreshThreadOnly(){
+  const list = document.getElementById('threadList');
+  if(list){ list.innerHTML = threadHtml(); list.scrollTop = list.scrollHeight; }
+}
+
+function renderQuestions(){
+  const el = document.getElementById('panel-questions');
+
+  let html = '<div class="thread-toolbar"><button type="button" class="btn-ghost" id="printThreadBtn">🖨 Print this thread</button></div>';
+  html += '<div class="thread" id="threadList">'+threadHtml()+'</div>';
   html += '<div class="composer">'
     + '<textarea id="questionText" placeholder="Type a question or note for Premier Caterers…"></textarea>'
     + '<div class="composer-bar">'
@@ -733,7 +931,6 @@ function renderQuestions(){
   document.getElementById('sendQuestionBtn').addEventListener('click', sendQuestion);
   document.getElementById('printThreadBtn').addEventListener('click', function(){ window.print(); });
 
-  // keep the thread scrolled to the latest message
   const list = document.getElementById('threadList');
   if(list) list.scrollTop = list.scrollHeight;
 }
@@ -754,9 +951,10 @@ async function sendQuestion(){
     }
     const msg = { from:'client', text: text, attachment: attachment, sentAt: Date.now() };
     const msgs = (portalDoc.messages || []).concat([msg]);
+    // Clear the composer immediately; the live listener will paint the new message.
+    textEl.value = ''; fileEl.value = '';
     await db.collection('clientPortals').doc(pid).set({ messages: msgs }, { merge:true });
-    portalDoc.messages = msgs;
-    renderQuestions();
+    btn.disabled = false; btn.textContent = 'Send';
   }catch(e){
     btn.disabled = false; btn.textContent = 'Send';
     alert('Could not send — please check your connection and try again.');
