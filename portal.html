@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Premier Caterers — Your Event Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg3:#F1F2ED; --card:#FFFFFF;
+    --maroon:#7A2E3D; --maroon-deep:#5C2230;
+    --brass:#B98B2E; --brass-deep:#8F6A1E; --brass-tint:#FAF0DC;
+    --nav-bg:#20262A;
+    --text:#23262B; --text2:#62665D;
+    --border:#E3E4DC;
+    --green-bg:#E7F0E3; --green-text:#37613A;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',system-ui,sans-serif;color:var(--text);background:var(--bg3);line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:760px;margin:0 auto;padding:0 16px 80px}
+
+  .frame{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-top:20px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+
+  .portal-header{background:var(--nav-bg);color:#fff;padding:26px 28px 0}
+  .brand{font-family:'Fraunces',serif;font-size:14px;letter-spacing:.02em;color:var(--brass);margin-bottom:16px}
+  .portal-header h1{font-family:'Fraunces',serif;font-size:23px;font-weight:600;margin:0 0 4px;color:#fff}
+  .portal-header .sub{color:#A9AEB0;font-size:13.5px;margin-bottom:18px}
+  .tabs{display:flex;gap:4px;overflow-x:auto}
+  .tab{padding:11px 16px;font-size:13px;font-weight:600;color:#A9AEB0;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+  .tab.active{color:#fff;border-bottom-color:var(--brass)}
+  .tab:disabled{opacity:.4;cursor:not-allowed}
+
+  .panel{padding:26px 28px 34px;display:none}
+  .panel.active{display:block}
+
+  .overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .overview-cell{background:var(--card);padding:16px 18px}
+  .overview-cell .label{font-size:11px;color:var(--text2);margin-bottom:4px}
+  .overview-cell .value{font-size:15px;font-weight:600}
+  .job-pill{display:inline-block;background:var(--maroon);color:#fff;font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px}
+  .type-pill{display:inline-block;background:var(--brass-tint);color:var(--brass-deep);font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px}
+  .welcome-note{color:var(--text2);font-size:13.5px;margin-top:20px;line-height:1.65}
+  .welcome-note a{color:var(--maroon)}
+
+  .invoice-summary{display:flex;justify-content:space-between;align-items:flex-end;padding:18px 0;border-bottom:1px solid var(--border);margin-bottom:18px;flex-wrap:wrap;gap:12px}
+  .invoice-summary .total-label{color:var(--text2);font-size:12.5px}
+  .invoice-summary .total-num{font-family:'Fraunces',serif;font-size:30px;font-weight:600;color:var(--maroon)}
+  table.invoice-table{width:100%;border-collapse:collapse;font-size:13.5px}
+  table.invoice-table th{text-align:left;font-weight:600;color:var(--text2);font-size:11.5px;padding:7px 0;border-bottom:1px solid var(--border)}
+  table.invoice-table td{padding:11px 0;border-bottom:1px solid var(--border)}
+  table.invoice-table td:last-child, table.invoice-table th:last-child{text-align:right}
+
+  .deposit-box{margin-top:22px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}
+  .deposit-box .dep-label{font-size:12.5px;color:var(--text2);margin-bottom:2px}
+  .deposit-box .dep-amt{font-family:'Fraunces',serif;font-size:20px}
+  .btn-primary{background:var(--maroon);color:#fff;border:none;padding:12px 22px;font-size:13.5px;font-weight:700;border-radius:8px;font-family:inherit;cursor:pointer}
+  .btn-primary:hover{background:var(--maroon-deep)}
+  .btn-primary:disabled{opacity:.55;cursor:not-allowed}
+
+  .paid-banner{background:var(--green-bg);border:2px solid var(--green-text);border-radius:10px;padding:16px 18px;text-align:center;color:var(--green-text);font-weight:600;margin-top:22px}
+
+  .placeholder-note{color:var(--text2);font-size:13.5px;text-align:center;padding:30px 10px}
+
+  .state{text-align:center;padding:60px 20px}
+  .state .ic{font-size:44px}
+  .state h1{font-family:'Fraunces',serif;margin:14px 0 6px;font-size:21px}
+  .state p{color:var(--text2);font-size:14.5px}
+  .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--maroon);border-radius:50%;animation:spin .8s linear infinite;margin:60px auto}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  @media(max-width:520px){
+    .overview-grid{grid-template-columns:1fr}
+    .invoice-summary .total-num{font-size:26px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="root"><div class="spinner"></div></div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
+  authDomain: "premier-caterers-internal-app.firebaseapp.com",
+  projectId: "premier-caterers-internal-app",
+  storageBucket: "premier-caterers-internal-app.firebasestorage.app",
+  messagingSenderId: "471701398759",
+  appId: "1:471701398759:web:559a7bee3b645ce545ee42"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const root = document.getElementById('root');
+
+function qp(k){ return new URLSearchParams(location.search).get(k); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function money(v){ return '$'+(parseFloat(v||0)).toFixed(2); }
+function fmtDate(iso){
+  if(!iso) return '—';
+  try{
+    const d = new Date(iso+'T00:00:00Z');
+    return d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric',timeZone:'UTC'});
+  }catch(e){ return iso; }
+}
+
+function stateScreen(icon, title, msg){
+  root.innerHTML = '<div class="frame"><div class="state"><div class="ic">'+icon+'</div><h1>'+esc(title)+'</h1><p>'+esc(msg)+'</p></div></div>';
+}
+
+const pid = qp('p'), tok = qp('t');
+let portalDoc = null;
+
+(async function(){
+  if(!pid || !tok){ stateScreen('🔗','Link incomplete','This portal link is missing information. Please use the exact link from your email.'); return; }
+  let snap;
+  try{
+    snap = await db.collection('clientPortals').doc(pid).get();
+  }catch(e){
+    stateScreen('⚠️','Could not load','Something went wrong loading your event. Please try again, or contact us at events@thepremiercaterer.com.'); return;
+  }
+  if(!snap.exists){ stateScreen('🔍','Event not found','We could not find this event. Please contact Premier Caterers at events@thepremiercaterer.com.'); return; }
+  portalDoc = snap.data();
+  if(String(portalDoc.token||'') !== String(tok)){ stateScreen('🔒','Invalid link','This portal link is not valid. Please use the exact link from your email, or contact us at events@thepremiercaterer.com.'); return; }
+
+  try{ db.collection('clientPortals').doc(pid).update({ lastViewedAt: Date.now() }); }catch(e){}
+
+  renderShell();
+})();
+
+function renderShell(){
+  root.innerHTML =
+    '<div class="frame">'
+    + '<div class="portal-header">'
+      + '<div class="brand">Premier Caterers</div>'
+      + '<h1>'+esc(portalDoc.eventName||'Your Event')+'</h1>'
+      + '<div class="sub">'+esc(fmtDate(portalDoc.eventDate))+(portalDoc.venue?(' · '+esc(portalDoc.venue)):'')+'</div>'
+      + '<div class="tabs">'
+        + '<button class="tab active" data-tab="overview">Overview</button>'
+        + '<button class="tab" data-tab="invoice">Invoice &amp; Payment</button>'
+        + '<button class="tab" disabled title="Coming soon">Event Details</button>'
+      + '</div>'
+    + '</div>'
+    + '<div class="panel active" id="panel-overview"></div>'
+    + '<div class="panel" id="panel-invoice"></div>'
+    + '</div>';
+
+  document.querySelectorAll('.tab[data-tab]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.tab[data-tab]').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  renderOverview();
+  renderInvoice();
+}
+
+function renderOverview(){
+  const el = document.getElementById('panel-overview');
+  el.innerHTML =
+    '<div class="overview-grid">'
+    + '<div class="overview-cell"><div class="label">Job Number</div><div class="value"><span class="job-pill">'+esc(portalDoc.jobNumber||'—')+'</span></div></div>'
+    + '<div class="overview-cell"><div class="label">Event Type</div><div class="value"><span class="type-pill">'+esc(portalDoc.eventType||'—')+'</span></div></div>'
+    + '<div class="overview-cell"><div class="label">Date</div><div class="value">'+esc(fmtDate(portalDoc.eventDate))+'</div></div>'
+    + '<div class="overview-cell"><div class="label">Venue</div><div class="value">'+esc(portalDoc.venue||'—')+'</div></div>'
+    + '<div class="overview-cell"><div class="label">Balance Due</div><div class="value" style="color:var(--maroon)">'+money(balanceRemaining())+'</div></div>'
+    + '</div>'
+    + '<p class="welcome-note">Welcome — this is where you can review your invoice and pay your deposit. Questions any time? Reach us at <a href="mailto:events@thepremiercaterer.com">events@thepremiercaterer.com</a>.</p>';
+}
+
+function balanceRemaining(){
+  const inv = portalDoc.invoiceSnapshot || {};
+  return (parseFloat(inv.total||0)) - (parseFloat(inv.paid||0));
+}
+
+function renderInvoice(){
+  const el = document.getElementById('panel-invoice');
+  const inv = portalDoc.invoiceSnapshot || {};
+  const items = inv.items || [];
+  const balance = balanceRemaining();
+
+  let rows = items.map(function(it){
+    return '<tr><td>'+esc(it.name||'')+'</td><td>'+esc(it.qty!=null?it.qty:'')+'</td><td>'+money(it.amount)+'</td></tr>';
+  }).join('');
+
+  const depositPaid = !!portalDoc.depositPaid;
+  const depositAmt = parseFloat(portalDoc.depositAmount||0);
+
+  el.innerHTML =
+    '<div class="invoice-summary">'
+      + '<div><div class="total-label">Invoice '+esc(inv.number||'')+'</div><div class="total-num">'+money(inv.total)+'</div></div>'
+      + '<div style="text-align:right"><div class="total-label">Balance remaining</div><div style="font-size:17px;font-weight:700;color:var(--maroon)">'+money(balance)+'</div></div>'
+    + '</div>'
+    + (items.length ? ('<table class="invoice-table"><tr><th>Item</th><th>Qty</th><th>Amount</th></tr>'+rows+'</table>') : '')
+    + (depositPaid
+        ? '<div class="paid-banner">✓ Deposit of '+money(depositAmt)+' received — thank you!</div>'
+        : (depositAmt > 0
+            ? ('<div class="deposit-box"><div><div class="dep-label">Deposit due to confirm date</div><div class="dep-amt">'+money(depositAmt)+'</div></div><button class="btn-primary" id="payBtn">Pay Deposit</button></div>')
+            : ''));
+
+  const payBtn = document.getElementById('payBtn');
+  if(payBtn){
+    payBtn.addEventListener('click', startCheckout);
+  }
+}
+
+async function startCheckout(){
+  const btn = document.getElementById('payBtn');
+  btn.disabled = true; btn.textContent = 'Redirecting…';
+  try{
+    // TODO: replace with the Stripe Checkout Apps Script relay endpoint once built.
+    // Expected request: POST { portalId: pid, token: tok }
+    // Expected response: { url: "https://checkout.stripe.com/..." }
+    throw new Error('Stripe relay not yet connected');
+  }catch(e){
+    btn.disabled = false; btn.textContent = 'Pay Deposit';
+    alert('Online payment isn\'t connected yet. Please contact Premier Caterers at events@thepremiercaterer.com to arrange your deposit.');
+  }
+}
+</script>
+</body>
+</html>
