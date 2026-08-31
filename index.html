@@ -3869,6 +3869,53 @@ function drawerVenue(inq){
      </div>
    </div>`;
 }
+function clientUploadsBlock(ev){
+  if(!ev) return '';
+  const fields = [
+    ['floorplanFiles','Floorplans / seating'],
+    ['scheduleFiles','Schedules'],
+    ['logoFiles','Logo'],
+    ['liquorFiles','Wine / liquor list'],
+    ['ceremonyFiles','Ceremony'],
+    ['vendorDocs','Vendor documents'],
+    ['otherClientFiles','Other']
+  ];
+  let anyFiles = false;
+  let rows = '';
+  const now = Date.now();
+  function ago(ts){
+    if(!ts) return '';
+    const d = Math.floor((now-ts)/86400000);
+    if(d<=0) return 'today';
+    if(d===1) return 'yesterday';
+    if(d<30) return d+' days ago';
+    return new Date(ts).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  }
+  fields.forEach(function(pair){
+    const arr = ev[pair[0]];
+    if(!Array.isArray(arr) || !arr.length) return;
+    anyFiles = true;
+    // newest first, mark the most recent one
+    const sorted = arr.slice().sort(function(a,b){ return (b.addedAt||0)-(a.addedAt||0); });
+    rows += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin:10px 0 5px">'+pcEsc(pair[1])+'</div>';
+    sorted.forEach(function(f,idx){
+      const newest = idx===0 && sorted.length>1;
+      rows += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:12.5px">
+        <i class="ti ti-file" style="font-size:14px;color:var(--text3)"></i>
+        <a href="${f.url}" target="_blank" style="color:var(--blue-mid);text-decoration:none;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pcEsc(f.name||'File')}</a>
+        <span style="font-size:10.5px;color:var(--text3);white-space:nowrap">${f.source==='client'?'Client':'You'} · ${ago(f.addedAt)}</span>
+        ${newest?'<span style="font-size:9.5px;font-weight:700;color:var(--green-text);background:var(--green-bg);padding:1px 6px;border-radius:8px">NEWEST</span>':''}
+      </div>`;
+    });
+  });
+  if(!anyFiles) return '';
+  return `<div style="margin-top:14px;padding-top:12px;border-top:0.5px solid var(--border)">
+    <div class="hub-sec">Client portal uploads <span class="rule"></span></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Files your client uploaded through their portal. Existing files are kept — newest is marked.</div>
+    ${rows}
+  </div>`;
+}
+
 function drawerDocuments(inq, role, ev){
   const id=inq.id;
   const docs = [
@@ -3899,7 +3946,8 @@ function drawerDocuments(inq, role, ev){
     ${_docGroup('Documents', docs)}
     ${_docGroup('Floor plans', floor)}
     ${_docGroup('Uploaded files', files)}
-    ${_docGroup('After the event', after)}`;
+    ${_docGroup('After the event', after)}
+    ${clientUploadsBlock(ev)}`;
 }
 
 function drawerStaffDetails(inq, ev, role){
@@ -4653,6 +4701,17 @@ function formatDateWithDay(d){
 
 function selectInquiry(id){
   selectedInqId = selectedInqId===id ? null : id;
+  // If opening a drawer whose event has a portal, quietly re-sync it so the
+  // client always sees the latest invoice/contract/menu, and pull any new uploads.
+  if(selectedInqId){
+    try{
+      const inq = inquiries.find(x=>x.id===selectedInqId);
+      const ev = inq ? _eventForInq(inq) : null;
+      if(ev && ev.portalId && typeof syncClientPortal==='function'){
+        setTimeout(function(){ syncClientPortal(ev.id).catch(function(){}); }, 300);
+      }
+    }catch(e){}
+  }
   render();
 }
 
@@ -12341,7 +12400,10 @@ function clientPortalHubCard(inq, ev, role){
 
   return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       <span style="font-size:12px;color:var(--text2)">${unread?'<span style="background:#c0392b;color:#fff;font-size:10px;font-weight:600;padding:1px 8px;border-radius:10px;margin-right:6px">unanswered</span>':''}Client link is live</span>
-      <button onclick="copyPortalLink('${portalUrl.replace(/'/g,"&#39;")}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-copy" style="font-size:13px"></i>Copy link</button>
+      <span style="display:inline-flex;gap:6px">
+        <button onclick="syncClientPortal('${ev.id}',{manual:true})" title="Push the latest invoice, contract & menu to the client, and pull in their uploads" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-refresh" style="font-size:13px"></i>Sync now</button>
+        <button onclick="copyPortalLink('${portalUrl.replace(/'/g,"&#39;")}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-copy" style="font-size:13px"></i>Copy link</button>
+      </span>
     </div>
     <div style="max-height:260px;overflow-y:auto;border:0.5px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px;background:var(--bg2)">
       ${msgs.length ? msgs.map(m=>`<div style="align-self:${m.from==='caterer'?'flex-end':'flex-start'};max-width:85%;background:${m.from==='caterer'?'var(--blue-bg)':'#fff'};border:0.5px solid var(--border);border-radius:9px;padding:7px 10px;font-size:12.5px">
@@ -12358,21 +12420,118 @@ function clientPortalHubCard(inq, ev, role){
 
 function aggregateInvoiceForPortal(evId){
   const slots = (typeof invoiceSlotsForEvent==='function') ? invoiceSlotsForEvent(evId) : (invoices[evId]?[evId]:[]);
-  let number = '', total = 0, paid = 0;
+  let number = '', subtotal = 0, logistics = 0, tax = 0, total = 0, paid = 0;
+  let anyInvoice = false, primaryKey = '';
   const items = [];
   slots.forEach(k=>{
     const inv = invoices[k]; if(!inv) return;
     if(!(inv.status==='invoice' || inv.status==='paid' || inv.status==='approved')) return;
     const t = calcInvoiceTotals(inv);
-    total += t.grand;
+    subtotal += t.subtotal; logistics += t.logistics; tax += t.tax; total += t.grand;
     paid += parseFloat(inv.deposit||0);
-    if(!number) number = invoiceDisplayLabel(evId, k);
+    if(inv.status==='invoice' || inv.status==='paid') anyInvoice = true;
+    if(!number){ number = invoiceDisplayLabel(evId, k); primaryKey = k; }
     (inv.lines||[]).forEach(l=>{
       if(!l.description) return;
       items.push({ name: l.description, qty: l.qty, amount: parseFloat(l.qty||0)*parseFloat(l.price||0) });
     });
   });
-  return { number, total, paid, items, depositAmount: 0 };
+  // The deposit the client is asked to pay: use the primary invoice's deposit field
+  // if set, else 0 (Kenny can set a specific deposit later).
+  const primaryInv = primaryKey ? invoices[primaryKey] : null;
+  const depositAmount = primaryInv ? parseFloat(primaryInv.deposit||0) : 0;
+  // Build the exact print-ready invoice document the caterer sees, so the portal's
+  // Download button gives an identical PDF. Best-effort; never break sync over it.
+  let printHtml = '';
+  try{ if(primaryKey && typeof buildInvoiceHTML==='function') printHtml = buildInvoiceHTML(primaryKey); }catch(e){}
+  return {
+    number, subtotal, logistics, tax, total, paid,
+    docType: anyInvoice ? 'invoice' : 'quote',
+    depositAmount, items, printHtml
+  };
+}
+
+function buildPortalCatererDocs(e){
+  const docs = {};
+  const menuRaw = e.menuLink || e.pdfMenuLink || '';
+  if(menuRaw){
+    docs.menuPdf = { name:'Menu (PDF)', url: (typeof menuPdfUrl==='function' ? menuPdfUrl(menuRaw) : menuRaw) };
+  }
+  try{
+    const c = (typeof contracts!=='undefined') ? contracts[e.id] : null;
+    if(c && typeof contractSignLink==='function'){
+      const link = contractSignLink(e.id);
+      if(link) docs.contract = { name:'Contract', url: link };
+    }
+  }catch(err){}
+  return docs;
+}
+
+// Push latest invoice/contract/menu into the event's portal doc, and pull client
+// uploads back onto the event (keeping both copies, stamped newest-first).
+async function syncClientPortal(eid, opts){
+  opts = opts || {};
+  const e = events.find(x=>x.id===eid);
+  if(!e || !e.portalId) return false;
+  const p = clientPortals[e.portalId];
+  if(!p) return false;
+
+  const inv = aggregateInvoiceForPortal(eid);
+  const catererDocuments = buildPortalCatererDocs(e);
+
+  const patch = {
+    eventName: e.name || p.eventName || '',
+    eventType: e.typeLabel || p.eventType || '',
+    eventDate: e.dayLabel || p.eventDate || '',
+    venue: e.addr || p.venue || '',
+    jobNumber: displayJob(e.job) || p.jobNumber || '',
+    invoiceSnapshot: inv,
+    depositAmount: inv.depositAmount || 0,
+    catererDocuments: catererDocuments,
+    lastSyncedAt: Date.now()
+  };
+
+  const pulled = pullPortalUploadsToEvent(e, p);
+
+  try{
+    await clientPortalsCol.doc(e.portalId).set(patch, { merge:true });
+    clientPortals[e.portalId] = Object.assign({}, p, patch);
+    if(pulled) await _saveEvent(e);
+    if(opts.manual){ try{ showToast('Portal synced \u2713'); }catch(_){}; render(); }
+    return true;
+  }catch(err){
+    if(opts.manual) alert('Sync failed \u2014 please check your connection and try again.');
+    return false;
+  }
+}
+
+// Merge client-uploaded portal files onto the event as stamped arrays. Returns
+// true if the event changed. Never overwrites; de-dupes by url.
+function pullPortalUploadsToEvent(e, p){
+  const ii = p.clientIntake; if(!ii && !(p.clientVendorDocs||[]).length) return false;
+  let changed = false;
+  function ingest(eventField, files, label){
+    if(!files || !files.length) return;
+    if(!Array.isArray(e[eventField])) e[eventField] = [];
+    files.forEach(function(f){
+      if(!f || !f.url) return;
+      if(e[eventField].some(function(x){ return x.url===f.url; })) return;
+      e[eventField].push({ name:f.name, url:f.url, source:'client', addedAt: f.uploadedAt||Date.now(), label: label||'' });
+      changed = true;
+    });
+  }
+  ((ii&&ii.meals)||[]).forEach(function(m,mi){
+    ingest('floorplanFiles', m.floorplanFiles, (m.label||('Meal '+(mi+1)))+' floorplan');
+    ingest('scheduleFiles', m.scheduleFiles, (m.label||('Meal '+(mi+1)))+' schedule');
+  });
+  if(ii){
+    ingest('logoFiles', ii.logoFiles, 'Logo');
+    ingest('liquorFiles', ii.liquorListFiles, 'Wine / liquor list');
+    ingest('ceremonyFiles', ii.ceremonyFiles, 'Ceremony');
+    ingest('otherClientFiles', ii.otherFiles, 'Other');
+  }
+  ingest('vendorDocs', p.clientVendorDocs, 'Vendor document');
+  return changed;
 }
 
 async function createClientPortal(eid){
@@ -12392,9 +12551,7 @@ async function createClientPortal(eid){
     eventType: e.typeLabel || '',
     eventDate: e.dayLabel || '',
     venue: e.addr || '',
-    catererDocuments: {
-      menu: e.menuLink ? { name:'Menu', url: e.menuLink } : null
-    },
+    catererDocuments: buildPortalCatererDocs(e),
     invoiceSnapshot: inv || { number:'', total:0, paid:0, items:[] },
     depositAmount: (inv && inv.depositAmount) || 0,
     depositPaid: false,
