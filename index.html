@@ -13491,7 +13491,16 @@ function gmailClientId(){ return getSharedSetting('gmailClientId') || ''; }
 // Apps Script relay: when enabled (and a Script URL is saved), Gmail send/read go through
 // Apps Script (authorized once as events@), so the browser OAuth token is never needed and
 // the connection can't silently drop. Falls back to direct OAuth when off.
-function gmailViaScript(){ return localStorage.getItem('gmailViaScript')==='1' && !!getSharedSetting('scriptUrl'); }
+function gmailViaScript(){
+  // The Apps Script relay (sends as events@thepremiercaterer.com) is the standard
+  // send method for everyone. It used to require a per-DEVICE localStorage flag,
+  // which meant users who never opened Settings (e.g. Shelley, who has no Settings
+  // access) fell through to the personal-Gmail path and hit "no permission".
+  // Now: if a shared scriptUrl exists, the relay is ON by default. A user can still
+  // explicitly opt OUT on their own device by setting the flag to '0'.
+  if(!getSharedSetting('scriptUrl')) return false;
+  return localStorage.getItem('gmailViaScript') !== '0';
+}
 function gmailRelayUrl(){ const u=getSharedSetting('scriptUrl')||''; return u; }
 function isGmailConnected(){ return gmailViaScript() ? true : !!gmailToken; }
 
