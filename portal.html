@@ -79,6 +79,44 @@
 
   .paid-banner{background:var(--green-bg);border:2px solid var(--green-text);border-radius:10px;padding:16px 18px;text-align:center;color:var(--green-text);font-weight:600;margin-top:22px}
 
+  .pay-box{margin-top:22px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:20px}
+  .pay-box-title{font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin-bottom:14px}
+  .pay-options{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  @media(max-width:520px){ .pay-options{grid-template-columns:1fr} }
+  .pay-opt{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:12px 14px;border:1.5px solid var(--border);border-radius:9px;background:var(--card);cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:var(--text);transition:all .12s;text-align:left}
+  .pay-opt:hover{border-color:var(--maroon)}
+  .pay-opt.selected{border-color:var(--maroon);background:#FBF3F5;box-shadow:0 0 0 3px rgba(122,46,61,.08)}
+  .pay-opt .pay-opt-amt{font-family:'Fraunces',serif;font-size:16px;font-weight:600;color:var(--maroon)}
+  .pay-custom-row{display:flex;align-items:center;gap:6px;margin-top:12px;background:var(--card);border:1.5px solid var(--border);border-radius:9px;padding:4px 12px}
+  .pay-custom-row .pay-cur{font-size:16px;color:var(--text2);font-weight:600}
+  .pay-custom-row input{flex:1;border:none;background:none;font-family:'Fraunces',serif;font-size:18px;padding:8px 0;color:var(--text)}
+  .pay-custom-row input:focus{outline:none}
+  .pay-note{font-size:11.5px;color:var(--brass-deep);margin-top:8px;text-align:center;min-height:14px}
+
+  .sched-box{margin-top:18px;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .sched-title{font-family:'Fraunces',serif;font-size:15px;font-weight:600;padding:14px 18px;background:var(--bg3);border-bottom:1px solid var(--border)}
+  .sched-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border)}
+  .sched-row:last-child{border-bottom:none}
+  .sched-main{display:flex;flex-direction:column;gap:2px}
+  .sched-label{font-size:13.5px;font-weight:600;color:var(--text)}
+  .sched-when{font-size:11.5px;color:var(--text2)}
+  .sched-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+  .sched-amt{font-family:'Fraunces',serif;font-size:15px;font-weight:600;color:var(--maroon)}
+  .sched-badge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:2px 8px;border-radius:10px}
+  .sched-badge.met{background:var(--green-bg);color:var(--green-text)}
+  .sched-badge.due{background:var(--brass-tint);color:var(--brass-deep)}
+
+  .pay-instr{margin-top:18px;border:1px solid var(--border);border-radius:12px;padding:18px 20px;background:var(--card)}
+  .pay-instr-title{font-family:'Fraunces',serif;font-size:15px;font-weight:600;margin-bottom:6px}
+  .pay-instr-lead{font-size:13px;color:var(--text2);line-height:1.55;margin-bottom:14px}
+  .pay-instr-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:520px){ .pay-instr-grid{grid-template-columns:1fr} }
+  .pay-method{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px 14px}
+  .pay-method .pm-h{font-size:12px;font-weight:700;color:var(--maroon);margin-bottom:5px;text-transform:uppercase;letter-spacing:.03em}
+  .pay-method .pm-b{font-size:12.5px;color:var(--text);line-height:1.6}
+  .pay-method .pm-note{font-size:11px;color:var(--text2)}
+  .pay-instr-foot{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--brass-deep);line-height:1.5}
+
   .placeholder-note{color:var(--text2);font-size:13.5px;text-align:center;padding:30px 10px}
 
   .form-progress{display:flex;align-items:center;gap:10px;margin-bottom:22px;font-size:12.5px;color:var(--text2)}
@@ -346,13 +384,28 @@ function renderInvoice(){
 
   const depositPaid = !!portalDoc.depositPaid || (deposit>0 && balance<=0.01);
   const depositAmt = parseFloat(portalDoc.depositAmount||0);
+  const fullyPaid = balance <= 0.01 && (deposit>0 || grand>0);
 
-  let totalsRows = '';
-  if(hasBreakdown){
-    totalsRows =
-      '<div class="tot-row"><span>Subtotal</span><span>'+money(subtotal)+'</span></div>'
-      + (logistics>0 ? '<div class="tot-row"><span>Logistics &amp; service</span><span>'+money(logistics)+'</span></div>' : '')
-      + (tax>0 ? '<div class="tot-row"><span>Tax</span><span>'+money(tax)+'</span></div>' : '');
+  let payHtml = '';
+  if(fullyPaid){
+    payHtml = '<div class="paid-banner">✓ Paid in full — thank you!</div>';
+  } else if(balance > 0.01 || depositAmt > 0){
+    // Offer flexible payment choices whenever anything is owed.
+    const showDeposit = depositAmt > 0 && depositAmt < balance;
+    payHtml =
+      '<div class="pay-box">'
+        + '<div class="pay-box-title">Make a payment</div>'
+        + '<div class="pay-options">'
+          + (showDeposit ? '<button type="button" class="pay-opt" data-pay="deposit" data-amt="'+depositAmt+'">Pay deposit<span class="pay-opt-amt">'+money(depositAmt)+'</span></button>' : '')
+          + '<button type="button" class="pay-opt" data-pay="balance" data-amt="'+balance+'">Pay full balance<span class="pay-opt-amt">'+money(balance)+'</span></button>'
+          + '<button type="button" class="pay-opt" data-pay="custom">Other amount<span class="pay-opt-amt">enter $</span></button>'
+        + '</div>'
+        + '<div class="pay-custom-row" id="payCustomRow" style="display:none">'
+          + '<span class="pay-cur">$</span><input type="number" min="1" step="0.01" id="payCustomInput" placeholder="0.00">'
+        + '</div>'
+        + '<button class="btn-primary" id="payBtn" style="width:100%;margin-top:12px" disabled>Select an amount above</button>'
+        + '<div class="pay-note" id="paySelNote"></div>'
+      + '</div>';
   }
 
   el.innerHTML =
@@ -370,16 +423,119 @@ function renderInvoice(){
         + '<div class="tot-row balance"><span>Balance due</span><span>'+money(balance)+'</span></div>'
       + '</div>'
     + '</div>'
-    + (depositPaid
-        ? '<div class="paid-banner">✓ '+(balance<=0.01 && deposit>0 ? 'Paid in full' : 'Deposit of '+money(depositAmt))+' received — thank you!</div>'
-        : (depositAmt > 0
-            ? ('<div class="deposit-box"><div><div class="dep-label">Deposit due to confirm your date</div><div class="dep-amt">'+money(depositAmt)+'</div></div><button class="btn-primary" id="payBtn">Pay Deposit</button></div>')
-            : ''));
+    + buildPaymentSchedule(grand, deposit, balance)
+    + payHtml
+    + buildPaymentInstructions();
 
-  const payBtn = document.getElementById('payBtn');
-  if(payBtn) payBtn.addEventListener('click', startCheckout);
+  wirePayOptions(balance);
   const dlBtn = document.getElementById('dlInvoiceBtn');
   if(dlBtn) dlBtn.addEventListener('click', downloadInvoicePdf);
+}
+
+// Chosen payment amount + which option, so the Stripe relay (Part 2) can use it.
+let _paySelection = { kind:null, amount:0 };
+
+// Payment schedule: initial deposit, 50% of balance 30 days out, remainder 7 days out.
+// Dates computed from the event date; rows marked paid/due where determinable.
+function buildPaymentSchedule(grand, deposit, balance){
+  if(!(grand > 0)) return '';
+  const evDate = parseEventDate(portalDoc.eventDate);
+  function dueDate(daysBefore){
+    if(!evDate) return '';
+    const d = new Date(evDate.getTime());
+    d.setUTCDate(d.getUTCDate() - daysBefore);
+    return d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric',timeZone:'UTC'});
+  }
+  const depositAmt = parseFloat(portalDoc.depositAmount||0);
+  const depositMet = deposit >= depositAmt && depositAmt > 0;
+  // "current balance" for the 50% milestone = grand minus deposit already paid
+  const fiftyOfBalance = Math.max(0, (grand - deposit) * 0.5);
+
+  function row(label, amountHtml, when, met){
+    return '<div class="sched-row">'
+      + '<div class="sched-main"><span class="sched-label">'+label+'</span>'+(when?'<span class="sched-when">'+esc(when)+'</span>':'')+'</div>'
+      + '<div class="sched-right"><span class="sched-amt">'+amountHtml+'</span>'
+      + (met ? '<span class="sched-badge met">✓ received</span>' : '<span class="sched-badge due">due</span>')
+      + '</div></div>';
+  }
+
+  let rows = '';
+  rows += row('Initial deposit', depositAmt>0?money(depositAmt):'—', 'To confirm your date', depositMet);
+  rows += row('50% of balance', money(fiftyOfBalance), dueDate(30) ? ('Due '+dueDate(30)+' (30 days before)') : '30 days before your event', false);
+  rows += row('Remaining balance', money(Math.max(0,balance)), dueDate(7) ? ('Due '+dueDate(7)+' (7 days before)') : '7 days before your event', balance<=0.01);
+
+  return '<div class="sched-box">'
+    + '<div class="sched-title">Payment schedule</div>'
+    + rows
+    + '</div>';
+}
+
+function parseEventDate(iso){
+  if(!iso) return null;
+  try{ const d = new Date(iso+'T00:00:00Z'); return isNaN(d.getTime())?null:d; }catch(e){ return null; }
+}
+
+// Static payment methods / instructions block.
+function buildPaymentInstructions(){
+  return '<div class="pay-instr">'
+    + '<div class="pay-instr-title">Ways to pay</div>'
+    + '<p class="pay-instr-lead">We accept cash, check, Zelle, wire, or credit card (credit cards carry a 3.4% processing fee).</p>'
+    + '<div class="pay-instr-grid">'
+      + '<div class="pay-method"><div class="pm-h">Zelle</div><div class="pm-b">201-250-9487 &nbsp;or&nbsp; premier.caterers@yahoo.com<br><span class="pm-note">Please check with us which to use.</span></div></div>'
+      + '<div class="pay-method"><div class="pm-h">Credit card</div><div class="pm-b">Use the <strong>Make a payment</strong> buttons above (3.4% fee applies).</div></div>'
+      + '<div class="pay-method"><div class="pm-h">Check or cash</div><div class="pm-b">Payable to <strong>Premier Caterers, LLC</strong>.</div></div>'
+      + '<div class="pay-method"><div class="pm-h">Wire transfer</div><div class="pm-b">'
+        + 'Bank of America<br>Premier Caterers, LLC<br>'
+        + 'Routing (paper &amp; electronic): 021200339<br>'
+        + 'Routing (wires): 026009593<br>'
+        + 'Account #: 381033988724'
+      + '</div></div>'
+    + '</div>'
+    + '<div class="pay-instr-foot">With every payment, please include the <strong>event name and event date</strong> so we can match it correctly.</div>'
+  + '</div>';
+}
+
+function wirePayOptions(balance){
+  const opts = document.querySelectorAll('.pay-opt');
+  const payBtn = document.getElementById('payBtn');
+  const customRow = document.getElementById('payCustomRow');
+  const customInput = document.getElementById('payCustomInput');
+  const selNote = document.getElementById('paySelNote');
+  if(!opts.length || !payBtn) return;
+
+  function setSelection(kind, amount){
+    _paySelection = { kind:kind, amount:amount };
+    const ok = amount > 0.01 && amount <= (balance + 0.01 || amount);
+    payBtn.disabled = !(amount > 0.01);
+    payBtn.textContent = amount > 0.01 ? ('Pay '+money(amount)) : 'Enter an amount';
+    if(kind==='custom' && amount > balance + 0.01){
+      selNote.textContent = 'That\'s more than the balance due — we\'ll treat it as an advance payment.';
+    } else { selNote.textContent = ''; }
+  }
+
+  opts.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      opts.forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+      if(btn.dataset.pay === 'custom'){
+        customRow.style.display = 'flex';
+        customInput.focus();
+        const v = parseFloat(customInput.value||0);
+        setSelection('custom', v);
+      } else {
+        customRow.style.display = 'none';
+        setSelection(btn.dataset.pay, parseFloat(btn.dataset.amt||0));
+      }
+    });
+  });
+
+  if(customInput){
+    customInput.addEventListener('input', function(){
+      setSelection('custom', parseFloat(customInput.value||0));
+    });
+  }
+
+  payBtn.addEventListener('click', startCheckout);
 }
 
 function downloadInvoicePdf(){
@@ -439,15 +595,18 @@ function buildPortalInvoiceHtml(){
 
 async function startCheckout(){
   const btn = document.getElementById('payBtn');
-  btn.disabled = true; btn.textContent = 'Redirecting…';
+  const amount = _paySelection.amount || 0;
+  if(amount <= 0.01){ return; }
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Connecting…';
   try{
     // TODO: replace with the Stripe Checkout Apps Script relay endpoint once built.
-    // Expected request: POST { portalId: pid, token: tok }
+    // Expected request: POST { portalId: pid, token: tok, amount: amount, kind: _paySelection.kind }
     // Expected response: { url: "https://checkout.stripe.com/..." }
     throw new Error('Stripe relay not yet connected');
   }catch(e){
-    btn.disabled = false; btn.textContent = 'Pay Deposit';
-    alert('Online payment isn\'t connected yet. Please contact Premier Caterers at events@thepremiercaterer.com to arrange your deposit.');
+    btn.disabled = false; btn.textContent = label;
+    alert('Online payment isn\'t connected yet — but your selection of '+money(amount)+' is noted. Please contact Premier Caterers at events@thepremiercaterer.com to arrange payment.');
   }
 }
 
