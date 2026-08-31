@@ -408,6 +408,14 @@ function renderInvoice(){
       + '</div>';
   }
 
+  let totalsRows = '';
+  if(hasBreakdown){
+    totalsRows =
+      '<div class="tot-row"><span>Subtotal</span><span>'+money(subtotal)+'</span></div>'
+      + (logistics>0 ? '<div class="tot-row"><span>Logistics &amp; service</span><span>'+money(logistics)+'</span></div>' : '')
+      + (tax>0 ? '<div class="tot-row"><span>Tax</span><span>'+money(tax)+'</span></div>' : '');
+  }
+
   el.innerHTML =
     '<div class="inv-doc">'
       + '<div class="inv-doc-head">'
