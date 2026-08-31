@@ -272,6 +272,18 @@ function _unansweredBadge(inq){
   return `<span title="Client emailed — no reply yet. Click to mark handled." onclick="event.stopPropagation();markEmailHandled('${inq.id}')" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#FFE9DC;border:1.5px dashed #B44100;color:#B44100;margin-left:6px;flex-shrink:0;cursor:pointer;position:relative"><i class="ti ti-mail-filled" style="font-size:11px"></i><span style="position:absolute;top:-2px;right:-2px;width:7px;height:7px;background:#B44100;border-radius:50%;border:1.5px solid var(--bg)"></span></span>`;
 }
 
+// Portal message badge — client sent a message through the portal with no reply.
+// Resolves the event from the inquiry so it can check the portal thread.
+function _portalMsgBadge(inq){
+  try{
+    const ev = _eventForInq(inq);
+    if(ev && typeof hasUnansweredPortalMessage==='function' && hasUnansweredPortalMessage(ev)){
+      return `<span title="Client sent a portal message — no reply yet" style="display:inline-flex;align-items:center;gap:3px;background:#c0392b;color:#fff;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:9px;margin-left:6px;flex-shrink:0"><i class="ti ti-message-circle" style="font-size:10px"></i>portal</span>`;
+    }
+  }catch(e){}
+  return '';
+}
+
 // Larger banner version shown in the client detail view (hub). Includes
 // the subject of the last unanswered message so Kenny sees what came in.
 function _unansweredHubBanner(inq){
@@ -3754,7 +3766,7 @@ function renderPipeline(){
         if(compact){
           return `<div class="inq-card compact ${selectedInqId===inq.id?'selected':''}" ${plBorderStyle(inq,s.key)} ${plPayTitle(inq,s.key)} onclick="selectInquiry('${inq.id}')">
             ${allergyBanner(inq,true)}
-            <div class="pl-card-head"><div class="inq-name">${nm}${_unansweredBadge(inq)}${_salespersonBadge(inq)}${_followupBadge(inq)}</div>${chev}</div>
+            <div class="pl-card-head"><div class="inq-name">${nm}${_unansweredBadge(inq)}${_portalMsgBadge(inq)}${_salespersonBadge(inq)}${_followupBadge(inq)}</div>${chev}</div>
             <div class="pl-compact-meta">
               ${inq.eventType ? `<span><i class="ti ti-tag" style="font-size:11px"></i>${inq.eventType}</span>` : ''}
               ${inq.eventDate ? `<span><i class="ti ti-calendar" style="font-size:11px"></i>${formatDateWithDay(inq.eventDate)}</span>` : ''}
@@ -3768,7 +3780,7 @@ function renderPipeline(){
           <div class="cc-topl">${inq.eventType?`<span class="type-badge" style="background:var(--text3)">${inq.eventType}</span>`:''}</div>
           ${inq.eventDate?`<div class="cc-date">${formatDateWithDay(inq.eventDate)}</div>`:''}
         </div>
-        <div class="pl-card-head"><div class="inq-name">${nm}${_unansweredBadge(inq)}${_salespersonBadge(inq)}${_followupBadge(inq)}</div>${chev}</div>
+        <div class="pl-card-head"><div class="inq-name">${nm}${_unansweredBadge(inq)}${_portalMsgBadge(inq)}${_salespersonBadge(inq)}${_followupBadge(inq)}</div>${chev}</div>
         ${contact ? `<div style="font-size:11px;color:var(--text3);margin:-2px 0 4px"><i class="ti ti-user" style="font-size:10px"></i> ${contact}</div>` : ''}
         ${inq.eventName ? `<div class="inq-event-name">${inq.eventName}</div>` : ''}
         <div class="inq-meta">
@@ -7353,6 +7365,7 @@ function renderSchedule(){
         <input type="checkbox" ${e.noStaffing?'checked':''} onchange="toggleNoStaffing('${e.id}',this.checked)" style="width:16px;height:16px;accent-color:var(--blue-mid);cursor:pointer" title="No staffing needed">
         <span class="job-pill">${displayJob(e.job)}</span>
         <span style="font-size:15px;font-weight:600;color:var(--text)">${e.name}</span>
+        ${hasUnansweredPortalMessage(e)?`<span title="Unanswered client portal message" style="display:inline-flex;align-items:center;gap:3px;background:#c0392b;color:#fff;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:9px"><i class="ti ti-message-circle" style="font-size:10px"></i>portal</span>`:''}
         <span style="font-size:12px;color:var(--text2)">${e.dayLabel||''} · ${e.typeLabel||''}</span>
         <div style="margin-left:auto;display:flex;gap:4px">
           <button onclick="addMealSection('${e.id}')" style="padding:4px 10px;font-size:12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-plus" style="font-size:12px"></i>Add meal</button>
@@ -8220,6 +8233,7 @@ function renderEventGrocery(e){
     <div class="sched-card-header">
       <span class="job-pill">${displayJob(e.job)}</span>
       <span style="font-size:15px;font-weight:600;color:var(--text)">${e.name}</span>
+      ${hasUnansweredPortalMessage(e)?`<span title="Unanswered client portal message" style="display:inline-flex;align-items:center;gap:3px;background:#c0392b;color:#fff;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:9px"><i class="ti ti-message-circle" style="font-size:10px"></i>portal</span>`:''}
       <span style="font-size:12px;color:var(--text2)">${e.dayLabel||''} · ${e.typeLabel||''}</span>
       <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
         ${hasMenu ? `<button onclick="generateGroceryFromMenu('${e.id}')" style="padding:5px 12px;font-size:12px;border:none;border-radius:var(--radius);background:var(--blue-mid);color:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:5px">
