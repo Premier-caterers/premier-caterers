@@ -12543,6 +12543,7 @@ async function syncClientPortal(eid, opts){
     eventDate: e.dayLabel || p.eventDate || '',
     venue: e.addr || p.venue || '',
     jobNumber: displayJob(e.job) || p.jobNumber || '',
+    clientEmail: clientEmailForEvent(eid) || p.clientEmail || '',
     invoiceSnapshot: inv,
     depositAmount: inv.depositAmount || 0,
     catererDocuments: catererDocuments,
@@ -12592,6 +12593,19 @@ function pullPortalUploadsToEvent(e, p){
   return changed;
 }
 
+// Best-effort client email for an event, for Stripe receipts etc.
+function clientEmailForEvent(eid){
+  try{
+    const e = events.find(x=>x.id===eid);
+    if(e && e.contactEmail) return e.contactEmail;
+    // event ids for booked jobs are typically 'inq_<id>'
+    const inqId = String(eid||'').indexOf('inq_')===0 ? String(eid).slice(4) : eid;
+    const inq = inquiries.find(x=>x.id===inqId);
+    if(inq && inq.email) return inq.email;
+  }catch(e){}
+  return '';
+}
+
 async function createClientPortal(eid){
   const e = events.find(x=>x.id===eid);
   if(!e){ alert('Event not found.'); return; }
@@ -12603,6 +12617,7 @@ async function createClientPortal(eid){
 
   const doc = {
     eventId: eid,
+    clientEmail: clientEmailForEvent(eid),
     jobNumber: displayJob(e.job) || '',
     token: token,
     eventName: e.name || '',
