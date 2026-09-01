@@ -261,6 +261,25 @@ function stateScreen(icon, title, msg){
 
 const pid = qp('p'), tok = qp('t');
 const justPaid = qp('paid') === '1';
+const paidSessionId = qp('session_id') || '';
+
+// When the client returns from a successful Stripe checkout, confirm the session
+// with the relay so the payment is recorded on the portal doc (Option 1: redirect
+// confirmation). Runs once; the live listener then repaints the paid state.
+async function verifyPaymentIfReturning(){
+  if(!justPaid || !paidSessionId) return;
+  try{
+    const url = STRIPE_RELAY_URL
+      + '?action=verify'
+      + '&session_id=' + encodeURIComponent(paidSessionId)
+      + '&portalId=' + encodeURIComponent(pid)
+      + '&token=' + encodeURIComponent(tok);
+    await fetch(url);
+    // Whether or not it recorded, strip the paid params from the URL so a refresh
+    // doesn't re-trigger, and so the "thank you" banner shows just once.
+    try{ history.replaceState({}, '', location.pathname + '?p=' + encodeURIComponent(pid) + '&t=' + encodeURIComponent(tok)); }catch(e){}
+  }catch(e){ /* non-fatal; payment still exists in Stripe */ }
+}
 let portalDoc = null;
 let shellBuilt = false;
 let activeTab = 'overview';
@@ -280,6 +299,7 @@ let activeTab = 'overview';
       try{ db.collection('clientPortals').doc(pid).update({ lastViewedAt: Date.now() }); }catch(e){}
       renderShell();
       shellBuilt = true;
+      verifyPaymentIfReturning();
     } else {
       // live update — refresh panels in place without disturbing the active tab
       refreshPanels();
