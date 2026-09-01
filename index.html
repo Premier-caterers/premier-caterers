@@ -3092,7 +3092,7 @@ function renderEvents(){
   const currentWeekDate = getWeekEndDate(currentWeekOffset);
   const currentWeekStr = currentWeekDate.toISOString().split('T')[0];
   const weekEvents = events.filter(e => {
-    if(eventInquiryMissing(e)) return false;
+    if(!isActiveEvent(e)) return false;
     // Events without weekOf belong to the base week (2026-06-08)
     const ew = e.weekOf || '2026-05-31';
     return ew === currentWeekStr;
