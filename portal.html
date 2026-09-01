@@ -260,6 +260,7 @@ function stateScreen(icon, title, msg){
 }
 
 const pid = qp('p'), tok = qp('t');
+const justPaid = qp('paid') === '1';
 let portalDoc = null;
 let shellBuilt = false;
 let activeTab = 'overview';
@@ -387,6 +388,9 @@ function renderInvoice(){
   const fullyPaid = balance <= 0.01 && (deposit>0 || grand>0);
 
   let payHtml = '';
+  if(justPaid){
+    payHtml += '<div class="paid-banner" style="margin-top:0;margin-bottom:16px">✓ Thank you! Your payment was received. It may take a moment to reflect on your balance.</div>';
+  }
   if(fullyPaid){
     payHtml = '<div class="paid-banner">✓ Paid in full — thank you!</div>';
   } else if(balance > 0.01 || depositAmt > 0){
@@ -511,14 +515,23 @@ function wirePayOptions(balance){
   const selNote = document.getElementById('paySelNote');
   if(!opts.length || !payBtn) return;
 
+  const CARD_FEE_RATE = 0.034;
   function setSelection(kind, amount){
     _paySelection = { kind:kind, amount:amount };
-    const ok = amount > 0.01 && amount <= (balance + 0.01 || amount);
     payBtn.disabled = !(amount > 0.01);
-    payBtn.textContent = amount > 0.01 ? ('Pay '+money(amount)) : 'Enter an amount';
-    if(kind==='custom' && amount > balance + 0.01){
-      selNote.textContent = 'That\'s more than the balance due — we\'ll treat it as an advance payment.';
-    } else { selNote.textContent = ''; }
+    if(amount > 0.01){
+      const fee = Math.round(amount * CARD_FEE_RATE * 100) / 100;
+      const total = Math.round((amount + fee) * 100) / 100;
+      payBtn.textContent = 'Pay '+money(total);
+      let note = 'Includes a '+(CARD_FEE_RATE*100).toFixed(1)+'% card processing fee ('+money(fee)+'). You will pay '+money(total)+' total.';
+      if(kind==='custom' && amount > balance + 0.01){
+        note = 'That is more than the balance due — treated as an advance payment. ' + note;
+      }
+      selNote.textContent = note;
+    } else {
+      payBtn.textContent = 'Enter an amount';
+      selNote.textContent = '';
+    }
   }
 
   opts.forEach(function(btn){
@@ -601,6 +614,8 @@ function buildPortalInvoiceHtml(){
     + '</div></div></body></html>';
 }
 
+const STRIPE_RELAY_URL = 'https://script.google.com/macros/s/AKfycbyaRqp2pSMDbY1DP_VC-ZmSlqLEzrf76GUIMUKJYC_hAy15KNCuvmbSeyZaFfusQJEomA/exec';
+
 async function startCheckout(){
   const btn = document.getElementById('payBtn');
   const amount = _paySelection.amount || 0;
@@ -608,13 +623,29 @@ async function startCheckout(){
   const label = btn.textContent;
   btn.disabled = true; btn.textContent = 'Connecting…';
   try{
-    // TODO: replace with the Stripe Checkout Apps Script relay endpoint once built.
-    // Expected request: POST { portalId: pid, token: tok, amount: amount, kind: _paySelection.kind }
-    // Expected response: { url: "https://checkout.stripe.com/..." }
-    throw new Error('Stripe relay not yet connected');
+    const payload = {
+      portalId: pid,
+      token: tok,
+      amount: amount,
+      kind: _paySelection.kind || 'payment',
+      returnUrl: location.href.split('#')[0]
+    };
+    // text/plain keeps this a "simple" cross-origin request (no preflight to Apps Script)
+    const r = await fetch(STRIPE_RELAY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if(d && d.ok && d.url){
+      // Redirect the client to Stripe's secure checkout page.
+      window.location.href = d.url;
+      return;
+    }
+    throw new Error((d && d.error) || 'Could not start checkout');
   }catch(e){
     btn.disabled = false; btn.textContent = label;
-    alert('Online payment isn\'t connected yet — but your selection of '+money(amount)+' is noted. Please contact Premier Caterers at events@thepremiercaterer.com to arrange payment.');
+    alert('We couldn\'t start the online payment ('+ (e.message||'error') +'). Please try again, or contact Premier Caterers at events@thepremiercaterer.com to arrange payment.');
   }
 }
 
