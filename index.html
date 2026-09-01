@@ -3833,6 +3833,7 @@ function renderPipeline(){
             </select>`; })()}
           </div>
           ${isBooked || isPastCol ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">→ Go to event week</button>` : ''}
+          ${(inq.stage==='menu_sent'||inq.stage==='booked') ? `<button class="stage-btn" style="background:var(--blue-bg);color:var(--blue-text);border:0.5px solid var(--blue-border)" onclick="event.stopPropagation();openInquiryPortal('${inq.id}')" title="Client portal"><i class="ti ti-external-link" style="font-size:12px"></i> Portal</button>` : ''}
           <button class="stage-btn" style="background:var(--bg2);color:var(--text2);margin-left:auto" onclick="event.stopPropagation();openContactMenu('${inq.id}')" title="Contact client"><i class="ti ti-send" style="font-size:12px"></i> Contact</button>
           <button onclick="event.stopPropagation();deleteInquiry('${inq.id}')" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px"><i class="ti ti-trash"></i></button>
         </div>` : ''}
@@ -12625,6 +12626,135 @@ function clientEmailForEvent(eid){
   return '';
 }
 
+// Build an invoice-snapshot-shaped object from an inquiry's ESTIMATE (pre-booking,
+// before an event/invoice exists). Mirrors aggregateInvoiceForPortal's output shape.
+function aggregateEstimateForPortal(inq){
+  const est = inq && inq.estimate;
+  if(!est || !Array.isArray(est.lines)){
+    return { number:'', subtotal:0, logistics:0, tax:0, total:0, paid:0, docType:'quote', depositAmount:0, items:[], printHtml:'' };
+  }
+  const t = calcInvoiceTotals(est);
+  const items = (est.lines||[]).filter(l=>l.description).map(l=>({
+    name: l.description, qty: l.qty, amount: parseFloat(l.qty||0)*parseFloat(l.price||0)
+  }));
+  const isInvoice = est.status==='invoice' || est.status==='paid';
+  return {
+    number: est.quoteNumber || displayJob(inq.job||'') || '',
+    subtotal: t.subtotal, logistics: t.logistics, tax: t.tax, total: t.grand,
+    paid: parseFloat(est.deposit||0),
+    docType: isInvoice ? 'invoice' : 'quote',
+    depositAmount: parseFloat(est.deposit||0),
+    items: items,
+    printHtml: ''
+  };
+}
+
+function _portalFieldsFromInquiry(inq){
+  const name = (clientPrimary(inq) || (((inq.firstName||'')+' '+(inq.lastName||'')).trim()) || inq.eventName || inq.organization || 'Client');
+  return {
+    clientEmail: inq.email || '',
+    jobNumber: displayJob(inq.job||'') || '',
+    eventName: inq.eventName || name || (inq.eventType||'Event'),
+    eventType: inq.eventType || '',
+    eventDate: inq.eventDate || '',
+    venue: inq.venueName || inq.venueLocation || ''
+  };
+}
+
+function _findPortalIdForInquiry(inqId){
+  const evId = 'inq_'+inqId;
+  const hit = Object.keys(clientPortals).find(pid=>{
+    const p = clientPortals[pid];
+    return p && (p.inquiryId===inqId || p.eventId===evId);
+  });
+  return hit || null;
+}
+
+function _buildInquiryCatererDocs(inq){
+  const docs = {};
+  const menuRaw = inq.menuLink || inq.pdfMenuLink || (inq.estimate && inq.estimate.menuLink) || '';
+  if(menuRaw){
+    docs.menuPdf = { name:'Menu (PDF)', url: (typeof menuPdfUrl==='function' ? menuPdfUrl(menuRaw) : menuRaw) };
+  }
+  try{
+    const c = (typeof contracts!=='undefined') ? contracts['inq_'+inq.id] : null;
+    if(c && typeof contractSignLink==='function'){
+      const link = contractSignLink('inq_'+inq.id);
+      if(link) docs.contract = { name:'Contract', url: link };
+    }
+  }catch(e){}
+  return docs;
+}
+
+// Create a portal from an INQUIRY (menu-sent stage, before booking).
+// Open (creating if needed) the client portal for an inquiry, in a new tab.
+async function openInquiryPortal(inqId){
+  const inq = inquiries.find(x=>x.id===inqId);
+  if(!inq) return;
+  let portalId = inq.portalId || _findPortalIdForInquiry(inqId);
+  if(!portalId){
+    portalId = await createInquiryPortal(inqId, { silent:true });
+    if(!portalId){ alert('Could not create the portal — please try again.'); return; }
+  }
+  const p = clientPortals[portalId];
+  const url = PORTAL_BASE_URL + '?p=' + encodeURIComponent(portalId) + '&t=' + encodeURIComponent((p&&p.token)||'');
+  copyPortalLink(url);
+  window.open(url, '_blank');
+}
+async function createInquiryPortal(inqId, opts){
+  opts = opts || {};
+  const inq = inquiries.find(x=>x.id===inqId);
+  if(!inq){ if(!opts.silent) alert('Inquiry not found.'); return null; }
+  const existingId = inq.portalId || _findPortalIdForInquiry(inqId);
+  if(existingId && clientPortals[existingId]){
+    if(!opts.silent){
+      const p = clientPortals[existingId];
+      const url = PORTAL_BASE_URL + '?p=' + encodeURIComponent(existingId) + '&t=' + encodeURIComponent(p.token||'');
+      copyPortalLink(url);
+      alert('Portal already exists — link copied to your clipboard.');
+    }
+    return existingId;
+  }
+  const token = _genPortalToken();
+  const portalId = 'p_inq_' + inqId + '_' + Date.now().toString(36);
+  const f = _portalFieldsFromInquiry(inq);
+  const est = aggregateEstimateForPortal(inq);
+  const doc = {
+    inquiryId: inqId,
+    eventId: 'inq_'+inqId,
+    clientEmail: f.clientEmail,
+    jobNumber: f.jobNumber,
+    token: token,
+    eventName: f.eventName,
+    eventType: f.eventType,
+    eventDate: f.eventDate,
+    venue: f.venue,
+    stage: 'prospect',
+    catererDocuments: _buildInquiryCatererDocs(inq),
+    invoiceSnapshot: est,
+    depositAmount: est.depositAmount || 0,
+    depositPaid: false,
+    notifyPhones: (opts.notifyPhones||[]),
+    messages: [],
+    createdAt: Date.now()
+  };
+  try{
+    await clientPortalsCol.doc(portalId).set(doc);
+    inq.portalId = portalId;
+    await _saveInquiry(inq);
+    clientPortals[portalId] = doc;
+    if(!opts.silent){
+      render();
+      const url = PORTAL_BASE_URL + '?p=' + encodeURIComponent(portalId) + '&t=' + encodeURIComponent(token);
+      copyPortalLink(url);
+      alert('Client portal created and link copied to your clipboard.');
+    }
+    return portalId;
+  }catch(err){
+    if(!opts.silent) alert('Could not create the portal — please check your connection and try again.');
+    return null;
+  }
+}
 async function createClientPortal(eid){
   const e = events.find(x=>x.id===eid);
   if(!e){ alert('Event not found.'); return; }

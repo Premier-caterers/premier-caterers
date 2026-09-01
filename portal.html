@@ -267,6 +267,16 @@ function stateScreen(icon, title, msg){
 const pid = qp('p'), tok = qp('t');
 const staffMode = qp('staff') === '1';   // set when the caterer edits from the app
 const focusTab = qp('tab') || '';         // optional: open straight to a tab (e.g. 'details')
+
+// A "prospect" portal is pre-booking (created from an inquiry): show the estimate
+// as view-only, no deposit/pay UI, no payment schedule.
+function _isProspect(){
+  if(!portalDoc) return false;
+  if(portalDoc.stage === 'prospect') return true;
+  const inv = portalDoc.invoiceSnapshot || {};
+  // Also treat a quote-status snapshot with no booked stage as prospect.
+  return portalDoc.stage !== 'booked' && (inv.docType === 'quote');
+}
 const justPaid = qp('paid') === '1';
 const paidSessionId = qp('session_id') || '';
 
@@ -343,7 +353,7 @@ function renderShell(){
       + '<div class="sub">'+esc(fmtDate(portalDoc.eventDate))+(portalDoc.venue?(' · '+esc(portalDoc.venue)):'')+'</div>'
       + '<div class="tabs">'
         + '<button class="tab'+(activeTab==='overview'?' active':'')+'" data-tab="overview">Overview</button>'
-        + '<button class="tab'+(activeTab==='invoice'?' active':'')+'" data-tab="invoice">Invoice &amp; Payment</button>'
+        + '<button class="tab'+(activeTab==='invoice'?' active':'')+'" data-tab="invoice">'+(_isProspect()?'Estimate':'Invoice &amp; Payment')+'</button>'
         + '<button class="tab'+(activeTab==='details'?' active':'')+'" data-tab="details">Event Details</button>'
         + '<button class="tab'+(activeTab==='documents'?' active':'')+'" data-tab="documents">Documents</button>'
         + '<button class="tab'+(activeTab==='questions'?' active':'')+'" data-tab="questions">Questions</button>'
@@ -381,9 +391,9 @@ function renderOverview(){
     + '<div class="overview-cell"><div class="label">Event Type</div><div class="value"><span class="type-pill">'+esc(portalDoc.eventType||'—')+'</span></div></div>'
     + '<div class="overview-cell"><div class="label">Date</div><div class="value">'+esc(fmtDate(portalDoc.eventDate))+'</div></div>'
     + '<div class="overview-cell"><div class="label">Venue</div><div class="value">'+esc(portalDoc.venue||'—')+'</div></div>'
-    + '<div class="overview-cell"><div class="label">Balance Due</div><div class="value" style="color:var(--maroon)">'+money(balanceRemaining())+'</div></div>'
+    + '<div class="overview-cell"><div class="label">'+(_isProspect()?'Estimate Total':'Balance Due')+'</div><div class="value" style="color:var(--maroon)">'+money(_isProspect()?parseFloat((portalDoc.invoiceSnapshot||{}).total||0):balanceRemaining())+'</div></div>'
     + '</div>'
-    + '<p class="welcome-note">Welcome — this is where you can review your invoice and pay your deposit. Questions any time? Reach us at <a href="mailto:events@thepremiercaterer.com">events@thepremiercaterer.com</a>.</p>';
+    + '<p class="welcome-note">Welcome — '+(_isProspect()?'this is where you can review your menu and estimate, sign your contract, upload event details, and message us directly':'this is where you can review your invoice and pay your deposit')+'. Questions any time? Reach us at <a href="mailto:events@thepremiercaterer.com">events@thepremiercaterer.com</a>.</p>';
 }
 
 function balanceRemaining(){
@@ -472,11 +482,11 @@ function renderInvoice(){
         + '<div class="tot-row balance"><span>Balance due</span><span>'+money(balance)+'</span></div>'
       + '</div>'
     + '</div>'
-    + buildPaymentSchedule(grand, deposit, balance)
-    + payHtml
-    + buildPaymentInstructions();
+    + (_isProspect()
+        ? '<div class="pay-instr" style="text-align:center"><div class="pay-instr-lead" style="margin:0">This is your estimate. Once you\'re ready to book, we\'ll finalize it into an invoice and you\'ll be able to pay your deposit right here.</div></div>'
+        : (buildPaymentSchedule(grand, deposit, balance) + payHtml + buildPaymentInstructions()));
 
-  wirePayOptions(balance);
+  if(!_isProspect()) wirePayOptions(balance);
   const dlBtn = document.getElementById('dlInvoiceBtn');
   if(dlBtn) dlBtn.addEventListener('click', downloadInvoicePdf);
 }
