@@ -395,8 +395,17 @@ function renderInvoice(){
   const logistics = parseFloat(inv.logistics||0);
   const tax = parseFloat(inv.tax||0);
   const grand = inv.total != null ? parseFloat(inv.total) : (subtotal+logistics+tax);
-  const deposit = parseFloat(inv.paid || portalDoc.depositAmount || 0);
-  const balance = grand - deposit;
+  // Amount recorded on the invoice by your app:
+  const invoicePaid = parseFloat(inv.paid || 0);
+  // Payments the client made through the portal via Stripe (base amount, before card fee):
+  const portalPayments = Array.isArray(portalDoc.payments) ? portalDoc.payments : [];
+  const portalPaidSum = portalPayments.reduce(function(s,p){ return s + parseFloat(p.baseAmount||0); }, 0);
+  // Total paid = whatever your app recorded, plus portal payments. If neither
+  // exists, fall back to the old depositAmount display value.
+  const deposit = (invoicePaid + portalPaidSum) > 0
+                    ? (invoicePaid + portalPaidSum)
+                    : parseFloat(portalDoc.depositAmount || 0);
+  const balance = Math.max(0, grand - deposit);
 
   let rows = items.map(function(it){
     const amt = it.amount != null ? it.amount : (parseFloat(it.qty||0)*parseFloat(it.price||0));
