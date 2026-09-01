@@ -79,6 +79,11 @@
 
   .paid-banner{background:var(--green-bg);border:2px solid var(--green-text);border-radius:10px;padding:16px 18px;text-align:center;color:var(--green-text);font-weight:600;margin-top:22px}
 
+  .pay-confirm{background:var(--green-bg);border:1px solid var(--green-text);border-radius:14px;padding:26px 22px;text-align:center;margin-bottom:20px}
+  .pay-confirm-check{width:52px;height:52px;border-radius:50%;background:var(--green-text);color:#fff;font-size:28px;line-height:52px;margin:0 auto 10px;font-weight:700}
+  .pay-confirm-title{font-family:'Fraunces',serif;font-size:20px;font-weight:600;color:var(--green-text)}
+  .pay-confirm-sub{font-size:13px;color:var(--text2);max-width:380px;margin:6px auto 0;line-height:1.55}
+
   .pay-box{margin-top:22px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:20px}
   .pay-box-title{font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin-bottom:14px}
   .pay-options{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
@@ -260,12 +265,15 @@ function stateScreen(icon, title, msg){
 }
 
 const pid = qp('p'), tok = qp('t');
+const staffMode = qp('staff') === '1';   // set when the caterer edits from the app
+const focusTab = qp('tab') || '';         // optional: open straight to a tab (e.g. 'details')
 const justPaid = qp('paid') === '1';
 const paidSessionId = qp('session_id') || '';
 
 // When the client returns from a successful Stripe checkout, confirm the session
 // with the relay so the payment is recorded on the portal doc (Option 1: redirect
 // confirmation). Runs once; the live listener then repaints the paid state.
+let _paidAmount = 0;
 async function verifyPaymentIfReturning(){
   if(!justPaid || !paidSessionId) return;
   try{
@@ -274,15 +282,15 @@ async function verifyPaymentIfReturning(){
       + '&session_id=' + encodeURIComponent(paidSessionId)
       + '&portalId=' + encodeURIComponent(pid)
       + '&token=' + encodeURIComponent(tok);
-    await fetch(url);
-    // Whether or not it recorded, strip the paid params from the URL so a refresh
-    // doesn't re-trigger, and so the "thank you" banner shows just once.
+    const r = await fetch(url);
+    try{ const d = await r.json(); if(d && d.amount) { _paidAmount = d.amount; renderInvoice(); } }catch(_){}
+    // Strip the paid params so a refresh doesn't re-trigger the banner.
     try{ history.replaceState({}, '', location.pathname + '?p=' + encodeURIComponent(pid) + '&t=' + encodeURIComponent(tok)); }catch(e){}
   }catch(e){ /* non-fatal; payment still exists in Stripe */ }
 }
 let portalDoc = null;
 let shellBuilt = false;
-let activeTab = 'overview';
+let activeTab = (focusTab && ['overview','invoice','details','documents','questions'].indexOf(focusTab)>-1) ? focusTab : 'overview';
 
 (function(){
   if(!pid || !tok){ stateScreen('🔗','Link incomplete','This portal link is missing information. Please use the exact link from your email.'); return; }
@@ -330,7 +338,7 @@ function renderShell(){
   root.innerHTML =
     '<div class="frame">'
     + '<div class="portal-header">'
-      + '<div class="brand">Premier Caterers</div>'
+      + '<div class="brand">Premier Caterers'+(staffMode?' <span style="background:var(--brass);color:#20262A;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px;letter-spacing:0;vertical-align:middle">STAFF VIEW</span>':'')+'</div>'
       + '<h1>'+esc(portalDoc.eventName||'Your Event')+'</h1>'
       + '<div class="sub">'+esc(fmtDate(portalDoc.eventDate))+(portalDoc.venue?(' · '+esc(portalDoc.venue)):'')+'</div>'
       + '<div class="tabs">'
@@ -412,7 +420,13 @@ function renderInvoice(){
 
   let payHtml = '';
   if(justPaid){
-    payHtml += '<div class="paid-banner" style="margin-top:0;margin-bottom:16px">✓ Thank you! Your payment was received. It may take a moment to reflect on your balance.</div>';
+    const amtLine = _paidAmount>0 ? ('<div style="font-family:\'Fraunces\',serif;font-size:26px;font-weight:600;margin:6px 0">'+money(_paidAmount)+'</div>') : '';
+    payHtml += '<div class="pay-confirm">'
+      + '<div class="pay-confirm-check">✓</div>'
+      + '<div class="pay-confirm-title">Payment received</div>'
+      + amtLine
+      + '<div class="pay-confirm-sub">Thank you! A receipt has been emailed to you. Your balance below reflects this payment.</div>'
+      + '</div>';
   }
   if(fullyPaid){
     payHtml = '<div class="paid-banner">✓ Paid in full — thank you!</div>';
@@ -750,7 +764,11 @@ function renderDetails(){
 
 function renderDetailsForm(host){
   let html = '';
-  html += '<div class="details-intro">Please fill in the final details for your event. Everything saves automatically as you go, so you can complete it in stages — just return any time using your link.</div>';
+  html += '<div class="details-intro">'
+    + (staffMode
+        ? 'Staff entry — fill in any event details you have on file. This is the same form the client sees; anything you enter here is shared with them, and anything they enter shows up for you. Saves automatically.'
+        : 'Please fill in the final details for your event. Everything saves automatically as you go, so you can complete it in stages — just return any time using your link.')
+    + '</div>';
   html += '<div class="form-progress"><span>'+progressPct()+'% complete</span><div class="bar"><div class="bar-fill" style="width:'+progressPct()+'%"></div></div><span class="save-status" id="saveStatus">Saves automatically</span></div>';
 
   // Menu confirmation
