@@ -12426,9 +12426,24 @@ function _genPortalToken(){
 }
 
 function clientPortalHubCard(inq, ev, role){
-  // The drawer is keyed off the inquiry; the portal lives on the event.
+  // Pre-booking: no event yet, but a portal CAN exist from the inquiry stage.
   if(!ev){
-    return `<div style="font-size:12px;color:var(--text3)">A portal link becomes available once this inquiry is booked into an event.</div>`;
+    if(!inq){ return `<div style="font-size:12px;color:var(--text3)">No client portal yet.</div>`; }
+    const existingPid = inq.portalId || _findPortalIdForInquiry(inq.id);
+    const existing = existingPid ? clientPortals[existingPid] : null;
+    if(existing){
+      const purl = PORTAL_BASE_URL + '?p=' + encodeURIComponent(existingPid) + '&t=' + encodeURIComponent(existing.token||'');
+      const msgs = existing.messages || [];
+      const unread = msgs.length && msgs[msgs.length-1].from === 'client';
+      return `<div style="font-size:12px;color:var(--text2);margin-bottom:8px">${unread?'<span style="background:#c0392b;color:#fff;font-size:10px;font-weight:600;padding:1px 8px;border-radius:10px;margin-right:6px">unanswered</span>':''}Prospect portal is live (pre-booking).</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="openInquiryPortal('${inq.id}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-external-link" style="font-size:13px"></i>Open portal</button>
+          <button onclick="copyPortalLink('${purl.replace(/'/g,"&#39;")}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-copy" style="font-size:13px"></i>Copy link</button>
+          <button onclick="toggleStaffPortalForm('inq_${inq.id}','${existing.token||''}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-edit" style="font-size:13px"></i>Edit details</button>
+        </div>`;
+    }
+    return `<div style="font-size:12px;color:var(--text2);margin-bottom:8px">Give the client early access — they can view the menu &amp; estimate, sign the contract, and message you, all before booking.</div>
+      <button onclick="openInquiryPortal('${inq.id}')" style="font-size:12px;padding:7px 14px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-external-link" style="font-size:14px"></i>Create client portal</button>`;
   }
   const p = ev.portalId ? clientPortals[ev.portalId] : null;
   const contacts = getNotifyContacts();
@@ -12805,21 +12820,30 @@ async function createClientPortal(eid){
 // the iframe never reloads and never flashes. It's still the same shared portal
 // form, so everything syncs to the client.
 function toggleStaffPortalForm(eid, token){
+  // Resolve the portal id + display name from either an event or an inquiry.
+  let portalId = '', displayName = '';
   const ev = events.find(x=>x.id===eid);
-  if(!ev || !ev.portalId){ alert('No portal for this event yet.'); return; }
-  // If already open, close it.
-  const existing = document.getElementById('staffPortalOverlay');
-  if(existing){ existing.remove(); return; }
-  const url = PORTAL_BASE_URL + '?p=' + encodeURIComponent(ev.portalId)
+  if(ev && ev.portalId){ portalId = ev.portalId; displayName = ev.name||''; }
+  else {
+    // Pre-booking: eid is 'inq_<id>'. Find the inquiry portal.
+    const inqId = String(eid).indexOf('inq_')===0 ? String(eid).slice(4) : eid;
+    const inq = inquiries.find(x=>x.id===inqId);
+    const pid = (inq && (inq.portalId || _findPortalIdForInquiry(inqId)));
+    if(pid){ portalId = pid; displayName = (inq && (clientPrimary(inq)||inq.eventName)) || ''; }
+  }
+  if(!portalId){ alert('No portal for this yet — create the portal first.'); return; }
+  const existingOv = document.getElementById('staffPortalOverlay');
+  if(existingOv){ existingOv.remove(); return; }
+  const url = PORTAL_BASE_URL + '?p=' + encodeURIComponent(portalId)
     + '&t=' + encodeURIComponent(token) + '&staff=1&tab=details';
   const ov = document.createElement('div');
   ov.id = 'staffPortalOverlay';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100001;display:flex;align-items:center;justify-content:center;padding:24px';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100001;display:flex;align-items:center;justify-content:center;padding:20px';
   ov.onclick = function(e){ if(e.target===ov) ov.remove(); };
   ov.innerHTML =
-    '<div style="background:var(--bg);border-radius:14px;overflow:hidden;width:100%;max-width:720px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">'
+    '<div style="background:var(--bg);border-radius:14px;overflow:hidden;width:100%;max-width:960px;height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">'
     + '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--nav-bg);color:#fff;flex-shrink:0">'
-      + '<span style="font-size:13px;font-weight:600"><i class="ti ti-edit" style="font-size:14px;vertical-align:middle"></i> Edit event details &mdash; ' + (ev.name||'').replace(/</g,'&lt;') + '</span>'
+      + '<span style="font-size:13px;font-weight:600"><i class="ti ti-edit" style="font-size:14px;vertical-align:middle"></i> Edit event details &mdash; ' + (displayName||'').replace(/</g,'&lt;') + '</span>'
       + '<button onclick="document.getElementById(\'staffPortalOverlay\').remove()" style="border:none;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-size:13px;font-family:inherit;padding:5px 12px;border-radius:7px">Done \u2715</button>'
     + '</div>'
     + '<div style="font-size:11.5px;color:var(--text3);padding:6px 16px;background:var(--bg2);flex-shrink:0">Saves automatically and syncs to the client.</div>'
