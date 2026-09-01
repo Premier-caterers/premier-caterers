@@ -1293,7 +1293,7 @@ function startFirebaseListeners(){
   checklistCol.onSnapshot( snap=>{ checklists={}; snap.docs.forEach(d=>{ checklists[d.id]=d.data().items||[]; }); if(currentView==='checklists'||currentView==='home') render(); updateBadge(); });
   clientPortalsCol.onSnapshot( snap=>{ clientPortals={}; snap.docs.forEach(d=>{ clientPortals[d.id]=d.data(); }); if(currentView==='pipeline'||currentView==='events'||currentView==='home') render(); try{ if(typeof syncHubDrawer==='function') syncHubDrawer(); }catch(e){} });
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
-  invoicesCol.onSnapshot( snap=>{ invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); }); try{ Object.keys(invoices).forEach(k=>{ _actPrevInv[k]=JSON.parse(JSON.stringify(invoices[k])); }); }catch(e){} if(currentView==='invoices') render(); });
+  invoicesCol.onSnapshot( snap=>{ invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); }); try{ Object.keys(invoices).forEach(k=>{ _actPrevInv[k]=JSON.parse(JSON.stringify(invoices[k])); }); }catch(e){} if(currentView==='invoices'||currentView==='pipeline'||currentView==='events') render(); try{ if(typeof syncHubDrawer==='function') syncHubDrawer(); }catch(e){} });
   venuesCol.onSnapshot( snap=>{ venues=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='venues') render(); });
   trashCol.onSnapshot( snap=>{ trash=snap.docs.map(d=>d.data()); purgeOldTrash(); if(currentView==='trash') render(); });
   groceryStationsCol.onSnapshot( snap=>{ groceryStations=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='grocery') render(); });
