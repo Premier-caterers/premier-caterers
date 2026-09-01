@@ -12563,7 +12563,7 @@ function buildPortalCatererDocs(e){
     const c = (typeof contracts!=='undefined') ? contracts[e.id] : null;
     if(c && typeof contractSignLink==='function'){
       const link = contractSignLink(e.id);
-      if(link) docs.contract = { name:'Contract', url: link };
+      if(link){ docs.contract = { name:'Contract', url: link }; docs.contractSignUrl = link; }
     }
   }catch(err){}
   return docs;
@@ -12729,7 +12729,7 @@ function _buildInquiryCatererDocs(inq){
     const c = (typeof contracts!=='undefined') ? contracts['inq_'+inq.id] : null;
     if(c && typeof contractSignLink==='function'){
       const link = contractSignLink('inq_'+inq.id);
-      if(link) docs.contract = { name:'Contract', url: link };
+      if(link){ docs.contract = { name:'Contract', url: link }; docs.contractSignUrl = link; }
     }
   }catch(e){}
   return docs;

@@ -277,6 +277,12 @@ function _isProspect(){
   // Also treat a quote-status snapshot with no booked stage as prospect.
   return portalDoc.stage !== 'booked' && (inv.docType === 'quote');
 }
+
+function _contractSignUrl(){
+  const cd = portalDoc && portalDoc.catererDocuments || {};
+  return cd.contractSignUrl || (cd.contract && cd.contract.url) || '';
+}
+function _hasContract(){ return !!_contractSignUrl(); }
 const justPaid = qp('paid') === '1';
 const paidSessionId = qp('session_id') || '';
 
@@ -300,7 +306,7 @@ async function verifyPaymentIfReturning(){
 }
 let portalDoc = null;
 let shellBuilt = false;
-let activeTab = (focusTab && ['overview','invoice','details','documents','questions'].indexOf(focusTab)>-1) ? focusTab : 'overview';
+let activeTab = (focusTab && ['overview','invoice','details','documents','contract','questions'].indexOf(focusTab)>-1) ? focusTab : 'overview';
 
 (function(){
   if(!pid || !tok){ stateScreen('🔗','Link incomplete','This portal link is missing information. Please use the exact link from your email.'); return; }
@@ -340,6 +346,7 @@ function refreshPanels(){
     // just refresh the thread list, leave composer alone
     refreshThreadOnly();
   } else {
+    renderContract();
     renderQuestions();
   }
 }
@@ -356,6 +363,7 @@ function renderShell(){
         + '<button class="tab'+(activeTab==='invoice'?' active':'')+'" data-tab="invoice">'+(_isProspect()?'Estimate':'Invoice &amp; Payment')+'</button>'
         + '<button class="tab'+(activeTab==='details'?' active':'')+'" data-tab="details">Event Details</button>'
         + '<button class="tab'+(activeTab==='documents'?' active':'')+'" data-tab="documents">Documents</button>'
+        + (_hasContract()?('<button class="tab'+(activeTab==='contract'?' active':'')+'" data-tab="contract">Contract</button>'):'')
         + '<button class="tab'+(activeTab==='questions'?' active':'')+'" data-tab="questions">Questions</button>'
       + '</div>'
     + '</div>'
@@ -363,6 +371,7 @@ function renderShell(){
     + '<div class="panel'+(activeTab==='invoice'?' active':'')+'" id="panel-invoice"></div>'
     + '<div class="panel'+(activeTab==='details'?' active':'')+'" id="panel-details"></div>'
     + '<div class="panel'+(activeTab==='documents'?' active':'')+'" id="panel-documents"></div>'
+    + '<div class="panel'+(activeTab==='contract'?' active':'')+'" id="panel-contract"></div>'
     + '<div class="panel'+(activeTab==='questions'?' active':'')+'" id="panel-questions"></div>'
     + '</div>';
 
@@ -380,6 +389,7 @@ function renderShell(){
   renderInvoice();
   renderDetails();
   renderDocuments();
+  renderContract();
   renderQuestions();
 }
 
@@ -1039,6 +1049,22 @@ function handleUpload(file, pathTag, folder){
 }
 
 // ───────────────────────── Documents ─────────────────────────
+
+function renderContract(){
+  const el = document.getElementById('panel-contract');
+  if(!el) return;
+  const signUrl = _contractSignUrl();
+  if(!signUrl){
+    el.innerHTML = '<div class="doc-empty" style="padding:30px 10px;text-align:center">Your contract will appear here once we\'ve prepared it. We\'ll let you know when it\'s ready to review and sign.</div>';
+    return;
+  }
+  // Embed the existing signing flow (sign.html) so the client reviews & signs
+  // right here. Same page, same token trust model, same write-back — no duplicate
+  // signing logic. staff mode is not passed, so the client sees the normal signer UI.
+  el.innerHTML = '<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden">'
+    + '<iframe src="'+esc(signUrl)+'" style="width:100%;height:720px;border:none;display:block" title="Contract"></iframe>'
+  + '</div>';
+}
 
 function renderDocuments(){
   const el = document.getElementById('panel-documents');
