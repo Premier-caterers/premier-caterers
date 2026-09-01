@@ -1293,7 +1293,25 @@ function startFirebaseListeners(){
   checklistCol.onSnapshot( snap=>{ checklists={}; snap.docs.forEach(d=>{ checklists[d.id]=d.data().items||[]; }); if(currentView==='checklists'||currentView==='home') render(); updateBadge(); });
   clientPortalsCol.onSnapshot( snap=>{ clientPortals={}; snap.docs.forEach(d=>{ clientPortals[d.id]=d.data(); }); if(currentView==='pipeline'||currentView==='events'||currentView==='home') render(); try{ if(typeof syncHubDrawer==='function') syncHubDrawer(); }catch(e){} });
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
-  invoicesCol.onSnapshot( snap=>{ invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); }); try{ Object.keys(invoices).forEach(k=>{ _actPrevInv[k]=JSON.parse(JSON.stringify(invoices[k])); }); }catch(e){} if(currentView==='invoices'||currentView==='pipeline'||currentView==='events') render(); try{ if(typeof syncHubDrawer==='function') syncHubDrawer(); }catch(e){} });
+  invoicesCol.onSnapshot( snap=>{
+    invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); });
+    try{ Object.keys(invoices).forEach(k=>{ _actPrevInv[k]=JSON.parse(JSON.stringify(invoices[k])); }); }catch(e){}
+    if(currentView==='invoices'||currentView==='pipeline'||currentView==='events') render();
+    try{ if(typeof syncHubDrawer==='function') syncHubDrawer(); }catch(e){}
+    // Keep any linked client portals in lockstep with their invoice, so a payment
+    // (or a manual edit) shows the same on the portal as in the app. Only touches
+    // events that actually have a portal, and only pushes the invoice snapshot.
+    try{
+      snap.docChanges().forEach(ch=>{
+        if(ch.type==='removed') return;
+        const eid = ch.doc.id;
+        const ev = events.find(x=>x.id===eid);
+        if(ev && ev.portalId && typeof syncPortalInvoiceOnly==='function'){
+          syncPortalInvoiceOnly(eid);
+        }
+      });
+    }catch(e){}
+  });
   venuesCol.onSnapshot( snap=>{ venues=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='venues') render(); });
   trashCol.onSnapshot( snap=>{ trash=snap.docs.map(d=>d.data()); purgeOldTrash(); if(currentView==='trash') render(); });
   groceryStationsCol.onSnapshot( snap=>{ groceryStations=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='grocery') render(); });
@@ -12484,6 +12502,31 @@ function buildPortalCatererDocs(e){
 
 // Push latest invoice/contract/menu into the event's portal doc, and pull client
 // uploads back onto the event (keeping both copies, stamped newest-first).
+// Lightweight portal sync: pushes ONLY the invoice snapshot + deposit to the
+// portal doc. Used by the invoice live-listener so the portal balance always
+// mirrors the app invoice, without the heavier full sync (uploads, docs, etc.).
+var _portalInvSyncTimers = {};
+async function syncPortalInvoiceOnly(eid){
+  const e = events.find(x=>x.id===eid);
+  if(!e || !e.portalId) return;
+  const p = clientPortals[e.portalId];
+  if(!p) return;
+  clearTimeout(_portalInvSyncTimers[eid]);
+  _portalInvSyncTimers[eid] = setTimeout(async ()=>{
+    try{
+      const inv = aggregateInvoiceForPortal(eid);
+      await clientPortalsCol.doc(e.portalId).set({
+        invoiceSnapshot: inv,
+        depositAmount: inv.depositAmount || 0,
+        lastSyncedAt: Date.now()
+      }, { merge:true });
+      if(clientPortals[e.portalId]){
+        clientPortals[e.portalId].invoiceSnapshot = inv;
+        clientPortals[e.portalId].depositAmount = inv.depositAmount || 0;
+      }
+    }catch(err){ /* non-fatal */ }
+  }, 500);
+}
 async function syncClientPortal(eid, opts){
   opts = opts || {};
   const e = events.find(x=>x.id===eid);
