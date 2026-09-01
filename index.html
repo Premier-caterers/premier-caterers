@@ -1321,7 +1321,26 @@ function startFirebaseListeners(){
   roadmapCol = db.collection('roadmap');
   roadmapCol.onSnapshot( snap=>{ roadmap=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='roadmap') render(); });
   contractsCol = db.collection('contracts');
-  contractsCol.onSnapshot( snap=>{ contracts={}; snap.docs.forEach(d=>{ contracts[d.id]=d.data(); }); try{ _healContractTerms(); }catch(e){} if(currentView==='pipeline'||currentView==='events') render(); try{ if(typeof syncHubDrawer==='function') syncHubDrawer(); }catch(e){} });
+  contractsCol.onSnapshot( snap=>{
+    const prevContracts = contracts || {};
+    contracts={}; snap.docs.forEach(d=>{ contracts[d.id]=d.data(); });
+    try{ _healContractTerms(); }catch(e){}
+    // Stage 4: when a contract becomes 'signed', auto-convert that inquiry's
+    // estimate into an invoice (book it) so the client can pay their deposit in
+    // the portal. Guarded so it only fires once per signature.
+    try{
+      Object.keys(contracts).forEach(cid=>{
+        const c = contracts[cid];
+        if(c && c.status==='signed'){
+          const was = prevContracts[cid];
+          const newlySigned = !was || was.status!=='signed';
+          if(newlySigned) _onContractSigned(cid, c);
+        }
+      });
+    }catch(e){ console.warn('contract-signed hook failed:', e); }
+    if(currentView==='pipeline'||currentView==='events') render();
+    try{ if(typeof syncHubDrawer==='function') syncHubDrawer(); }catch(e){}
+  });
   try{ seedRoadmapIfEmpty(); }catch(e){ console.warn('roadmap seed skipped:',e); }
   // My Day — personal, per-user only. Query is scoped to the signed-in user,
   // so nobody's schedule/to-dos/follow-ups are ever visible to anyone else.
@@ -12736,6 +12755,59 @@ function _buildInquiryCatererDocs(inq){
 }
 
 // Create a portal from an INQUIRY (menu-sent stage, before booking).
+// When a contract is signed, auto-convert that inquiry's estimate into an invoice
+// (books the job) so the client can immediately pay their deposit in the portal.
+// Idempotent: if the invoice is already 'invoice'/'paid', it does nothing.
+const _signedHandled = {};
+async function _onContractSigned(cid, contractDoc){
+  if(_signedHandled[cid]) return;
+  _signedHandled[cid] = true;
+  // contract id is the event id ('inq_<inqId>' pre-booking, or an event id)
+  const inqId = String(cid).indexOf('inq_')===0 ? String(cid).slice(4) : null;
+  if(!inqId) return;   // only auto-convert inquiry-based contracts
+  const inq = inquiries.find(x=>x.id===inqId);
+  if(!inq) return;
+  const evId = 'inq_'+inqId;
+  // If already invoiced, nothing to do.
+  const existingInv = invoices[evId];
+  if(existingInv && (existingInv.status==='invoice' || existingInv.status==='paid')) return;
+  try{
+    if(typeof ensureEstimate==='function') ensureEstimate(inq);
+    if(!inq.estimate || !Array.isArray(inq.estimate.lines) || !inq.estimate.lines.length) return;
+    // Book the inquiry + create the event if needed (no confirm — automatic).
+    if(inq.stage!=='booked'){
+      inq.stage='booked';
+      try{ logActivity(inq.id,'stage','Auto-booked — contract signed',{stage:'booked'}); }catch(e){}
+      await _saveInquiry(inq);
+    }
+    if(typeof createEventFromInquiry==='function') createEventFromInquiry(inq);
+    const e = events.find(x=>x.id===evId);
+    if(!e) return;
+    const base = invoices[evId] || getDefaultInvoice(e);
+    base.lines = JSON.parse(JSON.stringify(inq.estimate.lines));
+    base.taxExempt = inq.estimate.taxExempt;
+    base.logisticsRate = inq.estimate.logisticsRate;
+    base.deposit = base.deposit || inq.estimate.deposit || 0;
+    base.notes = inq.estimate.notes || base.notes || '';
+    base.status = 'invoice';
+    base.invoiceDate = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    base.eventId = evId;
+    invoices[evId] = base;
+    await _saveInvoice(evId, base);
+    // Flip the portal to 'booked' and refresh its snapshot so the pay tab appears.
+    const pid = inq.portalId || _findPortalIdForInquiry(inqId);
+    if(pid && clientPortalsCol){
+      try{
+        const inv = aggregateInvoiceForPortal(evId);
+        await clientPortalsCol.doc(pid).set({ stage:'booked', eventId:evId, invoiceSnapshot:inv, depositAmount: inv.depositAmount||0, lastSyncedAt:Date.now() }, { merge:true });
+        if(clientPortals[pid]){ clientPortals[pid].stage='booked'; clientPortals[pid].invoiceSnapshot=inv; }
+      }catch(e){}
+    }
+    try{ showToast && showToast('Contract signed — estimate converted to invoice \u2713'); }catch(e){}
+    render();
+  }catch(err){ console.warn('auto-convert on sign failed:', err); }
+}
+
 // Open (creating if needed) the client portal for an inquiry, in a new tab.
 async function openInquiryPortal(inqId){
   const inq = inquiries.find(x=>x.id===inqId);
