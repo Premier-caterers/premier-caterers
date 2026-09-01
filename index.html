@@ -2041,7 +2041,7 @@ function _evSeqNum(e){
 
 // The events that belong to a given week (same rule the cover sheet uses).
 function _weekEventsFor(weekStr){
-  return events.filter(e => (e.weekOf || '2026-05-31') === weekStr && !eventInquiryMissing(e));
+  return events.filter(e => (e.weekOf || '2026-05-31') === weekStr && isActiveEvent(e));
 }
 
 // True if a week's numbers aren't a clean 1..N run — a gap, a duplicate, or a
@@ -2703,13 +2703,31 @@ function eventInquiryMissing(e){
   return !inquiries.some(x=>x.id===inqId);
 }
 
+// Single source of truth for "should this event appear in active weekly views"
+// (cover sheet, This Week, schedule, grocery). Excludes events whose inquiry is
+// gone AND events whose inquiry was marked lost. Checks the inquiry's live stage
+// as the authority, falling back to the event's own lost flag.
+function isActiveEvent(e){
+  if(eventInquiryMissing(e)) return false;
+  if(e && e.lost === true) return false;
+  // Authoritative check: if the linked inquiry exists and is 'lost', hide it even
+  // if the event flag didn't get set for some reason.
+  try{
+    if(e && String(e.id).indexOf('inq_')===0){
+      const inq = inquiries.find(x=>x.id===String(e.id).slice(4));
+      if(inq && inq.stage==='lost') return false;
+    }
+  }catch(_){}
+  return true;
+}
+
 function renderCoverSheet(){
   const weekDate = getWeekEndDate(currentWeekOffset);
   const weekStr  = weekDate.toISOString().split('T')[0];
   const months   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const wLabel   = 'W/E '+months[weekDate.getUTCMonth()]+' '+weekDate.getUTCDate()+', \''+String(weekDate.getUTCFullYear()).slice(2);
 
-  const allWeekEvents = events.filter(e => (e.weekOf || '2026-05-31') === weekStr && !eventInquiryMissing(e));
+  const allWeekEvents = events.filter(e => (e.weekOf || '2026-05-31') === weekStr && isActiveEvent(e));
   const weekEvents = coverSortEvents(allWeekEvents);
 
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -2895,7 +2913,7 @@ function renderCoverSheet(){
 function printCoverSheet(){
   const weekDate = getWeekEndDate(currentWeekOffset);
   const weekStr  = weekDate.toISOString().split('T')[0];
-  const weekEvents = coverSortEvents(events.filter(e=>(e.weekOf||'2026-05-31')===weekStr && !eventInquiryMissing(e)));
+  const weekEvents = coverSortEvents(events.filter(e=>(e.weekOf||'2026-05-31')===weekStr && isActiveEvent(e)));
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const cols = ['#','NAME','MEAL','TYPE','DAY','ADDRESS','# WAITERS','BARTENDERS','WAITER TIME','# CHEFS','CHEFS TIME','# PORTERS','MASHGIACH','MANAGER'];
   const th = s => `<th style="padding:6px 8px;border:1px solid #999;background:#f0f0f0;font-size:10px;font-weight:700;text-align:left;white-space:nowrap">${s}</th>`;
@@ -2968,7 +2986,7 @@ function renderHome(){
   const wLabel   = months[weekDate.getUTCMonth()]+' '+weekDate.getUTCDate()+", '"+String(weekDate.getUTCFullYear()).slice(2);
 
   const dayOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
-  const weekEvents = events.filter(e=>(e.weekOf||'2026-05-31')===weekStr && !eventInquiryMissing(e))
+  const weekEvents = events.filter(e=>(e.weekOf||'2026-05-31')===weekStr && isActiveEvent(e))
     .sort((a,b)=> dayOrder.indexOf((a.day||'').toLowerCase()) - dayOrder.indexOf((b.day||'').toLowerCase()));
 
   // Open to-dos across this week's events
@@ -7308,7 +7326,7 @@ function renderSchedule(){
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const schedWeekLabel = 'W/E '+months[schedWeekDate.getUTCMonth()]+' '+schedWeekDate.getUTCDate()+', '+String(schedWeekDate.getUTCFullYear()).slice(2);
 
-  const weekEvents  = events.filter(e=>(e.weekOf||'2026-05-31')===schedWeekStr && !eventInquiryMissing(e));
+  const weekEvents  = events.filter(e=>(e.weekOf||'2026-05-31')===schedWeekStr && isActiveEvent(e));
   const staffEvents = weekEvents.filter(e=>!e.noStaffing);
   const noStaffEvents = weekEvents.filter(e=>e.noStaffing);
 
@@ -7560,7 +7578,7 @@ function renderChecklists(){
   // This week and future weeks stay together on the main page; past events move
   // to a separate collapsed archive section so they don't clutter the day-to-day view.
   const clThisWeekStr = getWeekEndDate(CURRENT_WEEK_OFFSET).toISOString().split('T')[0];
-  const clActiveEvents = events.filter(e=>!eventInquiryMissing(e));
+  const clActiveEvents = events.filter(e=>isActiveEvent(e));
   const clThisWeek  = clActiveEvents.filter(e=>(e.weekOf||'2026-05-31')===clThisWeekStr);
   const clUpcoming  = clActiveEvents.filter(e=>(e.weekOf||'2026-05-31')>clThisWeekStr)
                         .sort((a,b)=>(a.weekOf||'').localeCompare(b.weekOf||''));
@@ -7947,7 +7965,7 @@ function renderChanges(){
   const weekStr  = weekDate.toISOString().split('T')[0];
   const months   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const wLabel   = months[weekDate.getUTCMonth()]+' '+weekDate.getUTCDate()+", '"+String(weekDate.getUTCFullYear()).slice(2);
-  const weekEventsC = events.filter(e=>(e.weekOf||'2026-05-31')===weekStr);
+  const weekEventsC = events.filter(e=>(e.weekOf||'2026-05-31')===weekStr && isActiveEvent(e));
   const weekJobs = new Set(weekEventsC.map(e=>e.job));
   const weekChanges = changes.filter(c=>weekJobs.has(c.job));
   return `
@@ -8202,7 +8220,7 @@ function renderGrocery(){
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const we = getWeekEndDate(currentWeekOffset);
   const weekLabel = 'W/E '+months[we.getUTCMonth()]+' '+we.getUTCDate();
-  const weekEvents = events.filter(e=>(e.weekOf||'')===schedWeekStr && !e.noStaffing);
+  const weekEvents = events.filter(e=>(e.weekOf||'')===schedWeekStr && !e.noStaffing && isActiveEvent(e));
 
   const activeGrocTab = window._grocTab || 'weekly';
   const activeDbTab   = window._grocDbTab || 'stations';
@@ -8715,7 +8733,7 @@ async function seedGroceryDatabase(){
 function printGroceryList(_returnHtml){
   const tab = window._grocTab || 'weekly';
   const schedWeekStr = getWeekEndDate(currentWeekOffset).toISOString().split('T')[0];
-  const weekEvents = events.filter(e=>(e.weekOf||'')===schedWeekStr && !e.noStaffing);
+  const weekEvents = events.filter(e=>(e.weekOf||'')===schedWeekStr && !e.noStaffing && isActiveEvent(e));
   let items = [];
   if(tab==='weekly'){
     weekEvents.forEach(e=>{ (groceryLists[e.id]?.items||[]).forEach(i=>items.push({...i,_job:displayJob(e.job),_name:e.name})); });
