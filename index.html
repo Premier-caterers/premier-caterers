@@ -5066,6 +5066,27 @@ function openMenuEmail(inq, link){
   const ctx = buildTemplateContext(inq, { invoiceEid: 'inq_'+inq.id });
   const hasSignLink = !!ctx.signLink;
 
+  // Ensure a client portal exists for this inquiry (create on first menu send),
+  // and make its link available to drop into the email body.
+  let _portalUrl = '';
+  try{
+    let pid = inq.portalId || _findPortalIdForInquiry(inq.id);
+    if(!pid && typeof createInquiryPortal==='function'){
+      // create silently in the background; link is used below
+      createInquiryPortal(inq.id, { silent:true }).then(function(newPid){
+        if(newPid){
+          const np = clientPortals[newPid];
+          const nurl = PORTAL_BASE_URL + '?p=' + encodeURIComponent(newPid) + '&t=' + encodeURIComponent((np&&np.token)||'');
+          const bodyEl = document.getElementById('menu-email-body');
+          if(bodyEl && bodyEl.value.indexOf('portal.html')===-1){ bodyEl.value = _appendPortalLink(bodyEl.value, nurl); }
+        }
+      });
+    } else if(pid && clientPortals[pid]){
+      const p = clientPortals[pid];
+      _portalUrl = PORTAL_BASE_URL + '?p=' + encodeURIComponent(pid) + '&t=' + encodeURIComponent(p.token||'');
+    }
+  }catch(e){}
+
   // Pick the default template (Menu proposal) as the starting point.
   const defaultTpl = emailTemplates.find(t=>t.id==='tpl_menu_proposal') || emailTemplates[0];
   const subject = applyTemplatePlaceholders(defaultTpl?.subject || '', ctx);
@@ -5073,6 +5094,10 @@ function openMenuEmail(inq, link){
   // Auto-append contract signing link if we have one and the template opts in.
   if(hasSignLink && defaultTpl && defaultTpl.includeContract !== false){
     body = _appendSignLink(body, ctx.signLink);
+  }
+  // Auto-append the client portal link if the portal already exists.
+  if(_portalUrl && body.indexOf('portal.html')===-1){
+    body = _appendPortalLink(body, _portalUrl);
   }
   const defaultAttachEstimate = defaultTpl ? (defaultTpl.attachEstimate !== false) : true;
 
@@ -5126,6 +5151,15 @@ function _appendSignLink(body, link){
     const idx = m.index;
     return body.slice(0, idx) + block + body.slice(idx);
   }
+  return body + block;
+}
+
+function _appendPortalLink(body, link){
+  if(!link) return body;
+  if(body && body.indexOf(link) >= 0) return body;
+  const block = '\n\n\u2500\u2500\u2500\nYour event portal (view your menu & estimate, sign your contract, share details, and message us any time):\n' + link + '\n\u2500\u2500\u2500';
+  const m = body.match(/\n(Warm regards|Best regards|Best|Sincerely|Thanks|Thank you)[,\n]/i);
+  if(m){ const idx = m.index; return body.slice(0, idx) + block + body.slice(idx); }
   return body + block;
 }
 
