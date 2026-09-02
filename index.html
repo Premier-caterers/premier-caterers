@@ -3146,6 +3146,7 @@ function renderEvents(){
     const _msg = _n + " unacknowledged change order" + (_n>1?"s":"") + " — see Changes log";
     return `<div class="banner amber" style="margin-bottom:1rem"><i class="ti ti-alert-triangle" style="font-size:16px;color:var(--amber-text);flex-shrink:0;margin-top:1px"></i><div style="font-size:13px;color:var(--amber-text)"><strong>${_msg}</strong></div></div>`;
     })()}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;margin-bottom:1rem">
     <div class="stat-card"><div class="stat-n">${weekEvents.filter(e=>e.name).length}</div><div class="stat-l">events</div></div>
     <div class="stat-card"><div class="stat-n">${weekEvents.filter(e=>e.type!=='dropoff').length}</div><div class="stat-l">catered</div></div>
     <div class="stat-card"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.waiters||0),0)}</div><div class="stat-l">waiters</div></div>
@@ -3455,7 +3456,7 @@ function goChecklist(id){
 function saveEdit(id){
   const e=events.find(x=>x.id===id); if(!e) return;
   ['addr','notes','manager','mashgiach','waiterTime','chefTime','menuLink','groceryLink','floorplan','venueLink','logoData'].forEach(k=>{const el=document.getElementById('f-'+k);if(el)e[k]=el.value;});
-  ['waiters','chefs','porters'].forEach(k=>{const el=document.getElementById('f-'+k);if(el)e[k]=parseInt(el.value)||0;});
+  ['waiters','bartenders','chefs','porters'].forEach(k=>{const el=document.getElementById('f-'+k);if(el)e[k]=parseInt(el.value)||0;});
   const te=document.getElementById('f-type'); if(te){e.type=te.value;e.typeLabel=typeMap[te.value]||te.value;}
   const de=document.getElementById('f-day'); if(de)e.day=de.value;
   editingId=null; const _ev=events.find(x=>x.id===id); if(_ev){
@@ -4137,7 +4138,7 @@ function renderInqDetail(inq, role){
     ? `<div class="hub-sec" style="margin-top:16px">Referral <span class="rule"></span></div>${rows('How found us', inq.howFound)}${rows('Referred by', inq.referredBy)}${rows('Event attended', inq.eventAttended)}`
     : '';
   const notesHtml = inq.comments
-    ? `<div class="hub-sec" style="margin-top:16px">Notes <span class="rule"></span></div><div style="font-size:13px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${inq.comments}</div>`
+    ? `<div class="hub-sec" style="margin-top:16px">Notes <span class="rule"></span></div><div style="font-size:13px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${pcEsc(inq.comments)}</div>`
     : '';
 
   return `<div class="inq-detail hub">
@@ -4457,14 +4458,14 @@ function renderEstimateBlock(inq, role){
       <input type="number" value="${l.price||0}" min="0" step="0.01" onchange="updateEstimateLine('${inq.id}',${i},'price',this.value)" style="${inp};width:100%;text-align:right">
       <span data-amt="${i}" style="font-size:13px;text-align:right;color:var(--text2)">$${((parseFloat(l.qty||0))*(parseFloat(l.price||0))).toFixed(2)}</span>
       <span style="display:flex;gap:1px;justify-content:flex-end">
-        <button onclick="moveEstimateLine('${inq.id}',${i},-1)" title="Move up" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:1px" ${i===0?'disabled style="opacity:.3"':''}><i class="ti ti-arrow-up"></i></button>
-        <button onclick="moveEstimateLine('${inq.id}',${i},1)" title="Move down" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:1px" ${i===est.lines.length-1?'disabled style="opacity:.3"':''}><i class="ti ti-arrow-down"></i></button>
+        <button onclick="moveEstimateLine('${inq.id}',${i},-1)" title="Move up" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:1px;opacity:${i===0?'.3':'1'}" ${i===0?'disabled':''}><i class="ti ti-arrow-up"></i></button>
+        <button onclick="moveEstimateLine('${inq.id}',${i},1)" title="Move down" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:1px;opacity:${i===est.lines.length-1?'.3':'1'}" ${i===est.lines.length-1?'disabled':''}><i class="ti ti-arrow-down"></i></button>
         <button onclick="duplicateEstimateLine('${inq.id}',${i})" title="Duplicate line" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:1px"><i class="ti ti-copy"></i></button>
         <button onclick="removeEstimateLine('${inq.id}',${i})" title="Remove" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:13px;padding:1px"><i class="ti ti-x"></i></button>
       </span>
     </div>`).join('');
   return `<div id="estBlock-${inq.id}"><div class="detail-block" style="margin-top:1rem">${header}
-    <div style="display:grid;grid-template-columns:18px 1fr 52px 78px 70px 60px;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);padding-bottom:4px">
+    <div style="display:grid;grid-template-columns:18px 1fr 52px 78px 70px 86px;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);padding-bottom:4px">
       <span></span><span>Description</span><span style="text-align:right">Qty</span><span style="text-align:right">Unit $</span><span style="text-align:right">Amount</span><span></span>
     </div>
     <div id="estLinesBody-${inq.id}">${rows}</div>
@@ -6842,7 +6843,7 @@ function openEditInquiryModal(id){
   const inq = inquiries.find(x=>x.id===id);
   if(!inq){ alert('Could not find that inquiry.'); return; }
   document.getElementById('editInqModal')?.remove();
-  const esc = s => String(s==null?'':s).replace(/"/g,'&quot;');
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const typeOpts = ['','Aufruf','Bar Mitzvah','Bat Mitzvah','Wedding','Kiddush','Bris','Sheva Brachos','Vort','Shloshim','Breakfast','Brunch','Corporate','Drop off catering','Other'];
   const cuisineOpts = ['','Meat','Dairy','Both','Not sure yet'];
   const shabbosOpts = ['No','Yes','Both'];
@@ -7999,11 +8000,21 @@ function saveCheckItem(eid){
 
 function updateBadge(){ updatePipelineBadge();
 
+  // Count only OPEN items on THIS WEEK's active events, using the same
+  // done-test as renderHome (assignee sign-off), not the stale i.done flag.
   let n=0;
-  Object.keys(checklists).forEach(eid=>{
-    (checklists[eid]||[]).forEach(i=>{ if(!i.done&&!i.na) n++; });
-  });
-  const b=document.getElementById('checkBadge'); if(b) b.textContent=n;
+  try{
+    const _wkStr = getWeekEndDate(currentWeekOffset).toISOString().split('T')[0];
+    events.filter(e=>(e.weekOf||'2026-05-31')===_wkStr && isActiveEvent(e)).forEach(e=>{
+      (checklists[e.id]||[]).forEach(it=>{
+        if(it.na) return;
+        const doneAny = it.done || (it.assignees && it.assignees.some(a=>a.done));
+        if(!doneAny) n++;
+      });
+    });
+  }catch(_){ n=0; }
+  const b=document.getElementById('checkBadge');
+  if(b){ b.textContent=n; b.style.display = n ? '' : 'none'; }
   const tb=document.getElementById('trashBadge'); if(tb){ if(trash&&trash.length){ tb.textContent=trash.length; tb.style.display=''; } else { tb.style.display='none'; } }
 }
 
