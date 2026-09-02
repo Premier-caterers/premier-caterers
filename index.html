@@ -3053,7 +3053,7 @@ function renderHome(){
       <div class="home-box-body">
         ${weekEvents.length===0 ? `<div class="home-empty">No events this week</div>` :
           weekEvents.map(e=>`
-            <button class="home-row" onclick="showView('events');setTimeout(()=>selectEvent('${e.id}'),250)">
+            <button class="home-row" onclick="showView('events');openEventHub('${e.id}')">
               <span class="home-row-pill">${displayJob(e.job)}</span>
               <span class="home-row-main">${e.name}</span>
               <span class="home-row-meta">${(e.dayLabel||formatEventDay(e)||'')}${e.typeLabel?' · '+e.typeLabel:''}</span>
@@ -3375,7 +3375,7 @@ function renderDetail(e,role){
   const f=(k,label,val,type='text')=>`<div class="drow"><span class="dkey">${label}</span><span class="dval">${ed&&role.canEdit?`<input type="${type}" id="f-${k}" value="${(val||'').toString().replace(/"/g,'&quot;')}">`:(val||'—')}</span></div>`;
   const fta=(k,label,val)=>`<div class="drow" style="flex-direction:column;gap:4px"><span class="dkey">${label}</span><span class="dval" style="text-align:left;width:100%">${ed&&role.canEdit?`<textarea id="f-${k}">${val||''}</textarea>`:(val||'—')}</span></div>`;
   const fl=(k,label,val)=>`<div class="drow"><span class="dkey">${label}</span><span class="dval">${ed&&role.canEdit?`<input type="text" id="f-${k}" value="${val||''}">`:(val?`<a href="${val}" target="_blank">Open <i class="ti ti-external-link" style="font-size:11px"></i></a>`:'—')}</span></div>`;
-  const dayOpts=['thursday','friday','saturday','sunday','monday'].map(d=>`<option value="${d}" ${e.day===d?'selected':''}>${d.charAt(0).toUpperCase()+d.slice(1)}</option>`).join('');
+  const dayOpts=['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(d=>`<option value="${d}" ${e.day===d?'selected':''}>${d.charAt(0).toUpperCase()+d.slice(1)}</option>`).join('');
   const typeOpts=Object.entries(typeMap).map(([v,l])=>`<option value="${v}" ${e.type===v?'selected':''}>${l}</option>`).join('');
   const fsel=(k,label,val,opts)=>`<div class="drow"><span class="dkey">${label}</span><span class="dval">${ed&&role.canEdit?`<select id="f-${k}">${opts}</select>`:(val||'—')}</span></div>`;
 
@@ -3516,6 +3516,10 @@ function renderDetail(e,role){
   </div>`;
 }
 
+// FALLBACK ONLY. Every event that has a linked inquiry opens the shared hub
+// drawer via openEventHub(). This legacy panel now exists solely for older
+// events that were created before inquiries existed — without it they could
+// not be opened at all. Do not route anything new here.
 function selectEvent(id){ selectedId=selectedId===id?null:id; editingId=null; render(); setTimeout(()=>document.querySelector('.detail-panel')?.scrollIntoView({behavior:'smooth',block:'nearest'}),50); }
 function closeDetail(){ selectedId=null; editingId=null; _closeEventEditModal(); render(); }
 function startEdit(id){ editingId=id; render(); setTimeout(()=>document.querySelector('.detail-panel')?.scrollIntoView({behavior:'smooth',block:'nearest'}),50); }
@@ -4896,20 +4900,6 @@ function openEventHub(id){
   const inq=_beoInquiryFor(ev);
   if(inq && inq.id){ selectedId=null; editingId=null; selectedInqId=inq.id; render(); }
   else { selectEvent(id); }
-}
-// Edit the event's staffing / logistics fields using the existing event editor,
-// shown in an overlay so it works from any view (interim until the merged form).
-function editEventClassic(eid){
-  const ev=events.find(x=>x.id===eid); if(!ev) return;
-  const role=roles[currentRole];
-  closeInqDetail();
-  editingId=eid;
-  const m=document.createElement('div'); m.id='eventEditModal';
-  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100000;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:20px';
-  m.onclick=function(e){ if(e.target===m){ editingId=null; m.remove(); } };
-  const inner=document.createElement('div'); inner.style.cssText='max-width:940px;width:100%;margin:auto';
-  inner.innerHTML=renderDetail(ev, role);
-  m.appendChild(inner); document.body.appendChild(m);
 }
 function _closeEventEditModal(){ const m=document.getElementById('eventEditModal'); if(m) m.remove(); }
 
@@ -6969,7 +6959,7 @@ function openEditInquiryModal(id){
     return `<option value="${esc(v)}" ${String(cur||'')===String(v)?'selected':''}>${lbl}</option>`;
   }).join('');
   const ev = _eventForInq(inq);
-  const dayOpts = ['','thursday','friday','saturday','sunday','monday'].map(d=>`<option value="${d}" ${ev&&ev.day===d?'selected':''}>${d?d.charAt(0).toUpperCase()+d.slice(1):'—'}</option>`).join('');
+  const dayOpts = ['','monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(d=>`<option value="${d}" ${ev&&ev.day===d?'selected':''}>${d?d.charAt(0).toUpperCase()+d.slice(1):'—'}</option>`).join('');
   const evtTypeOpts = (typeof typeMap==='object'?Object.entries(typeMap):[]).map(([v,l])=>`<option value="${v}" ${ev&&ev.type===v?'selected':''}>${l}</option>`).join('');
   const evSec = ev ? `
     <div style="margin:18px 0 10px;font-size:13px;font-weight:700;color:var(--maroon,#8B1A1A);border-top:1px solid var(--border);padding-top:14px">Event logistics &amp; staff</div>
