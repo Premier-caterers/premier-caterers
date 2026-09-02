@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
 
@@ -9520,13 +9520,12 @@ function renderInvoiceDetail(){
             <div style="font-weight:600;color:var(--text);font-size:14px">An estimate already exists for this event (${fmt$(estTotal)})</div>
             <div style="font-size:12px;color:var(--text2);margin-top:3px">It wasn\u2019t carried over when this event was booked. Click Convert to copy the estimate\u2019s line items, tax setting, logistics rate, deposit, and notes into this invoice. Nothing is sent — you\u2019ll review it first.</div>
           </div>
-          <button onclick="convertEstimateToInvoiceNow('${eid}')" style="padding:8px 16px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-arrow-right"></i> Convert estimate to invoice</button>
+          <button onclick="convertEstimateToInvoiceNow('${eid}')" class="btn btn--pri" style=";white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-arrow-right"></i> Convert estimate to invoice</button>
         </div>`;
       }
     }
   } catch(_err) { /* banner is best-effort; never break the page over it */ }
 
-  const inpStyle = 'background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--text);font-family:inherit;width:100%;text-align:right';
 
   el.innerHTML = `<div class="detail-panel">
     ${estimateBannerHtml}
@@ -9578,12 +9577,12 @@ function renderInvoiceDetail(){
     </div>
 
     <div style="background:var(--bg2);border-radius:var(--radius);padding:.75rem 1rem;margin-bottom:1rem;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:13px">
-      <div><span style="font-size:11px;color:var(--text3);display:block">${isInvoice?'Invoice':'Quote'} #</span>${e.job}</div>
-      <div><span style="font-size:11px;color:var(--text3);display:block">Event date</span>${getFullEventDate(e)}</div>
-      <div><span style="font-size:11px;color:var(--text3);display:block">Created</span>${inv.createdAt}</div>
-      <div><span style="font-size:11px;color:var(--text3);display:block">Client phone</span>${canEdit?`<input type="text" value="${inv.clientPhone||''}" onchange="invoices['${eid}'].clientPhone=this.value" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:(inv.clientPhone||'—')}</div>
-      <div><span style="font-size:11px;color:var(--text3);display:block">Client email</span>${canEdit?`<input type="text" value="${inv.clientEmail||''}" onchange="invoices['${eid}'].clientEmail=this.value" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:(inv.clientEmail||'—')}</div>
-      <div><span style="font-size:11px;color:var(--text3);display:block">Address</span>${e.addr||'—'}</div>
+      <div><span class="inv-lbl">${isInvoice?'Invoice':'Quote'} #</span>${e.job}</div>
+      <div><span class="inv-lbl">Event date</span>${getFullEventDate(e)}</div>
+      <div><span class="inv-lbl">Created</span>${inv.createdAt}</div>
+      <div><span class="inv-lbl">Client phone</span>${canEdit?`<input type="text" value="${inv.clientPhone||''}" onchange="invoices['${eid}'].clientPhone=this.value" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:(inv.clientPhone||'—')}</div>
+      <div><span class="inv-lbl">Client email</span>${canEdit?`<input type="text" value="${inv.clientEmail||''}" onchange="invoices['${eid}'].clientEmail=this.value" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:(inv.clientEmail||'—')}</div>
+      <div><span class="inv-lbl">Address</span>${e.addr||'—'}</div>
     </div>
 
     <div style="overflow-x:auto">
@@ -9604,24 +9603,24 @@ function renderInvoiceDetail(){
             <div style="font-size:11px;color:var(--text3);margin-bottom:2px">${line.category}</div>
             ${canEdit?`<input type="text" value="${line.description}" onchange="updateInvoiceLine('${eid}',${i},'description',this.value)" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:`<div>${line.description}</div>`}
             ${canEdit?`<div style="display:flex;gap:5px;margin-top:5px">
-              <button onclick="toggleInvoiceLineFlag('${eid}',${i},'noTax')" title="${line.noTax?'Tax removed from this line — click to apply tax':'Tax applied — click to remove from this line'}" style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;cursor:pointer;border:0.5px solid ${line.noTax?'#e05c5c':'var(--border2)'};background:${line.noTax?'var(--amber-bg,#fdf3e3)':'transparent'};color:${line.noTax?'#b7791f':'var(--text3)'}">${line.noTax?'✕ No tax':'Tax'}</button>
-              <button onclick="toggleInvoiceLineFlag('${eid}',${i},'noLog')" title="${line.noLog?'Logistics removed from this line — click to apply':'Logistics applied — click to remove from this line'}" style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;cursor:pointer;border:0.5px solid ${line.noLog?'#e05c5c':'var(--border2)'};background:${line.noLog?'var(--amber-bg,#fdf3e3)':'transparent'};color:${line.noLog?'#b7791f':'var(--text3)'}">${line.noLog?'✕ No logistics':'Logistics'}</button>
+              <button onclick="toggleInvoiceLineFlag('${eid}',${i},'noTax')" title="${line.noTax?'Tax removed from this line — click to apply tax':'Tax applied — click to remove from this line'}" class="chip-toggle ${line.noTax?'on':''}">${line.noTax?'✕ No tax':'Tax'}</button>
+              <button onclick="toggleInvoiceLineFlag('${eid}',${i},'noLog')" title="${line.noLog?'Logistics removed from this line — click to apply':'Logistics applied — click to remove from this line'}" class="chip-toggle ${line.noLog?'on':''}">${line.noLog?'✕ No logistics':'Logistics'}</button>
             </div>`:`${(line.noTax||line.noLog)?`<div style="font-size:10px;color:var(--text3);margin-top:3px">${[line.noTax?'no tax':'',line.noLog?'no logistics':''].filter(Boolean).join(' · ')}</div>`:''}`}
           </td>
           <td style="padding:8px 10px;text-align:center">
-            ${canEdit?`<input type="number" value="${line.qty}" min="0" onchange="updateInvoiceLine('${eid}',${i},'qty',this.value)" style="${inpStyle};width:70px">`:line.qty}
+            ${canEdit?`<input type="number" value="${line.qty}" min="0" onchange="updateInvoiceLine('${eid}',${i},'qty',this.value)" class="field field--sm field--num" style="width:70px">`:line.qty}
           </td>
           <td style="padding:8px 10px;text-align:right">
-            ${canEdit?`<input type="number" value="${line.price}" min="0" step="0.01" onchange="updateInvoiceLine('${eid}',${i},'price',this.value)" style="${inpStyle}">`:('$'+parseFloat(line.price||0).toFixed(2))}
+            ${canEdit?`<input type="number" value="${line.price}" min="0" step="0.01" onchange="updateInvoiceLine('${eid}',${i},'price',this.value)" class="field field--sm field--num">`:('$'+parseFloat(line.price||0).toFixed(2))}
           </td>
           <td style="padding:8px 10px;text-align:right;font-weight:500">$${(parseFloat(line.qty||0)*parseFloat(line.price||0)).toFixed(2)}</td>
           <td style="padding:4px 6px;text-align:center;width:104px">
             ${canEdit?`<div style="display:flex;gap:2px;justify-content:center;align-items:center">
               <span class="drag-handle" title="Drag to reorder" style="cursor:grab;color:var(--text3);font-size:15px;padding:2px;touch-action:none"><i class="ti ti-grip-vertical"></i></span>
-              <button onclick="moveInvoiceLine('${eid}',${i},-1)" title="Move up" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;padding:2px" ${i===0?'disabled style="opacity:.3"':''}><i class="ti ti-arrow-up"></i></button>
-              <button onclick="moveInvoiceLine('${eid}',${i},1)" title="Move down" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;padding:2px" ${i===inv.lines.length-1?'disabled style="opacity:.3"':''}><i class="ti ti-arrow-down"></i></button>
-              <button onclick="duplicateInvoiceLine('${eid}',${i})" title="Duplicate line" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;padding:2px"><i class="ti ti-copy"></i></button>
-              <button onclick="removeInvoiceLine('${eid}',${i})" title="Remove line" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:14px;padding:2px"><i class="ti ti-trash"></i></button>
+              <button onclick="moveInvoiceLine('${eid}',${i},-1)" title="Move up" class="btn btn--icon" ${i===0?'disabled style="opacity:.3"':''}><i class="ti ti-arrow-up"></i></button>
+              <button onclick="moveInvoiceLine('${eid}',${i},1)" title="Move down" class="btn btn--icon" ${i===inv.lines.length-1?'disabled style="opacity:.3"':''}><i class="ti ti-arrow-down"></i></button>
+              <button onclick="duplicateInvoiceLine('${eid}',${i})" title="Duplicate line" class="btn btn--icon"><i class="ti ti-copy"></i></button>
+              <button onclick="removeInvoiceLine('${eid}',${i})" title="Remove line" class="btn btn--icon is-danger"><i class="ti ti-trash"></i></button>
             </div>`:''}
           </td>
         </tr>`).join('')}
@@ -9642,7 +9641,7 @@ function renderInvoiceDetail(){
               (<input type="number" value="${((inv.logisticsRate??LOGISTICS_RATE)*100).toFixed(2)}" min="0" max="100" step="0.01"
                 onchange="updateLogisticsRate('${eid}',this.value)"
                 style="width:52px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:2px 5px;font-size:12px;color:var(--text);font-family:inherit;text-align:right">%)
-              <button onclick="removeLogisticsFee('${eid}')" title="Remove logistics fee" style="border:none;background:none;color:#e05c5c;cursor:pointer;font-size:13px;padding:0 2px"><i class="ti ti-trash"></i></button>
+              <button onclick="removeLogisticsFee('${eid}')" title="Remove logistics fee" class="btn btn--icon is-danger"><i class="ti ti-trash"></i></button>
             </span>` : `(${((inv.logisticsRate??LOGISTICS_RATE)*100).toFixed(2)}%)`}
           </span>
           <span>$${tots.logistics.toFixed(2)}</span>
@@ -9657,7 +9656,7 @@ function renderInvoiceDetail(){
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
           <span style="color:var(--text2)">Deposit paid</span>
-          ${canEdit?`<input type="number" value="${inv.deposit||0}" min="0" step="0.01" onchange="updateDeposit('${eid}',this.value)" style="${inpStyle};width:120px">`:('$'+parseFloat(inv.deposit||0).toFixed(2))}
+          ${canEdit?`<input type="number" value="${inv.deposit||0}" min="0" step="0.01" onchange="updateDeposit('${eid}',this.value)" class="field field--sm field--num" style="width:120px">`:('$'+parseFloat(inv.deposit||0).toFixed(2))}
         </div>
         <div style="display:flex;justify-content:space-between;padding:10px 0;font-size:15px;font-weight:600;color:${tots.balance<=0?'var(--green-text)':'var(--crimson,#8B1A1A)'}">
           <span>Balance due</span>
@@ -9685,7 +9684,7 @@ function renderInvoiceDetail(){
                   <td style="padding:6px">${_actEsc(p.method||'')}</td>
                   <td style="padding:6px">${_actEsc(p.checkNumber||'—')}</td>
                   <td style="padding:6px;text-align:right;font-variant-numeric:tabular-nums">$${(parseFloat(p.amount)||0).toFixed(2)}</td>
-                  ${canEdit?`<td style="padding:6px;text-align:right"><button title="Delete this payment" onclick="deletePaymentRow('${eid}','${p.id}')" style="border:0;background:none;color:var(--crimson,#8B1A1A);cursor:pointer;font-size:14px;padding:0">×</button></td>`:''}
+                  ${canEdit?`<td style="padding:6px;text-align:right"><button title="Delete this payment" onclick="deletePaymentRow('${eid}','${p.id}')" class="btn btn--icon is-danger">×</button></td>`:''}
                 </tr>`).join('')}
                 <tr style="font-weight:600">
                   <td colspan="3" style="padding:8px 6px 4px;text-align:right;color:var(--text2)">Total paid</td>

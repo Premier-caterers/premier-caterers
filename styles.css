@@ -45,6 +45,10 @@
   /* NAV — now a white panel with a real border, not a dark slab */
   --nav-bg:#FFFFFF;--nav-bg-hover:#F6F2F3;--nav-text:#5B5F5C;--nav-text-active:#7A2E3D;
   --nav-border:#C6CABF;--nav-border-w:2px;--nav-label:#9A9E97;
+  /* Legacy alias: index.html referenced var(--crimson) in six places and it was
+     never defined, so it silently fell back to the retired brand red #8B1A1A.
+     Defining it here points all six at the real brand colour. */
+  --crimson:#7A2E3D;
 }
 @media(prefers-color-scheme:dark){:root{
   /* No dark-mode variant yet — mirror light so rendering stays consistent on dark-mode devices */
@@ -743,3 +747,34 @@ a{color:var(--blue-mid);text-decoration:none}
 }
 .cl-letter:hover:not(:disabled){background:var(--maroon-tint)}
 .cl-letter:disabled{color:var(--border2);cursor:default}
+
+/* ── Button modifiers used by the invoice document ── */
+.btn--icon{
+  min-height:0;padding:2px;border:none;background:none;color:var(--text3);
+  font-size:13px;line-height:1;border-radius:var(--radius-sm)
+}
+.btn--icon:hover{background:var(--bg3);color:var(--text2);border:none}
+.btn--icon.is-danger{color:var(--red-solid)}
+.btn--icon.is-danger:hover{background:var(--red-bg);color:var(--red-text)}
+.btn--icon[disabled]{opacity:.3}
+.btn--dashed{border:1px dashed var(--border2);background:none;color:var(--text2)}
+.btn--dashed:hover{border-color:var(--maroon);color:var(--maroon);background:var(--maroon-tint)}
+
+/* ── A chip that toggles a setting on a line (tax exempt, no logistics) ── */
+.chip-toggle{
+  font-family:inherit;font-size:10px;font-weight:600;
+  padding:2px 8px;border-radius:20px;cursor:pointer;
+  border:0.5px solid var(--border2);background:var(--bg);color:var(--text3)
+}
+.chip-toggle:hover{border-color:var(--border2);color:var(--text2)}
+.chip-toggle.on{border-color:var(--red-border);background:var(--red-bg);color:var(--red-text)}
+.chip-toggle.on-ok{border-color:var(--green-border);background:var(--green-bg);color:var(--green-text)}
+
+/* ── Invoice document ── */
+.inv-lbl{display:block;font-size:11px;color:var(--text3)}
+.inv-tot{display:flex;justify-content:space-between;gap:16px;padding:4px 0;font-size:13px}
+.inv-tot.is-grand{
+  border-top:0.5px solid var(--border2);margin-top:6px;padding-top:9px;
+  font-size:15px;font-weight:600
+}
+.inv-tot b{font-variant-numeric:tabular-nums}
