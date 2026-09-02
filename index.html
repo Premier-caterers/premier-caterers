@@ -78,30 +78,33 @@
 
 <div class="layout">
   <div class="sidebar" id="sidebar">
-    <div class="sidebar-label">Views</div>
     <button class="nav-item active" id="nav-home" onclick="showView('home')"><i class="ti ti-home"></i>Home</button>
-    <button class="nav-item" id="nav-myday" onclick="showView('myday')"><i class="ti ti-sun"></i>My Day</button>
-    <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
-    <button class="nav-item" id="nav-clients" onclick="showView('clients')"><i class="ti ti-address-book"></i>Clients</button>
-    <button class="nav-item" onclick="window.open('timeclock.html','_blank')"><i class="ti ti-clock-hour-4"></i>Time Clock<i class="ti ti-external-link" style="font-size:11px;margin-left:auto;opacity:.5"></i></button>
+    <div class="sidebar-label" id="grpWeek">This week</div>
     <button class="nav-item" id="nav-events" onclick="goToThisWeek()"><i class="ti ti-calendar"></i>This week</button>
     <button class="nav-item" id="nav-coversheet" onclick="goToCoverSheetThisWeek()"><i class="ti ti-layout-rows"></i>Weekly cover sheet</button>
-    <a class="nav-item" href="https://calendar.google.com" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-brand-google"></i>Google Calendar<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
-    <a class="nav-item" href="https://premier-caterers.github.io/premier-caterers/premier_caterers_form.html" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-clipboard-text"></i>Link to inquiry form<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
     <button class="nav-item" id="nav-schedule" onclick="showView('schedule')"><i class="ti ti-users"></i>Staff schedule</button>
     <button class="nav-item" id="nav-checklists" onclick="showView('checklists')"><i class="ti ti-checklist"></i>Checklists<span class="nav-badge" id="checkBadge">5</span></button>
     <button class="nav-item" id="nav-changes" onclick="showView('changes')"><i class="ti ti-refresh-alert"></i>Changes log<span class="nav-badge">2</span></button>
+    <a class="nav-item" href="https://calendar.google.com" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-brand-google"></i>Google Calendar<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
+    <div class="sidebar-label" id="grpSales">Sales</div>
+    <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
+    <button class="nav-item" id="nav-clients" onclick="showView('clients')"><i class="ti ti-address-book"></i>Clients</button>
     <button class="nav-item" id="nav-invoices" onclick="showView('invoices')"><i class="ti ti-file-invoice"></i>Quotes / Invoices</button>
-    <button class="nav-item" id="nav-reports" onclick="showView('reports')"><i class="ti ti-chart-bar"></i>Reports</button>
+    <button class="nav-item" id="nav-email" onclick="showView('email')"><i class="ti ti-mail"></i>Email<span class="nav-badge" id="emailBadge" style="display:none">0</span></button>
+    <a class="nav-item" href="https://premier-caterers.github.io/premier-caterers/premier_caterers_form.html" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-clipboard-text"></i>Link to inquiry form<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
+    <div class="sidebar-label" id="grpKitchen">Kitchen &amp; ops</div>
     <button class="nav-item" id="nav-grocery" onclick="window.open('https://premier-caterers.github.io/premier-caterers/grocery.html','_blank')"><i class="ti ti-shopping-cart"></i>Grocery<i class="ti ti-external-link" style="font-size:11px;margin-left:4px;opacity:.6"></i></button>
     <button class="nav-item" id="nav-purchasing" onclick="window.open('https://premier-caterers.github.io/premier-caterers/purchasing.html','_blank')"><i class="ti ti-building-store"></i>Purchasing<i class="ti ti-external-link" style="font-size:11px;margin-left:4px;opacity:.6"></i></button>
     <button class="nav-item" id="nav-equipment" onclick="showView('equipment')"><i class="ti ti-tool"></i>Equipment</button>
     <button class="nav-item" id="nav-venues" onclick="showView('venues')"><i class="ti ti-building"></i>Venues</button>
+    <button class="nav-item" onclick="window.open('timeclock.html','_blank')"><i class="ti ti-clock-hour-4"></i>Time Clock<i class="ti ti-external-link" style="font-size:11px;margin-left:auto;opacity:.5"></i></button>
+    <div class="sidebar-label" id="grpOffice">Office</div>
+    <button class="nav-item" id="nav-myday" onclick="showView('myday')"><i class="ti ti-sun"></i>My Day</button>
+    <button class="nav-item" id="nav-reports" onclick="showView('reports')"><i class="ti ti-chart-bar"></i>Reports</button>
     <button class="nav-item" id="nav-roadmap" onclick="showView('roadmap')"><i class="ti ti-map-2"></i>Roadmap</button>
-    <button class="nav-item" id="nav-email" onclick="showView('email')"><i class="ti ti-mail"></i>Email<span class="nav-badge" id="emailBadge" style="display:none">0</span></button>
     <div class="sidebar-label" id="setupLabel">Setup</div>
+    <button class="nav-item" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Settings</button>
     <button class="nav-item" id="nav-trash" onclick="showView('trash')"><i class="ti ti-trash"></i>Trash<span class="nav-badge" id="trashBadge" style="display:none">0</span></button>
-    <button class="nav-item" id="nav-settings" onclick="showView('settings')"><i class="ti ti-settings"></i>Google Sheets</button>
   </div>
   <div class="main" style="padding:0;display:flex;flex-direction:column">
   <div id="globalChangeBanner" style="display:none;background:var(--amber-bg);border-bottom:0.5px solid var(--amber-border);padding:.6rem 1.25rem;display:none;align-items:center;gap:10px;cursor:pointer" onclick="showView('changes')">
@@ -2263,11 +2266,26 @@ function updateUserBar(){
     ? `<span class="ub-name"><i class="ti ti-user"></i> ${prettyName(authUser)}</span><button class="ub-out" onclick="logout()">Log out</button>`
     : '';
 }
+// Sidebar groups. A group heading hides itself when this role can see none of
+// the sections under it, so nobody gets a label with nothing beneath it.
+const NAV_GROUPS = {
+  grpWeek:    ['events','coversheet','schedule','checklists','changes'],
+  grpSales:   ['pipeline','clients','invoices','email'],
+  grpKitchen: ['grocery','purchasing','equipment','venues'],
+  grpOffice:  ['myday','reports','roadmap'],
+  setupLabel: ['settings','trash']
+};
+// These three open other apps rather than a section, so they are always visible
+// and their group must stay visible with them.
+const NAV_GROUP_ALWAYS = { grpWeek:true, grpSales:true, grpKitchen:true };
 function applyAccess(){
   const allowed = access[currentRole]||[];
   ALL_SECTIONS.forEach(sec=>{ const el=document.getElementById('nav-'+sec); if(el) el.style.display = allowed.includes(sec)?'':'none'; });
-  const setup=document.getElementById('setupLabel');
-  if(setup) setup.style.display = (allowed.includes('trash')||allowed.includes('settings'))?'':'none';
+  Object.keys(NAV_GROUPS).forEach(gid=>{
+    const el=document.getElementById(gid); if(!el) return;
+    const any = NAV_GROUP_ALWAYS[gid] || NAV_GROUPS[gid].some(sec=>allowed.includes(sec));
+    el.style.display = any ? '' : 'none';
+  });
 }
 async function resetUserPassword(u){
   if(currentRole!=='admin' && currentRole!=='kenny') return;
