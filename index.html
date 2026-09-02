@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=3">
+<link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body>
 
@@ -6651,8 +6651,11 @@ function buildClientGroups(){
     const g = ensure(key, org || e.name);
     const wms = _weekMsOf(e.weekOf);
     const isPast = wms!==null ? (wms < nowMs) : false;
+    const _paid = (typeof aggregateInvoiceStatus==='function') && aggregateInvoiceStatus(e.id)==='paid';
     g.items.push({ kind:'event', id:e.id, label:(e.typeLabel||e.type||'Event'),
-      date:(e.dayLabel||''), status:(isPast?'past':'booked'), sort:(e.weekOf||'') });
+      date:(e.dayLabel||''), bucket:(isPast?'past':'booked'),
+      stat:(_paid ? 'paid' : (isPast ? 'past' : (e.status||'booked'))),
+      status:(isPast?'past':'booked'), sort:(e.weekOf||'') });
     g.organization = org || g.organization;
     if(org && !g.contact && e.contactName) g.contact = e.contactName;
     if(!g.phone && e.phone) g.phone = e.phone;
@@ -6674,7 +6677,8 @@ function buildClientGroups(){
     if(key==='nm:'||key==='org:') return;
     const g = ensure(key, org || person);
     g.items.push({ kind:'inq', id:inq.id, label:(inq.eventType||'Inquiry'),
-      date:(inq.eventDate?formatDate(inq.eventDate):''), status:'unbooked', sort:(inq.eventDate||'') });
+      date:(inq.eventDate?formatDate(inq.eventDate):''), bucket:'unbooked',
+      stat:(inq.stage||'new'), status:'unbooked', sort:(inq.eventDate||'') });
     g.organization = org || g.organization;
     if(!g.firstName) g.firstName = inq.firstName||'';
     if(!g.lastName)  g.lastName  = inq.lastName||'';
@@ -6702,14 +6706,10 @@ function renderClients(){
   const groups = buildClientGroups();
   let list = Object.keys(groups).map(k=>groups[k]);
 
-  // Status filter
   const filter = window._clientsFilter || 'all';
-  const hasStatus = (g, st)=> g.items.some(it=>it.status===st);
-  if(filter==='unbooked') list = list.filter(g=>hasStatus(g,'unbooked'));
-  else if(filter==='booked') list = list.filter(g=>hasStatus(g,'booked'));
-  else if(filter==='past') list = list.filter(g=>hasStatus(g,'past'));
+  const hasBucket = (g, st)=> g.items.some(it=>(it.bucket||it.status)===st);
+  if(filter!=='all') list = list.filter(g=>hasBucket(g,filter));
 
-  // Search — matches display name, org, first/last name, contact, email, or phone
   const q = (window._clientsSearch||'').trim().toLowerCase();
   if(q) list = list.filter(g=> (g.name||'').toLowerCase().includes(q)
       || (g.firstName||'').toLowerCase().includes(q)
@@ -6719,72 +6719,91 @@ function renderClients(){
       || (g.email||'').toLowerCase().includes(q)
       || (g.phone||'').toLowerCase().includes(q));
 
-  // Sort clients alphabetically by name
   list.sort((a,b)=> (a.name||'').toLowerCase().localeCompare((b.name||'').toLowerCase()));
 
-  const tab = (key,label)=>`<button onclick="window._clientsFilter='${key}';render()" style="padding:6px 14px;border:0.5px solid ${filter===key?'var(--blue-border)':'var(--border2)'};border-radius:var(--radius);background:${filter===key?'var(--blue-bg)':'var(--bg2)'};color:${filter===key?'var(--blue-text)':'var(--text2)'};font-size:13px;cursor:pointer">${label}</button>`;
-
-  const statusPill = (st)=>{
-    const map = { unbooked:['Not booked','var(--amber-bg)','var(--amber-text)'],
-                  booked:['Booked','var(--blue-bg)','var(--blue-text)'],
-                  past:['Past','var(--bg2)','var(--text3)'] };
-    const m = map[st]||['',' ',' ']; return `<span style="font-size:10px;padding:1px 7px;border-radius:8px;background:${m[1]};color:${m[2]}">${m[0]}</span>`;
+  // One status vocabulary, shared with every other screen.
+  const STAT = {
+    new:         ['New inquiry',  'pill--new'],
+    menu_sent:   ['Menu sent',    'pill--menu'],
+    booked:      ['Booked',       'pill--booked'],
+    invoice_sent:['Invoice sent', 'pill--invoice'],
+    paid:        ['Paid',         'pill--paid'],
+    lost:        ['Lost',         'pill--lost'],
+    past:        ['Past',         'pill--new'],
+    unbooked:    ['Not booked',   'pill--new']
   };
+  const pill = st => { const m = STAT[st]||STAT.new; return `<span class="pill ${m[1]}">${m[0]}</span>`; };
 
+  window._clientsOpen = window._clientsOpen || {};
   const seenLetters = new Set();
-  const letterOf = (name)=>{ const m=(name||'').trim().charAt(0).toUpperCase(); return /[A-Z]/.test(m) ? m : '#'; };
+  const letterOf = name => { const m=(name||'').trim().charAt(0).toUpperCase(); return /[A-Z]/.test(m)?m:'#'; };
 
-  const cards = list.map(g=>{
-    const hist = g.items.map(it=>{
+  const rows = list.map(g=>{
+    const L = letterOf(g.name);
+    const anchor = seenLetters.has(L) ? '' : (seenLetters.add(L), `<tr id="cl-letter-${L}" style="height:0"><td colspan="6" style="padding:0;border:none"></td></tr>`);
+    const open = !!window._clientsOpen[g.key];
+    const recent = g.items.slice().sort((x,y)=>String(y.sort||'').localeCompare(String(x.sort||'')))[0] || null;
+
+    const head = `<tr onclick="toggleClientRow('${g.key}')" style="cursor:pointer">
+      <td><b>${pcEsc(g.name||'')}</b>${g.contact?`<div class="u-faint" style="font-size:11px;font-weight:400">${pcEsc(g.contact)}</div>`:''}</td>
+      <td class="shrink u-nowrap">${pcEsc(g.phone||'')||'<span class="u-faint">—</span>'}</td>
+      <td class="u-truncate u-muted">${pcEsc(g.email||'')||'<span class="u-faint">—</span>'}</td>
+      <td class="num shrink">${g.items.length}</td>
+      <td class="shrink">${recent?pill(recent.stat||recent.bucket||recent.status):''}
+        <span class="u-muted" style="margin-left:6px">${recent?pcEsc(recent.label||''):''}</span>
+        ${recent&&recent.date?`<span class="u-faint" style="margin-left:6px">${pcEsc(recent.date)}</span>`:''}</td>
+      <td class="shrink u-faint">${open?'▾':'▸'}</td>
+    </tr>`;
+
+    if(!open) return anchor+head;
+
+    const hist = g.items.slice().sort((x,y)=>String(y.sort||'').localeCompare(String(x.sort||''))).map(it=>{
       const click = it.kind==='event' ? `gotoEvent('${it.id}')` : `goToInquiry('${it.id}')`;
-      return `<div onclick="${click}" style="display:flex;align-items:center;gap:8px;padding:5px 8px;border:0.5px solid var(--border);border-radius:7px;background:var(--bg);cursor:pointer;font-size:12px" title="Open">
-        ${statusPill(it.status)}
-        <span style="flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${it.label}</span>
-        ${it.date?`<span style="color:var(--text3)">${it.date}</span>`:''}
-        <i class="ti ti-chevron-right" style="font-size:13px;color:var(--text3)"></i>
+      return `<div class="cl-hist" onclick="event.stopPropagation();${click}">
+        ${pill(it.stat||it.bucket||it.status)}
+        <span class="u-truncate u-muted" style="flex:1">${pcEsc(it.label||'')}</span>
+        ${it.date?`<span class="u-faint">${pcEsc(it.date)}</span>`:''}
+        <i class="ti ti-chevron-right u-faint" style="font-size:13px"></i>
       </div>`;
     }).join('');
-    const actions = `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-        <button onclick="openClientReport('${g.key}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-report-money" style="font-size:13px"></i>Report</button>
-        ${role.canEdit ? `<button onclick="newEventForClient('${g.key}','new')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--amber-border);border-radius:7px;background:var(--amber-bg);color:var(--amber-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-plus" style="font-size:13px"></i>New potential event</button>` : ''}
-        ${role.canEdit ? `<button onclick="newEventForClient('${g.key}','booked')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-calendar-plus" style="font-size:13px"></i>New booked event</button>` : ''}
-      </div>`;
-    const contactLine = g.contact ? `<div style="font-size:12px;color:var(--text3);margin-top:1px"><i class="ti ti-user" style="font-size:11px"></i> ${g.contact}</div>` : '';
-    const metaBits = [g.phone?`<i class="ti ti-phone" style="font-size:11px"></i>${g.phone}`:'', g.email?`<i class="ti ti-mail" style="font-size:11px"></i>${g.email}`:''].filter(Boolean).join('&nbsp;&nbsp;');
-    const L = letterOf(g.name);
-    const anchor = seenLetters.has(L) ? '' : (seenLetters.add(L), `<div id="cl-letter-${L}" style="height:0"></div>`);
-    return `${anchor}<div style="border:0.5px solid var(--border2);border-radius:var(--radius-lg);background:var(--bg);padding:1rem 1.1rem;margin-bottom:.75rem;scroll-margin-top:70px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-        <div style="min-width:0">
-          <div style="font-size:15px;font-weight:600;color:var(--text)">${g.name}</div>
-          ${contactLine}
-          ${metaBits?`<div style="font-size:11px;color:var(--text3);margin-top:3px">${metaBits}</div>`:''}
-        </div>
-        <span style="font-size:11px;color:var(--text3);white-space:nowrap">${g.items.length} event${g.items.length===1?'':'s'}</span>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:5px;margin-top:10px">${hist}</div>
-      ${actions}
+
+    const acts = `<div class="btn-row" style="margin-top:10px">
+      <button class="btn" onclick="event.stopPropagation();openClientReport('${g.key}')"><i class="ti ti-report-money"></i> Report</button>
+      ${role.canEdit?`<button class="btn" onclick="event.stopPropagation();newEventForClient('${g.key}','new')"><i class="ti ti-plus"></i> New potential event</button>`:''}
+      ${role.canEdit?`<button class="btn btn--pri" onclick="event.stopPropagation();newEventForClient('${g.key}','booked')"><i class="ti ti-calendar-plus"></i> New booked event</button>`:''}
     </div>`;
+
+    return anchor+head+`<tr class="cl-open"><td colspan="6">
+      <div class="cl-panel"><div class="cl-hist-list">${hist}</div>${acts}</div></td></tr>`;
   }).join('');
 
-  const alphaBar = `<div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:1rem">
-    ${'#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(L=>{
-      const has = seenLetters.has(L);
-      return `<button ${has?`onclick="document.getElementById('cl-letter-${L}')?.scrollIntoView({behavior:'smooth',block:'start'})"`:'disabled'} style="width:22px;height:22px;font-size:11px;font-weight:600;border:none;border-radius:5px;cursor:${has?'pointer':'default'};background:transparent;color:${has?'var(--text2)':'var(--border2)'}">${L}</button>`;
-    }).join('')}
-  </div>`;
+  const alphaBar = `<div class="cl-alpha">${'#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(L=>{
+    const has = seenLetters.has(L);
+    return `<button class="cl-letter" ${has?`onclick="document.getElementById('cl-letter-${L}')?.scrollIntoView({behavior:'smooth',block:'start'})"`:'disabled'}>${L}</button>`;
+  }).join('')}</div>`;
 
-  return `<div class="view-pad" style="padding:1.5rem;max-width:900px;margin:0 auto">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:1rem">
-      <h2 style="margin:0;font-size:20px;color:var(--text)">Clients</h2>
-      <input id="clientsSearchInput" type="text" value="${(window._clientsSearch||'').replace(/"/g,'&quot;')}" oninput="window._clientsSearch=this.value;clearTimeout(window._cliT);window._cliT=setTimeout(render,250)" placeholder="Search by name, org, phone, email…" style="font-size:13px;padding:7px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);min-width:220px">
+  const tab = (key,label)=>`<button class="btn${filter===key?' btn--pri':''}" onclick="window._clientsFilter='${key}';render()">${label}</button>`;
+
+  return `<div class="view-pad">
+    <div class="section-header">
+      <div class="section-title">Clients</div>
+      <input id="clientsSearchInput" class="field" style="max-width:280px" type="text" placeholder="Search by name, org, phone, email…"
+        value="${(window._clientsSearch||'').replace(/"/g,'&quot;')}"
+        oninput="window._clientsSearch=this.value;clearTimeout(window._cliT);window._cliT=setTimeout(render,250)">
     </div>
-    <div style="display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap">
-      ${tab('all','All')} ${tab('unbooked','Not booked')} ${tab('booked','Booked')} ${tab('past','Past')}
-    </div>
+    <div class="btn-row" style="margin-bottom:10px">${tab('all','All')}${tab('unbooked','Not booked')}${tab('booked','Booked')}${tab('past','Past')}</div>
     ${alphaBar}
-    ${list.length? cards : `<div style="text-align:center;padding:3rem 0;color:var(--text3);font-size:13px">No clients match this view yet.</div>`}
+    ${list.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr>
+        <th>Client</th><th>Phone</th><th>Email</th><th class="num">Events</th><th>Most recent</th><th></th>
+      </tr></thead><tbody>${rows}</tbody></table></div>`
+      : `<div class="empty-note">No clients match this view yet.</div>`}
   </div>`;
+}
+
+function toggleClientRow(key){
+  window._clientsOpen = window._clientsOpen || {};
+  window._clientsOpen[key] = !window._clientsOpen[key];
+  render();
 }
 
 function goToInquiry(id){ showView('pipeline'); selectInquiry(id); }
@@ -9368,15 +9387,19 @@ function renderInvoices(){
     const jobLabel = multi ? invoiceDisplayLabel(e.id, slotKey) : displayJob(e.job);
     const nm = invoiceSlotName(slotKey);
     const nmHtml = (multi && nm) ? ' <span style="font-size:11px;color:var(--text3);font-weight:400">'+nm+'</span>' : '';
-    return '<div onclick="openInvoice(\''+slotKey+'\')" style="display:grid;grid-template-columns:130px 1fr 110px 100px 110px 90px 30px;gap:8px;align-items:center;padding:9px 14px;border-bottom:0.5px solid var(--border);cursor:pointer;font-size:13px;transition:background .1s" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
-      + '<span style="color:var(--text3);font-size:12px">'+fullDate+'</span>'
-      + '<span style="font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+jobLabel+' · '+e.name+nmHtml+'</span>'
-      + '<span style="text-align:right;color:var(--text)">'+(grand>0?'$'+grand.toFixed(2):'—')+'</span>'
-      + '<span style="text-align:right;color:var(--text2)">'+(deposit>0?'$'+deposit.toFixed(2):'—')+'</span>'
-      + '<span style="text-align:right;color:var(--text)">'+(tots?'$'+balance.toFixed(2):'—')+'</span>'
-      + '<span style="text-align:right;font-weight:700;'+statusColor+'">'+statusText+'</span>'
-      + '<span style="display:flex;justify-content:center;gap:3px">'+overdueHtml+changeHtml+'</span>'
-      + '</div>';
+    const PILL = {none:'pill--new',quote:'pill--menu',approved:'pill--invoice',invoice:'pill--invoice',paid:'pill--paid'};
+    const pct = (grand>0) ? Math.max(0,Math.min(100,(grand-balance)/grand*100)) : 0;
+    return '<tr onclick="openInvoice(\'' + slotKey + '\')" style="cursor:pointer">'
+      + '<td class="shrink"><span class="job-pill">' + jobLabel + '</span></td>'
+      + '<td><b>' + pcEsc(e.name||'') + '</b>' + nmHtml + '</td>'
+      + '<td class="shrink u-faint u-nowrap">' + fullDate + '</td>'
+      + '<td class="shrink"><span class="pill ' + (PILL[status]||'pill--new') + '">' + (statusLabels[status]||'No quote') + '</span></td>'
+      + '<td class="num shrink">' + (grand>0?'$'+grand.toFixed(2):'<span class="u-faint">&mdash;</span>') + '</td>'
+      + '<td class="num shrink u-muted">' + (deposit>0?'$'+deposit.toFixed(2):'<span class="u-faint">&mdash;</span>') + '</td>'
+      + '<td class="num shrink"' + (hasBalance?' style="color:var(--red-solid);font-weight:600"':'') + '>' + (tots&&balance>0.01?'$'+balance.toFixed(2):'<span class="u-faint">&mdash;</span>') + '</td>'
+      + '<td class="shrink"><span class="meter" title="' + pct.toFixed(0) + '% collected"><i style="width:' + pct + '%;background:' + (isPaid?'var(--green-solid)':'var(--amber-solid)') + '"></i></span></td>'
+      + '<td class="shrink u-nowrap">' + overdueHtml + changeHtml + '</td>'
+      + '</tr>';
   }
 
   const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -9387,28 +9410,37 @@ function renderInvoices(){
 
   function buildSection(label, evts){
     const filtered = filterByStatus(evts).sort((a,b)=>(a.weekOf||'').localeCompare(b.weekOf||''));
-    if(!filtered.length) return '<div style="padding:1rem 14px;color:var(--text3);font-size:13px">No events for '+label.toLowerCase()+'.</div>';
-    const headerRow = '<div style="display:grid;grid-template-columns:130px 1fr 110px 100px 110px 90px 30px;gap:8px;padding:6px 14px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:0.5px solid var(--border)">'
-      + '<span>Date</span><span>Event</span><span style="text-align:right">Total</span><span style="text-align:right">Paid</span><span style="text-align:right">Balance</span><span style="text-align:right">Status</span><span></span>'
-      + '</div>';
-    return '<div style="margin-bottom:1.25rem">'
-      + '<div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.07em;padding:6px 14px;background:var(--bg2);border-radius:var(--radius) var(--radius) 0 0;border:0.5px solid var(--border)">'+label+'</div>'
-      + '<div style="background:var(--bg);border:0.5px solid var(--border);border-top:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);overflow:hidden">'
-      + headerRow
+    if(!filtered.length) return '<div class="empty-note">No events for '+label.toLowerCase()+'.</div>';
+    const tot = filtered.reduce(function(acc,e){
+      invoiceSlotsForEvent(e.id).forEach(function(k){
+        const iv=invoices[k]; if(!iv) return;
+        const t=calcInvoiceTotals(iv); acc.grand+=t.grand; acc.bal+=Math.max(0,t.balance);
+      });
+      return acc;
+    },{grand:0,bal:0});
+    return '<div class="tbl-wrap" style="margin-bottom:1.1rem"><table class="tbl">'
+      + '<thead><tr><th>Event</th><th>Client</th><th>Date</th><th>Status</th>'
+      + '<th class="num">Invoiced</th><th class="num">Paid</th><th class="num">Balance</th>'
+      + '<th>Collected</th><th></th></tr></thead><tbody>'
+      + '<tr class="tbl__band"><td colspan="9"><div class="u-row"><span>' + label + '</span>'
+      + '<span class="u-faint" style="font-weight:400;letter-spacing:0;text-transform:none">'
+      + filtered.length + ' event' + (filtered.length===1?'':'s')
+      + (tot.grand>0 ? ' &middot; $' + tot.grand.toFixed(2) + ' invoiced' : '')
+      + (tot.bal>0.01 ? ' &middot; <span class="u-danger">$' + tot.bal.toFixed(2) + ' outstanding</span>' : '')
+      + '</span></div></td></tr>'
       + filtered.map(buildRow).join('')
-      + '</div></div>';
+      + '</tbody></table></div>';
   }
 
   const viewBtnHtml = viewBtns.map(function(b){
-    const active = invView===b.key;
-    return '<button onclick="window._invView=\''+b.key+'\';render()" style="padding:5px 12px;border-radius:var(--radius);border:0.5px solid '+(active?'var(--blue-border)':'var(--border2)')+';background:'+(active?'var(--blue-bg)':'var(--bg)')+';color:'+(active?'var(--blue-text)':'var(--text2)')+';font-size:12px;cursor:pointer;font-weight:'+(active?'500':'400')+'">'+b.label+'</button>';
+    return '<button class="btn' + (invView===b.key?' btn--pri':'') + '" onclick="window._invView=\'' + b.key + '\';render()">' + b.label + '</button>';
   }).join('');
 
   const months2=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const wd = getWeekEndDate(currentWeekOffset);
   const wLabel = 'W/E '+months2[wd.getUTCMonth()]+' '+wd.getUTCDate()+', '+String(wd.getUTCFullYear()).slice(2);
 
-  let h = navReturnBreadcrumb() + '<div class="section-header" style="margin-bottom:.75rem"><div class="section-title">Quotes & Invoices</div><div style="display:flex;gap:5px;flex-wrap:wrap">'+viewBtnHtml+'</div></div>';
+  let h = navReturnBreadcrumb() + '<div class="section-header" style="margin-bottom:.75rem"><div class="section-title">Quotes &amp; Invoices</div><div class="btn-row">'+viewBtnHtml+'</div></div>';
 
   if(invView==='default'){
     h += buildSection(wLabel, thisWeekEvts);
