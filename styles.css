@@ -705,3 +705,14 @@ a{color:var(--blue-mid);text-decoration:none}
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important}
 }
+
+/* ── Week table: paperwork at a glance ── */
+.ew-docs{display:inline-flex;gap:3px}
+.ew-doc{
+  width:17px;height:17px;border-radius:4px;
+  display:inline-grid;place-items:center;
+  font-size:9px;font-weight:700;line-height:1;
+  border:0.5px solid var(--border2);background:var(--bg);color:var(--text3)
+}
+.ew-doc.on{background:var(--green-bg);border-color:var(--green-border);color:var(--green-text)}
+.ew-doc.no{border:1px dashed var(--border2);background:var(--bg);color:var(--text3)}

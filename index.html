@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=2">
+<link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
 
@@ -2307,7 +2307,8 @@ function pcAuthGate(){
 
 /* =================== END LOGIN / ACCESS CONTROL (added) =================== */
 
-let currentView='home', currentRole='admin', selectedId=null, editingId=null, activeDay='all', eventsViewMode='card';
+let currentView='home', currentRole='admin', selectedId=null, editingId=null, activeDay='all',
+    eventsViewMode=(function(){ try{ return localStorage.getItem('pcEventsView')||'list'; }catch(_){ return 'list'; } })();
 
 function setRole(r,btn){
   currentRole=r;
@@ -3105,6 +3106,79 @@ function toggleEwCard(eid){
   render();
 }
 
+// ── This-week table helpers (redesign) ────────────────────────────────
+// One place that maps an event to the things the week table shows, so the
+// table, the day bands and the summary bar can never disagree.
+function setEventsView(mode){
+  eventsViewMode = mode;
+  try{ localStorage.setItem('pcEventsView', mode); }catch(_){}
+  render();
+}
+function _ewInq(e){
+  try{ return String(e.id).indexOf('inq_')===0 ? inquiries.find(x=>x.id===String(e.id).slice(4)) : null; }
+  catch(_){ return null; }
+}
+const _EW_PILL = {booked:'pill--booked', menu_sent:'pill--menu', invoice_sent:'pill--invoice',
+                  paid:'pill--paid', lost:'pill--lost'};
+function _ewStatusPill(e){
+  const key = e.status || 'booked';
+  const opt = ccStatusOptions.find(o=>o.key===key) || ccStatusOptions[0];
+  return `<span class="pill ${_EW_PILL[key]||'pill--new'}">${opt.label}</span>`;
+}
+function _ewGuests(e){
+  const inq = _ewInq(e);
+  const g = e.guestCount || (inq && inq.guestCount) || '';
+  return g ? String(g) : '<span class="u-faint">—</span>';
+}
+function _ewVenue(e){
+  const v = venues.find(v=>v.addr===e.addr || v.name===e.name);
+  return pcEsc((v && v.name) || e.addr || '');
+}
+function _ewCrew(e){
+  const p = [];
+  if(e.waiters) p.push(e.waiters+'W');
+  if(e.chefs)   p.push(e.chefs+'C');
+  if(e.porters) p.push(e.porters+'P');
+  return p.length ? p.join(' ') : '<span class="u-faint">—</span>';
+}
+// Paperwork at a glance: green when on file, dashed red when it is missing and
+// the event is close enough that missing matters.
+function _ewDocs(e, role){
+  const items = checklists[e.id]||[];
+  const active = items.filter(i=>!i.na);
+  const clDone = active.length && active.every(i=>i.assignees && i.assignees.some(a=>a.done));
+  const invOk  = role.canViewInvoices ? (aggregateInvoiceStatus(e.id)!=='none') : true;
+  const d = [
+    ['M', !!(e.menuLink||e.pdfMenuLink), 'Menu'],
+    ['$', invOk,                          'Invoice'],
+    ['B', !!e.beo,                        'BEO'],
+    ['F', !!e.floorplan,                  'Floor plan'],
+    ['✓', !!clDone,                  'Checklist']
+  ];
+  return '<span class="ew-docs">'+d.map(([ch,on,label])=>
+    `<span class="ew-doc${on?' on':' no'}" title="${label}${on?' — on file':' — missing'}">${ch}</span>`
+  ).join('')+'</span>';
+}
+// The proportion bar under each day band — share of the day's events per status.
+function _ewBatt(list){
+  if(!list.length) return '';
+  const order = ['paid','booked','invoice_sent','menu_sent','lost'];
+  const seg = {};
+  list.forEach(e=>{ const k=e.status||'booked'; seg[k]=(seg[k]||0)+1; });
+  const keys = order.filter(k=>seg[k]);
+  if(!keys.length) return '';
+  const bars = keys.map(k=>{
+    const o = ccStatusOptions.find(x=>x.key===k)||ccStatusOptions[0];
+    const col = (k==='paid') ? 'var(--green-solid)' : o.fg;
+    return `<i style="width:${(seg[k]/list.length*100).toFixed(1)}%;background:${col}"></i>`;
+  }).join('');
+  const legend = keys.map(k=>{
+    const o = ccStatusOptions.find(x=>x.key===k)||ccStatusOptions[0];
+    return seg[k]+' '+o.label.toLowerCase();
+  }).join(' · ');
+  return `<span class="batt"><span class="batt__bar">${bars}</span><span class="batt__legend">${legend}</span></span>`;
+}
+
 function renderEvents(){
   const role = roles[currentRole];
   // Filter events by weekOf field
@@ -3156,7 +3230,7 @@ function renderEvents(){
   <div class="section-header">
     <div class="section-title">Events — ${weekLabel}</div>
     <div style="display:flex;gap:6px;align-items:center">
-      <button onclick="eventsViewMode=eventsViewMode==='card'?'list':'card';render()" style="padding:5px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px">
+      <button onclick="setEventsView(eventsViewMode==='card'?'list':'card')" style="padding:5px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px">
         <i class="ti ${eventsViewMode==='card'?'ti-list':'ti-layout-grid'}" style="font-size:13px"></i>
         ${eventsViewMode==='card'?'List view':'Card view'}
       </button>
@@ -3167,6 +3241,7 @@ function renderEvents(){
     ${['all','monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(d=>`<button class="filter-btn ${activeDay===d?'active':''}" onclick="setDay('${d}')">${d==='all'?'All':d.charAt(0).toUpperCase()+d.slice(1)}</button>`).join('')}
   </div>`;
 
+  if(eventsViewMode === 'card'){
   dayOrder.forEach(d=>{
     if(!byDay[d]) return;
     const dayCompact = !!window._ewDayCollapsed[d];
@@ -3224,35 +3299,57 @@ function renderEvents(){
     });
     h+='</div>';
   });
+  }
 
-  // ── LIST VIEW ──
+  // ── LIST VIEW — one shared table, built directly. ──
+  // The old version generated card HTML, stripped it back out with a regex,
+  // then spliced a list in with substring(). Any markup change broke it
+  // silently. This builds the table from the data instead.
   if(eventsViewMode==='list'){
-    h = h.replace(/<div class="event-grid">[\s\S]*?<\/div>\s*(?=<div class="event-grid">|$)/g, '') // clear card grids
-    // Rebuild as list
-    let listH = '';
+    let t = '';
     dayOrder.forEach(d=>{
       if(!byDay[d]) return;
-      listH += `<div class="day-label">${formatEventDay(byDay[d][0])}</div>
-      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:8px">`;
-      byDay[d].forEach((e,i)=>{
-        const inv = invoices[e.id];
-        const invStatus = aggregateInvoiceStatus(e.id);
-        const invColor = invStatus==='none' ? 'var(--text3)' : invStatus==='paid' ? 'var(--green-text)' : invStatus==='invoice' ? '#7c3aed' : 'var(--amber-text)';
-        const hasChange = changes.some(c=>c.job===e.job && changeDepts.some(d=>!(c.acks||{})[d]));
-        listH += `<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:${i<byDay[d].length-1?'0.5px solid var(--border)':'none'};transition:background .1s;flex-wrap:wrap" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
-          <span class="job-pill" style="flex-shrink:0;cursor:pointer" onclick="selectEvent('${e.id}')">${displayJob(e.job)}</span>
-          <span style="font-size:14px;font-weight:500;color:var(--text);flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="selectEvent('${e.id}')">${e.name}</span>
-          <span class="type-badge t-${e.type}" style="flex-shrink:0">${e.typeLabel}</span>
-          <span style="font-size:12px;color:var(--text3);flex-shrink:0">${formatEventDay(e)}</span>
-          ${renderDocBtns(e, role, inv, invStatus, invColor)}
-        </div>`;
+      const list = byDay[d];
+      const guests = list.reduce((sum,e)=>{
+        const inq=_ewInq(e);
+        return sum + (parseInt(e.guestCount||(inq&&inq.guestCount))||0);
+      },0);
+      t += `<tr class="tbl__band"><td colspan="9"><div class="u-row">
+        <span>${formatEventDay(list[0])}</span>
+        <span class="u-faint" style="font-weight:400;letter-spacing:0;text-transform:none">${list.length} event${list.length>1?'s':''}${guests?' · '+guests+' guests':''}</span>
+        ${_ewBatt(list)}
+      </div></td></tr>`;
+      list.forEach(e=>{
+        const unanswered = hasUnansweredPortalMessage(e);
+        const hasChange  = changes.some(c=>c.job===e.job && changeDepts.some(dep=>!(c.acks||{})[dep]));
+        t += `<tr onclick="openEventHub('${e.id}')" style="cursor:pointer">
+          <td class="shrink"><span class="job-pill">${displayJob(e.job)}</span></td>
+          <td><b>${pcEsc(e.name||'')}</b>${hasChange?' <span class="pill pill--alert pill--sm">change order</span>':''}</td>
+          <td class="shrink u-muted">${pcEsc(e.typeLabel||'')}</td>
+          <td class="u-truncate">${_ewVenue(e)}</td>
+          <td class="num shrink">${_ewGuests(e)}</td>
+          <td class="num shrink u-mono">${_ewCrew(e)}</td>
+          <td class="shrink">${_ewStatusPill(e)}</td>
+          <td class="shrink"><span class="bub${unanswered?' bub--live':''}" title="${unanswered?'Client is waiting on a reply':'Nothing outstanding'}"><i></i>${unanswered?'waiting':'—'}</span></td>
+          <td class="shrink">${_ewDocs(e, role)}</td>
+        </tr>`;
       });
-      listH += '</div>';
+      if(role.canEdit){
+        t += `<tr class="tbl__add"><td colspan="9"><div class="inner" onclick="openModal()">
+          <b>+</b> Add an event to ${d.charAt(0).toUpperCase()+d.slice(1)}
+        </div></td></tr>`;
+      }
     });
-    // Replace all event-grid sections with list
-    const gridStart = h.indexOf('<div class="day-label">');
-    if(gridStart > -1) h = h.substring(0, gridStart) + listH;
-    else h += listH;
+    const head = `<thead><tr>
+      <th>Event</th><th>Client</th><th>Type</th><th>Venue</th>
+      <th class="num">Guests</th><th class="num">Crew</th>
+      <th>Status</th><th>Client</th><th>Paperwork</th>
+    </tr></thead>`;
+    // Everything before the first day heading is the page chrome (banner,
+    // stats, header, filters) — keep it, drop the card markup after it.
+    const cut = h.indexOf('<div class="day-label');
+    if(cut > -1) h = h.substring(0, cut);
+    h += `<div class="tbl-wrap"><table class="tbl">${head}<tbody>${t}</tbody></table></div>`;
   }
 
   if(selectedId){
