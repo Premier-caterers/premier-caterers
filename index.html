@@ -970,11 +970,17 @@ async function setSharedSetting(key, value){
     const asStr = (typeof value === 'string') ? value : JSON.stringify(value);
     localStorage.setItem(key, asStr);
   } catch(_){}
-  if(!db){ return; } // Firestore not up yet — local write is enough for now
+  if(!db){
+    console.warn('[setSharedSetting] db not ready yet — "'+key+'" saved to localStorage only, NOT to Firestore.');
+    return false;
+  }
   try {
     await db.collection('settings').doc('app').set({ [key]: value, _updatedAt: Date.now() }, { merge:true });
+    console.log('[setSharedSetting] wrote "'+key+'" to Firestore settings/app \u2713');
+    return true;
   } catch(err){
-    console.warn('Shared settings write failed:', err);
+    console.error('[setSharedSetting] FAILED writing "'+key+'" to Firestore:', err);
+    return false;
   }
 }
 
@@ -13281,7 +13287,9 @@ window.saveFollowupTestEmail = saveFollowupTestEmail;
 async function saveSalespersonEmails(){
   const map = {};
   const ready = {};
-  document.querySelectorAll('#salespeople-list .sp-row').forEach(row => {
+  const rows = document.querySelectorAll('#salespeople-list .sp-row');
+  console.log('[saveSalespersonEmails] found '+rows.length+' row(s) in the DOM to save.');
+  rows.forEach(row => {
     const name = (row.querySelector('.sp-name')?.value || '').trim();
     const email = (row.querySelector('.sp-email')?.value || '').trim();
     const isReady = !!row.querySelector('.sp-ready')?.checked;
@@ -13290,11 +13298,16 @@ async function saveSalespersonEmails(){
       if(isReady) ready[name] = true;
     }
   });
-  await setSharedSetting('salespersonEmails', map);
-  await setSharedSetting('delegationReady', ready);
+  console.log('[saveSalespersonEmails] about to save:', JSON.stringify(map), 'ready:', JSON.stringify(ready));
+  const ok1 = await setSharedSetting('salespersonEmails', map);
+  const ok2 = await setSharedSetting('delegationReady', ready);
   const note = document.getElementById('sp-unsaved-note');
   if(note) note.style.display = 'none';
-  showToast('Salespeople saved \u2713');
+  if(ok1 && ok2){
+    showToast('Salespeople saved \u2713');
+  } else {
+    alert('Something went wrong saving this \u2014 it did NOT reach the database. Please screenshot the browser console (F12) and send it to Kenny\u2019s developer.');
+  }
   render();
 }
 window.saveSalespersonEmails = saveSalespersonEmails;
