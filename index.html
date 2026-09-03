@@ -14886,31 +14886,15 @@ async function sendTextViaTwilio(number, body){
 function smsUseTwilio(){ return localStorage.getItem('smsUseTwilio')==='1'; }
 
 async function sendWhatsAppMessage(to, body){
-  const url = 'https://api.twilio.com/2010-04-01/Accounts/'+getTwilioSID()+'/Messages.json';
-  const params = new URLSearchParams({
-    From: getTwilioFrom(),
-    To:   'whatsapp:'+to,
-    Body: body
-  });
-  try{
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Basic ' + btoa(getTwilioSID()+':'+getTwilioToken()),
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: params.toString()
-    });
-    const d = await r.json();
-    if(d.error_code){ 
-      showToast('WhatsApp error '+d.error_code+': '+d.message, 6000);
-      return false; 
-    }
-    return true;
-  }catch(e){ 
-    showToast('WhatsApp failed: '+e.message, 6000);
-    return false; 
-  }
+  // Was previously calling Twilio's API directly from the browser with the
+  // Auth Token exposed in the request — browsers block that (CORS), so this
+  // could never actually succeed, and it leaked the secret token into every
+  // outgoing network request in the meantime. Route through the same
+  // server-side relay sendTextViaTwilio() already uses correctly, so
+  // credentials stay server-side and the send can actually go through.
+  const ok = await sendTextViaTwilio(to, body);
+  if(!ok) showToast('WhatsApp send failed \u2014 check the relay/Twilio setup in Settings', 6000);
+  return ok;
 }
 
 async function sendChangeNotifications(change, notifyDepts){
