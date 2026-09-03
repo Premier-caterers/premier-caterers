@@ -974,11 +974,32 @@ async function setSharedSetting(key, value){
     console.warn('[setSharedSetting] db not ready yet — "'+key+'" saved to localStorage only, NOT to Firestore.');
     return false;
   }
+  const docRef = db.collection('settings').doc('app');
   try {
-    await db.collection('settings').doc('app').set({ [key]: value, _updatedAt: Date.now() }, { merge:true });
+    // IMPORTANT: use update(), not set(..., {merge:true}). For object/map-type
+    // settings (salespersonEmails, delegationReady, notifyContacts), set()'s
+    // merge mode deep-merges the map's own keys instead of replacing the
+    // whole map — meaning deleted entries silently reappear because they
+    // never actually get removed. update() replaces the full value of the
+    // field(s) named while still leaving every other field in the document
+    // untouched, which is what "delete a row and save" actually needs.
+    await docRef.update({ [key]: value, _updatedAt: Date.now() });
     console.log('[setSharedSetting] wrote "'+key+'" to Firestore settings/app \u2713');
     return true;
   } catch(err){
+    // update() throws if the document doesn't exist yet (first-ever run) —
+    // fall back to set() just this once to create it, then future calls
+    // will find the doc and use update() normally.
+    if(err && err.code === 'not-found'){
+      try {
+        await docRef.set({ [key]: value, _updatedAt: Date.now() });
+        console.log('[setSharedSetting] created settings/app and wrote "'+key+'" \u2713');
+        return true;
+      } catch(err2){
+        console.error('[setSharedSetting] FAILED creating settings/app for "'+key+'":', err2);
+        return false;
+      }
+    }
     console.error('[setSharedSetting] FAILED writing "'+key+'" to Firestore:', err);
     return false;
   }
