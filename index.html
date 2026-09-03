@@ -267,6 +267,29 @@ function _salespersonBadge(inq){
   return `<span title="Salesperson: ${sp}" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:${bg};color:#fff;font-size:10px;font-weight:600;margin-left:6px;flex-shrink:0;letter-spacing:0">${initial}</span>`;
 }
 
+// Formats an inquiry's date for display, honoring two optional notes that
+// don't affect scheduling/job-numbering anywhere else in the app — they're
+// purely informational: eventTBD ("no firm date yet") and eventEndDate
+// ("this runs more than one day"). fmtFn is whichever formatter the caller
+// already uses (formatDate or formatDateWithDay) for the start date.
+function _dateNoteLabel(inq, fmtFn){
+  if(!inq) return '';
+  const start = inq.eventDate ? fmtFn(inq.eventDate) : '';
+  const end = (inq.eventEndDate && inq.eventEndDate !== inq.eventDate) ? formatDate(inq.eventEndDate) : '';
+  let label = end ? (start + ' \u2013 ' + end) : start;
+  if(inq.eventTBD){
+    label = label ? (label + ' (tentative)') : 'Date TBD';
+  }
+  return label;
+}
+
+// Small pill flagging "no firm date yet" — used where we want it visually
+// distinct rather than folded into the date text (e.g. compact cards).
+function _tbdBadge(inq){
+  if(!inq || !inq.eventTBD) return '';
+  return `<span title="No date confirmed yet" style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;letter-spacing:.03em;padding:2px 6px;border-radius:20px;background:#FFF3E0;color:#B4690E;border:0.5px solid #E8C088;margin-left:6px;flex-shrink:0;white-space:nowrap">TBD</span>`;
+}
+
 // The illuminated "unanswered email" indicator. Uses two visual signals so it
 // reads for colorblind users: a filled envelope icon AND a red dot on the
 // corner, plus a dashed outline. Clicking it opens the mark-as-handled menu.
@@ -3975,7 +3998,7 @@ function renderPipeline(){
             <div class="pl-card-head"><div class="inq-name">${nm}${_unansweredBadge(inq)}${_portalMsgBadge(inq)}${_salespersonBadge(inq)}${_followupBadge(inq)}</div>${chev}</div>
             <div class="pl-compact-meta">
               ${inq.eventType ? `<span><i class="ti ti-tag" style="font-size:11px"></i>${inq.eventType}</span>` : ''}
-              ${inq.eventDate ? `<span><i class="ti ti-calendar" style="font-size:11px"></i>${formatDateWithDay(inq.eventDate)}</span>` : ''}
+              ${(inq.eventDate || inq.eventTBD) ? `<span><i class="ti ti-calendar" style="font-size:11px"></i>${_dateNoteLabel(inq, formatDateWithDay)}</span>` : ''}
             </div>
           </div>`;
         }
@@ -3984,7 +4007,7 @@ function renderPipeline(){
         ${allergyBanner(inq,false)}
         <div class="cc-top" style="margin-bottom:6px">
           <div class="cc-topl">${inq.eventType?`<span class="type-badge" style="background:var(--text3)">${inq.eventType}</span>`:''}</div>
-          ${inq.eventDate?`<div class="cc-date">${formatDateWithDay(inq.eventDate)}</div>`:''}
+          ${(inq.eventDate || inq.eventTBD)?`<div class="cc-date">${_dateNoteLabel(inq, formatDateWithDay)}</div>`:''}
         </div>
         <div class="pl-card-head"><div class="inq-name">${nm}${_unansweredBadge(inq)}${_portalMsgBadge(inq)}${_salespersonBadge(inq)}${_followupBadge(inq)}</div>${chev}</div>
         ${contact ? `<div style="font-size:11px;color:var(--text3);margin:-2px 0 4px"><i class="ti ti-user" style="font-size:10px"></i> ${contact}</div>` : ''}
@@ -4238,7 +4261,7 @@ function renderInqDetail(inq, role){
   const contact = clientContact(inq);
   const ev = _eventForInq(inq);
   const evNum = ev ? (fullEventNum(ev)||'') : '';
-  const whenBits=[]; if(inq.eventDate) whenBits.push(formatDate(inq.eventDate)); if(inq.venueName) whenBits.push(inq.venueName); else if(inq.venueLocation) whenBits.push(inq.venueLocation);
+  const whenBits=[]; if(inq.eventDate || inq.eventTBD) whenBits.push(_dateNoteLabel(inq, formatDate)); if(inq.venueName) whenBits.push(inq.venueName); else if(inq.venueLocation) whenBits.push(inq.venueLocation);
   const pillBits=[]; if(inq.guestCount) pillBits.push(inq.guestCount+' guests'); if(inq.meatDairy) pillBits.push(inq.meatDairy); if(inq.cuisine) pillBits.push(inq.cuisine);
 
   let moneyHtml='';
@@ -4313,7 +4336,7 @@ function renderInqDetail(inq, role){
         ${_hubPayPill(inq, role)}
         ${_hubChip(inq.guestCount?inq.guestCount+' guests':'')}
         ${_hubChip(inq.meatDairy)}
-        ${_hubChip(inq.eventDate?formatDate(inq.eventDate):'')}
+        ${_hubChip((inq.eventDate||inq.eventTBD)?_dateNoteLabel(inq, formatDate):'')}
         ${_hubChip(inq.cuisine)}
       </div>
       ${_hubCardWrap(drawerDocuments(inq, role, ev))}
@@ -7058,6 +7081,10 @@ function openEditInquiryModal(id){
       <div class="modal-row" style="margin-bottom:0"><label>Event type</label><select id="ie-eventType">${sel(typeOpts, inq.eventType)}</select></div>
       <div class="modal-row" style="margin-bottom:0"><label>Event date</label><input id="ie-eventDate" type="date" value="${esc(inq.eventDate)}"></div>
     </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="modal-row" style="margin-bottom:0"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input id="ie-eventTBD" type="checkbox" style="margin:0" ${inq.eventTBD?'checked':''}> Date not yet decided</label></div>
+      <div class="modal-row" style="margin-bottom:0"><label>End date <span style="color:var(--text3);font-weight:400">(if multi-day)</span></label><input id="ie-eventEndDate" type="date" value="${esc(inq.eventEndDate)}"></div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
       <div class="modal-row" style="margin-bottom:0"><label>Guests</label><input id="ie-guestCount" value="${esc(inq.guestCount)}"></div>
       <div class="modal-row" style="margin-bottom:0"><label>Cuisine</label><select id="ie-cuisine">${sel(cuisineOpts, inq.cuisine)}</select></div>
@@ -7288,6 +7315,8 @@ function saveInquiryEdits(id){
   const wasBooked = inq.stage==='booked';
   inq.firstName=g('firstName'); inq.lastName=g('lastName'); inq.organization=g('organization');
   inq.eventName=g('eventName'); inq.eventType=g('eventType'); inq.eventDate=g('eventDate');
+  inq.eventTBD = !!(document.getElementById('ie-eventTBD')||{}).checked;
+  inq.eventEndDate = g('eventEndDate');
   inq.guestCount=g('guestCount'); inq.cuisine=g('cuisine'); inq.shabbos=g('shabbos');
   inq.venueName=g('venueName'); inq.venueLocation=g('venueLocation');
   inq.phone=g('phone'); inq.email=g('email');
@@ -7385,6 +7414,10 @@ function openAddInquiryModal(){
         </select>
       </div>
       <div class="modal-row" style="margin-bottom:8px"><label>Event date</label><input id="lead-eventDate" type="date"></div>
+      <div class="modal-row" style="margin-bottom:8px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input id="lead-eventTBD" type="checkbox" style="margin:0"> Date not yet decided</label>
+      </div>
+      <div class="modal-row" style="margin-bottom:8px"><label>End date <span style="color:var(--text3);font-weight:400">(only if this runs more than one day)</span></label><input id="lead-eventEndDate" type="date"></div>
       <div class="modal-row" style="margin-bottom:8px"><label>Venue name</label><input id="lead-venueName" placeholder="The venue / hall"></div>
       <div class="modal-row" style="margin-bottom:8px"><label>Venue location / address</label><input id="lead-venueLocation" placeholder="123 Main St, Teaneck"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -7435,6 +7468,8 @@ function saveNewLead(){
     eventName: get('lead-eventName').trim(),
     eventType: get('lead-eventType'),
     eventDate: get('lead-eventDate'),
+    eventTBD: !!(document.getElementById('lead-eventTBD')||{}).checked,
+    eventEndDate: get('lead-eventEndDate'),
     phone: get('lead-phone').trim(),
     email: get('lead-email').trim(),
     venueName: get('lead-venueName').trim(),
