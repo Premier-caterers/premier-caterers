@@ -2152,7 +2152,7 @@ const ALL_SECTIONS = ['home','myday','pipeline','clients','events','coversheet',
 const access = {
   admin:   ALL_SECTIONS.slice(),
   kenny:   ALL_SECTIONS.slice(),
-  shelley: ALL_SECTIONS.filter(s=>!['reports','trash','settings'].includes(s)),
+  shelley: ALL_SECTIONS.filter(s=>!['reports','trash'].includes(s)),
   josh:    ALL_SECTIONS.filter(s=>!['reports','trash','settings'].includes(s)),
   // My Day is a personal, per-user space — kitchen is a shared login used by
   // multiple people, so it doesn't get one.
