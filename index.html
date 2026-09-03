@@ -15354,6 +15354,10 @@ function initNow(){
     followupSuggestionsCol = db.collection('followupSuggestions');
     console.log('Firebase initialized! db=', !!db);
     render();
+    startSharedSettings();          // live-sync shared Settings (salespeople, Gmail relay, Apps Script URL, etc.) — was previously never called
+    startEmailTemplates();          // live-sync saved email templates — was previously never called
+    startUnansweredEmailWatcher();  // powers the "client hasn't been replied to" banner — was previously never called
+    startFollowupReminders();       // the 24h follow-up approval system — was previously never called
     seedIfEmpty().then(function(){
       startFirebaseListeners();
       window._firebaseReady = true;
