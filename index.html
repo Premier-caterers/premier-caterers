@@ -961,7 +961,7 @@ async function saveEmailTemplates(){
 // before Firestore comes back, and for genuinely-offline first loads.
 // PER-DEVICE things (login role, per-device auth tokens, checkbox toggles
 // like "use Twilio") intentionally stay in localStorage.
-const _SHARED_KEYS = ['scriptUrl','gmailClientId','githubToken','followupsPaused','salespersonEmails','delegationReady','followupsTestMode','followupsTestEmail','notifyContacts'];
+const _SHARED_KEYS = ['scriptUrl','gmailClientId','githubToken','followupsPaused','salespersonEmails','delegationReady','followupsTestMode','followupsTestEmail','notifyContacts','savedLineItems','twilioSID','twilioToken','twilioFrom','deptCarriers'];
 let sharedSettings = {};
 let _sharedSettingsReady = false;
 let _sharedSettingsListener = null;
@@ -1052,6 +1052,9 @@ function startSharedSettings(){
       }
       sharedSettings = next;
       _sharedSettingsReady = true;
+      // savedLineItems is read via a plain variable elsewhere (not
+      // getSharedSetting), so keep it mirrored whenever shared data arrives.
+      if(Array.isArray(next.savedLineItems)) savedLineItems = next.savedLineItems;
       // Mirror to localStorage as a fallback (helps offline / cold-start).
       _SHARED_KEYS.forEach(k => {
         if(next[k] != null){
@@ -9918,15 +9921,17 @@ function addInvoiceLine(eid){
   document.getElementById('addLineModal')?.remove();
   const m = document.createElement('div');
   m.id = 'addLineModal';
+  m.setAttribute('data-eid', eid);
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
   m.innerHTML = `
-  <div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+  <div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2)">
     <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1.25rem">Add line item</div>
     ${saved.length>0?`
     <div style="margin-bottom:1rem">
-      <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Saved items</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
-        ${saved.map((s,i)=>`<button onclick="selectSavedLine(${i})" style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer">${s.description}</button>`).join('')}
+      <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Saved items ${saved.length>8?`<span style="text-transform:none;font-weight:400;color:var(--text3)">(${saved.length})</span>`:''}</div>
+      ${saved.length>8?`<input type="text" id="nl-savedFilter" placeholder="Filter saved items…" oninput="_filterSavedLines(this.value)" style="width:100%;box-sizing:border-box;padding:6px 10px;border:0.5px solid var(--border2);border-radius:6px;font-size:12px;margin-bottom:8px">`:''}
+      <div id="nl-savedList" style="display:flex;flex-wrap:wrap;gap:6px;${saved.length>16?'max-height:160px;overflow-y:auto;padding:2px 2px 4px':''}">
+        ${saved.map((s,i)=>i).sort((a,b)=>(saved[a].description||'').localeCompare(saved[b].description||'')).map(i=>`<span data-label="${(saved[i].description||'').toLowerCase()}" style="display:inline-flex;align-items:center;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);overflow:hidden"><button onclick="selectSavedLine(${i})" style="padding:4px 4px 4px 10px;border:none;background:transparent;color:var(--text2);font-size:12px;cursor:pointer">${saved[i].description}</button><button onclick="event.stopPropagation();deleteSavedLine(${i})" title="Remove from saved items" style="padding:4px 8px 4px 4px;border:none;background:transparent;color:var(--text3);font-size:12px;cursor:pointer">\u00d7</button></span>`).join('')}
       </div>
     </div>`:``}
     <div class="modal-row"><label>Category</label>
@@ -9956,6 +9961,27 @@ function addInvoiceLine(eid){
   setTimeout(()=>document.getElementById('nl-description')?.focus(), 50);
 }
 
+function _filterSavedLines(q){
+  const query = (q||'').trim().toLowerCase();
+  const list = document.getElementById('nl-savedList');
+  if(!list) return;
+  list.querySelectorAll('span[data-label]').forEach(chip=>{
+    chip.style.display = (!query || chip.getAttribute('data-label').includes(query)) ? '' : 'none';
+  });
+}
+
+function deleteSavedLine(idx){
+  const item = savedLineItems[idx];
+  if(!item) return;
+  if(!confirm('Remove "'+item.description+'" from your saved items list? This just removes the shortcut — it won\u2019t affect any invoices that already used it.')) return;
+  savedLineItems.splice(idx, 1);
+  setSharedSetting('savedLineItems', savedLineItems);
+  // Re-open the modal fresh so indices/list reflect the deletion correctly
+  const modal = document.getElementById('addLineModal');
+  const eid = modal ? modal.getAttribute('data-eid') : null;
+  if(eid) addInvoiceLine(eid);
+}
+
 function selectSavedLine(idx){
   const s = savedLineItems[idx];
   if(!s) return;
@@ -9976,7 +10002,7 @@ function confirmAddLine(eid){
   // Save for future use
   if(saveItem && !savedLineItems.find(s=>s.description===description)){
     savedLineItems.push({category, description, price});
-    localStorage.setItem('savedLineItems', JSON.stringify(savedLineItems));
+    setSharedSetting('savedLineItems', savedLineItems);
   }
   document.getElementById('addLineModal')?.remove();
   renderInvoiceDetail();
@@ -13448,6 +13474,16 @@ function renderSettings(){
     </label>
     ${smsUseTwilio()
       ? `<div style="font-size:12px;color:var(--text2);background:var(--bg2);border-radius:var(--radius);padding:10px 12px">Texts will send via Twilio to each department's number below. Carriers aren't needed in this mode. Make sure your Apps Script URL is saved (Google Sheets section) and the script has been deployed with the Twilio setup done.</div>
+         <div style="background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:12px;margin-top:.75rem">
+           <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">Twilio account (shared \u2014 saved once here, used by every device)</div>
+           <div style="display:flex;flex-direction:column;gap:8px">
+             <input type="password" id="twilioSIDInput" placeholder="Account SID" value="${getTwilioSID()?'\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022':''}" style="background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px 12px;font-size:13px;color:var(--text);font-family:inherit">
+             <input type="password" id="twilioTokenInput" placeholder="Auth Token" value="${getTwilioToken()?'\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022':''}" style="background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px 12px;font-size:13px;color:var(--text);font-family:inherit">
+             <input type="text" id="twilioFromInput" placeholder="WhatsApp-enabled number, e.g. +12016135565" value="${(getSharedSetting('twilioFrom')||'')}" style="background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px 12px;font-size:13px;color:var(--text);font-family:inherit">
+             <button onclick="saveTwilioCredentials()" style="align-self:flex-start;padding:7px 14px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:12px;font-weight:500;cursor:pointer">Save Twilio credentials</button>
+           </div>
+           <div style="font-size:11px;color:var(--text3);margin-top:8px">${(getTwilioSID()&&getTwilioToken()&&getSharedSetting('twilioFrom'))?'\u2713 Credentials saved \u2014 the SID and Token fields above are masked for safety. Leave them as-is unless changing them.':'Not set up yet \u2014 paste in your Twilio Account SID, Auth Token, and Twilio phone number, then Save.'}</div>
+         </div>
          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-top:.75rem">
            ${Object.entries(deptContacts).map(([dept,c])=>`
            <div style="background:var(--bg2);border-radius:var(--radius);padding:8px 12px;display:flex;align-items:center;gap:8px">
@@ -14758,10 +14794,12 @@ function openComposeEmail(){ window._emailTab='compose'; render(); }
 
 
 // ── WHATSAPP / TWILIO NOTIFICATIONS ──
-// Twilio credentials stored in localStorage only (never in code)
-function getTwilioSID(){ return localStorage.getItem('twilioSID')||''; }
-function getTwilioToken(){ return localStorage.getItem('twilioToken')||''; }
-function getTwilioFrom(){ return 'whatsapp:'+(localStorage.getItem('twilioFrom')||''); }
+// Twilio credentials are shared settings (Firestore-backed, same as the
+// GitHub token) so every device sends from the same account — never
+// hardcoded in source either way.
+function getTwilioSID(){ return getSharedSetting('twilioSID')||''; }
+function getTwilioToken(){ return getSharedSetting('twilioToken')||''; }
+function getTwilioFrom(){ return 'whatsapp:'+(getSharedSetting('twilioFrom')||''); }
 const PRINTER_EMAIL = '47515733707@print.brother.com';
 
 const deptContacts = {
@@ -14791,8 +14829,34 @@ const carrierGateways = {
   'Xfinity Mobile': 'vtext.com',
   'Consumer Cellular':'mailmymobile.net'
 };
-function getDeptCarrier(dept){ return localStorage.getItem('smsCarrier_'+dept)||''; }
-function setDeptCarrier(dept,val){ localStorage.setItem('smsCarrier_'+dept,val||''); showToast(val?(dept+': '+val+' ✓'):(dept+': carrier cleared')); }
+function saveTwilioCredentials(){
+  const sidEl = document.getElementById('twilioSIDInput');
+  const tokEl = document.getElementById('twilioTokenInput');
+  const fromEl = document.getElementById('twilioFromInput');
+  const sidVal = sidEl ? sidEl.value.trim() : '';
+  const tokVal = tokEl ? tokEl.value.trim() : '';
+  const fromVal = fromEl ? fromEl.value.trim() : '';
+  // SID/Token fields display masked bullets when already saved (never the
+  // real value), so only overwrite them if the person actually typed
+  // something new — an untouched masked field should never wipe a saved
+  // credential. The "from" field isn't masked, so it always saves as typed.
+  const isMasked = v => /^\u2022+$/.test(v);
+  if(sidVal && !isMasked(sidVal)) setSharedSetting('twilioSID', sidVal);
+  if(tokVal && !isMasked(tokVal)) setSharedSetting('twilioToken', tokVal);
+  setSharedSetting('twilioFrom', fromVal);
+  showToast('Twilio credentials saved \u2713');
+  render();
+}
+window.saveTwilioCredentials = saveTwilioCredentials;
+
+function getDeptCarrier(dept){ return (getSharedSetting('deptCarriers')||{})[dept]||''; }
+function setDeptCarrier(dept,val){
+  const map = Object.assign({}, getSharedSetting('deptCarriers')||{});
+  if(val) map[dept]=val; else delete map[dept];
+  setSharedSetting('deptCarriers', map);
+  showToast(val?(dept+': '+val+' \u2713'):(dept+': carrier cleared'));
+  render();
+}
 
 // Send a text by emailing the carrier's SMS gateway, via the working Gmail relay.
 async function sendTextViaEmail(number, carrier, body){
