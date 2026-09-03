@@ -1026,6 +1026,10 @@ function startSharedSettings(){
         try {
           const saved = sharedSettings.salespersonEmails || {};
           const rows = document.querySelectorAll('#salespeople-list .sp-row');
+          // A row count that doesn't match what's saved means rows were added
+          // or deleted and not yet saved — treat that as an unsaved edit too,
+          // not just changed values on existing rows.
+          if(rows.length !== Object.keys(saved).length) hasUnsavedRows = true;
           rows.forEach(row => {
             const name = (row.querySelector('.sp-name')?.value || '').trim();
             const email = (row.querySelector('.sp-email')?.value || '').trim();
