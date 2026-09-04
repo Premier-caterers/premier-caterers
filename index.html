@@ -10990,7 +10990,9 @@ async function htmlToPdfBase64(html /*, filename */){
 }
 window.htmlToPdfBase64 = htmlToPdfBase64;
 // Draw the cover/contents/BEO/invoice as TRUE vector PDF pages (jsPDF), then merge
-// the menu PDF (pdf-lib) — honoring a per-part copy count. Returns {bytes, menuFailed}.
+// the menu/grocery/venue/floorplan PDFs and logo image (pdf-lib) — honoring a
+// per-part copy count. Returns {bytes, failed} where failed is an array of
+// item keys that could not be pulled in (e.g. ['menu','grocery']).
 async function buildPacketPdfBytes(eventId, opts){
   await ensureJsPdf(); await ensurePdfLib();
   const { jsPDF } = window.jspdf;
@@ -10999,6 +11001,10 @@ async function buildPacketPdfBytes(eventId, opts){
   const evFull=fullEventNum(e)||(e.job||'');
   const clientName=e.name||clientPrimary(inq)||'Client';
   const menuLink=inq.menuLink||(Array.isArray(inq.menus)&&inq.menus[0]?inq.menus[0].url:'')||'';
+  const grocLink=e.catererCopyDoc||e.catererCopyPdf||'';
+  const venueLink=e.venueLink||'';
+  const floorLink=e.floorplan||'';
+  const logoLink=e.logoData||'';
   const ML=40, MR=572, PW=612, BOTTOM=752;
   const C={maroon:[139,26,26], amberFill:[251,226,166], amberBorder:[186,117,23], dark:[26,26,26], grey:[120,120,120], line:[214,214,214], faint:[170,170,170], red:[200,30,30], strip:[247,239,230], sp:[250,238,218]};
   const doc=new jsPDF({unit:'pt',format:'letter'});
@@ -11019,6 +11025,10 @@ async function buildPacketPdfBytes(eventId, opts){
   const contractObj=(typeof contracts!=='undefined' && contracts[e.id])?contracts[e.id]:null;
   if(opts.contract && contractObj) enclosed.push((contractObj.status==='signed'?'Signed contract':'Contract')+(opts.contractCopies>1?(' \u00d7'+opts.contractCopies):''));
   if(opts.menu && menuLink) enclosed.push('Menu'+(opts.menuCopies>1?(' \u00d7'+opts.menuCopies):''));
+  if(opts.grocery && grocLink) enclosed.push('Grocery list'+(opts.groceryCopies>1?(' \u00d7'+opts.groceryCopies):''));
+  if(opts.venue && venueLink) enclosed.push('Venue sheet'+(opts.venueCopies>1?(' \u00d7'+opts.venueCopies):''));
+  if(opts.floorplanDoc && floorLink) enclosed.push('Floor plan(s)'+(opts.floorplanCopies>1?(' \u00d7'+opts.floorplanCopies):''));
+  if(opts.logo && logoLink) enclosed.push('Client logo'+(opts.logoCopies>1?(' \u00d7'+opts.logoCopies):''));
 
   function header(yTop){
     fB(18); setT(C.maroon); doc.text('Premier Caterers', ML, yTop);
@@ -11223,22 +11233,46 @@ async function buildPacketPdfBytes(eventId, opts){
   if(opts.invoice){ for(let c=0;c<(opts.invoiceCopies||1);c++){ invSlots.forEach(k=>drawInvoiceSlot(k)); } }
   if(opts.contract && contractObj){ for(let c=0;c<(opts.contractCopies||1);c++) drawContract(); }
 
-  // ---- merge (our vector pages + menu pages) via pdf-lib ----
+  // ---- merge (our vector pages + any fetched documents) via pdf-lib ----
   const { PDFDocument }=window.PDFLib;
   const merged=await PDFDocument.create();
   if(started){ const ours=await PDFDocument.load(doc.output('arraybuffer')); (await merged.copyPages(ours,ours.getPageIndices())).forEach(p=>merged.addPage(p)); }
-  let menuFailed=false;
-  if(opts.menu && menuLink){
+  const failed=[];
+  async function mergeLinkAsPdf(key, on, link, copies){
+    if(!on || !link) return;
     try{
-      const b64=await fetchMenuPdfBase64(menuLink);
-      const menuDoc=await PDFDocument.load(_b64ToBytes(b64));
-      const idxs=menuDoc.getPageIndices();
-      for(let c=0;c<(opts.menuCopies||1);c++){ (await merged.copyPages(menuDoc,idxs)).forEach(p=>merged.addPage(p)); }
-    }catch(err){ console.error('menu fetch failed:', err); menuFailed=true; }
+      const b64=await fetchMenuPdfBase64(link);
+      const src=await PDFDocument.load(_b64ToBytes(b64));
+      const idxs=src.getPageIndices();
+      for(let c=0;c<(copies||1);c++){ (await merged.copyPages(src,idxs)).forEach(p=>merged.addPage(p)); }
+    }catch(err){ console.error(key+' fetch failed:', err); failed.push(key); }
+  }
+  await mergeLinkAsPdf('menu', opts.menu, menuLink, opts.menuCopies);
+  await mergeLinkAsPdf('grocery', opts.grocery, grocLink, opts.groceryCopies);
+  await mergeLinkAsPdf('venue', opts.venue, venueLink, opts.venueCopies);
+  await mergeLinkAsPdf('floorplanDoc', opts.floorplanDoc, floorLink, opts.floorplanCopies);
+  if(opts.logo && logoLink){
+    try{
+      const imgUrl=driveImgUrl(logoLink);
+      const resp=await fetch(imgUrl);
+      if(!resp.ok) throw new Error('image fetch failed ('+resp.status+')');
+      const bytes=new Uint8Array(await resp.arrayBuffer());
+      let img;
+      const isPng = bytes[0]===0x89 && bytes[1]===0x50;
+      try{ img = isPng ? await merged.embedPng(bytes) : await merged.embedJpg(bytes); }
+      catch(embedErr){ img = isPng ? await merged.embedJpg(bytes) : await merged.embedPng(bytes); }
+      const maxW=PW-80, maxH=792-80;
+      const scale=Math.min(maxW/img.width, maxH/img.height, 1);
+      const w=img.width*scale, h=img.height*scale;
+      for(let c=0;c<(opts.logoCopies||1);c++){
+        const p=merged.addPage([PW,792]);
+        p.drawImage(img, { x:(PW-w)/2, y:(792-h)/2, width:w, height:h });
+      }
+    }catch(err){ console.error('logo fetch failed:', err); failed.push('logo'); }
   }
   if(merged.getPageCount()===0) throw new Error('Nothing to include in the packet.');
   const bytes=await merged.save();
-  return { bytes, menuFailed };
+  return { bytes, failed };
 }
 
 async function _runPaperwork(eventId, mode){
@@ -11252,8 +11286,12 @@ async function _runPaperwork(eventId, mode){
     invoice:ck('pp-invoice'), invoiceCopies:num('pp-invoice-copies',1),
     contract:ck('pp-contract'), contractCopies:num('pp-contract-copies',1),
     menu:ck('pp-menu'), menuCopies:num('pp-menu-copies',1),
+    grocery:ck('pp-grocery'), groceryCopies:num('pp-grocery-copies',1),
+    venue:ck('pp-venue'), venueCopies:num('pp-venue-copies',1),
+    floorplanDoc:ck('pp-floorplan'), floorplanCopies:num('pp-floorplan-copies',1),
+    logo:ck('pp-logo'), logoCopies:num('pp-logo-copies',1),
   };
-  if(!opts.cover && !opts.beo && !opts.invoice && !opts.contract && !opts.menu){ alert('Pick at least one document to include.'); return; }
+  if(!opts.cover && !opts.beo && !opts.invoice && !opts.contract && !opts.menu && !opts.grocery && !opts.venue && !opts.floorplanDoc && !opts.logo){ alert('Pick at least one document to include.'); return; }
   closePaperwork();
   if(typeof showToast==='function') showToast('Building packet\u2026 this can take a few seconds');
   try{
@@ -11265,10 +11303,12 @@ async function _runPaperwork(eventId, mode){
     if(mode==='pdf'){ const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); }
     else { const w=window.open(url,'_blank'); if(!w){ const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); } }
     setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(e){} }, 60000);
-    if(typeof showToast==='function') showToast(res.menuFailed ? 'Packet ready \u2014 but the menu could not be pulled (check Settings)' : ('Packet ready'+(opts.menu?' \u2014 menu included':'')));
+    const failedNames={menu:'menu',grocery:'grocery list',venue:'venue sheet',floorplanDoc:'floor plan',logo:'logo'};
+    const failedList=(res.failed||[]).map(k=>failedNames[k]||k);
+    if(typeof showToast==='function') showToast(failedList.length ? ('Packet ready \u2014 but could not pull: '+failedList.join(', ')+' (check Settings)') : 'Packet ready');
   }catch(err){
     console.error('paperwork build failed:', err);
-    alert('Sorry \u2014 building the packet failed: '+((err&&err.message)?err.message:err)+(opts.menu?'\n\nIf the menu could not be reached, check that your Apps Script URL is saved in Settings.':''));
+    alert('Sorry \u2014 building the packet failed: '+((err&&err.message)?err.message:err)+'\n\nIf a pulled-in file (menu, grocery list, venue sheet, floor plan) could not be reached, check that your Apps Script URL is saved in Settings.');
   }
 }
 function openPaperwork(arg){
@@ -11302,7 +11342,32 @@ function openPaperwork(arg){
       +row(hasInv,!hasInv,'pp-invoice','Invoice / estimate', hasInv?('Billing document'+(invSlots.length>1?(' \u00b7 '+invSlots.length+' on file'):'')):'No invoice on this event yet', hasInv?cpx('pp-invoice-copies',1):'')
       +row(!!contractSigned,!hasContract,'pp-contract', contractSigned?'Signed contract':'Contract', hasContract?(contractSigned?'Signed agreement with signature':'Not signed yet \u2014 blank signature lines'):'No contract created yet', hasContract?cpx('pp-contract-copies',1):'')
       +row(!!menuUrl,!menuUrl,'pp-menu','Menu', menuUrl?'Your menu PDF, pulled in via the Apps Script relay':'No menu linked to this event yet', menuUrl?cpx('pp-menu-copies',1):'')
-      +'<div style="font-size:11.5px;color:#888;padding:6px 2px 0;line-height:1.5"><i class="ti ti-info-circle" style="font-size:12px"></i> Everything is built into one crisp PDF. Set a copies count on any part. The menu needs your Apps Script URL saved in Settings (same as the menu email).</div>'
+      +(function(){
+        const grocLink = e.catererCopyDoc || e.catererCopyPdf || '';
+        const hasVenue = !!e.venueLink;
+        const hasFloor = !!e.floorplan;
+        const hasLogo = !!e.logoData;
+        return ''
+          +row(!!grocLink,!grocLink,'pp-grocery','Grocery list',grocLink?'The caterer copy \u2014 pulled in via the Apps Script relay':'No grocery list built for this event yet', grocLink?cpx('pp-grocery-copies',1):'')
+          +row(hasVenue,!hasVenue,'pp-venue','Venue sheet',hasVenue?'Pulled in via the Apps Script relay':'No venue sheet attached yet', hasVenue?cpx('pp-venue-copies',1):'')
+          +row(hasFloor,!hasFloor,'pp-floorplan','Floor plan(s)',hasFloor?'Pulled in via the Apps Script relay':'No floor plan attached yet', hasFloor?cpx('pp-floorplan-copies',1):'')
+          +row(hasLogo,!hasLogo,'pp-logo','Client logo',hasLogo?'Added as an image page':'No logo attached yet', hasLogo?cpx('pp-logo-copies',1):'');
+      })()
+      +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#999;margin:14px 0 6px">Not yet available</div>'
+      +row(false,true,'pp-equipment','Equipment list','Coming soon','')
+      +row(false,true,'pp-checklist','Final checklist','Coming soon','')
+      +row(false,true,'pp-linen','Linen order form','Coming soon','')
+      +row(false,true,'pp-insurance','Insurance','Coming soon','')
+      +row(false,true,'pp-buffetsigns','Buffet & table signs','Coming soon','')
+      +row(false,true,'pp-photos','Event photos','Coming soon','')
+      +row(false,true,'pp-survey','Post-event survey','Coming soon','')
+      +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#999;margin:14px 0 6px">Client portal uploads</div>'
+      +(function(){
+        const pCount=(k)=>Array.isArray(e[k])?e[k].length:0;
+        const cats=[['floorplanFiles','Floorplans / seating'],['scheduleFiles','Schedules'],['logoFiles','Logo (client-uploaded)'],['liquorFiles','Wine / liquor list'],['ceremonyFiles','Ceremony'],['vendorDocs','Vendor documents'],['otherClientFiles','Other']];
+        return cats.map(function(c){ const n=pCount(c[0]); return row(false,true,'pp-cp-'+c[0],c[1], n?(n+' file'+(n>1?'s':'')+' uploaded \u2014 not yet includable'):'None uploaded','');}).join('');
+      })()
+      +'<div style="font-size:11.5px;color:#888;padding:6px 2px 0;line-height:1.5"><i class="ti ti-info-circle" style="font-size:12px"></i> Everything is built into one crisp PDF. Set a copies count on any part. Anything pulled via the Apps Script relay needs your Apps Script URL saved in Settings.</div>'
     +'</div>'
     +'<div style="padding:13px 20px;border-top:1px solid #eee;display:flex;gap:9px;justify-content:flex-end">'
       +'<button onclick="closePaperwork()" style="'+fbtn+';background:#f3f3f3;color:#555">Cancel</button>'
