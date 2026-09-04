@@ -8062,12 +8062,13 @@ function _clIsDone(item){
   if(item.done!==undefined) return !!item.done;
   return !!(item.assignees && item.assignees.some(a=>a.done));
 }
-// Keeps this card open across the re-render. Scroll position itself is
-// already handled by render() — it has its own, more thorough scroll and
-// inner-panel preservation built in, so this doesn't need to duplicate it.
+// Keeps this card open across the re-render. renderChecklists() wipes
+// window._clOpen back to {} on every render (so only one card stays open at
+// a time) — but it explicitly re-opens whatever's in _pendingChecklistId
+// first, so that's the flag to set, not _clOpen directly (which would just
+// get discarded a moment later).
 function _clRerender(eid){
-  if(!window._clOpen) window._clOpen={};
-  window._clOpen[eid]=true;
+  window._pendingChecklistId = eid;
   render();
 }
 function toggleClDone(eid, idx){
