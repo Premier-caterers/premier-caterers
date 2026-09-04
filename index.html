@@ -961,7 +961,7 @@ async function saveEmailTemplates(){
 // before Firestore comes back, and for genuinely-offline first loads.
 // PER-DEVICE things (login role, per-device auth tokens, checkbox toggles
 // like "use Twilio") intentionally stay in localStorage.
-const _SHARED_KEYS = ['scriptUrl','gmailClientId','githubToken','followupsPaused','salespersonEmails','delegationReady','followupsTestMode','followupsTestEmail','notifyContacts','savedLineItems','twilioSID','twilioToken','twilioFrom','deptCarriers'];
+const _SHARED_KEYS = ['scriptUrl','gmailClientId','githubToken','followupsPaused','salespersonEmails','delegationReady','followupsTestMode','followupsTestEmail','notifyContacts','savedLineItems','twilioSID','twilioToken','twilioFrom','deptCarriers','commissaryEmail'];
 let sharedSettings = {};
 let _sharedSettingsReady = false;
 let _sharedSettingsListener = null;
@@ -4169,6 +4169,8 @@ function drawerDocuments(inq, role, ev){
     role.canViewInvoices?_docBtn('Estimate / Invoice','ti-file-invoice',false,`viewClientQuote('${id}')`):'',
     _docBtn('Equipment list','ti-tool', !ev, ev?`_navReturnCapture('${ev.id}');showView('equipment')`:''),
     _docBtn('Grocery list','ti-shopping-cart', !ev, ev?`window.open('${ev.catererCopyDoc || ev.catererCopyPdf || 'https://drive.google.com/drive/u/0/folders/16u6TIcojWDWqQj6pvG6z_3pg1262Wabh'}','_blank')`:''),
+    _docBtn('Weekly cover sheet','ti-layout-rows', !ev, ev?`goToEventCoverSheet('${ev.weekOf||''}')`:''),
+    _docBtn('Venue sheet','ti-building', !ev, ev?(ev.venueLink?`window.open('${ev.venueLink}','_blank')`:`attachDoc('${ev.id}','venueLink')`):''),
     _docBtn('Final checklist','ti-checklist', !ev, ev?`goChecklist('${ev.id}')`:''),
     _docBtn('Linen order form','ti-wash',true,''),
     _docBtn('BEO','ti-clipboard-list',false,`openBeo('${id}')`),
@@ -10956,6 +10958,12 @@ function _b64ToBytes(b64){
   for(let i=0;i<len;i++) u[i]=bin.charCodeAt(i);
   return u;
 }
+function _bytesToB64(bytes){
+  let bin='';
+  const CHUNK=0x8000;
+  for(let i=0;i<bytes.length;i+=CHUNK) bin+=String.fromCharCode.apply(null, bytes.subarray(i,i+CHUNK));
+  return btoa(bin);
+}
 // Render a full HTML document string to PDF bytes (ArrayBuffer) using html2pdf,
 // inside an isolated off-screen iframe so the document's CSS can't touch the app.
 async function _htmlToPdfArrayBuffer(html){
@@ -11029,6 +11037,7 @@ async function buildPacketPdfBytes(eventId, opts){
   if(opts.venue && venueLink) enclosed.push('Venue sheet'+(opts.venueCopies>1?(' \u00d7'+opts.venueCopies):''));
   if(opts.floorplanDoc && floorLink) enclosed.push('Floor plan(s)'+(opts.floorplanCopies>1?(' \u00d7'+opts.floorplanCopies):''));
   if(opts.logo && logoLink) enclosed.push('Client logo'+(opts.logoCopies>1?(' \u00d7'+opts.logoCopies):''));
+  if(opts.weeklycover && e.weekOf) enclosed.push('Weekly cover sheet'+(opts.weeklycoverCopies>1?(' \u00d7'+opts.weeklycoverCopies):''));
 
   function header(yTop){
     fB(18); setT(C.maroon); doc.text('Premier Caterers', ML, yTop);
@@ -11226,12 +11235,68 @@ async function buildPacketPdfBytes(eventId, opts){
     fN(7.5); setT([150,150,150]); doc.text((evFull?('Event #'+evFull+'   \u00b7   '):'')+'Catering Agreement'+(c.status==='signed'?' \u00b7 Signed':' \u00b7 Unsigned'), ML, 778);
   }
 
+  function drawWeeklyCoverSheet(){
+    if(!e.weekOf) return;
+    const weekDate = new Date(e.weekOf+'T12:00:00Z');
+    const weekEvents = coverSortEvents(events.filter(x=>(x.weekOf||'')===e.weekOf && isActiveEvent(x)));
+    const LW=792, LH=612, LML=36, LMR=756, LBOTTOM=576;
+    const cols=[
+      ['#',26],['NAME',78],['MEAL',26],['TYPE',50],['DAY',44],['ADDRESS',108],
+      ['# WAITERS',38],['BARTENDERS',42],['WAITER TIME',46],['# CHEFS',34],
+      ['CHEFS TIME',42],['# PORTERS',36],['MASHGIACH',46],['MANAGER',42]
+    ];
+    let y=0;
+    function newLandscapePage(){
+      doc.addPage('letter','landscape'); started=true; y=44;
+      setF(C.amberFill); setD(C.amberBorder); doc.setLineWidth(1);
+      doc.rect(LML,y-22,LMR-LML,22,'FD');
+      fB(13); setT([90,50,5]);
+      doc.text('Weekly cover sheet \u2014 W/E '+(weekDate.getUTCMonth()+1)+'/'+weekDate.getUTCDate()+'/'+weekDate.getUTCFullYear(), LML+6, y-6);
+      y+=6;
+      let x=LML; fB(7.5); setT(C.grey);
+      cols.forEach(c=>{ doc.text(c[0], x+3, y+9); x+=c[1]; });
+      setD(C.line); doc.setLineWidth(0.5); doc.line(LML,y+13,LMR,y+13);
+      y+=16;
+    }
+    function row(cells, indent, bold){
+      if(y>LBOTTOM){ newLandscapePage(); }
+      let x=LML;
+      fN(7.5); setT(C.dark);
+      cols.forEach((c,i)=>{
+        const val=cells[i]==null?'':String(cells[i]);
+        if(bold && i===0) fB(7.5); else fN(7.5);
+        const tx = i===5 ? doc.splitTextToSize(val, c[1]-6)[0]||'' : val; // address column: single line, clipped
+        doc.text((i===0&&indent?'  ':'')+tx.slice(0, i===5?26:14), x+3+(i===0&&indent?6:0), y+8);
+        x+=c[1];
+      });
+      setD([230,230,230]); doc.setLineWidth(0.4); doc.line(LML,y+11,LMR,y+11);
+      y+=14;
+    }
+    newLandscapePage();
+    weekEvents.forEach(ev2=>{
+      const hasMeals=(ev2.meals||[]).length>0;
+      const mainLabel=hasMeals?(ev2.mainLabel||'a'):'';
+      row([coverJobNum(ev2.job)+mainLabel, ev2.name, mainLabel, ev2.typeLabel||ev2.type, formatEventDay(ev2), ev2.addr,
+           ev2.waiterNames||ev2.waiters||'', ev2.bartenderNames||ev2.bartenders||'', ev2.waiterTime||'',
+           ev2.chefNames||ev2.chefs||'', ev2.chefTime||'', ev2.porterNames||ev2.porters||'',
+           ev2.mashgiachNames||(ev2.mashgiach&&ev2.mashgiach!=='-'?ev2.mashgiach:''), ev2.manager], false, true);
+      (ev2.meals||[]).forEach(meal=>{
+        row(['\u21b3'+coverJobNum(ev2.job)+(meal.jobSuffix||''), meal.name||ev2.name, meal.jobSuffix||'', meal.typeLabel||'', meal.dayLabel||ev2.dayLabel||'', ev2.addr,
+             meal.waiterNames||meal.waiters||'', meal.bartenderNames||meal.bartenders||'', meal.waiterTime||'',
+             meal.chefNames||meal.chefs||'', meal.chefTime||'', meal.porterNames||meal.porters||'',
+             meal.mashgiachNames||meal.mashgiach||'', meal.manager], true, false);
+      });
+    });
+    fN(7); setT(C.grey); doc.text('Generated '+nowStamp(), LML, LH-18);
+  }
+
   // ---- assemble vector parts in order, repeating per-part copies ----
   for(let c=0;c<(opts.cover?(opts.coverCopies||1):0);c++) drawCover();
   for(let c=0;c<(opts.contents?(opts.contentsCopies||1):0);c++) drawContents();
   if(opts.beo){ for(let c=0;c<(opts.beoCopies||1);c++) drawBeo(); }
   if(opts.invoice){ for(let c=0;c<(opts.invoiceCopies||1);c++){ invSlots.forEach(k=>drawInvoiceSlot(k)); } }
   if(opts.contract && contractObj){ for(let c=0;c<(opts.contractCopies||1);c++) drawContract(); }
+  if(opts.weeklycover){ for(let c=0;c<(opts.weeklycoverCopies||1);c++) drawWeeklyCoverSheet(); }
 
   // ---- merge (our vector pages + any fetched documents) via pdf-lib ----
   const { PDFDocument }=window.PDFLib;
@@ -11275,11 +11340,11 @@ async function buildPacketPdfBytes(eventId, opts){
   return { bytes, failed };
 }
 
-async function _runPaperwork(eventId, mode){
+function _ppGatherOpts(){
   const g=id=>document.getElementById(id);
   const ck=id=>!!(g(id)&&g(id).checked);
   const num=(id,d)=>{ const el=g(id); let v=el?parseInt(el.value,10):d; if(!v||v<1)v=d; return Math.min(9,Math.max(1,v)); };
-  const opts={
+  return {
     cover:ck('pp-cover'), coverCopies:num('pp-cover-copies',1),
     contents:ck('pp-contents'), contentsCopies:num('pp-contents-copies',1),
     beo:ck('pp-beo'), beoCopies:num('pp-beo-copies',1),
@@ -11290,8 +11355,16 @@ async function _runPaperwork(eventId, mode){
     venue:ck('pp-venue'), venueCopies:num('pp-venue-copies',1),
     floorplanDoc:ck('pp-floorplan'), floorplanCopies:num('pp-floorplan-copies',1),
     logo:ck('pp-logo'), logoCopies:num('pp-logo-copies',1),
+    weeklycover:ck('pp-weeklycover'), weeklycoverCopies:num('pp-weeklycover-copies',1),
   };
-  if(!opts.cover && !opts.beo && !opts.invoice && !opts.contract && !opts.menu && !opts.grocery && !opts.venue && !opts.floorplanDoc && !opts.logo){ alert('Pick at least one document to include.'); return; }
+}
+function _ppAnySelected(opts){
+  return !!(opts.cover||opts.beo||opts.invoice||opts.contract||opts.menu||opts.grocery||opts.venue||opts.floorplanDoc||opts.logo||opts.weeklycover);
+}
+const _ppFailedNames={menu:'menu',grocery:'grocery list',venue:'venue sheet',floorplanDoc:'floor plan',logo:'logo'};
+async function _runPaperwork(eventId, mode){
+  const opts=_ppGatherOpts();
+  if(!_ppAnySelected(opts)){ alert('Pick at least one document to include.'); return; }
   closePaperwork();
   if(typeof showToast==='function') showToast('Building packet\u2026 this can take a few seconds');
   try{
@@ -11303,12 +11376,61 @@ async function _runPaperwork(eventId, mode){
     if(mode==='pdf'){ const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); }
     else { const w=window.open(url,'_blank'); if(!w){ const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); } }
     setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(e){} }, 60000);
-    const failedNames={menu:'menu',grocery:'grocery list',venue:'venue sheet',floorplanDoc:'floor plan',logo:'logo'};
-    const failedList=(res.failed||[]).map(k=>failedNames[k]||k);
+    const failedList=(res.failed||[]).map(k=>_ppFailedNames[k]||k);
     if(typeof showToast==='function') showToast(failedList.length ? ('Packet ready \u2014 but could not pull: '+failedList.join(', ')+' (check Settings)') : 'Packet ready');
   }catch(err){
     console.error('paperwork build failed:', err);
     alert('Sorry \u2014 building the packet failed: '+((err&&err.message)?err.message:err)+'\n\nIf a pulled-in file (menu, grocery list, venue sheet, floor plan) could not be reached, check that your Apps Script URL is saved in Settings.');
+  }
+}
+// Builds the packet (same checkboxes as Save PDF / Combine & print), then opens
+// the existing client-email compose modal with it pre-attached for review before sending.
+async function _runPaperworkEmail(eventId){
+  const opts=_ppGatherOpts();
+  if(!_ppAnySelected(opts)){ alert('Pick at least one document to include.'); return; }
+  const e=_beoResolveEvent(eventId); if(!e){ alert('Event not found.'); return; }
+  const inq=_beoInquiryFor(e);
+  if(!inq || !inq.id){ alert('No inquiry record linked to this event, so there is nowhere to email from. Attach one first.'); return; }
+  closePaperwork();
+  if(typeof showToast==='function') showToast('Building packet\u2026 this can take a few seconds');
+  try{
+    const res=await buildPacketPdfBytes(eventId, opts);
+    const b64=_bytesToB64(res.bytes);
+    const fname=_ppFileName(e)+'.pdf';
+    openClientEmailModal(inq.id);
+    _cliEmailAttachments.push({ filename:fname, mime:'application/pdf', base64:b64, size:res.bytes.length });
+    if(typeof _cemRenderAttList==='function') _cemRenderAttList();
+    const failedList=(res.failed||[]).map(k=>_ppFailedNames[k]||k);
+    if(failedList.length && typeof showToast==='function') showToast('Attached \u2014 but could not pull: '+failedList.join(', ')+' (check Settings)');
+  }catch(err){
+    console.error('paperwork email build failed:', err);
+    alert('Sorry \u2014 building the packet failed: '+((err&&err.message)?err.message:err));
+  }
+}
+// Builds the packet and sends it straight to the saved commissary printer
+// address via the same Gmail relay as every other outgoing email \u2014 no
+// review step, no modal, just sent.
+async function _runPaperworkCommissary(eventId){
+  const to=(getSharedSetting('commissaryEmail')||'').trim();
+  if(!to){ alert('No commissary printer email is saved yet \u2014 add one in Settings first.'); return; }
+  const opts=_ppGatherOpts();
+  if(!_ppAnySelected(opts)){ alert('Pick at least one document to include.'); return; }
+  const e=_beoResolveEvent(eventId); if(!e){ alert('Event not found.'); return; }
+  closePaperwork();
+  if(typeof showToast==='function') showToast('Building packet\u2026 this can take a few seconds');
+  try{
+    const res=await buildPacketPdfBytes(eventId, opts);
+    const b64=_bytesToB64(res.bytes);
+    const fname=_ppFileName(e)+'.pdf';
+    const evFull=fullEventNum(e)||(e.job||'');
+    const subject='Event paperwork'+(evFull?(' \u2014 #'+evFull):'')+' \u2014 '+(e.name||'Event');
+    const body='Attached: event paperwork for '+(e.name||'this event')+(evFull?(' (#'+evFull+')'):'')+'.';
+    const ok=await sendGmailEmail(to, subject, body, body, [{ filename:fname, mime:'application/pdf', base64:b64 }]);
+    const failedList=(res.failed||[]).map(k=>_ppFailedNames[k]||k);
+    if(ok && typeof showToast==='function') showToast((failedList.length?('Sent to commissary \u2014 but could not pull: '+failedList.join(', ')):'Sent to commissary \u2713'));
+  }catch(err){
+    console.error('paperwork commissary send failed:', err);
+    alert('Sorry \u2014 building or sending the packet failed: '+((err&&err.message)?err.message:err));
   }
 }
 function openPaperwork(arg){
@@ -11342,6 +11464,7 @@ function openPaperwork(arg){
       +row(hasInv,!hasInv,'pp-invoice','Invoice / estimate', hasInv?('Billing document'+(invSlots.length>1?(' \u00b7 '+invSlots.length+' on file'):'')):'No invoice on this event yet', hasInv?cpx('pp-invoice-copies',1):'')
       +row(!!contractSigned,!hasContract,'pp-contract', contractSigned?'Signed contract':'Contract', hasContract?(contractSigned?'Signed agreement with signature':'Not signed yet \u2014 blank signature lines'):'No contract created yet', hasContract?cpx('pp-contract-copies',1):'')
       +row(!!menuUrl,!menuUrl,'pp-menu','Menu', menuUrl?'Your menu PDF, pulled in via the Apps Script relay':'No menu linked to this event yet', menuUrl?cpx('pp-menu-copies',1):'')
+      +row(!!e.weekOf,!e.weekOf,'pp-weeklycover','Weekly cover sheet', e.weekOf?('Every event for the week of '+formatDate(e.weekOf)):'No week set on this event', e.weekOf?cpx('pp-weeklycover-copies',1):'')
       +(function(){
         const grocLink = e.catererCopyDoc || e.catererCopyPdf || '';
         const hasVenue = !!e.venueLink;
@@ -11369,14 +11492,17 @@ function openPaperwork(arg){
       })()
       +'<div style="font-size:11.5px;color:#888;padding:6px 2px 0;line-height:1.5"><i class="ti ti-info-circle" style="font-size:12px"></i> Everything is built into one crisp PDF. Set a copies count on any part. Anything pulled via the Apps Script relay needs your Apps Script URL saved in Settings.</div>'
     +'</div>'
-    +'<div style="padding:13px 20px;border-top:1px solid #eee;display:flex;gap:9px;justify-content:flex-end">'
+    +'<div style="padding:13px 20px;border-top:1px solid #eee;display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end">'
       +'<button onclick="closePaperwork()" style="'+fbtn+';background:#f3f3f3;color:#555">Cancel</button>'
+      +'<button onclick="_runPaperworkCommissary(\''+e.id+'\')" style="'+fbtn+';background:#fff;color:#555;border:1.5px solid #d8d2c8"><i class="ti ti-printer" style="font-size:15px;vertical-align:-2px"></i> To commissary</button>'
+      +'<button onclick="_runPaperworkEmail(\''+e.id+'\')" style="'+fbtn+';background:#fff;color:#555;border:1.5px solid #d8d2c8"><i class="ti ti-mail" style="font-size:15px;vertical-align:-2px"></i> Email</button>'
       +'<button onclick="_runPaperwork(\''+e.id+'\',\'pdf\')" style="'+fbtn+';background:#fff;color:#8B1A1A;border:1.5px solid #8B1A1A"><i class="ti ti-file-type-pdf" style="font-size:15px;vertical-align:-2px"></i> Save PDF</button>'
       +'<button onclick="_runPaperwork(\''+e.id+'\',\'print\')" style="'+fbtn+';background:#8B1A1A;color:#fff"><i class="ti ti-printer" style="font-size:15px;vertical-align:-2px"></i> Combine &amp; print</button>'
     +'</div></div>';
   document.body.appendChild(wrap);
 }
 window.openPaperwork=openPaperwork; window.closePaperwork=closePaperwork; window._runPaperwork=_runPaperwork;
+window._runPaperworkEmail=_runPaperworkEmail; window._runPaperworkCommissary=_runPaperworkCommissary;
 
 // ─────────────────────────────────────────────────────────────
 // CONTRACT (e-signable). Client signs remotely via sign.html.
@@ -12731,6 +12857,25 @@ function printList(id) {
 }
 
 
+// ── Event paperwork: commissary printer email (Settings) ──
+function _renderCommissarySettings(){
+  const val = getSharedSetting('commissaryEmail') || '';
+  return `
+  <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
+    <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px">Commissary Printer Email</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">Event paperwork packets sent with the "Send to commissary" button go straight to this address \u2014 no review step.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input type="email" id="commissaryEmailInput" value="${val.replace(/"/g,'&quot;')}" placeholder="print@yourcommissary.com" style="flex:1;min-width:220px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px 12px;font-size:13px;font-family:inherit">
+      <button onclick="saveCommissaryEmail()" class="btn-save">Save</button>
+    </div>
+  </div>`;
+}
+async function saveCommissaryEmail(){
+  const el = document.getElementById('commissaryEmailInput');
+  const val = (el && el.value || '').trim();
+  await setSharedSetting('commissaryEmail', val);
+  showToast(val ? 'Commissary email saved' : 'Commissary email cleared');
+}
 // ── SETTINGS ──
 // ── FOLLOW-UP SETTINGS PANEL ──
 // ── Client Portal: notification contacts (Settings → who gets texted) ──
@@ -13475,6 +13620,7 @@ function renderSettings(){
       <button onclick="resetUserPassword('josh')" style="padding:8px 14px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-size:13px;cursor:pointer">Reset Josh&rsquo;s password</button>
     </div>
   </div>
+  ${_renderCommissarySettings()}
   ${_renderNotifyContactsSettings()}
   ${_renderFollowupSettings()}
   <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem">
@@ -13958,6 +14104,15 @@ function goToThisWeek(){
 }
 function goToCoverSheetThisWeek(){
   currentWeekOffset = CURRENT_WEEK_OFFSET;
+  showView('coversheet');
+}
+// Jump the Cover Sheet view to a specific event's week, same offset math as jumpToWeek.
+function goToEventCoverSheet(weekOf){
+  if(!weekOf) return;
+  const d = new Date(weekOf);
+  const base = new Date('2026-06-07');
+  const diff = Math.round((d - base) / (7*24*60*60*1000));
+  currentWeekOffset = diff;
   showView('coversheet');
 }
 
