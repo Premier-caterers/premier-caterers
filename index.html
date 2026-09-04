@@ -4168,7 +4168,7 @@ function drawerDocuments(inq, role, ev){
     _docBtn('Menu(s)','ti-file-text',false,`openInqMenuQuick('${id}')`),
     role.canViewInvoices?_docBtn('Estimate / Invoice','ti-file-invoice',false,`viewClientQuote('${id}')`):'',
     _docBtn('Equipment list','ti-tool', !ev, ev?`_navReturnCapture('${ev.id}');showView('equipment')`:''),
-    _docBtn('Grocery list','ti-shopping-cart', !ev, ev?`openEventGrocery('${ev.id}')`:''),
+    _docBtn('Grocery list','ti-shopping-cart', !ev, ev?`window.open('https://premier-caterers.github.io/premier-caterers/grocery.html?event=${ev.id}','_blank')`:''),
     _docBtn('Final checklist','ti-checklist', !ev, ev?`goChecklist('${ev.id}')`:''),
     _docBtn('Linen order form','ti-wash',true,''),
     _docBtn('BEO','ti-clipboard-list',false,`openBeo('${id}')`),
