@@ -7892,9 +7892,9 @@ function initChecklist(eid){
 
 function renderChecklists(){
   events.forEach(e=>initChecklist(e.id));
+  if(!window._clOpen) window._clOpen = {};
   const _pendingId = window._pendingChecklistId;
-  window._clOpen = {};
-  if(_pendingId){ window._clOpen[_pendingId] = true; window._pendingChecklistId = null; }
+  if(_pendingId){ window._clOpen = {}; window._clOpen[_pendingId] = true; window._pendingChecklistId = null; }
 
   let h = navReturnBreadcrumb() + '<div class="section-header"><div class="section-title">Event checklists</div>'
     + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
