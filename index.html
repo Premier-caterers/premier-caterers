@@ -8062,15 +8062,13 @@ function _clIsDone(item){
   if(item.done!==undefined) return !!item.done;
   return !!(item.assignees && item.assignees.some(a=>a.done));
 }
-// Preserves scroll position across the full-page re-render every checklist
-// interaction triggers — without this, the page visibly snaps to the top of
-// the Checklists view on every click, which reads as "jumping back to the list".
+// Keeps this card open across the re-render. Scroll position itself is
+// already handled by render() — it has its own, more thorough scroll and
+// inner-panel preservation built in, so this doesn't need to duplicate it.
 function _clRerender(eid){
-  const y = window.scrollY;
   if(!window._clOpen) window._clOpen={};
   window._clOpen[eid]=true;
   render();
-  requestAnimationFrame(()=>{ window.scrollTo(0,y); });
 }
 function toggleClDone(eid, idx){
   const item = checklists[eid]?.[idx]; if(!item || item.na) return;
