@@ -3089,7 +3089,7 @@ function renderHome(){
   weekEvents.forEach(e=>{
     (checklists[e.id]||[]).forEach(it=>{
       if(it.na) return;
-      const doneAny = it.done || (it.assignees && it.assignees.some(a=>a.done));
+      const doneAny = it.assignees && it.assignees.some(a=>a.done);
       if(!doneAny) todos.push({eid:e.id, name:e.name, text:it.text});
     });
   });
@@ -3221,7 +3221,7 @@ function _ewCrew(e){
 function _ewDocs(e, role){
   const items = checklists[e.id]||[];
   const active = items.filter(i=>!i.na);
-  const clDone = active.length && active.every(i=>i.done || (i.assignees && i.assignees.some(a=>a.done)));
+  const clDone = active.length && active.every(i=>i.assignees && i.assignees.some(a=>a.done));
   const invOk  = role.canViewInvoices ? (aggregateInvoiceStatus(e.id)!=='none') : true;
   const d = [
     ['M', !!(e.menuLink||e.pdfMenuLink), 'Menu'],
@@ -3345,7 +3345,7 @@ function renderEvents(){
       // event hub (openEventHub), not on the card face.
       const ccVenueName = (()=>{ const _v=venues.find(v=>v.addr===e.addr||v.name===e.name); return (_v&&_v.name) || e.addr || ''; })();
       const ccInvStatus = role.canViewInvoices ? aggregateInvoiceStatus(e.id) : 'none';
-      const ccClPct = (()=>{ const items=checklists[e.id]||[]; const active=items.filter(i=>!i.na); if(!active.length) return 0; const done=active.filter(i=>i.done||(i.assignees&&i.assignees.some(a=>a.done))).length; return Math.round(done/active.length*100); })();
+      const ccClPct = (()=>{ const items=checklists[e.id]||[]; const active=items.filter(i=>!i.na); if(!active.length) return 0; const done=active.filter(i=>i.assignees&&i.assignees.some(a=>a.done)).length; return Math.round(done/active.length*100); })();
       const ccUnanswered = hasUnansweredPortalMessage(e);
       const ccLink = (on, icon, label, onclick) => `<button onclick="event.stopPropagation();${onclick}" class="cc-link${on?' on':''}"><i class="ti ${icon}"></i>${label}</button>`;
       h+=`<div class="event-card ${selectedId===e.id?'selected':''}" onclick="openEventHub('${e.id}')">
@@ -4324,12 +4324,13 @@ function renderInqDetail(inq, role){
         ${_hubChip((inq.eventDate||inq.eventTBD)?_dateNoteLabel(inq, formatDate):'')}
         ${_hubChip(inq.cuisine)}
       </div>
-      ${_hubCard('Details', `<div class="hub-facts">${fact('Client', name)}${fact('Phone', inq.phone)}${fact('Email', inq.email)}${fact('Event type', inq.eventType)}${fact('Party planner', inq.plannerName)}${_salespersonHubCell(inq, role)}</div>${_unansweredHubBanner(inq)}${hubAiCard(inq)||''}${refHtml}${notesHtml}`)}
+      ${_hubCard('Details', `<div class="hub-facts">${fact('Client', name)}${fact('Phone', inq.phone)}${fact('Email', inq.email)}${fact('Event type', inq.eventType)}${fact('Party planner', inq.plannerName)}${_salespersonHubCell(inq, role)}</div>${_unansweredHubBanner(inq)}${refHtml}${notesHtml}`)}
       ${_hubCardWrap(drawerDocuments(inq, role, ev))}
       ${_hubCard('Client portal', clientPortalHubCard(inq, ev, role))}
       ${(role.canViewInvoices && _estimateOpenId===inq.id) ? _hubCard('Money &amp; estimate', renderEstimateBlock(inq, role)) : ''}
       ${_hubCard('Menu', `<div style="display:flex;flex-direction:column;gap:10px">${menuHtml}<div style="margin-top:2px"><button onclick="attachInqMenu('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:inherit"><i class="ti ti-link" style="font-size:14px"></i>${(Array.isArray(inq.menus)&&inq.menus.length)||inq.menuLink?'Add another link':'Attach menu manually'}</button><button onclick="openTemplatePicker('${inq.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-left:6px;font-family:inherit"><i class="ti ti-file-plus" style="font-size:14px"></i>Create menu from template</button></div></div>`)}
       ${ev ? _hubCard('Staff &amp; event details', drawerStaffDetails(inq, ev, role)) : ''}
+      ${hubAiCard(inq)||''}
       ${_hubCard('Activity', `${hubTimeline(inq,6)}<div style="margin-top:11px"><button onclick="openActivityLog('${inq.id}')" style="font-size:12px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:inherit"><i class="ti ti-history" style="font-size:15px"></i>Full activity log${_actCountFor(inq.id)?(' (' + _actCountFor(inq.id) + ')'):''}</button></div>`)}
     </div>
   </div>`;
@@ -7868,7 +7869,7 @@ function saveSchedEdit(id){
 }
 
 // ── CHECKLISTS ──
-const clPeople = ['Kenny','Shelley','Josh','Commissary','Client','Party planner','Other'];
+const clPeople = ['Kenny','Shelley','Josh','Commissary','Client','Other'];
 
 function initChecklist(eid){
   if(!checklists[eid]){
@@ -7877,7 +7878,7 @@ function initChecklist(eid){
       text:t.text,
       na:false,
       naDefault:t.na,
-      dueOption:'',
+      dueOption:t.dueOption||'',
       customDue:'',
       assignees:[], // [{person, done, notes, ts, otherName}]
       addToFuture:false,
@@ -7944,20 +7945,12 @@ function renderChecklists(){
 
 function toggleChecklistArchive(){ window._clArchiveOpen = !window._clArchiveOpen; render(); }
 
-// Owners that exist as real logins in this app — the only ones a reminder can
-// actually land My Day items for. Client / Party planner / Other have no
-// login, so a reminder aimed at them is redirected to the event's salesperson.
-const CL_OWNER_MAP = {Kenny:'owner', Shelley:'shelley', Josh:'josh'};
-function _clOwnerFor(person){ return CL_OWNER_MAP[person] || null; }
-function _clUnitDays(amount, unit){ return unit==='weeks' ? amount*7 : unit==='months' ? amount*30 : amount; }
-function _clReminderLabel(r){ if(!r) return ''; return r.amount+' '+(r.unit==='days'?(r.amount==1?'day':'days'):r.unit==='weeks'?(r.amount==1?'week':'weeks'):(r.amount==1?'month':'months'))+' before'; }
-
 function checklistCardHtml(e){
   let h = '';
     const eid = e.id;
     const rawItems = checklists[eid]||[];
     const active = rawItems.filter(i=>!i.na);
-    const done = active.filter(i=>_clIsDone(i)).length;
+    const done = active.filter(i=>i.assignees&&i.assignees.some(a=>a.done)).length;
     const pct = active.length>0 ? Math.round(done/active.length*100) : 0;
     const isOpen = window._clOpen[eid] === true;
 
@@ -7975,21 +7968,27 @@ function checklistCardHtml(e){
       + '<div style="padding:.75rem 1.25rem 1rem">';
 
     // Column headers
-    h += '<div style="display:grid;grid-template-columns:26px 26px 1fr 168px 150px 108px 30px 26px;gap:8px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">'
-      + '<span title="Done">Done</span><span title="Not applicable">N/A</span><span>Task</span><span>Assigned to</span><span>Notes</span><span>Due date</span><span title="Reminder">🔔</span><span title="Add to change log">📋</span>'
+    h += '<div style="display:grid;grid-template-columns:28px 1fr 200px 160px 100px 32px;gap:8px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">'
+      + '<span>N/A</span><span>Task</span><span>Assigned to / Status</span><span>Notes</span><span>Due date</span><span>📋</span>'
       + '</div>';
 
     rawItems.forEach(function(item, idx){
-      const isDone = _clIsDone(item);
-      h += '<div style="border-bottom:0.5px solid var(--border);padding:9px 0">'
-        + '<div style="display:grid;grid-template-columns:26px 26px 1fr 168px 150px 108px 30px 26px;gap:8px;align-items:flex-start">'
-        // Done checkbox
-        + '<button onclick="toggleClDone(\''+eid+'\','+idx+')" title="Mark done" '+(item.na?'disabled':'')+' style="width:22px;height:22px;border-radius:6px;border:1.5px solid '+(isDone?'var(--green-text)':'var(--border2)')+';background:'+(isDone?'var(--green-text)':'var(--bg)')+';color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;margin-top:1px;opacity:'+(item.na?'.4':'1')+'">'+(isDone?'<i class="ti ti-check"></i>':'')+'</button>'
-        // N/A checkbox
-        + '<button onclick="toggleClNA(\''+eid+'\','+idx+')" title="Not applicable" style="width:22px;height:22px;border-radius:6px;border:1.5px solid '+(item.na?'var(--text3)':'var(--border2)')+';background:'+(item.na?'var(--text3)':'var(--bg)')+';color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;margin-top:1px">'+(item.na?'<i class="ti ti-check"></i>':'')+'</button>'
-        // Task text — click to edit
-        + '<div id="cl-text-'+eid+'-'+idx+'" onclick="editClText(\''+eid+'\','+idx+',this)" title="Click to edit" style="font-size:15px;font-weight:600;line-height:1.35;cursor:text;color:'+(item.na?'var(--text3)':isDone?'var(--text3)':'var(--text)')+';padding-top:1px">'+pcEsc(item.text)+'</div>'
-        // Assigned to
+      const isDone = item.assignees && item.assignees.some(function(a){ return a.done; });
+      const allDone = item.assignees && item.assignees.length > 0 && item.assignees.every(function(a){ return a.done; });
+
+      h += '<div style="border-bottom:0.5px solid var(--border);padding:8px 0;'+(item.na?'opacity:.5':'')+'">'
+        // Row 1: N/A, task name, assignee selector, due date, change log flag
+        + '<div style="display:grid;grid-template-columns:28px 1fr 200px 160px 100px 32px;gap:8px;align-items:flex-start">'
+        + '<button onclick="toggleNA(\''+eid+'\','+idx+')" style="border:0.5px solid '+(item.na?'var(--coral-text)':'var(--border2)')+';background:'+(item.na?'var(--coral-bg)':'none')+';color:'+(item.na?'var(--coral-text)':'var(--text3)')+';cursor:pointer;font-size:10px;padding:2px 4px;border-radius:4px;font-weight:'+(item.na?'600':'400')+';margin-top:2px">N/A</button>'
+        + '<div style="font-size:13px;font-weight:500;color:'+(item.na?'var(--text3)':allDone?'var(--green-text)':'var(--text)')+';text-decoration:'+(allDone&&!item.na?'none':'none')+'">'
+          + item.text
+          + (item.assignees&&item.assignees.length>0 ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">'+item.assignees.map(function(a){
+              return '<span style="font-size:11px;padding:2px 7px;border-radius:8px;background:'+(a.done?'var(--green-bg)':'var(--amber-bg)')+';color:'+(a.done?'var(--green-text)':'var(--amber-text)')+';display:inline-flex;align-items:center;gap:3px">'
+                + (a.done?'✓ ':'') + (a.person==='Other'?a.otherName||'Other':a.person)
+                + '</span>';
+            }).join('')+'</div>' : '')
+        + '</div>'
+        // Assignee multi-select dropdown
         + '<div>'
           + '<select multiple onchange="updateAssignees(\''+eid+'\','+idx+',this)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:4px;font-size:12px;color:var(--text);font-family:inherit;height:auto" '+(item.na?'disabled':'')+'>'
           + clPeople.map(function(p){
@@ -8001,8 +8000,8 @@ function checklistCardHtml(e){
               '<input type="text" placeholder="Other name..." value="'+(item.assignees.find(function(a){return a.person==='Other';})||{}).otherName+'" onchange="updateOtherName(\''+eid+'\','+idx+',this.value)" style="margin-top:4px;width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:3px 6px;font-size:12px;color:var(--text);font-family:inherit">'
             : '')
         + '</div>'
-        // Notes
-        + '<div><textarea placeholder="Notes..." onchange="updateClNotes(\''+eid+'\','+idx+',\'main\',this.value)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:4px 6px;font-size:12px;color:var(--text);font-family:inherit;resize:vertical;min-height:38px" '+(item.na?'disabled':'')+'>'+(item.notes||'')+'</textarea></div>'
+        // Notes field
+        + '<div><textarea placeholder="Notes..." onchange="updateClNotes(\''+eid+'\','+idx+',\'main\',this.value)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:4px 6px;font-size:12px;color:var(--text);font-family:inherit;resize:vertical;min-height:40px" '+(item.na?'disabled':'')+'>'+(item.notes||'')+'</textarea></div>'
         // Due date
         + '<div style="font-size:11px">'
           + (item.dueOption==='custom'
@@ -8011,25 +8010,26 @@ function checklistCardHtml(e){
               ? '<span style="color:var(--blue-text);font-weight:600;font-size:12px">'+calcDueDate(e.day, parseInt(item.dueOption))+'</span><button onclick="setDueOption(\''+eid+'\','+idx+',\'\')" style="display:block;border:none;background:none;color:var(--text3);cursor:pointer;font-size:10px;padding:0">change</button>'
               : '<select onchange="setDueOption(\''+eid+'\','+idx+',this.value)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:3px 5px;font-size:11px;color:var(--text);font-family:inherit"><option value="">Set due...</option><option value="30">1 month before</option><option value="14">2 weeks before</option><option value="7">1 week before</option><option value="5">5 days before</option><option value="2">48 hrs before</option><option value="1">24 hrs before</option><option value="custom">Custom...</option></select>')
         + '</div>'
-        // Reminder
-        + '<div style="display:flex;flex-direction:column;align-items:center;gap:2px">'
-          + '<button onclick="toggleClReminderPopover(\''+eid+'\','+idx+')" title="'+(item.reminder?_clReminderLabel(item.reminder):'Set a reminder')+'" '+(item.na?'disabled':'')+' style="border:none;background:none;cursor:pointer;font-size:15px;color:'+(item.reminder?'var(--amber-text)':'var(--text3)')+'"><i class="ti ti-bell'+(item.reminder?'':'-off')+'"></i></button>'
-          + '</div>'
         // Change log flag
         + '<div style="display:flex;justify-content:center;margin-top:4px"><input type="checkbox" '+(item.addToChangeLog?'checked':'')+' title="Add to change log" onchange="toggleChangeLogFlag(\''+eid+'\','+idx+',this.checked)" style="width:15px;height:15px;accent-color:var(--blue-mid);cursor:pointer" '+(item.na?'disabled':'')+'></div>'
-        + '</div>'
-        + '<div id="cl-remind-pop-'+eid+'-'+idx+'" style="display:none;margin:8px 0 0 34px;padding:9px 11px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:8px;align-items:center;gap:8px;flex-wrap:wrap">'
-          + '<span style="font-size:12px;color:var(--text2)">Remind</span>'
-          + '<input id="cl-remind-amt-'+eid+'-'+idx+'" type="number" min="1" value="'+(item.reminder?item.reminder.amount:1)+'" style="width:52px;background:var(--bg);border:0.5px solid var(--border2);border-radius:5px;padding:4px 6px;font-size:12px;color:var(--text);font-family:inherit">'
-          + '<select id="cl-remind-unit-'+eid+'-'+idx+'" style="background:var(--bg);border:0.5px solid var(--border2);border-radius:5px;padding:4px 6px;font-size:12px;color:var(--text);font-family:inherit">'
-            + ['days','weeks','months'].map(u=>'<option value="'+u+'" '+(item.reminder&&item.reminder.unit===u?'selected':(!item.reminder&&u==='days'?'selected':''))+'>'+u+'</option>').join('')
-          + '</select>'
-          + '<span style="font-size:12px;color:var(--text3)">before the event</span>'
-          + '<button onclick="saveClReminder(\''+eid+'\','+idx+')" style="padding:5px 12px;border:none;border-radius:6px;background:#8B1A1A;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Save</button>'
-          + (item.reminder ? '<button onclick="clearClReminder(\''+eid+'\','+idx+')" style="padding:5px 12px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);font-size:12px;cursor:pointer">Remove</button>' : '')
-        + '</div>'
-        + '</div>'; // end item
+        + '</div>';
 
+      // Per-assignee rows: checkbox, name, notes, timestamp
+      if(item.assignees && item.assignees.length > 0 && !item.na){
+        h += '<div style="margin-top:6px;margin-left:36px;border-left:2px solid var(--border2);padding-left:10px">';
+        item.assignees.forEach(function(a, ai){
+          const displayName = a.person==='Other' ? (a.otherName||'Other') : a.person;
+          h += '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px">'
+            + '<input type="checkbox" '+(a.done?'checked':'')+' onchange="toggleAssigneeDone(\''+eid+'\','+idx+','+ai+',this.checked)" style="width:14px;height:14px;accent-color:var(--blue-mid);cursor:pointer">'
+            + '<span style="width:80px;flex-shrink:0;font-weight:500;color:var(--text2)">'+displayName+'</span>'
+            + '<input type="text" value="'+(a.notes||'')+'" placeholder="Notes..." onchange="updateAssigneeNotes(\''+eid+'\','+idx+','+ai+',this.value)" style="flex:1;background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:3px 6px;font-size:12px;color:var(--text);font-family:inherit">'
+            + (a.ts ? '<span style="font-size:10px;color:var(--text3);white-space:nowrap;flex-shrink:0">'+a.ts+'</span>' : '')
+            + '</div>';
+        });
+        h += '</div>';
+      }
+
+      h += '</div>'; // end item
     });
 
     // Add task button
@@ -8040,153 +8040,9 @@ function checklistCardHtml(e){
     h += '</div></div></div>'; // close body, card
   return h;
 }
-// A task counts as done from its own single flag now. Older saved items that
-// pre-date this (checked off via the old per-assignee model) still read as
-// done here, so nothing that was already checked appears to un-check itself.
-function _clIsDone(item){
-  if(item.done!==undefined) return !!item.done;
-  return !!(item.assignees && item.assignees.some(a=>a.done));
-}
-// Preserves scroll position across the full-page re-render every checklist
-// interaction triggers — without this, the page visibly snaps to the top of
-// the Checklists view on every click, which reads as "jumping back to the list".
-function _clRerender(eid){
-  const y = window.scrollY;
-  if(!window._clOpen) window._clOpen={};
-  window._clOpen[eid]=true;
-  render();
-  requestAnimationFrame(()=>{ window.scrollTo(0,y); });
-}
-function toggleClDone(eid, idx){
-  const item = checklists[eid]?.[idx]; if(!item || item.na) return;
-  const was = _clIsDone(item);
-  item.done = !was;
-  if(item.assignees) item.assignees.forEach(a=>{ delete a.done; }); // stop the legacy field disagreeing with the new one
-  _saveChecklist(eid, checklists[eid]);
-  if(item.addToChangeLog) _clLogChange(eid, idx, item, !was);
-  _clRerender(eid);
-}
-function toggleClNA(eid, idx){
-  const item = checklists[eid]?.[idx]; if(!item) return;
-  item.na = !item.na;
-  if(item.na) item.done = false;
-  _saveChecklist(eid, checklists[eid]);
-  _clRerender(eid);
-}
-function _clLogChange(eid, idx, item, nowDone){
-  try{
-    const e = events.find(x=>x.id===eid); if(!e) return;
-    const _n = new Date();
-    const time = _n.toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit'})+' @ '+_n.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-    const jobLabel = fullEventNum(e) || e.job || e.name;
-    const _c = { id:'ch'+Date.now(), time, job:jobLabel, desc:'Checklist: "'+item.text+'" marked '+(nowDone?'done':'not done'), acks:{}, notifyDepts:[], by:initiatorName(), ts:Date.now() };
-    changes.unshift(_c); _saveChange(_c);
-  }catch(err){ console.error('checklist change-log failed:', err); }
-}
-function editClText(eid, idx, el){
-  if(el.querySelector('input')) return; // already editing
-  const item = checklists[eid]?.[idx]; if(!item) return;
-  const current = item.text;
-  el.innerHTML = '<input type="text" value="'+current.replace(/"/g,'&quot;')+'" style="width:100%;font-size:15px;font-weight:600;font-family:inherit;background:var(--bg2);border:0.5px solid var(--blue-border);border-radius:5px;padding:3px 6px;color:var(--text)">';
-  const input = el.querySelector('input');
-  input.focus(); input.select();
-  const save = ()=>{
-    const v = input.value.trim();
-    if(v && v!==current){ item.text=v; _saveChecklist(eid, checklists[eid]); }
-    _clRerender(eid);
-  };
-  input.addEventListener('blur', save);
-  input.addEventListener('keydown', ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); input.blur(); } if(ev.key==='Escape'){ input.value=current; input.blur(); } });
-  input.addEventListener('click', ev=>ev.stopPropagation());
-}
-function updateAssignees(eid, idx, sel){
-  if(!checklists[eid]||!checklists[eid][idx]) return;
-  const selected = Array.from(sel.selectedOptions).map(o=>o.value);
-  const existing = checklists[eid][idx].assignees||[];
-  checklists[eid][idx].assignees = selected.map(p=>{ const ex=existing.find(a=>a.person===p); return ex||{person:p,otherName:''}; });
-  _saveChecklist(eid, checklists[eid]);
-  render();
-}
-function updateOtherName(eid, idx, val){
-  if(!checklists[eid]||!checklists[eid][idx]) return;
-  const a = checklists[eid][idx].assignees.find(x=>x.person==='Other');
-  if(a) a.otherName = val;
-  _saveChecklist(eid, checklists[eid]);
-}
-function updateClNotes(eid, idx, type, val){
-  if(!checklists[eid]||!checklists[eid][idx]) return;
-  checklists[eid][idx].notes = val;
-  _saveChecklist(eid, checklists[eid]);
-}
-function toggleClReminderPopover(eid, idx){
-  const pop = document.getElementById('cl-remind-pop-'+eid+'-'+idx);
-  if(!pop) return;
-  pop.style.display = (pop.style.display==='flex') ? 'none' : 'flex';
-}
-async function saveClReminder(eid, idx){
-  const item = checklists[eid]?.[idx]; if(!item) return;
-  const amtEl = document.getElementById('cl-remind-amt-'+eid+'-'+idx);
-  const unitEl = document.getElementById('cl-remind-unit-'+eid+'-'+idx);
-  const amount = Math.max(1, parseInt(amtEl?.value,10) || 1);
-  const unit = unitEl?.value || 'days';
-  item.reminder = { amount, unit };
-  _saveChecklist(eid, checklists[eid]);
-  await _clSyncReminder(eid, idx);
-  _clRerender(eid);
-}
-function clearClReminder(eid, idx){
-  const item = checklists[eid]?.[idx]; if(!item) return;
-  item.reminder = null;
-  _saveChecklist(eid, checklists[eid]);
-  _clRerender(eid);
-}
-// Writes a My Day reminder (email + WhatsApp, per the person's own saved
-// preferences) for each assignee that has a real login. Client / Party
-// planner / Other have none, so their reminder redirects to the event's
-// salesperson instead — same idea as being cc'd because the client can't
-// be reminded directly.
-async function _clSyncReminder(eid, idx){
-  try{
-    const e = events.find(x=>x.id===eid); if(!e) return;
-    const item = checklists[eid]?.[idx]; if(!item || !item.reminder) return;
-    const base = getEventIsoDate(e.day); if(!base) { showToast('No event day set — reminder not scheduled'); return; }
-    const days = _clUnitDays(item.reminder.amount, item.reminder.unit);
-    const due = new Date(base.getTime()); due.setDate(due.getDate()-days);
-    const dueAtTs = due.getTime();
-    const dueDateLabel = due.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-    const inq = _beoInquiryFor(e);
-    const people = (item.assignees||[]).map(a=>a.person);
-    let owners = people.map(_clOwnerFor).filter(Boolean);
-    if(people.includes('Client') && inq && inq.salesperson){
-      const spOwner = _clOwnerFor(inq.salesperson);
-      if(spOwner && !owners.includes(spOwner)) owners.push(spOwner);
-    }
-    owners = [...new Set(owners)];
-    if(!owners.length){ showToast('Reminder saved \u2014 but no one on the list has a login to remind (Client/Party planner/Other have none unless a salesperson is set)'); return; }
-    const text = 'Checklist: '+item.text+' \u2014 '+(fullEventNum(e)||e.job||'')+' '+(e.name||'');
-    for(const owner of owners){
-      await myDayCol.add({ owner, type:'todo', text, dueAtTs, dueDateLabel, status:'pending', createdAt:Date.now(), reminderMethods:['email','whatsapp'] });
-    }
-    showToast('Reminder set for '+dueDateLabel);
-  }catch(err){ console.error('checklist reminder sync failed:', err); showToast('Could not schedule the reminder'); }
-}
-function setDueOption(eid, idx, val){
-  const item = checklists[eid]?.[idx]; if(!item) return;
-  item.dueOption = val;
-  if(val !== 'custom') item.customDue = '';
-  _saveChecklist(eid, checklists[eid]);
-  _clRerender(eid);
-}
-function setCustomDue(eid, idx, val){
-  const item = checklists[eid]?.[idx]; if(!item) return;
-  item.customDue = val;
-  _saveChecklist(eid, checklists[eid]);
-}
-function toggleChangeLogFlag(eid, idx, val){
-  const item = checklists[eid]?.[idx]; if(!item) return;
-  item.addToChangeLog = val;
-  _saveChecklist(eid, checklists[eid]);
-}
+
+
+
 
 function toggleClCollapse(eid){
   window._clOpen = window._clOpen||{};
@@ -8198,6 +8054,81 @@ function toggleClCollapse(eid){
 }
 function expandAllChecklists(){ events.forEach(e=>{ window._clOpen=window._clOpen||{}; window._clOpen[e.id]=true; }); render(); }
 function collapseAllChecklists(){ window._clOpen={}; render(); }
+
+function updateAssignees(eid, idx, sel){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  const selected = Array.from(sel.selectedOptions).map(o=>o.value);
+  const existing = checklists[eid][idx].assignees||[];
+  checklists[eid][idx].assignees = selected.map(p=>{ const ex=existing.find(a=>a.person===p); return ex||{person:p,done:false,notes:'',ts:'',otherName:''}; });
+  _saveChecklist(eid, checklists[eid]);
+  render();
+}
+
+function toggleAssigneeDone(eid, idx, ai, val){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  checklists[eid][idx].assignees[ai].done = val;
+  const now = new Date();
+  checklists[eid][idx].assignees[ai].ts = (now.getMonth()+1)+'/'+now.getDate()+'/'+String(now.getFullYear()).slice(2)+' '+now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+  _saveChecklist(eid, checklists[eid]);
+  render();
+}
+
+function updateAssigneeNotes(eid, idx, ai, val){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  checklists[eid][idx].assignees[ai].notes = val;
+  const now = new Date();
+  checklists[eid][idx].assignees[ai].ts = (now.getMonth()+1)+'/'+now.getDate()+'/'+String(now.getFullYear()).slice(2)+' '+now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+  _saveChecklist(eid, checklists[eid]);
+}
+
+function updateOtherName(eid, idx, val){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  const a = checklists[eid][idx].assignees.find(x=>x.person==='Other');
+  if(a) a.otherName = val;
+  _saveChecklist(eid, checklists[eid]);
+}
+
+function updateClNotes(eid, idx, type, val){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  checklists[eid][idx].notes = val;
+  _saveChecklist(eid, checklists[eid]);
+}
+
+function toggleNA(eid, idx){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  checklists[eid][idx].na = !checklists[eid][idx].na;
+  _saveChecklist(eid, checklists[eid]);
+  render();
+}
+
+function setDueOption(eid, idx, val){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  checklists[eid][idx].dueOption = val;
+  _saveChecklist(eid, checklists[eid]);
+  render();
+}
+
+function setCustomDue(eid, idx, val){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  checklists[eid][idx].customDue = val;
+  _saveChecklist(eid, checklists[eid]);
+}
+
+function toggleChangeLogFlag(eid, idx, val){
+  if(!checklists[eid]||!checklists[eid][idx]) return;
+  checklists[eid][idx].addToChangeLog = val;
+  if(val){
+    const e = events.find(x=>x.id===eid);
+    const item = checklists[eid][idx];
+    const now = new Date();
+    const ts = (now.getMonth()+1)+'/'+now.getDate()+' '+now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+    const changeEntry = {id:'cl_change_'+Date.now(), job:e?e.job:'', text:'Checklist item flagged: '+item.text, notifyDepts:changeDepts, acks:{}, ts};
+    changes.unshift(changeEntry);
+    changesCol.doc(changeEntry.id).set(changeEntry);
+    showToast('Added to change log');
+  }
+  _saveChecklist(eid, checklists[eid]);
+}
 
 function openAddTaskModal(eid){
   document.getElementById('addTaskModal')?.remove();
@@ -8235,6 +8166,110 @@ function saveNewTask(eid){
   render();
 }
 function setClSort(key){ _clSort=key; render(); setTimeout(()=>{ document.querySelectorAll('.checklist-card').forEach(c=>{ if(window._clOpen[c.id.replace('cl-','')]===true){ const b=c.querySelector('[id^=cl-body]'); if(b) b.style.display='block'; }}); },30); }
+
+function toggleClCollapse(eid){
+  if(!window._clOpen) window._clOpen={};
+  const body=document.getElementById('cl-body-'+eid);
+  const chevron=document.getElementById('cl-chevron-'+eid);
+  const header=body?.previousElementSibling;
+  const isOpen=body?.style.display!=='none';
+  if(body) body.style.display=isOpen?'none':'block';
+  if(chevron) chevron.className=`ti ti-chevron-${isOpen?'right':'down'}`;
+  if(header) header.style.borderBottom=isOpen?'none':'0.5px solid var(--border)';
+  window._clOpen[eid]=!isOpen;
+}
+
+function expandAllChecklists(){
+  if(!window._clOpen) window._clOpen={};
+  events.forEach(e=>{
+    window._clOpen[e.id]=true;
+    const body=document.getElementById('cl-body-'+e.id);
+    const chevron=document.getElementById('cl-chevron-'+e.id);
+    const header=body?.previousElementSibling;
+    if(body) body.style.display='block';
+    if(chevron) chevron.className='ti ti-chevron-down';
+    if(header) header.style.borderBottom='0.5px solid var(--border)';
+  });
+}
+
+function collapseAllChecklists(){
+  if(!window._clOpen) window._clOpen={};
+  events.forEach(e=>{
+    window._clOpen[e.id]=false;
+    const body=document.getElementById('cl-body-'+e.id);
+    const chevron=document.getElementById('cl-chevron-'+e.id);
+    const header=body?.previousElementSibling;
+    if(body) body.style.display='none';
+    if(chevron) chevron.className='ti ti-chevron-right';
+    if(header) header.style.borderBottom='none';
+  });
+}
+
+
+function toggleCheck(eid,iid,val){
+  const item=checklists[eid]?.find(i=>i.id===iid); if(!item) return;
+  item.done=val; _saveChecklist(eid, checklists[eid]); updateBadge();
+  // update inline
+  const active=checklists[eid].filter(i=>!i.na);
+  const done=active.filter(i=>i.done).length;
+  const pct=active.length>0?Math.round(done/active.length*100):0;
+  const card=document.getElementById('cl-'+eid);
+  if(card){
+    card.querySelector('.cl-progress').textContent=`${done}/${active.length}`;
+    card.querySelector('.progress-fill').style.width=pct+'%';
+  }
+}
+
+function toggleNA(eid,idx){
+  const item=checklists[eid]?.[idx]; if(!item) return;
+  item.na=!item.na;
+  if(item.na) item.done=false;
+  save(); updateBadge();
+  // Re-render the full checklist view, keeping this card open
+  if(!window._clOpen) window._clOpen={};
+  window._clOpen[eid]=true;
+  render();
+  setTimeout(()=>{
+    const body=document.getElementById('cl-body-'+eid);
+    if(body) body.style.display='block';
+    const chevron=document.getElementById('cl-chevron-'+eid);
+    if(chevron) chevron.className='ti ti-chevron-down';
+    const header=body?.previousElementSibling;
+    if(header) header.style.borderBottom='0.5px solid var(--border)';
+    document.getElementById('cl-'+eid)?.scrollIntoView({behavior:'smooth',block:'nearest'});
+  },30);
+}
+
+function addCheckItem(eid){
+  const area=document.getElementById('add-item-area-'+eid); if(!area) return;
+  area.innerHTML=`
+  <div style="display:flex;gap:8px;align-items:center;padding:8px 0;flex-wrap:wrap">
+    <input id="newci-text-${eid}" placeholder="Task..." style="flex:2;min-width:140px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:6px;padding:6px 9px;font-size:13px;color:var(--text);font-family:inherit">
+    <input id="newci-who-${eid}" placeholder="Who" style="width:90px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:6px;padding:6px 9px;font-size:13px;color:var(--text);font-family:inherit">
+    <button onclick="saveCheckItem('${eid}')" style="padding:6px 13px;border:none;border-radius:6px;background:var(--blue-mid);color:#fff;font-size:13px;cursor:pointer">Add</button>
+    <button onclick="document.getElementById('add-item-area-${eid}').innerHTML=''" style="padding:6px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);font-size:13px;cursor:pointer">Cancel</button>
+  </div>`;
+  document.getElementById('newci-text-'+eid)?.focus();
+}
+
+function saveCheckItem(eid){
+  const text=document.getElementById('newci-text-'+eid)?.value?.trim();
+  const who=document.getElementById('newci-who-'+eid)?.value?.trim()||'';
+  if(!text) return;
+  if(!checklists[eid]) checklists[eid]=[];
+  const idx=checklists[eid].length;
+  checklists[eid].push({id:'cl_'+eid+'_'+Date.now(),text,who,done:false,na:false});
+  save(); updateBadge();
+  document.getElementById('add-item-area-'+eid).innerHTML='';
+  // append new row
+  const card=document.getElementById('cl-'+eid);
+  if(card){
+    const newRow=document.createElement('div');
+    newRow.className='check-item'; newRow.id=`cli-${eid}-${idx}`;
+    newRow.innerHTML=`<input type="checkbox" onchange="toggleCheck('${eid}','cl_${eid}_${Date.now()}',this.checked)" style="width:15px;height:15px;flex-shrink:0;accent-color:var(--blue-mid)"><div style="flex:1"><div class="check-label">${text}</div><div class="check-meta">${who}</div></div><button onclick="toggleNA('${eid}',${idx})" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 7px;border-radius:5px">N/A</button>`;
+    card.insertBefore(newRow, document.getElementById('add-item-area-'+eid));
+  }
+}
 
 function updateBadge(){ updatePipelineBadge();
 
@@ -11081,6 +11116,7 @@ async function buildPacketPdfBytes(eventId, opts){
   if(opts.floorplanDoc && floorLink) enclosed.push('Floor plan(s)'+(opts.floorplanCopies>1?(' \u00d7'+opts.floorplanCopies):''));
   if(opts.logo && logoLink) enclosed.push('Client logo'+(opts.logoCopies>1?(' \u00d7'+opts.logoCopies):''));
   if(opts.weeklycover && e.weekOf) enclosed.push('Weekly cover sheet'+(opts.weeklycoverCopies>1?(' \u00d7'+opts.weeklycoverCopies):''));
+  if(opts.checklist && checklists[e.id] && checklists[e.id].length) enclosed.push('Final checklist'+(opts.checklistCopies>1?(' \u00d7'+opts.checklistCopies):''));
 
   function header(yTop){
     fB(18); setT(C.maroon); doc.text('Premier Caterers', ML, yTop);
@@ -11333,6 +11369,42 @@ async function buildPacketPdfBytes(eventId, opts){
     fN(7); setT(C.grey); doc.text('Generated '+nowStamp(), LML, LH-18);
   }
 
+  function drawFinalChecklist(){
+    const items = checklists[e.id]||[];
+    if(!items.length) return;
+    page();
+    fB(16); setT(C.dark); doc.text('Final checklist', ML, 50);
+    fN(10); setT(C.grey); doc.text(data.title+(data.job?(' \u00b7 '+data.job):''), ML, 66);
+    setD(C.line); doc.setLineWidth(0.5); doc.line(ML, 76, MR, 76);
+    let y = 96;
+    const colW = MR-ML;
+    items.forEach(it=>{
+      const isDone = it.done!==undefined ? !!it.done : !!(it.assignees && it.assignees.some(a=>a.done));
+      const people = (it.assignees||[]).map(a=> a.person==='Other' ? (a.otherName||'Other') : a.person).filter(Boolean).join(', ');
+      const due = it.dueOption==='custom' ? (it.customDue||'') : (it.dueOption ? calcDueDate(e.day, parseInt(it.dueOption)) : '');
+      const metaBits = [people, due?('Due '+due):'', it.notes||''].filter(Boolean);
+      fB(11);
+      const taskLines = doc.splitTextToSize(it.text, colW-26);
+      fN(9);
+      const metaLines = metaBits.length ? doc.splitTextToSize(metaBits.join('   \u00b7   '), colW-26) : [];
+      const rowH = 15 + taskLines.length*13 + metaLines.length*11 + 6;
+      if(y+rowH > BOTTOM){ page(); y=50; }
+      // status glyph
+      setD(it.na?C.faint:isDone?C.green||[63,122,68]:C.dark); doc.setLineWidth(1.1);
+      doc.rect(ML, y-9, 11, 11, it.na||isDone?'S':'S');
+      if(isDone && !it.na){ setT([63,122,68]); fB(9); doc.text('\u2713', ML+2, y); }
+      if(it.na){ setT(C.faint); fN(6.5); doc.text('N/A', ML-1, y+15); }
+      // task text
+      fB(11); setT(it.na?C.faint:isDone?C.grey:C.dark);
+      taskLines.forEach((line,li)=>{ doc.text(line, ML+20, y+li*13); });
+      let ny = y + taskLines.length*13 + 3;
+      if(metaLines.length){ fN(9); setT(C.grey); metaLines.forEach(line=>{ doc.text(line, ML+20, ny); ny+=11; }); }
+      y = ny + 9;
+      setD([230,230,230]); doc.setLineWidth(0.4); doc.line(ML, y-5, MR, y-5);
+    });
+    fN(7); setT(C.grey); doc.text('Generated '+nowStamp(), ML, 792-24);
+  }
+
   // ---- assemble vector parts in order, repeating per-part copies ----
   for(let c=0;c<(opts.cover?(opts.coverCopies||1):0);c++) drawCover();
   for(let c=0;c<(opts.contents?(opts.contentsCopies||1):0);c++) drawContents();
@@ -11340,6 +11412,7 @@ async function buildPacketPdfBytes(eventId, opts){
   if(opts.invoice){ for(let c=0;c<(opts.invoiceCopies||1);c++){ invSlots.forEach(k=>drawInvoiceSlot(k)); } }
   if(opts.contract && contractObj){ for(let c=0;c<(opts.contractCopies||1);c++) drawContract(); }
   if(opts.weeklycover){ for(let c=0;c<(opts.weeklycoverCopies||1);c++) drawWeeklyCoverSheet(); }
+  if(opts.checklist){ for(let c=0;c<(opts.checklistCopies||1);c++) drawFinalChecklist(); }
 
   // ---- merge (our vector pages + any fetched documents) via pdf-lib ----
   const { PDFDocument }=window.PDFLib;
@@ -11399,10 +11472,11 @@ function _ppGatherOpts(){
     floorplanDoc:ck('pp-floorplan'), floorplanCopies:num('pp-floorplan-copies',1),
     logo:ck('pp-logo'), logoCopies:num('pp-logo-copies',1),
     weeklycover:ck('pp-weeklycover'), weeklycoverCopies:num('pp-weeklycover-copies',1),
+    checklist:ck('pp-checklist'), checklistCopies:num('pp-checklist-copies',1),
   };
 }
 function _ppAnySelected(opts){
-  return !!(opts.cover||opts.beo||opts.invoice||opts.contract||opts.menu||opts.grocery||opts.venue||opts.floorplanDoc||opts.logo||opts.weeklycover);
+  return !!(opts.cover||opts.beo||opts.invoice||opts.contract||opts.menu||opts.grocery||opts.venue||opts.floorplanDoc||opts.logo||opts.weeklycover||opts.checklist);
 }
 const _ppFailedNames={menu:'menu',grocery:'grocery list',venue:'venue sheet',floorplanDoc:'floor plan',logo:'logo'};
 async function _runPaperwork(eventId, mode){
@@ -11521,7 +11595,7 @@ function openPaperwork(arg){
       })()
       +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#999;margin:14px 0 6px">Not yet available</div>'
       +row(false,true,'pp-equipment','Equipment list','Coming soon','')
-      +row(false,true,'pp-checklist','Final checklist','Coming soon','')
+      +row(!!(checklists[e.id]&&checklists[e.id].length),!(checklists[e.id]&&checklists[e.id].length),'pp-checklist','Final checklist', (checklists[e.id]&&checklists[e.id].length)?(checklists[e.id].filter(function(i){return !i.na;}).length+' tasks'):'No checklist for this event yet', (checklists[e.id]&&checklists[e.id].length)?cpx('pp-checklist-copies',1):'')
       +row(false,true,'pp-linen','Linen order form','Coming soon','')
       +row(false,true,'pp-insurance','Insurance','Coming soon','')
       +row(false,true,'pp-buffetsigns','Buffet & table signs','Coming soon','')
@@ -14065,6 +14139,32 @@ function dueLabelFromDays(days){
   const map = {'30':'1 month before','14':'2 weeks before','7':'1 week before','5':'5 days before','2':'48 hrs before','1':'24 hrs before'};
   return map[String(days)] || days+' days before';
 }
+
+function setDueOption(eid, idx, val){
+  const item = checklists[eid]?.[idx]; if(!item) return;
+  item.dueOption = val;
+  if(val !== 'custom') item.customDue = '';
+  save();
+  // re-render just the due cell inline by re-rendering checklists
+  render();
+  setTimeout(()=>{ const el=document.getElementById('cl-body-'+eid); if(el) el.style.display='block'; window._clOpen[eid]=true; },30);
+}
+
+function setCustomDue(eid, idx, val){
+  const item = checklists[eid]?.[idx]; if(!item) return;
+  item.customDue = val;
+  save();
+}
+
+function toggleAssigned(eid, idx, name, val){
+  const item = checklists[eid]?.[idx]; if(!item) return;
+  if(!item.assignedTo) item.assignedTo='';
+  const parts = item.assignedTo ? item.assignedTo.split(',').map(s=>s.trim()).filter(Boolean) : [];
+  if(val && !parts.includes(name)) parts.push(name);
+  if(!val) { const i=parts.indexOf(name); if(i>-1) parts.splice(i,1); }
+  item.assignedTo = parts.join(', '); _saveChecklist(eid, checklists[eid]);
+}
+
 
 // ── WEEK NAVIGATION ──
 function computeCurrentWeekOffset(){
