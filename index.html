@@ -4172,21 +4172,21 @@ function drawerDocuments(inq, role, ev){
     _docBtn('Weekly cover sheet','ti-layout-rows', !ev, ev?`goToEventCoverSheet('${ev.weekOf||''}')`:''),
     _docBtn('Venue sheet','ti-building', !ev, ev?(ev.venueLink?`window.open('${ev.venueLink}','_blank')`:`attachDoc('${ev.id}','venueLink')`):''),
     _docBtn('Final checklist','ti-checklist', !ev, ev?`goChecklist('${ev.id}')`:''),
-    _docBtn('Linen order form','ti-wash',true,''),
+    _docBtn('Linen order form'+(ev&&ev.linenFiles&&ev.linenFiles.length?' ('+ev.linenFiles.length+')':''),'ti-wash', !ev, ev?`openMultiAttachModal('${ev.id}','linenFiles','Linen Order Form')`:''),
     _docBtn('BEO','ti-clipboard-list',false,`openBeo('${id}')`),
     _docBtn('Contract','ti-file-certificate',false,`openContract('${id}')`),
   ].join('');
   const floor = [
-    _docBtn('Floor plan(s)','ti-layout-2', !ev, ev?(ev.floorplan?`window.open('${ev.floorplan}','_blank')`:`attachDoc('${ev.id}','floorplan')`):''),
-    _docBtn('Open floor plan app','ti-app-window',true,''),
+    _docBtn('Floor plan(s)'+(ev&&ev.floorplanFiles&&ev.floorplanFiles.length?' ('+ev.floorplanFiles.length+')':''),'ti-layout-2', !ev, ev?`openMultiAttachModal('${ev.id}','floorplanFiles','Floor Plan(s)')`:''),
+    _docBtn('Open floor plan app','ti-app-window',false,`window.open('https://linentablecloth.com/pages/event-layout-tool?srsltid=AfmBOoobxUKsPT56eD9WOryLOtcfgev-GZ1_9zyFRzGNPXCnhBoTsBPl','_blank')`),
   ].join('');
   const files = [
-    _docBtn('Insurance','ti-shield',true,''),
+    _docBtn('Insurance'+(ev&&ev.insuranceFiles&&ev.insuranceFiles.length?' ('+ev.insuranceFiles.length+')':''),'ti-shield', !ev, ev?`openMultiAttachModal('${ev.id}','insuranceFiles','Insurance')`:''),
     _docBtn('Client logo','ti-photo', !ev, ev?(ev.logoData?`window.open('${driveImgUrl(ev.logoData)}','_blank')`:`attachDoc('${ev.id}','logoData')`):''),
     _docBtn('Buffet & table signs','ti-signature',true,''),
   ].join('');
   const after = [
-    _docBtn('Event photos','ti-camera',true,''),
+    _docBtn('Event photos'+(ev&&ev.eventPhotoFiles&&ev.eventPhotoFiles.length?' ('+ev.eventPhotoFiles.length+')':''),'ti-camera', !ev, ev?`openMultiAttachModal('${ev.id}','eventPhotoFiles','Event Photos')`:''),
     _docBtn('Post-event survey','ti-message-2',true,''),
   ].join('');
   return `<div class="hub-sec">Event documents <span class="rule"></span></div>
@@ -6143,6 +6143,104 @@ async function saveEventField(eventId, field, value){
   const e = events.find(x=>x.id===eventId); if(!e) return;
   e[field] = value;
   await _saveEvent(e);
+}
+
+// ── Multi-file attachments (Floor plan(s), Insurance, Event photos, Linen order form) ──
+// Each field is an array of {url, name, addedAt, source:'you'}, same shape as the
+// client-portal upload arrays, so both places can read/display the same data.
+function _maFmtSize(n){ if(!n) return ''; if(n<1024) return n+' B'; if(n<1048576) return Math.round(n/1024)+' KB'; return (n/1048576).toFixed(1)+' MB'; }
+function openMultiAttachModal(eventId, field, label){
+  const e = events.find(x=>x.id===eventId); if(!e) return;
+  // One-time migration: an event created before this field existed may still have
+  // a single legacy value on the old singular field name (floorplan/insuranceDoc/eventPhotos).
+  const legacyMap = { floorplanFiles:'floorplan', insuranceFiles:'insuranceDoc', eventPhotoFiles:'eventPhotos' };
+  const legacyField = legacyMap[field];
+  if(legacyField && e[legacyField] && !(Array.isArray(e[field]) && e[field].length)){
+    e[field] = [{ url:e[legacyField], name:label, addedAt:Date.now(), source:'you' }];
+    _saveEvent(e);
+  }
+  if(!Array.isArray(e[field])) e[field] = [];
+  document.getElementById('multiAttachModal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'multiAttachModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:var(--bg);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:480px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.3)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0">
+        <div style="font-size:16px;font-weight:600;color:var(--text)">${label}</div>
+        <button onclick="document.getElementById('multiAttachModal').remove()" style="border:none;background:none;cursor:pointer;font-size:20px;color:var(--text3)">&times;</button>
+      </div>
+      <div id="maFileList" style="overflow-y:auto;margin-bottom:14px"></div>
+      <div style="margin-bottom:14px;flex-shrink:0">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Upload file(s)</div>
+        <label style="display:block;border:2px dashed var(--border2);border-radius:var(--radius);padding:20px;text-align:center;cursor:pointer;color:var(--text3);font-size:13px" onmouseover="this.style.borderColor='#8B1A1A'" onmouseout="this.style.borderColor='var(--border2)'">
+          <i class="ti ti-upload" style="font-size:24px;display:block;margin-bottom:6px"></i>
+          Click to upload or drag &amp; drop \u2014 multiple files OK
+          <input type="file" multiple style="display:none" onchange="handleMultiAttachUpload('${eventId}','${field}','${label.replace(/'/g,"\\'")}',this.files)">
+        </label>
+      </div>
+      <div style="flex-shrink:0">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Or paste a URL</div>
+        <div style="display:flex;gap:8px">
+          <input id="maUrlInput" type="text" placeholder="https://..." style="flex:1;padding:8px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);font-size:13px;background:var(--bg);color:var(--text);outline:none">
+          <button onclick="saveMultiAttachUrl('${eventId}','${field}','${label.replace(/'/g,"\\'")}')" style="padding:8px 16px;border:none;border-radius:var(--radius);background:#8B1A1A;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Add</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', ev => { if(ev.target===modal) modal.remove(); });
+  _maRenderList(eventId, field, label);
+}
+function _maRenderList(eventId, field, label){
+  const e = events.find(x=>x.id===eventId);
+  const el = document.getElementById('maFileList');
+  if(!el) return;
+  const files = (e && Array.isArray(e[field])) ? e[field] : [];
+  if(!files.length){ el.innerHTML = `<div style="font-size:12.5px;color:var(--text3);padding:8px 0">No files attached yet.</div>`; return; }
+  const sorted = files.map((f,i)=>({f,i})).sort((a,b)=>(b.f.addedAt||0)-(a.f.addedAt||0));
+  el.innerHTML = sorted.map(({f,i})=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border:0.5px solid var(--border);border-radius:8px;margin-bottom:6px">
+      <i class="ti ti-file" style="font-size:15px;color:var(--text3)"></i>
+      <a href="${f.url}" target="_blank" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--blue-mid);text-decoration:none;font-size:12.5px">${(f.name||'File').replace(/</g,'&lt;')}</a>
+      <span style="font-size:10.5px;color:var(--text3);white-space:nowrap">${_maFmtSize(f.size)}</span>
+      <button onclick="removeMultiAttachFile('${eventId}','${field}','${label.replace(/'/g,"\\'")}',${i})" style="border:none;background:none;cursor:pointer;color:#e05c5c;font-size:14px;padding:2px" title="Remove">&times;</button>
+    </div>`).join('');
+}
+async function handleMultiAttachUpload(eventId, field, label, fileList){
+  const files = Array.from(fileList||[]); if(!files.length) return;
+  const e = events.find(x=>x.id===eventId); if(!e) return;
+  if(!Array.isArray(e[field])) e[field] = [];
+  showToast('Uploading '+files.length+' file'+(files.length>1?'s':'')+'\u2026');
+  for(const file of files){
+    const url = await uploadToStorage(eventId, field, file);
+    if(url) e[field].push({ url, name:file.name, size:file.size, addedAt:Date.now(), source:'you' });
+  }
+  await _saveEvent(e);
+  _maRenderList(eventId, field, label);
+  showToast('Uploaded \u2713');
+  render();
+}
+function saveMultiAttachUrl(eventId, field, label){
+  const input = document.getElementById('maUrlInput');
+  const url = input?.value?.trim();
+  if(!url){ showToast('Please enter a URL'); return; }
+  const e = events.find(x=>x.id===eventId); if(!e) return;
+  if(!Array.isArray(e[field])) e[field] = [];
+  const name = url.split('/').pop().split('?')[0] || 'Link';
+  e[field].push({ url, name, addedAt:Date.now(), source:'you' });
+  _saveEvent(e);
+  if(input) input.value = '';
+  _maRenderList(eventId, field, label);
+  render();
+}
+function removeMultiAttachFile(eventId, field, label, idx){
+  if(!confirm('Remove this file?')) return;
+  const e = events.find(x=>x.id===eventId); if(!e) return;
+  if(!Array.isArray(e[field])) return;
+  e[field].splice(idx,1);
+  _saveEvent(e);
+  _maRenderList(eventId, field, label);
+  render();
 }
 
 function openOtherSlot(eventId, slot){
