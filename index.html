@@ -24,7 +24,7 @@
   </div>
   <div class="topbar-spacer"></div>
   <div class="role-switcher" id="userBar"></div>
-  <span class="ts-stamp" id="tsStamp" style="font-size:10px;color:var(--text3);white-space:nowrap">Updated 06/17 — 21:31</span>
+  <span class="ts-stamp" id="tsStamp" style="font-size:10px;color:var(--text3);white-space:nowrap"></span>
   <button class="sync-btn" id="syncBtn" onclick="showView('settings')">
     <i class="ti ti-table" style="font-size:14px"></i>
     <span id="syncLabel">Connect Sheets</span>
@@ -15327,47 +15327,25 @@ window.toggleClCollapse = toggleClCollapse;
 window.expandAllChecklists = expandAllChecklists;
 window.collapseAllChecklists = collapseAllChecklists;
 window.setClSort = setClSort;
-window.toggleClCollapse = toggleClCollapse;
-window.expandAllChecklists = expandAllChecklists;
-window.collapseAllChecklists = collapseAllChecklists;
-window.updateAssignees = updateAssignees;
-window.toggleAssigneeDone = toggleAssigneeDone;
-window.updateAssigneeNotes = updateAssigneeNotes;
+window.toggleClDone = toggleClDone;
+window.toggleClNA = toggleClNA;
+window.editClText = editClText;
+window.toggleClAssignPopover = toggleClAssignPopover;
+window.updateAssigneeCheckbox = updateAssigneeCheckbox;
 window.updateOtherName = updateOtherName;
 window.updateClNotes = updateClNotes;
-window.toggleNA = toggleNA;
 window.setDueOption = setDueOption;
 window.setCustomDue = setCustomDue;
 window.toggleChangeLogFlag = toggleChangeLogFlag;
+window.toggleClReminderPopover = toggleClReminderPopover;
+window.saveClReminder = saveClReminder;
+window.clearClReminder = clearClReminder;
 window.openAddTaskModal = openAddTaskModal;
 window.saveNewTask = saveNewTask;
 window.closeAddTaskModal = closeAddTaskModal;
 window.closeAndSaveTask = closeAndSaveTask;
 window.printChecklist = printChecklist;
-window.toggleClCollapse = toggleClCollapse;
-window.expandAllChecklists = expandAllChecklists;
-window.collapseAllChecklists = collapseAllChecklists;
-window.updateAssignees = updateAssignees;
-window.toggleAssigneeDone = toggleAssigneeDone;
-window.updateAssigneeNotes = updateAssigneeNotes;
-window.updateOtherName = updateOtherName;
-window.updateClNotes = updateClNotes;
-window.toggleNA = toggleNA;
-window.setDueOption = setDueOption;
-window.setCustomDue = setCustomDue;
-window.toggleChangeLogFlag = toggleChangeLogFlag;
-window.openAddTaskModal = openAddTaskModal;
-window.saveNewTask = saveNewTask;
-window.closeAddTaskModal = closeAddTaskModal;
-window.closeAndSaveTask = closeAndSaveTask;
 window.downloadChecklist = downloadChecklist;
-window.addCheckItem = addCheckItem;
-window.saveCheckItem = saveCheckItem;
-window.toggleCheck = toggleCheck;
-window.toggleNA = toggleNA;
-window.toggleAssigned = toggleAssigned;
-window.setDueOption = setDueOption;
-window.setCustomDue = setCustomDue;
 window.toggleSelect = toggleSelect;
 window.advanceToQuantities = advanceToQuantities;
 window.backToSelecting = backToSelecting;
@@ -15783,16 +15761,17 @@ function initNow(){
 }
 // initNow() is now started by pcAuthGate() after a successful sign-in (added)
 updateWeekLabel();
-// Build/deploy stamp — reflects when this file was last modified (i.e. last GitHub upload),
-// so it auto-updates on every deploy with no manual editing.
+// Page-load stamp — shows when this browser tab loaded the app, so it's
+// always accurate. It intentionally does NOT try to show a "last deployed"
+// date: document.lastModified depends on GitHub Pages' HTTP caching headers,
+// which can lag well behind the actual file content and mislead more than help.
 (function(){
   try{
     const el=document.getElementById('tsStamp');
     if(!el) return;
-    const d=new Date(document.lastModified);
-    if(isNaN(d.getTime())) return;
+    const d=new Date();
     const p=n=>String(n).padStart(2,'0');
-    el.textContent='Updated '+p(d.getMonth()+1)+'/'+p(d.getDate())+' — '+p(d.getHours())+':'+p(d.getMinutes());
+    el.textContent='Loaded '+p(d.getMonth()+1)+'/'+p(d.getDate())+' — '+p(d.getHours())+':'+p(d.getMinutes());
   }catch(e){}
 })();
 </script>
