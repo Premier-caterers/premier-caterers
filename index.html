@@ -4178,7 +4178,7 @@ function drawerDocuments(inq, role, ev){
   ].join('');
   const floor = [
     _docBtn('Floor plan(s)'+(ev&&ev.floorplanFiles&&ev.floorplanFiles.length?' ('+ev.floorplanFiles.length+')':''),'ti-layout-2', !ev, ev?`openMultiAttachModal('${ev.id}','floorplanFiles','Floor Plan(s)')`:''),
-    _docBtn('Open floor plan app','ti-app-window',false,`window.open('https://linentablecloth.com/pages/event-layout-tool?srsltid=AfmBOoobxUKsPT56eD9WOryLOtcfgev-GZ1_9zyFRzGNPXCnhBoTsBPl','_blank')`),
+    _docBtn('Open floor plan app','ti-app-window',false,`window.open('https://app.eventdiagram.com/dashboard','_blank')`),
   ].join('');
   const files = [
     _docBtn('Insurance'+(ev&&ev.insuranceFiles&&ev.insuranceFiles.length?' ('+ev.insuranceFiles.length+')':''),'ti-shield', !ev, ev?`openMultiAttachModal('${ev.id}','insuranceFiles','Insurance')`:''),
