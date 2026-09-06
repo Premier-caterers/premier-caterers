@@ -1073,7 +1073,11 @@ function renderDocuments(){
   // Build the "From Premier Caterers" list. Menu uses the PDF export URL, never
   // the editable doc. Contract and Invoice are generated on demand.
   const catererEntries = [];
-  if(catererDocs.menuPdf && catererDocs.menuPdf.url){
+  if(Array.isArray(catererDocs.menus) && catererDocs.menus.length){
+    catererDocs.menus.forEach(function(m){
+      if(m && m.url) catererEntries.push({ ic:'📋', label: m.name || 'Menu (PDF)', url: m.url });
+    });
+  } else if(catererDocs.menuPdf && catererDocs.menuPdf.url){
     catererEntries.push({ ic:'📋', label:'Menu (PDF)', url: catererDocs.menuPdf.url });
   } else if(catererDocs.menu && catererDocs.menu.url){
     catererEntries.push({ ic:'📋', label:'Menu (PDF)', url: toPdfUrl(catererDocs.menu.url) });

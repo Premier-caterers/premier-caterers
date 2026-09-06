@@ -1183,6 +1183,7 @@ async function _saveInquiry(i){
     }
     try{ _stripTemplateMenus(i); }catch(e){}
     await ref.set(i);
+    try{ if(i.portalId && typeof syncProspectPortal==='function') syncProspectPortal(i.id); }catch(e){}
   }catch(err){ console.error(err); }
 }
 async function _saveChecklist(eid,items){ try{ await db.collection('checklists').doc(eid).set({items,ts:Date.now()}); }catch(err){ console.error(err); } }
@@ -5266,9 +5267,17 @@ function openMenuEmail(inq, link){
           if(bodyEl && bodyEl.value.indexOf('portal.html')===-1){ bodyEl.value = _appendPortalLink(bodyEl.value, nurl); }
         }
       });
-    } else if(pid && clientPortals[pid]){
-      const p = clientPortals[pid];
-      _portalUrl = PORTAL_BASE_URL + '?p=' + encodeURIComponent(pid) + '&t=' + encodeURIComponent(p.token||'');
+    } else if(pid){
+      // Portal already existed — refresh its snapshot from the live inquiry
+      // (estimate/menu may have changed since it was first created) before
+      // handing out the link.
+      if(typeof syncProspectPortal==='function'){
+        try{ syncProspectPortal(inq.id); }catch(e){}
+      }
+      if(clientPortals[pid]){
+        const p = clientPortals[pid];
+        _portalUrl = PORTAL_BASE_URL + '?p=' + encodeURIComponent(pid) + '&t=' + encodeURIComponent(p.token||'');
+      }
     }
   }catch(e){}
 
@@ -13357,9 +13366,27 @@ function _findPortalIdForInquiry(inqId){
 
 function _buildInquiryCatererDocs(inq){
   const docs = {};
-  const menuRaw = inq.menuLink || inq.pdfMenuLink || (inq.estimate && inq.estimate.menuLink) || '';
-  if(menuRaw){
-    docs.menuPdf = { name:'Menu (PDF)', url: (typeof menuPdfUrl==='function' ? menuPdfUrl(menuRaw) : menuRaw) };
+  // Menus live in inq.menus[] (current format, supports multiple named menus);
+  // inq.menuLink / pdfMenuLink are the legacy single-link fallback. Checking
+  // menuLink only (as this used to) meant any menu added the current way
+  // never made it to the client portal at all.
+  const menuList = [];
+  if(Array.isArray(inq.menus) && inq.menus.length){
+    inq.menus.forEach(function(m){
+      if(m && m.url){
+        menuList.push({ name: m.name || 'Menu (PDF)', url: (typeof menuPdfUrl==='function' ? menuPdfUrl(m.url) : m.url) });
+      }
+    });
+  }
+  if(!menuList.length){
+    const menuRaw = inq.menuLink || inq.pdfMenuLink || (inq.estimate && inq.estimate.menuLink) || '';
+    if(menuRaw){
+      menuList.push({ name:'Menu (PDF)', url: (typeof menuPdfUrl==='function' ? menuPdfUrl(menuRaw) : menuRaw) });
+    }
+  }
+  if(menuList.length){
+    docs.menus = menuList;
+    docs.menuPdf = menuList[0]; // kept for any older code path still reading .menuPdf
   }
   try{
     const c = (typeof contracts!=='undefined') ? contracts['inq_'+inq.id] : null;
@@ -13491,6 +13518,42 @@ async function createInquiryPortal(inqId, opts){
   }catch(err){
     if(!opts.silent) alert('Could not create the portal — please check your connection and try again.');
     return null;
+  }
+}
+
+// Keep an already-existing PROSPECT portal in sync with its inquiry.
+// createInquiryPortal() only ever writes invoiceSnapshot / catererDocuments
+// once, at creation time — after that, editing the estimate or attaching a
+// menu used to just sit invisible to the client forever, because
+// syncPortalInvoiceOnly() (below) only listens to the `invoices` collection,
+// which doesn't exist yet pre-booking. This is that same sync for the
+// pre-booking stage. Once the client is actually booked, syncPortalInvoiceOnly
+// takes over and this becomes a no-op, so real invoice data is never
+// overwritten with stale quote data.
+async function syncProspectPortal(inqId){
+  try{
+    const inq = inquiries.find(x=>x.id===inqId);
+    if(!inq) return;
+    const portalId = inq.portalId || _findPortalIdForInquiry(inqId);
+    if(!portalId || !clientPortalsCol) return; // no portal yet — nothing to keep in sync
+    const existing = clientPortals[portalId];
+    if(existing && existing.stage==='booked') return; // invoice listener owns it now
+    const f = _portalFieldsFromInquiry(inq);
+    const est = aggregateEstimateForPortal(inq);
+    const patch = {
+      jobNumber: f.jobNumber,
+      eventName: f.eventName,
+      eventType: f.eventType,
+      eventDate: f.eventDate,
+      venue: f.venue,
+      invoiceSnapshot: est,
+      depositAmount: est.depositAmount || 0,
+      catererDocuments: _buildInquiryCatererDocs(inq)
+    };
+    await clientPortalsCol.doc(portalId).update(patch);
+    clientPortals[portalId] = Object.assign({}, existing, patch);
+  }catch(err){
+    console.warn('syncProspectPortal failed:', err);
   }
 }
 async function createClientPortal(eid){
