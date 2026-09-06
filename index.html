@@ -9612,7 +9612,7 @@ function openInvoice(eid){
   if(!invoices[eid]){
     invoices[eid] = getDefaultInvoice(e);
   }
-  renderInvoiceDetail();
+  renderInvoiceDetail(true);
 }
 
 function closeInvoiceDetail(){
@@ -9639,7 +9639,7 @@ function lockInvoiceEdit(eid){
   renderInvoiceDetail();
 }
 
-function renderInvoiceDetail(){
+function renderInvoiceDetail(scrollToView){
   const eid = activeInvoiceId;
   const e = events.find(x=>x.id===baseEventIdOf(eid));
   const inv = invoices[eid];
@@ -9770,7 +9770,7 @@ function renderInvoiceDetail(){
           <td style="padding:8px 10px;text-align:right">
             ${canEdit?`<input type="number" value="${line.price}" min="0" step="0.01" onchange="updateInvoiceLine('${eid}',${i},'price',this.value)" class="field field--sm field--num">`:('$'+parseFloat(line.price||0).toFixed(2))}
           </td>
-          <td style="padding:8px 10px;text-align:right;font-weight:500">$${(parseFloat(line.qty||0)*parseFloat(line.price||0)).toFixed(2)}</td>
+          <td style="padding:8px 10px;text-align:right;font-weight:500"><span data-amt="${i}">$${(parseFloat(line.qty||0)*parseFloat(line.price||0)).toFixed(2)}</span></td>
           <td style="padding:4px 6px;text-align:center;width:104px">
             ${canEdit?`<div style="display:flex;gap:2px;justify-content:center;align-items:center">
               <span class="drag-handle" title="Drag to reorder" style="cursor:grab;color:var(--text3);font-size:15px;padding:2px;touch-action:none"><i class="ti ti-grip-vertical"></i></span>
@@ -9789,7 +9789,7 @@ function renderInvoiceDetail(){
       <div style="min-width:280px">
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px">
           <span style="color:var(--text2)">Subtotal</span>
-          <span>$${tots.subtotal.toFixed(2)}</span>
+          <span id="invSub-${eid}">$${tots.subtotal.toFixed(2)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px">
           <span style="color:var(--text2);display:flex;align-items:center;gap:5px;flex-wrap:wrap">
@@ -9801,15 +9801,15 @@ function renderInvoiceDetail(){
               <button onclick="removeLogisticsFee('${eid}')" title="Remove logistics fee" class="btn btn--icon is-danger"><i class="ti ti-trash"></i></button>
             </span>` : `(${((inv.logisticsRate??LOGISTICS_RATE)*100).toFixed(2)}%)`}
           </span>
-          <span>$${tots.logistics.toFixed(2)}</span>
+          <span id="invLog-${eid}">$${tots.logistics.toFixed(2)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px">
           <span style="color:var(--text2)">${inv.taxExempt?'Sales tax (exempt)':'Sales tax (6.625%)'}</span>
-          <span>$${tots.tax.toFixed(2)}</span>
+          <span id="invTax-${eid}">$${tots.tax.toFixed(2)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);font-size:16px;font-weight:600">
           <span>Grand total</span>
-          <span>$${tots.grand.toFixed(2)}</span>
+          <span id="invGrand-${eid}">$${tots.grand.toFixed(2)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
           <span style="color:var(--text2)">Deposit paid</span>
@@ -9817,7 +9817,7 @@ function renderInvoiceDetail(){
         </div>
         <div style="display:flex;justify-content:space-between;padding:10px 0;font-size:15px;font-weight:600;color:${tots.balance<=0?'var(--green-text)':'var(--crimson,#8B1A1A)'}">
           <span>Balance due</span>
-          <span>$${tots.balance.toFixed(2)}</span>
+          <span id="invBalance-${eid}">$${tots.balance.toFixed(2)}</span>
         </div>
         ${(function(){
           ensurePaymentsArray(inv);
@@ -9845,7 +9845,7 @@ function renderInvoiceDetail(){
                 </tr>`).join('')}
                 <tr style="font-weight:600">
                   <td colspan="3" style="padding:8px 6px 4px;text-align:right;color:var(--text2)">Total paid</td>
-                  <td style="padding:8px 6px 4px;text-align:right;font-variant-numeric:tabular-nums">$${(parseFloat(inv.deposit)||0).toFixed(2)}</td>
+                  <td id="invTotalPaid-${eid}" style="padding:8px 6px 4px;text-align:right;font-variant-numeric:tabular-nums">$${(parseFloat(inv.deposit)||0).toFixed(2)}</td>
                   ${canEdit?'<td></td>':''}
                 </tr>
               </tbody>
@@ -9871,14 +9871,36 @@ function renderInvoiceDetail(){
     </div>`:''}
   </div>`;
 
-  el.scrollIntoView({behavior:'smooth',block:'nearest'});
+  if(scrollToView) el.scrollIntoView({behavior:'smooth',block:'nearest'});
   initLineSortable('invLinesBody', (from,to)=>reorderInvoiceLine(eid, from, to));
+}
+
+// Re-render ONLY the computed numbers (row total + subtotal/logistics/tax/grand/balance),
+// leaving the input elements themselves untouched. This is what updateInvoiceLine/updateDeposit
+// use for qty/price/deposit edits so a field committing doesn't blow away every input's DOM
+// node (which is what was stealing focus and scrambling digits while editing).
+function refreshInvoiceMath(eid){
+  const inv = invoices[eid]; if(!inv) return;
+  const tots = calcInvoiceTotals(inv);
+  const body = document.getElementById('invLinesBody');
+  if(body){ inv.lines.forEach((l,i)=>{ const a=body.querySelector('[data-amt="'+i+'"]'); if(a) a.textContent='$'+((parseFloat(l.qty||0))*(parseFloat(l.price||0))).toFixed(2); }); }
+  const set=(id,val)=>{ const e=document.getElementById(id); if(e) e.textContent='$'+val.toFixed(2); };
+  set('invSub-'+eid, tots.subtotal);
+  set('invLog-'+eid, tots.logistics);
+  set('invTax-'+eid, tots.tax);
+  set('invGrand-'+eid, tots.grand);
+  set('invBalance-'+eid, tots.balance);
+  const balEl = document.getElementById('invBalance-'+eid);
+  if(balEl) balEl.parentElement.style.color = tots.balance<=0 ? 'var(--green-text)' : 'var(--crimson,#8B1A1A)';
+  const paidEl = document.getElementById('invTotalPaid-'+eid);
+  if(paidEl) paidEl.textContent = '$'+(parseFloat(inv.deposit)||0).toFixed(2);
 }
 
 function updateInvoiceLine(eid,idx,field,val){
   if(!invoices[eid]) return;
   invoices[eid].lines[idx][field] = field==='description' ? val : parseFloat(val)||0;
-  renderInvoiceDetail();
+  if(field==='qty'||field==='price') refreshInvoiceMath(eid);
+  // description needs no re-render at all — the input already shows what was typed.
 }
 
 function toggleInvoiceLineFlag(eid,idx,flag){
@@ -9892,7 +9914,7 @@ function toggleInvoiceLineFlag(eid,idx,flag){
 function updateDeposit(eid,val){
   if(!invoices[eid]) return;
   invoices[eid].deposit = parseFloat(val)||0;
-  renderInvoiceDetail();
+  refreshInvoiceMath(eid);
 }
 
 function updateInvoiceNotes(eid,val){
