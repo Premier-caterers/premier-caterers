@@ -5533,10 +5533,23 @@ async function confirmSendMenuEmail(){
     // Schedule the 24-hour follow-up reminder. Silent no-op if the inquiry has
     // no salesperson or follow-ups are globally paused.
     try{ if(typeof _menuEmailInqId!=='undefined' && _menuEmailInqId) recordMenuFollowup(_menuEmailInqId, to); }catch(e){ console.warn('recordMenuFollowup failed:', e); }
+    try{ if(typeof _menuEmailInqId!=='undefined' && _menuEmailInqId) _autoAdvanceNewLead(_menuEmailInqId); }catch(e){}
     document.getElementById('sendEmailModal')?.remove();
   } else {
     if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-send" style="font-size:13px"></i> Send'; }
   }
+}
+
+// Any client-facing send — menu, general email, or invoice — should move a
+// brand-new lead into "Menu sent" automatically. No reason a client's first
+// message from us still shows as an untouched New lead in the Pipeline.
+// No-op for anything already past 'new' (menu_sent/booked/lost untouched).
+function _autoAdvanceNewLead(inqId){
+  try{
+    if(!inqId) return;
+    const inq = inquiries.find(x=>x.id===inqId);
+    if(inq && inq.stage==='new'){ moveInquiry(inqId, 'menu_sent'); }
+  }catch(e){ console.warn('_autoAdvanceNewLead failed:', e); }
 }
 
 function moveInquiry(id, stage){
@@ -14991,6 +15004,7 @@ async function confirmSendInvoiceEmail(eid){
         const inv = invoices[eid];
         const docType = (inv && (inv.status==='invoice' || inv.status==='paid')) ? 'Invoice' : 'Estimate';
         logActivity(inqId, 'email_sent', docType+' emailed to '+to+': '+subject, { to:to, subject:subject, invoiceId:eid });
+        try{ _autoAdvanceNewLead(inqId); }catch(e){}
       }
     } catch(_){}
     document.getElementById('sendEmailModal')?.remove();
