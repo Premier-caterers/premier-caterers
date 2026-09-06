@@ -4612,8 +4612,8 @@ function renderEstimateBlock(inq, role){
     <div style="display:grid;grid-template-columns:18px 1fr 52px 78px 70px 86px;gap:6px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border)">
       <span class="drag-handle" title="Drag to reorder" style="cursor:grab;color:var(--text3);font-size:15px;touch-action:none"><i class="ti ti-grip-vertical"></i></span>
       <input value="${(l.description||'').replace(/"/g,'&quot;')}" onchange="updateEstimateLine('${inq.id}',${i},'description',this.value)" placeholder="Description" style="${inp};width:100%">
-      <input type="number" value="${l.qty||0}" min="0" step="1" onchange="updateEstimateLine('${inq.id}',${i},'qty',this.value)" style="${inp};width:100%;text-align:right">
-      <input type="number" value="${l.price||0}" min="0" step="0.01" onchange="updateEstimateLine('${inq.id}',${i},'price',this.value)" style="${inp};width:100%;text-align:right">
+      <input type="number" value="${l.qty||0}" min="0" step="1" oninput="updateEstimateLine('${inq.id}',${i},'qty',this.value)" style="${inp};width:100%;text-align:right">
+      <input type="number" value="${l.price||0}" min="0" step="0.01" oninput="updateEstimateLine('${inq.id}',${i},'price',this.value)" style="${inp};width:100%;text-align:right">
       <span data-amt="${i}" style="font-size:13px;text-align:right;color:var(--text2)">$${((parseFloat(l.qty||0))*(parseFloat(l.price||0))).toFixed(2)}</span>
       <span style="display:flex;gap:1px;justify-content:flex-end">
         <button onclick="moveEstimateLine('${inq.id}',${i},-1)" title="Move up" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:1px;opacity:${i===0?'.3':'1'}" ${i===0?'disabled':''}><i class="ti ti-arrow-up"></i></button>
@@ -4630,7 +4630,7 @@ function renderEstimateBlock(inq, role){
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
       <button onclick="addEstimateLine('${inq.id}')" style="font-size:12px;padding:5px 11px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer"><i class="ti ti-plus" style="font-size:12px"></i> Add line</button>
       <button onclick="toggleEstimateTaxExempt('${inq.id}')" style="font-size:12px;padding:5px 11px;border:0.5px solid ${est.taxExempt?'var(--green-border)':'var(--border2)'};border-radius:7px;background:${est.taxExempt?'var(--green-bg)':'var(--bg2)'};color:${est.taxExempt?'var(--green-text)':'var(--text2)'};cursor:pointer">${est.taxExempt?'Tax exempt ✓':'Tax exempt?'}</button>
-      <span style="font-size:12px;color:var(--text2);display:inline-flex;align-items:center;gap:4px">Logistics (<input type="number" value="${((est.logisticsRate??LOGISTICS_RATE)*100).toFixed(2)}" min="0" max="100" step="0.01" onchange="updateEstimateLogistics('${inq.id}',this.value)" style="${inp};width:56px;text-align:right">%)</span>
+      <span style="font-size:12px;color:var(--text2);display:inline-flex;align-items:center;gap:4px">Logistics (<input type="number" value="${((est.logisticsRate??LOGISTICS_RATE)*100).toFixed(2)}" min="0" max="100" step="0.01" oninput="updateEstimateLogistics('${inq.id}',this.value)" style="${inp};width:56px;text-align:right">%)</span>
     </div>
     <div style="margin-top:12px;display:flex;justify-content:flex-end">
       <div style="min-width:240px;font-size:13px">
@@ -9765,10 +9765,10 @@ function renderInvoiceDetail(scrollToView){
             </div>`:`${(line.noTax||line.noLog)?`<div style="font-size:10px;color:var(--text3);margin-top:3px">${[line.noTax?'no tax':'',line.noLog?'no logistics':''].filter(Boolean).join(' · ')}</div>`:''}`}
           </td>
           <td style="padding:8px 10px;text-align:center">
-            ${canEdit?`<input type="number" value="${line.qty}" min="0" onchange="updateInvoiceLine('${eid}',${i},'qty',this.value)" class="field field--sm field--num" style="width:70px">`:line.qty}
+            ${canEdit?`<input type="number" value="${line.qty}" min="0" oninput="updateInvoiceLine('${eid}',${i},'qty',this.value)" class="field field--sm field--num" style="width:70px">`:line.qty}
           </td>
           <td style="padding:8px 10px;text-align:right">
-            ${canEdit?`<input type="number" value="${line.price}" min="0" step="0.01" onchange="updateInvoiceLine('${eid}',${i},'price',this.value)" class="field field--sm field--num">`:('$'+parseFloat(line.price||0).toFixed(2))}
+            ${canEdit?`<input type="number" value="${line.price}" min="0" step="0.01" oninput="updateInvoiceLine('${eid}',${i},'price',this.value)" class="field field--sm field--num">`:('$'+parseFloat(line.price||0).toFixed(2))}
           </td>
           <td style="padding:8px 10px;text-align:right;font-weight:500"><span data-amt="${i}">$${(parseFloat(line.qty||0)*parseFloat(line.price||0)).toFixed(2)}</span></td>
           <td style="padding:4px 6px;text-align:center;width:104px">
@@ -9813,7 +9813,7 @@ function renderInvoiceDetail(scrollToView){
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
           <span style="color:var(--text2)">Deposit paid</span>
-          ${canEdit?`<input type="number" value="${inv.deposit||0}" min="0" step="0.01" onchange="updateDeposit('${eid}',this.value)" class="field field--sm field--num" style="width:120px">`:('$'+parseFloat(inv.deposit||0).toFixed(2))}
+          ${canEdit?`<input type="number" value="${inv.deposit||0}" min="0" step="0.01" oninput="updateDeposit('${eid}',this.value)" class="field field--sm field--num" style="width:120px">`:('$'+parseFloat(inv.deposit||0).toFixed(2))}
         </div>
         <div style="display:flex;justify-content:space-between;padding:10px 0;font-size:15px;font-weight:600;color:${tots.balance<=0?'var(--green-text)':'var(--crimson,#8B1A1A)'}">
           <span>Balance due</span>
