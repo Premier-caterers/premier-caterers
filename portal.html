@@ -135,6 +135,21 @@
 
   .details-intro{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid var(--border)}
 
+  .details-jumpnav{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:20px;padding:14px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:12px}
+  .details-jumpnav-title{width:100%;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text2);margin-bottom:2px}
+  .jumpnav-item{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--text);text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:7px 14px 7px 9px;cursor:pointer;transition:border-color .12s,background .12s;font-family:inherit}
+  .jumpnav-item:hover{border-color:var(--maroon)}
+  .jumpnav-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--border)}
+  .jumpnav-item.pending{background:#FCF3E0;border-color:#EBCE8E}
+  .jumpnav-item.pending .jumpnav-dot{background:var(--brass)}
+  .jumpnav-item.done .jumpnav-dot{background:var(--green-text)}
+  .jumpnav-item.optional{color:var(--text2)}
+  .jumpnav-item.optional .jumpnav-dot{background:var(--border)}
+  .jumpnav-hint{width:100%;font-size:11.5px;color:var(--text2);margin-top:2px}
+  .section-block{scroll-margin-top:14px}
+  .section-block.just-jumped{animation:jumpFlash 1.1s ease-out}
+  @keyframes jumpFlash{0%{box-shadow:0 0 0 3px rgba(122,46,61,.28)}100%{box-shadow:none}}
+
   .section-block{border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin-bottom:16px;background:var(--card)}
   .section-block h3{font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin:0 0 14px;padding-bottom:10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
   .section-block h3.tight{margin-bottom:10px;padding-bottom:0;border-bottom:none}
@@ -782,6 +797,20 @@ function renderDetails(){
   renderDetailsForm(document.getElementById('detailsFormHost'));
 }
 
+function _detailSectionStatuses(){
+  const anyMealIncomplete = intake.meals.some(function(m){ return !m.guestAdults || !m.startTime; });
+  const wineNeedsList = intake.wineLiquor===true && !((intake.liquorListFiles||[]).length);
+  return [
+    { id:'detail-sec-menu',      label:'Menu confirmation',              status: intake.menuConfirmed===null ? 'pending' : 'done' },
+    { id:'detail-sec-meals',     label:'Guests, timing & floorplans',    status: anyMealIncomplete ? 'pending' : 'done' },
+    { id:'detail-sec-wine',      label:'Wine & liquor',                  status: intake.wineLiquor===null ? 'pending' : (wineNeedsList ? 'pending' : 'done') },
+    { id:'detail-sec-allergies', label:'Allergies',                      status:'optional' },
+    { id:'detail-sec-vendors',   label:'Vendors',                        status:'optional' },
+    { id:'detail-sec-logo',      label: isWedding() ? 'Logo & ceremony' : 'Logo', status:'optional' },
+    { id:'detail-sec-other',     label:'Anything else',                  status:'optional' }
+  ];
+}
+
 function renderDetailsForm(host){
   let html = '';
   html += '<div class="details-intro">'
@@ -789,10 +818,26 @@ function renderDetailsForm(host){
         ? 'Staff entry — fill in any event details you have on file. This is the same form the client sees; anything you enter here is shared with them, and anything they enter shows up for you. Saves automatically.'
         : 'Please fill in the final details for your event. Everything saves automatically as you go, so you can complete it in stages — just return any time using your link.')
     + '</div>';
+
+  // Quick-jump table of contents — amber dot = still needs an answer,
+  // green = answered, grey = optional. Click jumps straight to that section
+  // (this is the thing that was missing: at a glance, nothing told you
+  // wine/liquor or floorplans still needed a response).
+  const _sections = _detailSectionStatuses();
+  html += '<nav class="details-jumpnav" aria-label="Jump to a section">'
+    + '<div class="details-jumpnav-title">Jump to a section</div>'
+    + _sections.map(function(s){
+        return '<a href="#'+s.id+'" class="jumpnav-item '+s.status+'" data-jump-target="'+s.id+'"><span class="jumpnav-dot"></span>'+esc(s.label)+'</a>';
+      }).join('')
+    + (_sections.some(function(s){return s.status==='pending';})
+        ? '<div class="jumpnav-hint">Amber = still needs your answer &middot; green = answered &middot; grey = optional</div>'
+        : '<div class="jumpnav-hint">Everything required is answered — the grey items below are optional.</div>')
+    + '</nav>';
+
   html += '<div class="form-progress"><span>'+progressPct()+'% complete</span><div class="bar"><div class="bar-fill" style="width:'+progressPct()+'%"></div></div><span class="save-status" id="saveStatus">Saves automatically</span></div>';
 
   // Menu confirmation
-  html += '<div class="section-block">'
+  html += '<div class="section-block" id="detail-sec-menu">'
     + '<h3><span class="step-dot">1</span>Menu confirmation</h3>'
     + '<div class="toggle-row" data-toggle="menuConfirmed">'
       + '<button type="button" class="toggle-btn'+(intake.menuConfirmed===true?' selected':'')+'" data-val="true">Confirmed as-is</button>'
@@ -802,16 +847,17 @@ function renderDetailsForm(host){
     + '</div>';
 
   // Meals intro
-  html += '<div class="section-block"><h3 class="tight"><span class="step-dot">2</span>Guest count, timing, floorplans &amp; linens</h3>'
-    + '<div style="font-size:12px;color:var(--text2);margin-bottom:2px">If your event has more than one meal or session, add a block for each so we get the details right for every part.</div></div>';
+  html += '<div class="section-block" id="detail-sec-meals"><h3 class="tight"><span class="step-dot">2</span>Guest count, timing, floorplans &amp; linens</h3>'
+    + '<div style="font-size:12px;color:var(--text2);margin-bottom:2px">If your event has more than one meal or session, add a block for each so we get the details right for every part.</div>';
   // Meal blocks
   intake.meals.forEach(function(m, i){
     html += renderMealBlock(m, i);
   });
-  html += '<button type="button" class="add-meal-link" id="addMealBtn">+ Add another meal / session</button>';
+  html += '<button type="button" class="add-meal-link" id="addMealBtn">+ Add another meal / session</button>'
+    + '</div>';
 
   // Wine & liquor
-  html += '<div class="section-block">'
+  html += '<div class="section-block" id="detail-sec-wine">'
     + '<h3><span class="step-dot">3</span>Wine &amp; liquor</h3>'
     + '<div class="toggle-row" data-toggle="wineLiquor">'
       + '<button type="button" class="toggle-btn'+(intake.wineLiquor===true?' selected':'')+'" data-val="true">Yes, there will be alcohol</button>'
@@ -826,11 +872,11 @@ function renderDetailsForm(host){
     + '</div>';
 
   // Allergies
-  html += '<div class="section-block"><h3><span class="step-dot">4</span>Allergies</h3>'
+  html += '<div class="section-block" id="detail-sec-allergies"><h3><span class="step-dot">4</span>Allergies</h3>'
     + '<div class="field-row"><textarea data-field="allergies" rows="2" placeholder="List any guest allergies we should know about">'+esc(intake.allergies)+'</textarea></div></div>';
 
   // Vendors
-  html += '<div class="section-block"><h3><span class="step-dot">5</span>Your vendors</h3>'
+  html += '<div class="section-block" id="detail-sec-vendors"><h3><span class="step-dot">5</span>Your vendors</h3>'
     + '<div class="field-grid-3">'
       + '<div class="field-row"><label>Musician / band</label><input type="text" data-field="musicianName" value="'+esc(intake.musicianName)+'" placeholder="Name"></div>'
       + '<div class="field-row"><label>Florist</label><input type="text" data-field="floristName" value="'+esc(intake.floristName)+'" placeholder="Name"></div>'
@@ -838,13 +884,13 @@ function renderDetailsForm(host){
     + '</div></div>';
 
   // Logo + ceremony (weddings)
-  html += '<div class="section-block"><h3><span class="step-dot">6</span>Logo'+(isWedding()?' &amp; ceremony':'')+'</h3>'
+  html += '<div class="section-block" id="detail-sec-logo"><h3><span class="step-dot">6</span>Logo'+(isWedding()?' &amp; ceremony':'')+'</h3>'
     + renderUploadField('Upload your logo, if applicable', 'logoFiles', 'logo')
     + (isWedding() ? ('<div class="field-subhead">Ceremony procession &amp; music</div>' + renderUploadField('Upload procession order and music list', 'ceremonyFiles', 'ceremony')) : '')
     + '</div>';
 
   // Other
-  html += '<div class="section-block"><h3><span class="step-dot">7</span>Anything else?</h3>'
+  html += '<div class="section-block" id="detail-sec-other"><h3><span class="step-dot">7</span>Anything else?</h3>'
     + '<div class="field-row"><textarea data-field="otherNotes" rows="3" placeholder="Any other important information you would like us to know">'+esc(intake.otherNotes)+'</textarea></div>'
     + renderUploadField('Upload any other files', 'otherFiles', 'other')
     + '</div>';
@@ -854,6 +900,23 @@ function renderDetailsForm(host){
 
   host.innerHTML = html;
   wireDetailsEvents(host);
+  wireJumpNav(host);
+}
+
+// Smooth-scrolls to a section instead of the browser's instant anchor jump,
+// and gives it a brief highlight flash so it's obvious what you landed on.
+function wireJumpNav(host){
+  host.querySelectorAll('[data-jump-target]').forEach(function(a){
+    a.addEventListener('click', function(ev){
+      ev.preventDefault();
+      const target = document.getElementById(a.getAttribute('data-jump-target'));
+      if(!target) return;
+      target.scrollIntoView({ behavior:'smooth', block:'start' });
+      target.classList.remove('just-jumped');
+      void target.offsetWidth; // restart animation if clicked twice in a row
+      target.classList.add('just-jumped');
+    });
+  });
 }
 
 function renderMealBlock(m, i){
