@@ -4967,10 +4967,12 @@ function syncHubDrawer(){
   if(inq){
     const role=roles[currentRole];
     // Preserve scroll position and active element across the re-render so editing an
-    // estimate/invoice field doesn't bounce the drawer back to the top.
-    const _prevScroll = dr.scrollTop || 0;
-    const _prevBody = dr.querySelector('.hub-body');
-    const _prevBodyScroll = _prevBody ? _prevBody.scrollTop : 0;
+    // estimate/invoice field (or a background Firestore sync) doesn't bounce the
+    // drawer back to the top. The actual scrolling element is .inq-detail.hub
+    // (overflow-y:auto in CSS) — #hubDrawer itself is overflow:hidden and
+    // .hub-body has no overflow set, so scrollTop on either of those is always 0.
+    const _prevScrollEl = dr.querySelector('.inq-detail.hub');
+    const _prevScroll = _prevScrollEl ? _prevScrollEl.scrollTop : 0;
     const _activeEl = document.activeElement;
     let _activeMeta = null;
     if(_activeEl && dr.contains(_activeEl) && _activeEl.tagName){
@@ -4991,10 +4993,9 @@ function syncHubDrawer(){
     dr.setAttribute('aria-hidden','false');
     requestAnimationFrame(()=>{ dr.classList.add('show'); sc.classList.add('show'); });
     // Restore scroll first (cheap) — then refocus the equivalent input if we can find it.
-    dr.scrollTop = _prevScroll;
-    const _newBody = dr.querySelector('.hub-body');
-    if(_newBody) _newBody.scrollTop = _prevBodyScroll;
-    requestAnimationFrame(()=>{ try{ dr.scrollTop = _prevScroll; const nb = dr.querySelector('.hub-body'); if(nb) nb.scrollTop = _prevBodyScroll; }catch(e){} });
+    const _newScrollEl = dr.querySelector('.inq-detail.hub');
+    if(_newScrollEl) _newScrollEl.scrollTop = _prevScroll;
+    requestAnimationFrame(()=>{ try{ const se = dr.querySelector('.inq-detail.hub'); if(se) se.scrollTop = _prevScroll; }catch(e){} });
     if(_activeMeta && _activeMeta.signature){
       try{
         let candidate = null;
