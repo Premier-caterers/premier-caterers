@@ -10518,9 +10518,17 @@ function buildInvoiceHTML(eid){
   let _revFooter='';
   try{
     const sig=_docSig({lines:inv.lines,deposit:inv.deposit,status:inv.status,notes:inv.notes,taxExempt:inv.taxExempt,logisticsRate:inv.logisticsRate});
+    // Only write back when the revision stamp actually changed. This function is called
+    // from the client-portal sync, which runs inside the invoices Firestore listener —
+    // writing unconditionally here made every listener event trigger another write,
+    // which triggered the listener again: an infinite write loop (~1 write/sec per
+    // portal event) that exhausted Firestore's write queue and re-rendered the whole
+    // app several times a second.
+    const _revBefore = JSON.stringify([inv._rev, inv._finalized, inv._revSig]);
     finalizeDoc(inv, sig);
     _revFooter = docFooterText(inv, isInvoice?'Invoice':'Estimate', fullEventNum(e));
-    if(db) db.collection('invoices').doc(eid).set(inv);
+    const _revAfter = JSON.stringify([inv._rev, inv._finalized, inv._revSig]);
+    if(db && _revAfter !== _revBefore) db.collection('invoices').doc(eid).set(inv);
   }catch(err){ console.warn('invoice footer:',err); }
 
   const html = '<!DOCTYPE html><html><head><title>'+invoiceFileName(eid)+'</title><style>'+
