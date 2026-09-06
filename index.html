@@ -10506,7 +10506,11 @@ function printInvoice(eid){
   setTimeout(()=>w.print(),400);
 }
 
-function buildInvoiceHTML(eid){
+function buildInvoiceHTML(eid, opts){
+  opts = opts || {};
+  // readOnly: render the document without persisting the revision stamp or mutating
+  // the in-memory invoice. REQUIRED for any caller that runs inside a Firestore
+  // listener (the client-portal sync), otherwise render→write→listener→render loops.
   const e = events.find(x=>x.id===baseEventIdOf(eid));
   const inv = invoices[eid];
   if(!e||!inv) return '';
@@ -10524,11 +10528,18 @@ function buildInvoiceHTML(eid){
     // which triggered the listener again: an infinite write loop (~1 write/sec per
     // portal event) that exhausted Firestore's write queue and re-rendered the whole
     // app several times a second.
-    const _revBefore = JSON.stringify([inv._rev, inv._finalized, inv._revSig]);
-    finalizeDoc(inv, sig);
-    _revFooter = docFooterText(inv, isInvoice?'Invoice':'Estimate', fullEventNum(e));
-    const _revAfter = JSON.stringify([inv._rev, inv._finalized, inv._revSig]);
-    if(db && _revAfter !== _revBefore) db.collection('invoices').doc(eid).set(inv);
+    if(opts.readOnly){
+      // Work on a copy so the listener path can't dirty the live invoice object.
+      const _copy = Object.assign({}, inv);
+      finalizeDoc(_copy, sig);
+      _revFooter = docFooterText(_copy, isInvoice?'Invoice':'Estimate', fullEventNum(e));
+    } else {
+      const _revBefore = JSON.stringify([inv._rev, inv._finalized, inv._revSig]);
+      finalizeDoc(inv, sig);
+      _revFooter = docFooterText(inv, isInvoice?'Invoice':'Estimate', fullEventNum(e));
+      const _revAfter = JSON.stringify([inv._rev, inv._finalized, inv._revSig]);
+      if(db && _revAfter !== _revBefore) db.collection('invoices').doc(eid).set(inv);
+    }
   }catch(err){ console.warn('invoice footer:',err); }
 
   const html = '<!DOCTYPE html><html><head><title>'+invoiceFileName(eid)+'</title><style>'+
@@ -13170,7 +13181,7 @@ function aggregateInvoiceForPortal(evId){
   // Build the exact print-ready invoice document the caterer sees, so the portal's
   // Download button gives an identical PDF. Best-effort; never break sync over it.
   let printHtml = '';
-  try{ if(primaryKey && typeof buildInvoiceHTML==='function') printHtml = buildInvoiceHTML(primaryKey); }catch(e){}
+  try{ if(primaryKey && typeof buildInvoiceHTML==='function') printHtml = buildInvoiceHTML(primaryKey, {readOnly:true}); }catch(e){}
   return {
     number, subtotal, logistics, tax, total, paid,
     docType: anyInvoice ? 'invoice' : 'quote',
