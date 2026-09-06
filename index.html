@@ -4611,7 +4611,7 @@ function renderEstimateBlock(inq, role){
   const rows = est.lines.map((l,i)=>`
     <div style="display:grid;grid-template-columns:18px 1fr 52px 78px 70px 86px;gap:6px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border)">
       <span class="drag-handle" title="Drag to reorder" style="cursor:grab;color:var(--text3);font-size:15px;touch-action:none"><i class="ti ti-grip-vertical"></i></span>
-      <input value="${(l.description||'').replace(/"/g,'&quot;')}" onchange="updateEstimateLine('${inq.id}',${i},'description',this.value)" placeholder="Description" style="${inp};width:100%">
+      <input value="${(l.description||'').replace(/"/g,'&quot;')}" oninput="updateEstimateLine('${inq.id}',${i},'description',this.value)" placeholder="Description" style="${inp};width:100%">
       <input type="number" value="${l.qty||0}" min="0" step="1" oninput="updateEstimateLine('${inq.id}',${i},'qty',this.value)" style="${inp};width:100%;text-align:right">
       <input type="number" value="${l.price||0}" min="0" step="0.01" oninput="updateEstimateLine('${inq.id}',${i},'price',this.value)" style="${inp};width:100%;text-align:right">
       <span data-amt="${i}" style="font-size:13px;text-align:right;color:var(--text2)">$${((parseFloat(l.qty||0))*(parseFloat(l.price||0))).toFixed(2)}</span>
@@ -4641,7 +4641,7 @@ function renderEstimateBlock(inq, role){
       </div>
     </div>
     <div style="font-size:12px;color:var(--text2);margin:6px 0 4px">Notes (shown on the estimate PDF)</div>
-    <textarea onchange="updateEstimateNotes('${inq.id}',this.value)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px;font-size:13px;color:var(--text);font-family:inherit;resize:vertical;min-height:50px">${est.notes||''}</textarea>
+    <textarea oninput="updateEstimateNotes('${inq.id}',this.value)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px;font-size:13px;color:var(--text);font-family:inherit;resize:vertical;min-height:50px">${est.notes||''}</textarea>
   </div></div>`;
 }
 
@@ -4965,17 +4965,34 @@ function syncHubDrawer(){
   if(!dr||!sc) return;
   const inq = ((currentView==='pipeline'||currentView==='events') && selectedInqId) ? inquiries.find(x=>x.id===selectedInqId) : null;
   if(inq){
+    // If the user is actively mid-edit on this inquiry's open estimate, skip the rebuild
+    // entirely. Without this, any OTHER Firestore collection changing anywhere in the app
+    // (a client-portal message, an unrelated invoice payment, a contract being signed) calls
+    // syncHubDrawer() unconditionally and tears the drawer down mid-keystroke, which is what
+    // was corrupting typed text. This is the single choke point all four snapshot listeners
+    // that call syncHubDrawer() route through, so none of them need their own copy of this
+    // check. Also requires the drawer to already be open and showing this exact inquiry —
+    // otherwise closing the drawer then immediately reopening the same card within the
+    // 2-second edit window would silently fail to reopen it.
+    if(_estimateOpenId===inq.id && Date.now() < _estimateDirtyUntil && dr.dataset.inqId===inq.id && dr.getAttribute('aria-hidden')==='false') return;
     const role=roles[currentRole];
+    // Only carry scroll position / focus across a re-render when it's the SAME inquiry
+    // already showing in the drawer (e.g. a background sync landing while it's open) —
+    // never when a different card was just clicked. Otherwise a fresh drawer opens
+    // already scrolled to wherever the PREVIOUS client's drawer was left, since closing
+    // the drawer only hides it (dr.innerHTML is never cleared) and its old scrollTop was
+    // still sitting there to be picked up.
+    const _sameInq = dr.dataset.inqId === inq.id;
     // Preserve scroll position and active element across the re-render so editing an
     // estimate/invoice field (or a background Firestore sync) doesn't bounce the
     // drawer back to the top. The actual scrolling element is .inq-detail.hub
     // (overflow-y:auto in CSS) — #hubDrawer itself is overflow:hidden and
     // .hub-body has no overflow set, so scrollTop on either of those is always 0.
-    const _prevScrollEl = dr.querySelector('.inq-detail.hub');
+    const _prevScrollEl = _sameInq ? dr.querySelector('.inq-detail.hub') : null;
     const _prevScroll = _prevScrollEl ? _prevScrollEl.scrollTop : 0;
     const _activeEl = document.activeElement;
     let _activeMeta = null;
-    if(_activeEl && dr.contains(_activeEl) && _activeEl.tagName){
+    if(_sameInq && _activeEl && dr.contains(_activeEl) && _activeEl.tagName){
       // Record enough to find the new equivalent input after re-render.
       _activeMeta = {
         tag: _activeEl.tagName,
@@ -4990,9 +5007,11 @@ function syncHubDrawer(){
     }
     try{ dr.innerHTML = renderInqDetail(inq, role); }
     catch(err){ dr.innerHTML = '<div style="padding:2rem;color:#b00;font:13px monospace">Hub error: '+(err&&err.message||err)+'</div>'; }
+    dr.dataset.inqId = inq.id;
     dr.setAttribute('aria-hidden','false');
     requestAnimationFrame(()=>{ dr.classList.add('show'); sc.classList.add('show'); });
     // Restore scroll first (cheap) — then refocus the equivalent input if we can find it.
+    // For a freshly-opened (different) inquiry this is just scrollTop=0, i.e. the top.
     const _newScrollEl = dr.querySelector('.inq-detail.hub');
     if(_newScrollEl) _newScrollEl.scrollTop = _prevScroll;
     requestAnimationFrame(()=>{ try{ const se = dr.querySelector('.inq-detail.hub'); if(se) se.scrollTop = _prevScroll; }catch(e){} });
@@ -5023,6 +5042,7 @@ function syncHubDrawer(){
   } else {
     dr.classList.remove('show'); sc.classList.remove('show');
     dr.setAttribute('aria-hidden','true');
+    delete dr.dataset.inqId;
   }
 }
 document.addEventListener('keydown', function(e){
