@@ -93,7 +93,6 @@
     <button class="nav-item" id="nav-email" onclick="showView('email')"><i class="ti ti-mail"></i>Email<span class="nav-badge" id="emailBadge" style="display:none">0</span></button>
     <a class="nav-item" href="https://premier-caterers.github.io/premier-caterers/premier_caterers_form.html" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-clipboard-text"></i>Link to inquiry form<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
     <div class="sidebar-label" id="grpKitchen">Kitchen &amp; ops</div>
-    <button class="nav-item" id="nav-grocery" onclick="window.open('https://premier-caterers.github.io/premier-caterers/grocery.html','_blank')"><i class="ti ti-shopping-cart"></i>Grocery<i class="ti ti-external-link" style="font-size:11px;margin-left:4px;opacity:.6"></i></button>
     <button class="nav-item" id="nav-purchasing" onclick="window.open('https://premier-caterers.github.io/premier-caterers/purchasing.html','_blank')"><i class="ti ti-building-store"></i>Purchasing<i class="ti ti-external-link" style="font-size:11px;margin-left:4px;opacity:.6"></i></button>
     <button class="nav-item" id="nav-equipment" onclick="showView('equipment')"><i class="ti ti-tool"></i>Equipment</button>
     <button class="nav-item" id="nav-venues" onclick="showView('venues')"><i class="ti ti-building"></i>Venues</button>
@@ -2329,7 +2328,7 @@ function updateUserBar(){
 const NAV_GROUPS = {
   grpWeek:    ['events','coversheet','schedule','checklists','changes'],
   grpSales:   ['pipeline','clients','invoices','email'],
-  grpKitchen: ['grocery','purchasing','equipment','venues'],
+  grpKitchen: ['purchasing','equipment','venues'],
   grpOffice:  ['myday','reports','roadmap'],
   setupLabel: ['settings','trash']
 };
