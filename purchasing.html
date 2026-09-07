@@ -576,7 +576,7 @@ let vendors=[], items=[], priceHistory=[];
 //   {messageId, threadId, from, subject, receivedAt, fileUrl, fileName, mimeType,
 //    parsed:{vendorName,invoiceDate,invoiceNumber,lines:[...]}, vendorGuessId,
 //    isRevision, revisionTargetId, status:'pending'|'saved'|'dismissed'}
-let jobEvents=[], eventPurchases=[], pendingInvoiceScans=[];
+let jobEvents=[], eventPurchases=[], pendingInvoiceScans=[], reviewInvoiceScans=[];
 let _started=false;
 function startData(){
   if(_started) return; _started=true;
@@ -586,6 +586,11 @@ function startData(){
   db.collection('events').onSnapshot(s=>{ jobEvents=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }, err=>{ console.warn('events listener (read-only) error:', err); });
   db.collection('eventPurchases').onSnapshot(s=>{ eventPurchases=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
   db.collection('pendingInvoiceScans').where('status','==','pending').onSnapshot(s=>{ pendingInvoiceScans=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.receivedAt||0)-(a.receivedAt||0)); renderScan(); }, err=>{ console.warn('pendingInvoiceScans listener error:', err); });
+  // Items flagged "Review" (question marks, unsure vendor, etc.) — pulled out
+  // of the main Pending list into their own bucket so the main list stays
+  // clean. Same doc shape, just a different status.
+  db.collection('pendingInvoiceScans').where('status','==','needs_review').onSnapshot(s=>{ reviewInvoiceScans=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.receivedAt||0)-(a.receivedAt||0)); renderScan(); }, err=>{ console.warn('reviewInvoiceScans listener error:', err); });
+  db.collection('settings').doc('app').onSnapshot(d=>{ const data=d.data()||{}; customCategories = data.customCategories||[]; renderAll(); }, err=>{ console.warn('settings listener error:', err); });
   startOrdersCollection();
   startRepliesData();
   startRepliesPolling();
@@ -649,12 +654,19 @@ function _jcInvoiceCard(p){
     <th>${esc(p.vendorName||'(unknown vendor)')}${p.invoiceNumber?' — #'+esc(p.invoiceNumber):''}</th>
     <th class="muted">${p.invoiceDate?fmtDate(p.invoiceDate):''}${p.eventLabel?' · '+esc(p.eventLabel):''}</th>
     <th class="num">${fmtMoney(p.totalAmount)}</th>
+    <th style="width:1%"><button class="btn ghost sm" onclick="deleteEventPurchase('${p.id}')" title="Delete this invoice log entry"><i class="ti ti-trash"></i></button></th>
   </tr></thead></table>
   ${fileLinks?`<div style="display:flex;gap:6px;padding:4px 8px">${fileLinks}</div>`:''}
   <table style="margin-top:2px"><tbody>${
     lines.map(l=>`<tr><td>${esc(l.ourName)}</td><td class="muted">${l.qty?l.qty+' '+esc(l.soldBy):''}</td><td class="num">${fmtMoney(l.price)}/${esc(l.soldBy||'unit')}</td><td class="num">${fmtMoney(l.lineTotal)}</td></tr>`).join('')
   }</tbody></table></div>`;
 }
+async function deleteEventPurchase(id){
+  if(!confirm('Delete this invoice from your log? This removes the invoice entry itself, but does NOT undo any price catalog changes it already made — check All Items separately if a price needs fixing too.')) return;
+  try{ await db.collection('eventPurchases').doc(id).delete(); toast('Deleted'); }
+  catch(e){ alert('Could not delete: '+e.message); }
+}
+window.deleteEventPurchase = deleteEventPurchase;
 
 function renderJobCosts(){
   const el=document.getElementById('jobCostsBody'); if(!el) return;
@@ -1677,7 +1689,7 @@ function _renderPendingBulkTable(){
       <td class="muted">${isStatement?(p.parsed&&p.parsed.statementDate?fmtDate(p.parsed.statementDate):'—'):(p.parsed&&p.parsed.invoiceDate?fmtDate(p.parsed.invoiceDate):(p.receivedAt?new Date(p.receivedAt).toLocaleDateString():'—'))}</td>
       <td class="num">${isStatement?'—':pendingLines(p).length}</td>
       <td class="num">${isStatement?'—':fmtMoney(pendingTotal(p))}</td>
-      <td><button class="btn ghost sm" onclick="openPendingInvoiceScan('${p.id}')" ${running?'disabled':''}>View</button></td>
+      <td><button class="btn ghost sm" onclick="openPendingInvoiceScan('${p.id}')" ${running?'disabled':''}>View</button> <button class="btn ghost sm" onclick="markPendingForReview('${p.id}')" ${running?'disabled':''} title="Move to Review folder"><i class="ti ti-help-circle"></i></button></td>
     </tr>`;
   }).join('');
   const progressBanner = running ? `<div class="scan-err" style="background:#EAF3EC;border-color:#B7DDC0;color:#2C6B36;display:flex;align-items:center;gap:10px">
@@ -1723,10 +1735,23 @@ function renderScan(){
         <i class="ti ${p.isRevision?'ti-replace':'ti-file-invoice'}" style="color:${p.isRevision?'var(--amber-text,#a06a00)':'var(--text3)'}"></i>
         <span class="name">${esc(p.parsed&&p.parsed.vendorName||p.from||'(unknown vendor)')}${p.parsed&&p.parsed.invoiceNumber?' — #'+esc(p.parsed.invoiceNumber):''}${p.isRevision?' <b>· revision</b>':''}</span>
         <span class="size">${p.receivedAt?new Date(p.receivedAt).toLocaleDateString():''}</span>
+        <button onclick="event.stopPropagation();markPendingForReview('${p.id}')" title="Move to Review folder"><i class="ti ti-help-circle"></i></button>
         <button onclick="event.stopPropagation();dismissPendingInvoiceScan('${p.id}')" title="Dismiss — not an invoice"><i class="ti ti-x"></i></button>
       </div>`).join('')}</div>
   </div>`) : '';
-  el.innerHTML = `${pendingHtml}<div class="scan-step">
+  const reviewHtml = reviewInvoiceScans.length ? `<div class="scan-step" style="border:1px solid #C9BCE8;background:#FAF8FC">
+    <h3><i class="ti ti-help-circle" style="font-size:15px;vertical-align:-2px;color:#5B4B8A"></i> Review (${reviewInvoiceScans.length})</h3>
+    <div class="desc">Set aside from the main list with a question mark on them. Open one to review, or send it back to Pending.</div>
+    <div class="scan-files">${reviewInvoiceScans.map(p=>`
+      <div class="scan-file" style="cursor:pointer" onclick="openPendingInvoiceScan('${p.id}')">
+        <i class="ti ${p.documentType==='statement'?'ti-file-text':(p.isRevision?'ti-replace':'ti-file-invoice')}" style="color:${p.documentType==='statement'?'var(--purple-text,#5B4B8A)':(p.isRevision?'var(--amber-text,#a06a00)':'var(--text3)')}"></i>
+        <span class="name">${esc(p.parsed&&p.parsed.vendorName||p.from||'(unknown vendor)')}${p.parsed&&p.parsed.invoiceNumber?' — #'+esc(p.parsed.invoiceNumber):''}</span>
+        <span class="size">${p.receivedAt?new Date(p.receivedAt).toLocaleDateString():''}</span>
+        <button onclick="event.stopPropagation();moveReviewBackToPending('${p.id}')" title="Back to Pending"><i class="ti ti-corner-up-left"></i></button>
+        <button onclick="event.stopPropagation();dismissPendingInvoiceScan('${p.id}')" title="Dismiss — not an invoice"><i class="ti ti-x"></i></button>
+      </div>`).join('')}</div>
+  </div>` : '';
+  el.innerHTML = `${pendingHtml}${reviewHtml}<div class="scan-step">
     <h3>1. Upload a vendor invoice or price sheet</h3>
     <div class="desc">PDFs, photos (JPG/PNG), or screenshots. You can drop several files at once — they'll be combined into one review.</div>
     <div class="scan-drop" id="scanDrop" onclick="document.getElementById('scanFileInput').click()">
@@ -1779,7 +1804,7 @@ async function _fileToBase64(f){
 // Claude has already parsed these server-side. Opening one skips straight to the
 // same review screen a manual scan lands on — nothing saves until confirmed here.
 function openPendingInvoiceScan(id){
-  const p = pendingInvoiceScans.find(x=>x.id===id);
+  const p = pendingInvoiceScans.find(x=>x.id===id) || reviewInvoiceScans.find(x=>x.id===id);
   if(!p){ alert('That item is no longer pending.'); return; }
   _scanState.parsed = p.parsed || {};
   _scanState.vendorPick = p.vendorGuessId || '';
@@ -1801,8 +1826,28 @@ async function dismissPendingInvoiceScan(id){
   try{ await db.collection('pendingInvoiceScans').doc(id).set({status:'dismissed'}, {merge:true}); }
   catch(e){ alert('Could not dismiss: '+e.message); }
 }
+// Pulls an item out of the main Pending list into its own Review bucket —
+// for anything with questions you don't want cluttering the main queue but
+// aren't ready to save or dismiss outright.
+async function markPendingForReview(id){
+  try{ await db.collection('pendingInvoiceScans').doc(id).set({status:'needs_review'}, {merge:true}); toast('Moved to Review'); }
+  catch(e){ alert('Could not move to Review: '+e.message); }
+}
+async function moveReviewBackToPending(id){
+  try{ await db.collection('pendingInvoiceScans').doc(id).set({status:'pending'}, {merge:true}); }
+  catch(e){ alert('Could not move back: '+e.message); }
+}
 window.openPendingInvoiceScan = openPendingInvoiceScan;
 window.dismissPendingInvoiceScan = dismissPendingInvoiceScan;
+window.markPendingForReview = markPendingForReview;
+window.moveReviewBackToPending = moveReviewBackToPending;
+async function scanSendToReview(){
+  if(!_scanState.pendingId) return;
+  await markPendingForReview(_scanState.pendingId);
+  _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', jobEventId:'', error:'', pendingId:null, fileUrl:'', fileName:'', isRevision:false, revisionTargetId:'' };
+  renderScan();
+}
+window.scanSendToReview = scanSendToReview;
 
 async function scanRunAI(){
   const relay = getEventsRelayUrl();
@@ -1863,7 +1908,7 @@ function _renderStatementReview(el, p){
     <h3>This is a statement, not an itemized invoice</h3>
     ${pendingSourceNote}
     <div class="scan-err" style="background:#F0EDF7;border-color:#C9BCE8;color:#5B4B8A">
-      <i class="ti ti-info-circle"></i> A statement lists several separate invoices rather than individual products, so there's nothing here to add to your price catalog. Use this to check whether you have all ${rows.length} invoice${rows.length===1?'':'s'} it references — anything marked "missing" you'll need the actual invoice for, not this statement.
+      <i class="ti ti-info-circle"></i> A statement lists several separate invoices rather than individual products, so there's nothing here to add to your price catalog. Use this to check whether you have all ${rows.length} invoice${rows.length===1?'':'s'} it references, and add/edit rows below if Claude missed any. Anything marked "missing" you'll need the actual invoice for, not this statement.
     </div>
     <div class="scan-meta">
       ${p.vendorName?`<span>Vendor on statement: <b>${esc(p.vendorName)}</b></span>`:''}
@@ -1880,20 +1925,56 @@ function _renderStatementReview(el, p){
     </div>
   </div>
   <div class="card" style="overflow-x:auto;margin-top:14px"><table><thead><tr>
-    <th>Invoice #</th><th>Date</th><th class="num">Amount</th><th>Status</th>
-  </tr></thead><tbody>${withStatus.map(r=>`
-    <tr>
-      <td>${esc(r.invoiceNumber||'—')}</td>
-      <td class="muted">${r.date?fmtDate(r.date):'—'}</td>
-      <td class="num">${fmtMoney(r.amount)}</td>
+    <th>Invoice #</th><th>Date</th><th class="num">Amount</th><th>Status</th><th></th>
+  </tr></thead><tbody id="statementRows">${withStatus.map((r,i)=>`
+    <tr data-idx="${i}">
+      <td><input data-k="invoiceNumber" value="${esc(r.invoiceNumber||'')}" style="width:100px"></td>
+      <td><input data-k="date" type="date" value="${esc(r.date||'')}" style="width:130px"></td>
+      <td class="num"><input data-k="amount" type="number" step="0.01" value="${r.amount||''}" style="width:90px;text-align:right"></td>
       <td>${r.have?`<span style="color:var(--green-text,#3F7A44)"><i class="ti ti-check"></i> On file</span>`:(vendorId?`<span style="color:var(--red-text,#B3261E)"><i class="ti ti-alert-triangle"></i> Missing</span>`:`<span class="muted">Pick a vendor to check</span>`)}</td>
+      <td><button class="btn ghost sm" onclick="statementDeleteRow(${i})" title="Remove row"><i class="ti ti-x"></i></button></td>
     </tr>`).join('')}
-  </tbody></table></div>
+  </tbody></table>
+  <div style="padding:8px"><button class="btn ghost sm" onclick="statementAddRow()"><i class="ti ti-plus"></i> Add row</button></div>
+  </div>
   <div class="scan-step" style="margin-top:14px;display:flex;gap:10px">
     <button class="btn ghost" onclick="scanCancel()">Discard & start over</button>
+    <button class="btn ghost" onclick="statementSaveChanges()">Save changes</button>
+    ${_scanState.pendingId?`<button class="btn ghost" onclick="scanSendToReview()">Send to Review</button>`:''}
     ${_scanState.pendingId?`<button class="btn" onclick="scanDismissStatement()">Done reviewing — dismiss</button>`:''}
   </div>`;
 }
+function _statementReadRowsFromDom(){
+  const body = document.getElementById('statementRows'); if(!body) return _scanState.parsed.statementInvoices||[];
+  return Array.from(body.querySelectorAll('tr')).map(tr=>{
+    const r={}; tr.querySelectorAll('input').forEach(i=>{ r[i.dataset.k] = i.type==='number' ? (parseFloat(i.value)||0) : i.value; });
+    return r;
+  }).filter(r=>r.invoiceNumber || r.date || r.amount);
+}
+function statementAddRow(){
+  _scanState.parsed.statementInvoices = _statementReadRowsFromDom();
+  _scanState.parsed.statementInvoices.push({ invoiceNumber:'', date:'', amount:0 });
+  renderScanReview();
+}
+function statementDeleteRow(i){
+  const rows = _statementReadRowsFromDom();
+  rows.splice(i,1);
+  _scanState.parsed.statementInvoices = rows;
+  renderScanReview();
+}
+async function statementSaveChanges(){
+  _scanState.parsed.statementInvoices = _statementReadRowsFromDom();
+  if(_scanState.pendingId){
+    try{ await db.collection('pendingInvoiceScans').doc(_scanState.pendingId).set({ parsed: _scanState.parsed }, {merge:true}); toast('Saved ✓'); }
+    catch(e){ alert('Could not save: '+e.message); return; }
+  } else {
+    toast('Updated — not linked to a pending record, so this only applies to this review session.');
+  }
+  renderScanReview();
+}
+window.statementAddRow = statementAddRow;
+window.statementDeleteRow = statementDeleteRow;
+window.statementSaveChanges = statementSaveChanges;
 async function scanDismissStatement(){
   if(_scanState.pendingId){
     try{ await db.collection('pendingInvoiceScans').doc(_scanState.pendingId).set({status:'dismissed'}, {merge:true}); }catch(e){}
@@ -1902,6 +1983,19 @@ async function scanDismissStatement(){
   renderScan();
 }
 window.scanDismissStatement = scanDismissStatement;
+// Manual override for when the auto-detection missed a statement. Starts
+// blank (or keeps whatever vendor name Claude found) and lets you add rows
+// by hand via the editable table above.
+async function scanMarkAsStatement(){
+  if(!confirm('Mark this as a statement instead of an itemized invoice? You\'ll be able to add the invoice numbers/dates/amounts it references by hand.')) return;
+  const keepVendorName = (_scanState.parsed && _scanState.parsed.vendorName) || '';
+  _scanState.parsed = { documentType:'statement', vendorName: keepVendorName, statementInvoices: [] };
+  if(_scanState.pendingId){
+    try{ await db.collection('pendingInvoiceScans').doc(_scanState.pendingId).set({ documentType:'statement', parsed: _scanState.parsed }, {merge:true}); }catch(e){}
+  }
+  renderScanReview();
+}
+window.scanMarkAsStatement = scanMarkAsStatement;
 
 function renderScanReview(){
   const el=document.getElementById('scanBody'); if(!el) return;
@@ -2002,6 +2096,8 @@ function renderScanReview(){
        <div style="font-size:12.5px;color:var(--text3)"><b>Price per unit</b> is what one sold-by unit costs — that's what gets saved. <b>Cost each</b> and <b>Total</b> are calculated for you. <b>Qty ordered</b> is shown for reference only; it isn't saved on the product, since it changes invoice to invoice. Existing items get a <b>new price quote</b> (keeps history); new items are added.</div>
        <div>
          <button class="btn ghost" onclick="scanCancel()">Discard & start over</button>
+         <button class="btn ghost" onclick="scanMarkAsStatement()" title="Use this if the auto-detection missed a statement">Not itemized — it's a statement</button>
+         ${_scanState.pendingId?`<button class="btn ghost" onclick="scanSendToReview()">Send to Review</button>`:''}
          <button class="btn" onclick="scanSaveAll()"><i class="ti ti-device-floppy"></i> Save all</button>
        </div>
      </div>`;
@@ -2852,7 +2948,37 @@ function closeModal(){ document.getElementById('modalBg').classList.remove('show
 function openModal(html){ document.getElementById('modal').innerHTML=html; document.getElementById('modalBg').classList.add('show'); }
 function val(id){ const e=document.getElementById(id); return e?e.value.trim():''; }
 
-const CATEGORIES=['','Meat','Fish','Dairy','Bakery','Frozen','Produce','Dry Goods','Beverages','Cleaning Supplies','Paper Products','Smallwares','Linen','Other'];
+const CATEGORIES=['','Meat','Fish','Dairy','Bakery','Frozen','Produce','Grocery','Dry Goods','Beverages','Cleaning Supplies','Paper Products','Smallwares','Linen','Other'];
+// Categories added on the fly via "+ Add new category…" — stored in Firestore
+// (settings/app.customCategories) so they persist and show up for everyone,
+// not just the browser that added them.
+let customCategories = [];
+function allCategories(){ return CATEGORIES.concat(customCategories.filter(c=>c && !CATEGORIES.includes(c))); }
+async function addCustomCategoryIfWanted(name){
+  name = String(name||'').trim();
+  if(!name || CATEGORIES.includes(name) || customCategories.includes(name)) return;
+  if(!confirm('Add "'+name+'" as a permanent category, so it shows up in this list from now on?')) return;
+  try{
+    await db.collection('settings').doc('app').set({ customCategories: firebase.firestore.FieldValue.arrayUnion(name) }, {merge:true});
+  }catch(e){ console.error('Could not save custom category: '+e.message); }
+}
+window.addCustomCategoryIfWanted = addCustomCategoryIfWanted;
+// Shared by every category <select> (scan review grid + item edit modal).
+// Picking "+ Add new category…" prompts for a name, injects it as a real
+// option so this row/field can actually use it, and separately asks whether
+// to save it permanently to the shared list.
+function handleCategorySelectChange(sel){
+  if(sel.value !== '__new') return;
+  const name = (prompt('New category name:')||'').trim();
+  if(!name){ sel.value=''; return; }
+  const newOpt = document.createElement('option');
+  newOpt.value = name; newOpt.textContent = name; newOpt.selected = true;
+  const placeholder = Array.from(sel.options).find(o=>o.value==='__new');
+  if(placeholder) sel.insertBefore(newOpt, placeholder); else sel.appendChild(newOpt);
+  sel.value = name;
+  addCustomCategoryIfWanted(name);
+}
+window.handleCategorySelectChange = handleCategorySelectChange;
 
 // Vendor item
 // ════════ BULK ADD ITEMS ════════
@@ -2875,7 +3001,8 @@ const BULK_COLS = [
 function bulkCellHtml(col, value){
   const v = (value==null?'':String(value)).replace(/"/g,'&quot;');
   if(col.kind === 'category'){
-    return '<select data-k="'+col.key+'">'+CATEGORIES.map(c=>`<option value="${c}" ${normName(v)===normName(c)?'selected':''}>${c||'—'}</option>`).join('')+'</select>';
+    const opts = allCategories().map(c=>`<option value="${c}" ${normName(v)===normName(c)?'selected':''}>${c||'—'}</option>`).join('');
+    return '<select data-k="'+col.key+'" onchange="handleCategorySelectChange(this)">'+opts+'<option value="__new">+ Add new category…</option></select>';
   }
   if(col.kind === 'unit'){
     return '<input data-k="'+col.key+'" list="unitList" value="'+v+'" autocomplete="off">';
@@ -3081,14 +3208,14 @@ function openItem(id){
   if(!vendors.length){ alert('Add at least one vendor first (Vendors tab).'); return; }
   const x = id?items.find(q=>q.id===id):{date:'', soldBy:''};
   const vOpts=vendors.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(v=>`<option value="${v.id}" ${x.vendorId===v.id?'selected':''}>${esc(v.name)}</option>`).join('');
-  const catOpts=CATEGORIES.map(c=>`<option value="${c}" ${x.category===c?'selected':''}>${c||'—'}</option>`).join('');
+  const catOpts=allCategories().map(c=>`<option value="${c}" ${x.category===c?'selected':''}>${c||'—'}</option>`).join('')+'<option value="__new">+ Add new category…</option>';
   openModal(`<div class="modal-head"><div class="h">${id?'Edit item':'Add item'}</div><button class="icon-btn" onclick="closeModal()"><i class="ti ti-x"></i></button></div>
   <div class="modal-body">
     <div class="sec-label first">What it is</div>
     <div class="fld"><label>Our product name *</label><input id="i_ourname" list="ourNameList" value="${esc(x.ourName||'')}" placeholder="e.g. Mini Fancy Pastry" autocomplete="off"><div class="hint">Use the same name across vendors — that’s how they get compared. Start typing to reuse an existing one.</div></div>
     <div class="fld-row">
       <div class="fld"><label>What we use it for</label><input id="i_usefor" value="${esc(x.useFor||'')}" placeholder="e.g. dessert table"></div>
-      <div class="fld"><label>Type</label><select id="i_cat">${catOpts}</select></div>
+      <div class="fld"><label>Type</label><select id="i_cat" onchange="handleCategorySelectChange(this)">${catOpts}</select></div>
     </div>
     <div class="sec-label">Vendor</div>
     <div class="fld"><label>Vendor *</label><select id="i_vendor">${vOpts}</select></div>
