@@ -1964,6 +1964,11 @@ function renderScanReview(){
 
   const linesHtml = lines.length ? `<div class="bulk-grid-wrap"><table class="bulk-grid"><thead><tr>${ths}</tr></thead><tbody id="scanBody2">${
     lines.map((L,i)=>{
+      // If this line matches a product you already have from this vendor,
+      // use ITS saved category instead of letting Claude re-guess — so you
+      // only ever have to set the category once per product per vendor.
+      const vendorIdForMatch = (_scanState.vendorPick && _scanState.vendorPick !== '__new') ? _scanState.vendorPick : '';
+      const existingMatch = vendorIdForMatch ? items.find(x => x.vendorId===vendorIdForMatch && normName(x.ourName)===normName(L.ourName||'')) : null;
       // Resolve a clean price-per-unit. If Claude gave only a line total + qty, derive it.
       let perUnit = parseFloat(L.price);
       const qty = parseFloat(L.qty || L.quantity || 0);
@@ -1983,6 +1988,7 @@ function renderScanReview(){
         if(c.key === 'price') v = (isFinite(perUnit) && perUnit>0) ? perUnit : '';
         else if(c.key === 'qty') v = (isFinite(qty) && qty>0) ? qty : '';
         else if(c.key === 'soldBy') v = sb;
+        else if(c.key === 'category') v = (existingMatch && existingMatch.category) ? existingMatch.category : (L.category || '');
         else v = L[c.key] || '';
         return `<td class="${c.cls}">${bulkCellHtml(c, v)}</td>`;
       }).join('');
