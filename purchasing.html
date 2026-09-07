@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -456,6 +457,7 @@ const firebaseConfig = {
 };
 if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const storage = firebase.storage();
 
 // ── SHARED SETTINGS (Firestore-backed, device-independent) ──
 // Mirrors the main app: relay URLs live at settings/app in Firestore so every
@@ -565,8 +567,16 @@ let vendors=[], items=[], priceHistory=[];
 // Job Costs tab. Purchasing never writes to this collection.
 // eventPurchases: {eventId, eventLabel, vendorId, vendorName, invoiceDate,
 //   invoiceNumber, lines:[{ourName,category,vendorItemName,vendorCode,soldBy,
-//   packSize,price,qty,lineTotal}], totalAmount, createdAt, createdBy, source}
-let jobEvents=[], eventPurchases=[];
+//   packSize,price,qty,lineTotal}], totalAmount, createdAt, createdBy, source,
+//   fileUrlOriginal, fileNameOriginal, fileUrlRevised, fileNameRevised}
+// pendingInvoiceScans: candidates found by the Apps Script time-trigger watching
+// orders@. Written server-side (no browser needs to be open). Each one is an
+// unreviewed invoice email — Claude has already parsed it, but nothing is saved
+// to eventPurchases until a person opens it here and confirms.
+//   {messageId, threadId, from, subject, receivedAt, fileUrl, fileName, mimeType,
+//    parsed:{vendorName,invoiceDate,invoiceNumber,lines:[...]}, vendorGuessId,
+//    isRevision, revisionTargetId, status:'pending'|'saved'|'dismissed'}
+let jobEvents=[], eventPurchases=[], pendingInvoiceScans=[];
 let _started=false;
 function startData(){
   if(_started) return; _started=true;
@@ -575,6 +585,7 @@ function startData(){
   db.collection('priceHistory').onSnapshot(s=>{ priceHistory=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
   db.collection('events').onSnapshot(s=>{ jobEvents=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }, err=>{ console.warn('events listener (read-only) error:', err); });
   db.collection('eventPurchases').onSnapshot(s=>{ eventPurchases=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
+  db.collection('pendingInvoiceScans').where('status','==','pending').onSnapshot(s=>{ pendingInvoiceScans=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.receivedAt||0)-(a.receivedAt||0)); renderScan(); }, err=>{ console.warn('pendingInvoiceScans listener error:', err); });
   startOrdersCollection();
   startRepliesData();
   startRepliesPolling();
@@ -630,11 +641,16 @@ let _jcVendorPick = '';
 
 function _jcInvoiceCard(p){
   const lines = p.lines||[];
+  const fileLinks = [
+    p.fileUrlOriginal ? `<a href="${esc(p.fileUrlOriginal)}" target="_blank" rel="noopener" class="btn ghost sm" style="text-decoration:none"><i class="ti ti-file-text"></i> Original</a>` : '',
+    p.fileUrlRevised ? `<a href="${esc(p.fileUrlRevised)}" target="_blank" rel="noopener" class="btn ghost sm" style="text-decoration:none"><i class="ti ti-replace"></i> Revised</a>` : ''
+  ].filter(Boolean).join(' ');
   return `<div class="card" style="margin-bottom:10px"><table><thead><tr>
     <th>${esc(p.vendorName||'(unknown vendor)')}${p.invoiceNumber?' — #'+esc(p.invoiceNumber):''}</th>
     <th class="muted">${p.invoiceDate?fmtDate(p.invoiceDate):''}${p.eventLabel?' · '+esc(p.eventLabel):''}</th>
     <th class="num">${fmtMoney(p.totalAmount)}</th>
   </tr></thead></table>
+  ${fileLinks?`<div style="display:flex;gap:6px;padding:4px 8px">${fileLinks}</div>`:''}
   <table style="margin-top:2px"><tbody>${
     lines.map(l=>`<tr><td>${esc(l.ourName)}</td><td class="muted">${l.qty?l.qty+' '+esc(l.soldBy):''}</td><td class="num">${fmtMoney(l.price)}/${esc(l.soldBy||'unit')}</td><td class="num">${fmtMoney(l.lineTotal)}</td></tr>`).join('')
   }</tbody></table></div>`;
@@ -1427,7 +1443,7 @@ window.manuallyMatchReply = manuallyMatchReply;
 
 // ════════ SCAN INVOICE ════════
 // Workflow states: 'idle' (drop zone), 'scanning' (spinner), 'review' (grid + save).
-let _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', jobEventId:'', error:'' };
+let _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', jobEventId:'', error:'', pendingId:null, fileUrl:'', fileName:'', isRevision:false, revisionTargetId:'' };
 
 function renderScan(){
   const el=document.getElementById('scanBody'); if(!el) return;
@@ -1442,7 +1458,18 @@ function renderScan(){
   const filesHtml = _scanState.files.length ? '<div class="scan-files">'+_scanState.files.map((f,i)=>`<div class="scan-file"><i class="ti ti-file" style="color:var(--text3)"></i><span class="name">${esc(f.name)}</span><span class="size">${_fmtSize(f.size)}</span><button onclick="scanRemoveFile(${i})" title="Remove"><i class="ti ti-x"></i></button></div>`).join('')+'</div>' : '';
   const errHtml = _scanState.error ? '<div class="scan-err">'+esc(_scanState.error)+'</div>' : '';
   const canGo = _scanState.files.length && getEventsRelayUrl();
-  el.innerHTML = `<div class="scan-step">
+  const pendingHtml = pendingInvoiceScans.length ? `<div class="scan-step" style="border:1px solid var(--maroon-tint,#F3E4E2);background:#FFFCF8">
+    <h3><i class="ti ti-mail" style="font-size:15px;vertical-align:-2px"></i> Pending from orders@ (${pendingInvoiceScans.length})</h3>
+    <div class="desc">Found automatically by watching orders@. Claude already read these — open one to review and save, same as a manual scan.</div>
+    <div class="scan-files">${pendingInvoiceScans.map(p=>`
+      <div class="scan-file" style="cursor:pointer" onclick="openPendingInvoiceScan('${p.id}')">
+        <i class="ti ${p.isRevision?'ti-replace':'ti-file-invoice'}" style="color:${p.isRevision?'var(--amber-text,#a06a00)':'var(--text3)'}"></i>
+        <span class="name">${esc(p.parsed&&p.parsed.vendorName||p.from||'(unknown vendor)')}${p.parsed&&p.parsed.invoiceNumber?' — #'+esc(p.parsed.invoiceNumber):''}${p.isRevision?' <b>· revision</b>':''}</span>
+        <span class="size">${p.receivedAt?new Date(p.receivedAt).toLocaleDateString():''}</span>
+        <button onclick="event.stopPropagation();dismissPendingInvoiceScan('${p.id}')" title="Dismiss — not an invoice"><i class="ti ti-x"></i></button>
+      </div>`).join('')}</div>
+  </div>` : '';
+  el.innerHTML = `${pendingHtml}<div class="scan-step">
     <h3>1. Upload a vendor invoice or price sheet</h3>
     <div class="desc">PDFs, photos (JPG/PNG), or screenshots. You can drop several files at once — they'll be combined into one review.</div>
     <div class="scan-drop" id="scanDrop" onclick="document.getElementById('scanFileInput').click()">
@@ -1490,6 +1517,35 @@ function scanHandleFiles(fileList){
 async function _fileToBase64(f){
   return await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(',')[1]||''); fr.onerror=rej; fr.readAsDataURL(f); });
 }
+
+// ── Pending invoice scans (auto-detected from orders@ by the Apps Script trigger) ──
+// Claude has already parsed these server-side. Opening one skips straight to the
+// same review screen a manual scan lands on — nothing saves until confirmed here.
+function openPendingInvoiceScan(id){
+  const p = pendingInvoiceScans.find(x=>x.id===id);
+  if(!p){ alert('That item is no longer pending.'); return; }
+  _scanState.parsed = p.parsed || {};
+  _scanState.vendorPick = p.vendorGuessId || '';
+  if(!_scanState.vendorPick && p.parsed && p.parsed.vendorName){
+    const guess = vendors.find(v=>normName(v.name)===normName(p.parsed.vendorName));
+    if(guess) _scanState.vendorPick = guess.id;
+  }
+  _scanState.pendingId = p.id;
+  _scanState.fileUrl = p.fileUrl || '';
+  _scanState.fileName = p.fileName || '';
+  _scanState.isRevision = !!p.isRevision;
+  _scanState.revisionTargetId = p.revisionTargetId || '';
+  _scanState.jobEventId = '';
+  _scanState.mode = 'review';
+  renderScan();
+}
+async function dismissPendingInvoiceScan(id){
+  if(!confirm('Dismiss this — not an invoice? It won\'t be shown again.')) return;
+  try{ await db.collection('pendingInvoiceScans').doc(id).set({status:'dismissed'}, {merge:true}); }
+  catch(e){ alert('Could not dismiss: '+e.message); }
+}
+window.openPendingInvoiceScan = openPendingInvoiceScan;
+window.dismissPendingInvoiceScan = dismissPendingInvoiceScan;
 
 async function scanRunAI(){
   const relay = getEventsRelayUrl();
@@ -1540,8 +1596,16 @@ function renderScanReview(){
   const productOpts = productList.map(g=>`<option value="${esc(g.key)}">${esc(g.name)}</option>`).join('');
 
   // Header summary
+  const revTarget = _scanState.isRevision ? eventPurchases.find(x=>x.id===_scanState.revisionTargetId) : null;
+  const revisionBanner = revTarget ? `<div class="scan-err" style="background:#FFF6E5;border-color:#E8C777;color:#8a6300">
+      <i class="ti ti-replace"></i> This looks like a <b>revised version</b> of an invoice already saved — ${esc(revTarget.vendorName||'')}${revTarget.invoiceNumber?' #'+esc(revTarget.invoiceNumber):''}${revTarget.invoiceDate?', '+esc(fmtDate(revTarget.invoiceDate)):''}, previously totaling ${fmtMoney(revTarget.totalAmount)}.
+      Saving will <b>replace</b> that invoice's line items and total with what's below. The original file stays on file as "original"; this one is saved as "revised".
+    </div>` : '';
+  const pendingSourceNote = _scanState.pendingId ? `<div class="scan-meta" style="margin-bottom:8px"><span><i class="ti ti-mail"></i> Found automatically from orders@</span></div>` : '';
   const head = `<div class="scan-step">
     <h3>Review what Claude found</h3>
+    ${pendingSourceNote}
+    ${revisionBanner}
     <div class="scan-meta">
       ${p.vendorName?`<span>Vendor on invoice: <b>${esc(p.vendorName)}</b></span>`:''}
       ${p.invoiceDate?`<span>Date: <b>${esc(p.invoiceDate)}</b></span>`:''}
@@ -1634,7 +1698,7 @@ window.scanRecalcAll=scanRecalcAll;
 
 function scanCancel(){
   if(!confirm('Discard this scan and start over?')) return;
-  _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', jobEventId:'', error:'' };
+  _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', jobEventId:'', error:'', pendingId:null, fileUrl:'', fileName:'', isRevision:false, revisionTargetId:'' };
   renderScan();
 }
 
@@ -1666,22 +1730,49 @@ async function scanSaveAll(){
   const invoiceDate = (_scanState.parsed && _scanState.parsed.invoiceDate) || '';
   const invoiceNumber = (_scanState.parsed && _scanState.parsed.invoiceNumber) || '';
 
-  // Duplicate check — same vendor + matching invoice number, OR same vendor +
-  // same date + same total (covers invoices where the number wasn't readable).
-  // Blocks by default; only proceeds if the user explicitly confirms.
+  // Revision/duplicate check — same vendor + matching invoice number, OR same
+  // vendor + same date + same total (covers invoices where the number wasn't
+  // readable). A match here means this is either the exact same invoice again,
+  // or a revised version of it — either way it replaces the saved record
+  // in place rather than creating a second entry. Always confirmed first.
   const prelimTotal = rows.reduce((s,r)=>{ const price=parseFloat(r.price)||0, qty=parseFloat(r.qty)||0; return s+(qty>0?price*qty:price); },0);
-  const dupMatch = eventPurchases.find(p=>{
+  let dupMatch = eventPurchases.find(p=>{
     if(p.vendorId!==vendorId) return false;
     if(invoiceNumber && p.invoiceNumber && normName(invoiceNumber)===normName(p.invoiceNumber)) return true;
     if(invoiceDate && p.invoiceDate===invoiceDate && Math.abs((p.totalAmount||0)-prelimTotal)<0.02) return true;
     return false;
   });
+  // If this came from a pending email scan that Apps Script already flagged as
+  // a revision, trust that unless a fresher match was just found above.
+  if(!dupMatch && _scanState.isRevision && _scanState.revisionTargetId){
+    dupMatch = eventPurchases.find(p=>p.id===_scanState.revisionTargetId) || null;
+  }
   if(dupMatch){
-    const msg = 'This looks like a duplicate of an invoice already saved from '+resolvedVendorName+
+    const sameTotal = Math.abs((dupMatch.totalAmount||0)-prelimTotal)<0.02;
+    const msg = (sameTotal ? 'This looks like the exact same invoice already saved from ' : 'This looks like a revised version of an invoice already saved from ')+resolvedVendorName+
       (dupMatch.invoiceDate?' on '+fmtDate(dupMatch.invoiceDate):'')+
       (dupMatch.invoiceNumber?' (#'+dupMatch.invoiceNumber+')':'')+
-      ' totaling '+fmtMoney(dupMatch.totalAmount)+'.\n\nSaving it again will double-count it in your price catalog and invoice history.\n\nSave anyway?';
+      ' totaling '+fmtMoney(dupMatch.totalAmount)+'.\n\n'+
+      (sameTotal ? 'Saving will replace it with this version (no change expected).' : 'Saving will REPLACE that invoice\'s line items and total with this version. The original file stays on file as "original"; this one is kept as "revised".')+
+      '\n\nContinue?';
     if(!confirm(msg)) return;
+  }
+
+  // Uploads the original scanned file(s) to Storage under this invoice's own
+  // folder, tagged 'original' or 'revised'. Manual/camera scans upload the raw
+  // File objects; scans opened from a pending email already have a fileUrl —
+  // that one's just copied over rather than re-uploaded.
+  async function _uploadInvoiceFile(eventPurchaseId, slot){
+    if(_scanState.fileUrl){ return { url:_scanState.fileUrl, name:_scanState.fileName||'invoice' }; }
+    if(!_scanState.files.length) return null;
+    const f = _scanState.files[0]; // if multiple files were combined, the first is kept as the record copy
+    const ext = (f.name.split('.').pop()||'pdf');
+    const path = 'invoices/'+eventPurchaseId+'/'+slot+'_'+Date.now()+'.'+ext;
+    try{
+      const snap = await storage.ref(path).put(f);
+      const url = await snap.ref.getDownloadURL();
+      return { url, name:f.name };
+    }catch(e){ console.error('Invoice file upload failed:', e); return null; }
   }
 
   let newItems=0, repriced=0;
@@ -1733,6 +1824,7 @@ async function scanSaveAll(){
         newItems++;
       }
     }
+    let savedPurchaseId = '';
     {
       const ev = _scanState.jobEventId ? jobEventById(_scanState.jobEventId) : null;
       const purchaseLines = rows.map(r=>{
@@ -1744,17 +1836,35 @@ async function scanSaveAll(){
         };
       });
       const purchaseTotal = purchaseLines.reduce((s,l)=>s+(l.lineTotal||0),0);
-      await db.collection('eventPurchases').add({
+      const fields = {
         eventId: _scanState.jobEventId || '',
         eventLabel: ev ? jobEventLabel(ev) : '',
         vendorId, vendorName: resolvedVendorName,
         invoiceDate, invoiceNumber,
         lines: purchaseLines, totalAmount: purchaseTotal,
-        createdAt: stamp, createdBy: userLabel(), source: 'scan'
-      });
+        updatedAt: stamp, updatedBy: userLabel(), source: 'scan'
+      };
+      if(dupMatch){
+        // Replace in place — keep the same record (and its original file),
+        // overwrite the line items/total/date with this version, and attach
+        // this file as the "revised" copy.
+        savedPurchaseId = dupMatch.id;
+        const rev = await _uploadInvoiceFile(dupMatch.id, 'revised');
+        if(rev){ fields.fileUrlRevised = rev.url; fields.fileNameRevised = rev.name; }
+        await db.collection('eventPurchases').doc(dupMatch.id).set(fields, {merge:true});
+      } else {
+        fields.createdAt = stamp; fields.createdBy = userLabel();
+        const ref = await db.collection('eventPurchases').add(fields);
+        savedPurchaseId = ref.id;
+        const orig = await _uploadInvoiceFile(ref.id, 'original');
+        if(orig){ await ref.set({fileUrlOriginal:orig.url, fileNameOriginal:orig.name}, {merge:true}); }
+      }
     }
-    toast('Saved ✓ — '+newItems+' new, '+repriced+' repriced'+(_scanState.jobEventId?' — logged to event':''));
-    _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', jobEventId:'', error:'' };
+    if(_scanState.pendingId){
+      try{ await db.collection('pendingInvoiceScans').doc(_scanState.pendingId).set({status:'saved', savedPurchaseId}, {merge:true}); }catch(e){}
+    }
+    toast('Saved ✓ — '+newItems+' new, '+repriced+' repriced'+(_scanState.jobEventId?' — logged to event':'')+(dupMatch?' — replaced existing invoice':''));
+    _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', jobEventId:'', error:'', pendingId:null, fileUrl:'', fileName:'', isRevision:false, revisionTargetId:'' };
     renderScan();
   }catch(e){ alert('Could not save: '+e.message); }
 }
