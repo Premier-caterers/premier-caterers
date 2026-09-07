@@ -1445,6 +1445,207 @@ window.manuallyMatchReply = manuallyMatchReply;
 // Workflow states: 'idle' (drop zone), 'scanning' (spinner), 'review' (grid + save).
 let _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', jobEventId:'', error:'', pendingId:null, fileUrl:'', fileName:'', isRevision:false, revisionTargetId:'' };
 
+// ── Bulk review for the "Pending from orders@" queue ──
+// Lets you handle many auto-caught invoices at once instead of opening each
+// one individually. Bulk save skips per-row editing and saves Claude's read
+// as-is — good for clearing out things that look right at a glance, not a
+// substitute for looking closely at anything you're unsure of.
+let _pendingBulkMode = false;
+let _pendingSelected = {};
+
+function pendingLines(p){ return (p.parsed && p.parsed.lines) || []; }
+function pendingTotal(p){
+  return pendingLines(p).reduce((s,l)=>{ const price=parseFloat(l.price)||0, qty=parseFloat(l.qty)||0; return s+(qty>0?price*qty:price); },0);
+}
+function pendingDupKey(p){
+  const vendorPart = p.vendorGuessId || normName((p.parsed&&p.parsed.vendorName)||p.from||'');
+  const invPart = normName((p.parsed&&p.parsed.invoiceNumber)||'');
+  return invPart ? (vendorPart+'::'+invPart) : '';
+}
+function togglePendingBulkMode(){ _pendingBulkMode=!_pendingBulkMode; _pendingSelected={}; renderScan(); }
+function togglePendingSelect(id){ if(_pendingSelected[id]) delete _pendingSelected[id]; else _pendingSelected[id]=true; renderScan(); }
+function selectAllPending(){ pendingInvoiceScans.forEach(p=>_pendingSelected[p.id]=true); renderScan(); }
+function clearPendingSelection(){ _pendingSelected={}; renderScan(); }
+// Groups pending items by vendor + invoice number and selects every copy
+// EXCEPT the most recently received one — so "Dismiss selected" keeps
+// whichever the vendor sent last and clears out the older copies.
+function selectPendingDuplicates(){
+  const groups = {};
+  pendingInvoiceScans.forEach(p=>{
+    const k = pendingDupKey(p); if(!k) return;
+    (groups[k]=groups[k]||[]).push(p);
+  });
+  _pendingSelected = {};
+  Object.values(groups).forEach(list=>{
+    if(list.length<2) return;
+    list.sort((a,b)=>(b.receivedAt||0)-(a.receivedAt||0)); // newest first
+    list.slice(1).forEach(p=>_pendingSelected[p.id]=true); // keep [0] (newest), select the rest
+  });
+  renderScan();
+}
+async function bulkDismissSelectedPending(){
+  const ids = Object.keys(_pendingSelected); if(!ids.length){ alert('Nothing selected.'); return; }
+  if(!confirm('Dismiss '+ids.length+' selected item'+(ids.length===1?'':'s')+' — not invoices? They won\'t be shown again.')) return;
+  const batch = db.batch();
+  ids.forEach(id=>batch.set(db.collection('pendingInvoiceScans').doc(id), {status:'dismissed'}, {merge:true}));
+  try{ await batch.commit(); _pendingSelected={}; toast('Dismissed '+ids.length); }
+  catch(e){ alert('Could not dismiss: '+e.message); }
+}
+async function bulkSaveSelectedPending(){
+  const ids = Object.keys(_pendingSelected); if(!ids.length){ alert('Nothing selected.'); return; }
+  if(!confirm('Save '+ids.length+' selected invoice'+(ids.length===1?'':'s')+' as-is (no per-line editing)? This updates your price catalog and invoice log for each one.')) return;
+  let ok=0, fail=0;
+  for(const id of ids){
+    const p = pendingInvoiceScans.find(x=>x.id===id); if(!p) continue;
+    try{ await saveOnePendingScan(p); ok++; }
+    catch(e){ fail++; console.error('Bulk save failed for pending '+id+': '+e.message); }
+  }
+  _pendingSelected={};
+  toast('Saved '+ok+(fail?', '+fail+' failed (check console)':''));
+  renderScan();
+}
+// Saves one pending scan's Claude-read data directly (no DOM/editing step) —
+// shares the same catalog-update, duplicate-detection, and revision-replace
+// logic as the manual review screen's scanSaveAll, just sourced from the
+// pending doc instead of the on-screen grid.
+async function saveOnePendingScan(p){
+  let vendorId = p.vendorGuessId || '';
+  if(!vendorId && p.parsed && p.parsed.vendorName){
+    const guess = vendors.find(v=>normName(v.name)===normName(p.parsed.vendorName));
+    if(guess) vendorId = guess.id;
+  }
+  if(!vendorId){
+    const nm = (p.parsed && p.parsed.vendorName) || p.from || '(unknown vendor)';
+    const ref = await db.collection('vendors').add({ name:nm, updatedAt:Date.now(), createdAt:Date.now() });
+    vendorId = ref.id;
+  }
+  const resolvedVendorName = vendorName(vendorId) !== '(unknown vendor)' ? vendorName(vendorId) : ((p.parsed && p.parsed.vendorName) || '');
+  const rows = pendingLines(p).filter(r=>r.ourName && r.soldBy && parseFloat(r.packSize)>0 && parseFloat(r.price)>0);
+  if(!rows.length) throw new Error('No valid line items.');
+
+  const stamp = Date.now();
+  const invoiceDate = (p.parsed && p.parsed.invoiceDate) || '';
+  const invoiceNumber = (p.parsed && p.parsed.invoiceNumber) || '';
+  const prelimTotal = rows.reduce((s,r)=>{ const price=parseFloat(r.price)||0, qty=parseFloat(r.qty)||0; return s+(qty>0?price*qty:price); },0);
+
+  let dupMatch = eventPurchases.find(ep=>{
+    if(ep.vendorId!==vendorId) return false;
+    if(invoiceNumber && ep.invoiceNumber && normName(invoiceNumber)===normName(ep.invoiceNumber)) return true;
+    if(invoiceDate && ep.invoiceDate===invoiceDate && Math.abs((ep.totalAmount||0)-prelimTotal)<0.02) return true;
+    return false;
+  });
+  if(!dupMatch && p.isRevision && p.revisionTargetId){
+    dupMatch = eventPurchases.find(ep=>ep.id===p.revisionTargetId) || null;
+  }
+
+  let newItems=0, repriced=0;
+  for(const r of rows){
+    const existing = items.find(x => x.vendorId===vendorId && normName(x.ourName)===normName(r.ourName));
+    if(existing){
+      const histDoc={
+        itemId: existing.id, ourName: existing.ourName||'', vendorId: existing.vendorId||'',
+        price: existing.price||0, packSize: existing.packSize||0, unit: existing.unit||'',
+        packDesc: existing.packDesc||'', vendorItemName: existing.vendorItemName||'', vendorCode: existing.vendorCode||'',
+        date: existing.date||'', notes: existing.notes||'',
+        archivedAt: stamp, archivedBy: userLabel(), ts: existing.updatedAt||existing.createdAt||stamp,
+        source: 'scan'
+      };
+      await db.collection('priceHistory').add(histDoc);
+      await db.collection('vendorItems').doc(existing.id).set({
+        price: parseFloat(r.price), packSize: parseFloat(r.packSize),
+        soldBy: r.soldBy || existing.soldBy || existing.unit || '',
+        unit: r.soldBy || existing.unit || '',
+        category: r.category || existing.category || '',
+        packDesc: (parseFloat(r.packSize)>1?(r.soldBy+' of '+r.packSize):r.soldBy) || existing.packDesc || '',
+        vendorItemName: r.vendorItemName || existing.vendorItemName || '',
+        vendorCode: r.vendorCode || existing.vendorCode || '',
+        date: invoiceDate || existing.date || '',
+        notes: r.notes || existing.notes || '',
+        updatedAt: stamp, updatedBy: userLabel()
+      }, {merge:true});
+      repriced++;
+    } else {
+      await db.collection('vendorItems').add({
+        vendorId, ourName: r.ourName, category: r.category||'',
+        soldBy: r.soldBy, unit: r.soldBy,
+        vendorItemName: r.vendorItemName||'', vendorCode: r.vendorCode||'',
+        packDesc: (parseFloat(r.packSize)>1?(r.soldBy+' of '+r.packSize):r.soldBy),
+        packSize: parseFloat(r.packSize), price: parseFloat(r.price),
+        date: invoiceDate || '', notes: r.notes||'',
+        createdAt: stamp, updatedAt: stamp, source: 'scan'
+      });
+      newItems++;
+    }
+  }
+
+  const purchaseLines = rows.map(r=>{
+    const price=parseFloat(r.price)||0, qty=parseFloat(r.qty)||0;
+    return { ourName:r.ourName||'', category:r.category||'', vendorItemName:r.vendorItemName||'',
+      vendorCode:r.vendorCode||'', soldBy:r.soldBy||'', packSize:parseFloat(r.packSize)||0,
+      price, qty, lineTotal: qty>0 ? price*qty : price };
+  });
+  const purchaseTotal = purchaseLines.reduce((s,l)=>s+(l.lineTotal||0),0);
+  const fields = {
+    eventId: '', eventLabel: '',
+    vendorId, vendorName: resolvedVendorName,
+    invoiceDate, invoiceNumber,
+    lines: purchaseLines, totalAmount: purchaseTotal,
+    updatedAt: stamp, updatedBy: userLabel(), source: 'scan'
+  };
+  let savedPurchaseId = '';
+  if(dupMatch){
+    savedPurchaseId = dupMatch.id;
+    if(p.fileUrl){ fields.fileUrlRevised = p.fileUrl; fields.fileNameRevised = p.fileName||'invoice'; }
+    await db.collection('eventPurchases').doc(dupMatch.id).set(fields, {merge:true});
+  } else {
+    fields.createdAt = stamp; fields.createdBy = userLabel();
+    const ref = await db.collection('eventPurchases').add(fields);
+    savedPurchaseId = ref.id;
+    if(p.fileUrl){ await ref.set({fileUrlOriginal:p.fileUrl, fileNameOriginal:p.fileName||'invoice'}, {merge:true}); }
+  }
+  await db.collection('pendingInvoiceScans').doc(p.id).set({status:'saved', savedPurchaseId}, {merge:true});
+}
+window.togglePendingBulkMode = togglePendingBulkMode;
+window.togglePendingSelect = togglePendingSelect;
+window.selectAllPending = selectAllPending;
+window.clearPendingSelection = clearPendingSelection;
+window.selectPendingDuplicates = selectPendingDuplicates;
+window.bulkDismissSelectedPending = bulkDismissSelectedPending;
+window.bulkSaveSelectedPending = bulkSaveSelectedPending;
+
+function _renderPendingBulkTable(){
+  const selCount = Object.keys(_pendingSelected).length;
+  const dupGroups = {}; pendingInvoiceScans.forEach(p=>{ const k=pendingDupKey(p); if(k) (dupGroups[k]=dupGroups[k]||[]).push(p); });
+  const rows = pendingInvoiceScans.slice().sort((a,b)=>(b.receivedAt||0)-(a.receivedAt||0)).map(p=>{
+    const isDup = pendingDupKey(p) && dupGroups[pendingDupKey(p)].length>1;
+    const checked = !!_pendingSelected[p.id];
+    return `<tr style="${checked?'background:var(--maroon-tint,#F8ECEA)':''}">
+      <td><input type="checkbox" ${checked?'checked':''} onchange="togglePendingSelect('${p.id}')"></td>
+      <td style="cursor:pointer" onclick="openPendingInvoiceScan('${p.id}')"><i class="ti ${p.isRevision?'ti-replace':'ti-file-invoice'}" style="color:${p.isRevision?'var(--amber-text,#a06a00)':'var(--text3)'};margin-right:4px"></i>${esc((p.parsed&&p.parsed.vendorName)||p.from||'(unknown vendor)')}${isDup?' <span style="color:var(--red-text,#B3261E);font-size:11.5px">· possible duplicate</span>':''}${p.isRevision?' <b style="font-size:11.5px">· revision</b>':''}</td>
+      <td class="muted">${p.parsed&&p.parsed.invoiceNumber?'#'+esc(p.parsed.invoiceNumber):'—'}</td>
+      <td class="muted">${p.parsed&&p.parsed.invoiceDate?fmtDate(p.parsed.invoiceDate):(p.receivedAt?new Date(p.receivedAt).toLocaleDateString():'—')}</td>
+      <td class="num">${pendingLines(p).length}</td>
+      <td class="num">${fmtMoney(pendingTotal(p))}</td>
+      <td><button class="btn ghost sm" onclick="openPendingInvoiceScan('${p.id}')">View</button></td>
+    </tr>`;
+  }).join('');
+  return `<div class="scan-step" style="border:1px solid var(--maroon-tint,#F3E4E2);background:#FFFCF8">
+    <h3><i class="ti ti-mail" style="font-size:15px;vertical-align:-2px"></i> Pending from orders@ (${pendingInvoiceScans.length}) <button class="btn ghost sm" style="float:right" onclick="togglePendingBulkMode()">Back to list</button></h3>
+    <div class="desc">Bulk mode saves Claude's read as-is, without the per-line editing screen — good for clearing out ones that look right at a glance. "Select duplicates" keeps the newest copy of each and selects the rest for you to dismiss. Click View on anything you want to check closely first.</div>
+    <div style="margin:10px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="btn ghost sm" onclick="selectAllPending()">Select all</button>
+      <button class="btn ghost sm" onclick="selectPendingDuplicates()">Select duplicates</button>
+      <button class="btn ghost sm" onclick="clearPendingSelection()">Clear selection</button>
+      <span style="flex:1"></span>
+      <span class="muted" style="font-size:12.5px">${selCount} selected</span>
+      <button class="btn ghost sm" onclick="bulkDismissSelectedPending()" ${selCount?'':'disabled'}>Dismiss selected</button>
+      <button class="btn sm" onclick="bulkSaveSelectedPending()" ${selCount?'':'disabled'}>Save selected</button>
+    </div>
+    <div class="card" style="overflow-x:auto"><table><thead><tr>
+      <th></th><th>Vendor</th><th>Invoice #</th><th>Date</th><th class="num">Items</th><th class="num">Total</th><th></th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+  </div>`;
+}
 function renderScan(){
   const el=document.getElementById('scanBody'); if(!el) return;
   if(_scanState.mode === 'scanning'){
@@ -1458,8 +1659,8 @@ function renderScan(){
   const filesHtml = _scanState.files.length ? '<div class="scan-files">'+_scanState.files.map((f,i)=>`<div class="scan-file"><i class="ti ti-file" style="color:var(--text3)"></i><span class="name">${esc(f.name)}</span><span class="size">${_fmtSize(f.size)}</span><button onclick="scanRemoveFile(${i})" title="Remove"><i class="ti ti-x"></i></button></div>`).join('')+'</div>' : '';
   const errHtml = _scanState.error ? '<div class="scan-err">'+esc(_scanState.error)+'</div>' : '';
   const canGo = _scanState.files.length && getEventsRelayUrl();
-  const pendingHtml = pendingInvoiceScans.length ? `<div class="scan-step" style="border:1px solid var(--maroon-tint,#F3E4E2);background:#FFFCF8">
-    <h3><i class="ti ti-mail" style="font-size:15px;vertical-align:-2px"></i> Pending from orders@ (${pendingInvoiceScans.length})</h3>
+  const pendingHtml = pendingInvoiceScans.length ? (_pendingBulkMode ? _renderPendingBulkTable() : `<div class="scan-step" style="border:1px solid var(--maroon-tint,#F3E4E2);background:#FFFCF8">
+    <h3><i class="ti ti-mail" style="font-size:15px;vertical-align:-2px"></i> Pending from orders@ (${pendingInvoiceScans.length}) <button class="btn ghost sm" style="float:right" onclick="togglePendingBulkMode()">Review as table</button></h3>
     <div class="desc">Found automatically by watching orders@. Claude already read these — open one to review and save, same as a manual scan.</div>
     <div class="scan-files">${pendingInvoiceScans.map(p=>`
       <div class="scan-file" style="cursor:pointer" onclick="openPendingInvoiceScan('${p.id}')">
@@ -1468,7 +1669,7 @@ function renderScan(){
         <span class="size">${p.receivedAt?new Date(p.receivedAt).toLocaleDateString():''}</span>
         <button onclick="event.stopPropagation();dismissPendingInvoiceScan('${p.id}')" title="Dismiss — not an invoice"><i class="ti ti-x"></i></button>
       </div>`).join('')}</div>
-  </div>` : '';
+  </div>`) : '';
   el.innerHTML = `${pendingHtml}<div class="scan-step">
     <h3>1. Upload a vendor invoice or price sheet</h3>
     <div class="desc">PDFs, photos (JPG/PNG), or screenshots. You can drop several files at once — they'll be combined into one review.</div>
