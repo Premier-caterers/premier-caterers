@@ -1802,7 +1802,7 @@ function renderScanReview(){
       <i class="ti ti-replace"></i> This looks like a <b>revised version</b> of an invoice already saved — ${esc(revTarget.vendorName||'')}${revTarget.invoiceNumber?' #'+esc(revTarget.invoiceNumber):''}${revTarget.invoiceDate?', '+esc(fmtDate(revTarget.invoiceDate)):''}, previously totaling ${fmtMoney(revTarget.totalAmount)}.
       Saving will <b>replace</b> that invoice's line items and total with what's below. The original file stays on file as "original"; this one is saved as "revised".
     </div>` : '';
-  const pendingSourceNote = _scanState.pendingId ? `<div class="scan-meta" style="margin-bottom:8px"><span><i class="ti ti-mail"></i> Found automatically from orders@</span></div>` : '';
+  const pendingSourceNote = _scanState.pendingId ? `<div class="scan-meta" style="margin-bottom:8px"><span><i class="ti ti-mail"></i> Found automatically from orders@</span>${_scanState.fileUrl?` <a href="${esc(_scanState.fileUrl)}" target="_blank" rel="noopener" class="btn ghost sm" style="text-decoration:none;margin-left:8px"><i class="ti ti-file-text"></i> View original invoice</a>`:''}</div>` : '';
   const head = `<div class="scan-step">
     <h3>Review what Claude found</h3>
     ${pendingSourceNote}
