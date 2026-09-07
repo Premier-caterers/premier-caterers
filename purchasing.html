@@ -1734,6 +1734,7 @@ function renderScan(){
       <div class="scan-file" style="cursor:pointer" onclick="openPendingInvoiceScan('${p.id}')">
         <i class="ti ${p.isRevision?'ti-replace':'ti-file-invoice'}" style="color:${p.isRevision?'var(--amber-text,#a06a00)':'var(--text3)'}"></i>
         <span class="name">${esc(p.parsed&&p.parsed.vendorName||p.from||'(unknown vendor)')}${p.parsed&&p.parsed.invoiceNumber?' — #'+esc(p.parsed.invoiceNumber):''}${p.isRevision?' <b>· revision</b>':''}</span>
+        <span class="size">${p.documentType==='statement'?'':fmtMoney(pendingTotal(p))}</span>
         <span class="size">${p.receivedAt?new Date(p.receivedAt).toLocaleDateString():''}</span>
         <button onclick="event.stopPropagation();markPendingForReview('${p.id}')" title="Move to Review folder"><i class="ti ti-help-circle"></i></button>
         <button onclick="event.stopPropagation();dismissPendingInvoiceScan('${p.id}')" title="Dismiss — not an invoice"><i class="ti ti-x"></i></button>
@@ -1746,6 +1747,7 @@ function renderScan(){
       <div class="scan-file" style="cursor:pointer" onclick="openPendingInvoiceScan('${p.id}')">
         <i class="ti ${p.documentType==='statement'?'ti-file-text':(p.isRevision?'ti-replace':'ti-file-invoice')}" style="color:${p.documentType==='statement'?'var(--purple-text,#5B4B8A)':(p.isRevision?'var(--amber-text,#a06a00)':'var(--text3)')}"></i>
         <span class="name">${esc(p.parsed&&p.parsed.vendorName||p.from||'(unknown vendor)')}${p.parsed&&p.parsed.invoiceNumber?' — #'+esc(p.parsed.invoiceNumber):''}</span>
+        <span class="size">${p.documentType==='statement'?'':fmtMoney(pendingTotal(p))}</span>
         <span class="size">${p.receivedAt?new Date(p.receivedAt).toLocaleDateString():''}</span>
         <button onclick="event.stopPropagation();moveReviewBackToPending('${p.id}')" title="Back to Pending"><i class="ti ti-corner-up-left"></i></button>
         <button onclick="event.stopPropagation();dismissPendingInvoiceScan('${p.id}')" title="Dismiss — not an invoice"><i class="ti ti-x"></i></button>
@@ -1848,6 +1850,17 @@ async function scanSendToReview(){
   renderScan();
 }
 window.scanSendToReview = scanSendToReview;
+// Deletes the item currently open in the review screen — same as dismissing
+// it from the list, just without having to leave this screen to do it.
+async function scanDeleteFromReview(){
+  if(!_scanState.pendingId) return;
+  if(!confirm('Delete this — not needed? It won\'t be shown again.')) return;
+  try{ await db.collection('pendingInvoiceScans').doc(_scanState.pendingId).set({status:'dismissed'}, {merge:true}); }
+  catch(e){ alert('Could not delete: '+e.message); return; }
+  _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', jobEventId:'', error:'', pendingId:null, fileUrl:'', fileName:'', isRevision:false, revisionTargetId:'' };
+  renderScan();
+}
+window.scanDeleteFromReview = scanDeleteFromReview;
 
 async function scanRunAI(){
   const relay = getEventsRelayUrl();
@@ -2022,6 +2035,7 @@ function renderScanReview(){
       ${p.vendorName?`<span>Vendor on invoice: <b>${esc(p.vendorName)}</b></span>`:''}
       ${p.invoiceDate?`<span>Date: <b>${esc(p.invoiceDate)}</b></span>`:''}
       ${p.invoiceNumber?`<span>Invoice #: <b>${esc(p.invoiceNumber)}</b></span>`:''}
+      <span>Total: <b id="scanHeaderTotal">${fmtMoney(pendingTotal({parsed:{lines}}))}</b></span>
       <span>Lines found: <b>${lines.length}</b></span>
     </div>
     <div class="fld">
@@ -2098,6 +2112,7 @@ function renderScanReview(){
          <button class="btn ghost" onclick="scanCancel()">Discard & start over</button>
          <button class="btn ghost" onclick="scanMarkAsStatement()" title="Use this if the auto-detection missed a statement">Not itemized — it's a statement</button>
          ${_scanState.pendingId?`<button class="btn ghost" onclick="scanSendToReview()">Send to Review</button>`:''}
+         ${_scanState.pendingId?`<button class="btn ghost" onclick="scanDeleteFromReview()" title="Remove this from the queue entirely"><i class="ti ti-trash"></i> Delete</button>`:''}
          <button class="btn" onclick="scanSaveAll()"><i class="ti ti-device-floppy"></i> Save all</button>
        </div>
      </div>`;
@@ -2112,8 +2127,20 @@ function scanRecalcRow(tr){
   const ceEl=tr.querySelector('.scan-ce'), totEl=tr.querySelector('.scan-tot');
   if(ceEl) ceEl.textContent=ce!=null?fmtMoney(ce):'—';
   if(totEl) totEl.textContent=tot!=null?fmtMoney(tot):'—';
+  scanRecalcHeaderTotal();
 }
-function scanRecalcAll(){ const b=document.getElementById('scanBody2'); if(b) b.querySelectorAll('tr').forEach(scanRecalcRow); }
+function scanRecalcHeaderTotal(){
+  const body = document.getElementById('scanBody2'); const el = document.getElementById('scanHeaderTotal');
+  if(!body || !el) return;
+  let sum = 0;
+  body.querySelectorAll('tr').forEach(tr=>{
+    const g=k=>{ const i=tr.querySelector('[data-k="'+k+'"]'); return i?parseFloat(i.value):NaN; };
+    const price=g('price'), qty=g('qty');
+    if(isFinite(price)&&price>0) sum += (isFinite(qty)&&qty>0) ? price*qty : price;
+  });
+  el.textContent = fmtMoney(sum);
+}
+function scanRecalcAll(){ const b=document.getElementById('scanBody2'); if(b) b.querySelectorAll('tr').forEach(scanRecalcRow); scanRecalcHeaderTotal(); }
 window.scanRecalcAll=scanRecalcAll;
 
 function scanCancel(){
