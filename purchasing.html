@@ -1509,6 +1509,7 @@ async function bulkSaveSelectedPending(){
 // logic as the manual review screen's scanSaveAll, just sourced from the
 // pending doc instead of the on-screen grid.
 async function saveOnePendingScan(p){
+  if(p.documentType === 'statement') throw new Error('This is a statement, not an itemized invoice — nothing to save. Click View to review it instead.');
   let vendorId = p.vendorGuessId || '';
   if(!vendorId && p.parsed && p.parsed.vendorName){
     const guess = vendors.find(v=>normName(v.name)===normName(p.parsed.vendorName));
@@ -1617,21 +1618,22 @@ function _renderPendingBulkTable(){
   const selCount = Object.keys(_pendingSelected).length;
   const dupGroups = {}; pendingInvoiceScans.forEach(p=>{ const k=pendingDupKey(p); if(k) (dupGroups[k]=dupGroups[k]||[]).push(p); });
   const rows = pendingInvoiceScans.slice().sort((a,b)=>(b.receivedAt||0)-(a.receivedAt||0)).map(p=>{
-    const isDup = pendingDupKey(p) && dupGroups[pendingDupKey(p)].length>1;
+    const isStatement = p.documentType === 'statement';
+    const isDup = !isStatement && pendingDupKey(p) && dupGroups[pendingDupKey(p)].length>1;
     const checked = !!_pendingSelected[p.id];
     return `<tr style="${checked?'background:var(--maroon-tint,#F8ECEA)':''}">
       <td><input type="checkbox" ${checked?'checked':''} onchange="togglePendingSelect('${p.id}')"></td>
-      <td style="cursor:pointer" onclick="openPendingInvoiceScan('${p.id}')"><i class="ti ${p.isRevision?'ti-replace':'ti-file-invoice'}" style="color:${p.isRevision?'var(--amber-text,#a06a00)':'var(--text3)'};margin-right:4px"></i>${esc((p.parsed&&p.parsed.vendorName)||p.from||'(unknown vendor)')}${isDup?' <span style="color:var(--red-text,#B3261E);font-size:11.5px">· possible duplicate</span>':''}${p.isRevision?' <b style="font-size:11.5px">· revision</b>':''}</td>
-      <td class="muted">${p.parsed&&p.parsed.invoiceNumber?'#'+esc(p.parsed.invoiceNumber):'—'}</td>
-      <td class="muted">${p.parsed&&p.parsed.invoiceDate?fmtDate(p.parsed.invoiceDate):(p.receivedAt?new Date(p.receivedAt).toLocaleDateString():'—')}</td>
-      <td class="num">${pendingLines(p).length}</td>
-      <td class="num">${fmtMoney(pendingTotal(p))}</td>
+      <td style="cursor:pointer" onclick="openPendingInvoiceScan('${p.id}')"><i class="ti ${isStatement?'ti-file-text':(p.isRevision?'ti-replace':'ti-file-invoice')}" style="color:${isStatement?'var(--purple-text,#5B4B8A)':(p.isRevision?'var(--amber-text,#a06a00)':'var(--text3)')};margin-right:4px"></i>${esc((p.parsed&&p.parsed.vendorName)||p.from||'(unknown vendor)')}${isStatement?' <span style="color:var(--purple-text,#5B4B8A);font-size:11.5px">· statement, not itemized</span>':''}${isDup?' <span style="color:var(--red-text,#B3261E);font-size:11.5px">· possible duplicate</span>':''}${p.isRevision?' <b style="font-size:11.5px">· revision</b>':''}</td>
+      <td class="muted">${isStatement?(p.parsed&&p.parsed.statementInvoices?p.parsed.statementInvoices.length+' invoices':'—'):(p.parsed&&p.parsed.invoiceNumber?'#'+esc(p.parsed.invoiceNumber):'—')}</td>
+      <td class="muted">${isStatement?(p.parsed&&p.parsed.statementDate?fmtDate(p.parsed.statementDate):'—'):(p.parsed&&p.parsed.invoiceDate?fmtDate(p.parsed.invoiceDate):(p.receivedAt?new Date(p.receivedAt).toLocaleDateString():'—'))}</td>
+      <td class="num">${isStatement?'—':pendingLines(p).length}</td>
+      <td class="num">${isStatement?'—':fmtMoney(pendingTotal(p))}</td>
       <td><button class="btn ghost sm" onclick="openPendingInvoiceScan('${p.id}')">View</button></td>
     </tr>`;
   }).join('');
   return `<div class="scan-step" style="border:1px solid var(--maroon-tint,#F3E4E2);background:#FFFCF8">
     <h3><i class="ti ti-mail" style="font-size:15px;vertical-align:-2px"></i> Pending from orders@ (${pendingInvoiceScans.length}) <button class="btn ghost sm" style="float:right" onclick="togglePendingBulkMode()">Back to list</button></h3>
-    <div class="desc">Bulk mode saves Claude's read as-is, without the per-line editing screen — good for clearing out ones that look right at a glance. "Select duplicates" keeps the newest copy of each and selects the rest for you to dismiss. Click View on anything you want to check closely first.</div>
+    <div class="desc">Bulk mode saves Claude's read as-is, without the per-line editing screen — good for clearing out ones that look right at a glance. Statements are flagged separately since they have nothing to bulk-save — click View to review those. "Select duplicates" keeps the newest copy of each and selects the rest for you to dismiss.</div>
     <div style="margin:10px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <button class="btn ghost sm" onclick="selectAllPending()">Select all</button>
       <button class="btn ghost sm" onclick="selectPendingDuplicates()">Select duplicates</button>
@@ -1787,9 +1789,70 @@ async function scanRunAI(){
   }
 }
 
+// A statement lists several separate invoices (number/date/amount) rather
+// than itemizing products. There's nothing here to save to the price
+// catalog — this view just helps you spot which of the referenced
+// invoices you're missing, then lets you dismiss it.
+function _renderStatementReview(el, p){
+  const vOpts = vendors.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))
+    .map(v=>`<option value="${v.id}" ${_scanState.vendorPick===v.id?'selected':''}>${esc(v.name)}</option>`).join('');
+  const rows = p.statementInvoices || [];
+  const vendorId = _scanState.vendorPick;
+  const withStatus = rows.map(r=>{
+    const have = vendorId ? eventPurchases.find(ep=>ep.vendorId===vendorId && ep.invoiceNumber && normName(ep.invoiceNumber)===normName(r.invoiceNumber||'')) : null;
+    return { ...r, have };
+  });
+  const missingCount = withStatus.filter(r=>!r.have).length;
+  const pendingSourceNote = _scanState.pendingId ? `<div class="scan-meta" style="margin-bottom:8px"><span><i class="ti ti-mail"></i> Found automatically from orders@</span>${_scanState.fileUrl?` <a href="${esc(_scanState.fileUrl)}" target="_blank" rel="noopener" class="btn ghost sm" style="text-decoration:none;margin-left:8px"><i class="ti ti-file-text"></i> View original document</a>`:''}</div>` : '';
+
+  el.innerHTML = `<div class="scan-step">
+    <h3>This is a statement, not an itemized invoice</h3>
+    ${pendingSourceNote}
+    <div class="scan-err" style="background:#F0EDF7;border-color:#C9BCE8;color:#5B4B8A">
+      <i class="ti ti-info-circle"></i> A statement lists several separate invoices rather than individual products, so there's nothing here to add to your price catalog. Use this to check whether you have all ${rows.length} invoice${rows.length===1?'':'s'} it references — anything marked "missing" you'll need the actual invoice for, not this statement.
+    </div>
+    <div class="scan-meta">
+      ${p.vendorName?`<span>Vendor on statement: <b>${esc(p.vendorName)}</b></span>`:''}
+      ${p.statementDate?`<span>Date: <b>${esc(p.statementDate)}</b></span>`:''}
+      <span>Invoices listed: <b>${rows.length}</b></span>
+      ${missingCount?`<span style="color:var(--red-text,#B3261E)"><b>${missingCount} missing</b></span>`:`<span style="color:var(--green-text,#3F7A44)">All accounted for</span>`}
+    </div>
+    <div class="fld">
+      <label>Vendor — confirms or overrides Claude's guess (needed to check what you already have)</label>
+      <select id="scanVendor" onchange="_scanState.vendorPick=this.value; renderScanReview()">
+        <option value="">— pick a vendor —</option>
+        ${vOpts}
+      </select>
+    </div>
+  </div>
+  <div class="card" style="overflow-x:auto;margin-top:14px"><table><thead><tr>
+    <th>Invoice #</th><th>Date</th><th class="num">Amount</th><th>Status</th>
+  </tr></thead><tbody>${withStatus.map(r=>`
+    <tr>
+      <td>${esc(r.invoiceNumber||'—')}</td>
+      <td class="muted">${r.date?fmtDate(r.date):'—'}</td>
+      <td class="num">${fmtMoney(r.amount)}</td>
+      <td>${r.have?`<span style="color:var(--green-text,#3F7A44)"><i class="ti ti-check"></i> On file</span>`:(vendorId?`<span style="color:var(--red-text,#B3261E)"><i class="ti ti-alert-triangle"></i> Missing</span>`:`<span class="muted">Pick a vendor to check</span>`)}</td>
+    </tr>`).join('')}
+  </tbody></table></div>
+  <div class="scan-step" style="margin-top:14px;display:flex;gap:10px">
+    <button class="btn ghost" onclick="scanCancel()">Discard & start over</button>
+    ${_scanState.pendingId?`<button class="btn" onclick="scanDismissStatement()">Done reviewing — dismiss</button>`:''}
+  </div>`;
+}
+async function scanDismissStatement(){
+  if(_scanState.pendingId){
+    try{ await db.collection('pendingInvoiceScans').doc(_scanState.pendingId).set({status:'dismissed'}, {merge:true}); }catch(e){}
+  }
+  _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', jobEventId:'', error:'', pendingId:null, fileUrl:'', fileName:'', isRevision:false, revisionTargetId:'' };
+  renderScan();
+}
+window.scanDismissStatement = scanDismissStatement;
+
 function renderScanReview(){
   const el=document.getElementById('scanBody'); if(!el) return;
   const p = _scanState.parsed || {};
+  if(p.documentType === 'statement'){ _renderStatementReview(el, p); return; }
   const lines = p.lines || [];
   const vOpts = vendors.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))
     .map(v=>`<option value="${v.id}" ${_scanState.vendorPick===v.id?'selected':''}>${esc(v.name)}</option>`).join('');
