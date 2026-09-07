@@ -1452,6 +1452,7 @@ let _scanState = { mode:'idle', files:[], parsed:null, vendorPick:'', jobEventId
 // substitute for looking closely at anything you're unsure of.
 let _pendingBulkMode = false;
 let _pendingSelected = {};
+let _pendingRescanProgress = null; // {done, total} while a re-scan is running, else null
 
 function pendingLines(p){ return (p.parsed && p.parsed.lines) || []; }
 function pendingTotal(p){
@@ -1517,8 +1518,9 @@ async function bulkRescanSelectedPending(){
   const knownVendors = vendors.map(v=>v.name).filter(Boolean);
   const knownProducts = ourProducts().map(g=>({ name:g.name, soldBy:(g.items[0]&&soldByOf(g.items[0]))||'' }));
   let ok=0, fail=0;
+  _pendingRescanProgress = { done:0, total:ids.length }; renderScan();
   for(const id of ids){
-    const p = pendingInvoiceScans.find(x=>x.id===id); if(!p || !p.fileUrl) { fail++; continue; }
+    const p = pendingInvoiceScans.find(x=>x.id===id); if(!p || !p.fileUrl) { fail++; _pendingRescanProgress.done++; renderScan(); continue; }
     try{
       const fileResp = await fetch(p.fileUrl);
       if(!fileResp.ok) throw new Error('Could not fetch original file (HTTP '+fileResp.status+')');
@@ -1542,7 +1544,9 @@ async function bulkRescanSelectedPending(){
       }, {merge:true});
       ok++;
     }catch(e){ fail++; console.error('Re-scan failed for pending '+id+': '+e.message); }
+    _pendingRescanProgress.done++; renderScan();
   }
+  _pendingRescanProgress = null;
   _pendingSelected={};
   toast('Re-scanned '+ok+(fail?', '+fail+' failed (check console)':''));
   renderScan();
@@ -1660,6 +1664,7 @@ window.bulkRescanSelectedPending = bulkRescanSelectedPending;
 
 function _renderPendingBulkTable(){
   const selCount = Object.keys(_pendingSelected).length;
+  const running = !!_pendingRescanProgress;
   const dupGroups = {}; pendingInvoiceScans.forEach(p=>{ const k=pendingDupKey(p); if(k) (dupGroups[k]=dupGroups[k]||[]).push(p); });
   const rows = pendingInvoiceScans.slice().sort((a,b)=>(b.receivedAt||0)-(a.receivedAt||0)).map(p=>{
     const isStatement = p.documentType === 'statement';
@@ -1672,21 +1677,25 @@ function _renderPendingBulkTable(){
       <td class="muted">${isStatement?(p.parsed&&p.parsed.statementDate?fmtDate(p.parsed.statementDate):'—'):(p.parsed&&p.parsed.invoiceDate?fmtDate(p.parsed.invoiceDate):(p.receivedAt?new Date(p.receivedAt).toLocaleDateString():'—'))}</td>
       <td class="num">${isStatement?'—':pendingLines(p).length}</td>
       <td class="num">${isStatement?'—':fmtMoney(pendingTotal(p))}</td>
-      <td><button class="btn ghost sm" onclick="openPendingInvoiceScan('${p.id}')">View</button></td>
+      <td><button class="btn ghost sm" onclick="openPendingInvoiceScan('${p.id}')" ${running?'disabled':''}>View</button></td>
     </tr>`;
   }).join('');
+  const progressBanner = running ? `<div class="scan-err" style="background:#EAF3EC;border-color:#B7DDC0;color:#2C6B36;display:flex;align-items:center;gap:10px">
+      <span class="spinner"></span> Re-scanning ${_pendingRescanProgress.done} of ${_pendingRescanProgress.total}… keep this tab open.
+    </div>` : '';
   return `<div class="scan-step" style="border:1px solid var(--maroon-tint,#F3E4E2);background:#FFFCF8">
-    <h3><i class="ti ti-mail" style="font-size:15px;vertical-align:-2px"></i> Pending from orders@ (${pendingInvoiceScans.length}) <button class="btn ghost sm" style="float:right" onclick="togglePendingBulkMode()">Back to list</button></h3>
+    <h3><i class="ti ti-mail" style="font-size:15px;vertical-align:-2px"></i> Pending from orders@ (${pendingInvoiceScans.length}) <button class="btn ghost sm" style="float:right" onclick="togglePendingBulkMode()" ${running?'disabled':''}>Back to list</button></h3>
     <div class="desc">Bulk mode saves Claude's read as-is, without the per-line editing screen — good for clearing out ones that look right at a glance. Statements are flagged separately since they have nothing to bulk-save — click View to review those. "Select duplicates" keeps the newest copy of each and selects the rest for you to dismiss.</div>
+    ${progressBanner}
     <div style="margin:10px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <button class="btn ghost sm" onclick="selectAllPending()">Select all</button>
-      <button class="btn ghost sm" onclick="selectPendingDuplicates()">Select duplicates</button>
-      <button class="btn ghost sm" onclick="clearPendingSelection()">Clear selection</button>
+      <button class="btn ghost sm" onclick="selectAllPending()" ${running?'disabled':''}>Select all</button>
+      <button class="btn ghost sm" onclick="selectPendingDuplicates()" ${running?'disabled':''}>Select duplicates</button>
+      <button class="btn ghost sm" onclick="clearPendingSelection()" ${running?'disabled':''}>Clear selection</button>
       <span style="flex:1"></span>
       <span class="muted" style="font-size:12.5px">${selCount} selected</span>
-      <button class="btn ghost sm" onclick="bulkRescanSelectedPending()" ${selCount?'':'disabled'} title="Re-reads the original file with the latest AI — fixes entries scanned before statement detection existed">Re-scan selected</button>
-      <button class="btn ghost sm" onclick="bulkDismissSelectedPending()" ${selCount?'':'disabled'}>Dismiss selected</button>
-      <button class="btn sm" onclick="bulkSaveSelectedPending()" ${selCount?'':'disabled'}>Save selected</button>
+      <button class="btn ghost sm" onclick="bulkRescanSelectedPending()" ${(selCount&&!running)?'':'disabled'} title="Re-reads the original file with the latest AI — fixes entries scanned before statement detection existed">${running?'Re-scanning…':'Re-scan selected'}</button>
+      <button class="btn ghost sm" onclick="bulkDismissSelectedPending()" ${(selCount&&!running)?'':'disabled'}>Dismiss selected</button>
+      <button class="btn sm" onclick="bulkSaveSelectedPending()" ${(selCount&&!running)?'':'disabled'}>Save selected</button>
     </div>
     <div class="card" style="overflow-x:auto"><table><thead><tr>
       <th></th><th>Vendor</th><th>Invoice #</th><th>Date</th><th class="num">Items</th><th class="num">Total</th><th></th>
