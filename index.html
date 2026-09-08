@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=8">
+<link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
 
@@ -2959,7 +2959,7 @@ function renderCoverSheet(){
       <td class="cs-td">${tinp('manager',row.manager,'placeholder="\u2014"')}</td>
     </tr>
     <tr><td colspan="${cols.length}" class="cs-temp-bar">
-      <button onclick="coverCommitRow(${ri})" style="padding:5px 16px;border:none;border-radius:7px;background:var(--maroon);color:#fff;font-size:12px;font-weight:600;cursor:pointer;margin-right:6px">\u2713 Save row</button>
+      <button onclick="coverCommitRow(${ri})" class="btn btn--pri" style="margin-right:6px">\u2713 Save row</button>
       <button onclick="coverDiscardRow(${ri})" style="padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text2);font-size:12px;cursor:pointer">\u2715 Discard</button>
     </td></tr>`;
   });
@@ -2979,10 +2979,10 @@ function renderCoverSheet(){
         <span style="font-size:13px;font-weight:600;color:var(--text)">${wLabel}</span>
         <button onclick="changeWeek(1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">\u203a</button>
         <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" style="padding:5px 12px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:12px;cursor:pointer">Current week</button>
-        ${coverWeekNumberingOff(weekStr) ? `<button onclick="renumberWeek('${weekStr}')" title="This week's event numbers are out of order \u2014 click to fix" style="padding:5px 12px;border:1.5px dashed var(--maroon);border-radius:var(--radius);background:#fff;color:var(--maroon);font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-list-numbers"></i> Renumber</button>` : ''}
-        <button onclick="printCoverSheet()" style="padding:5px 14px;border:none;border-radius:var(--radius);background:var(--maroon);color:#fff;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-printer"></i> Print / Save PDF</button>
-        <button onclick="coverAddNewRow()" style="padding:5px 14px;border:0.5px solid var(--maroon);border-radius:var(--radius);background:#fff;color:var(--maroon);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-plus"></i> New event</button>
-        <button onclick="coverCreateDropOff()" style="padding:5px 14px;border:0.5px solid #666;border-radius:var(--radius);background:#fff;color:#555;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px"><i class="ti ti-truck-delivery"></i> New drop off</button>
+        ${coverWeekNumberingOff(weekStr) ? `<button onclick="renumberWeek('${weekStr}')" title="This week's event numbers are out of order \u2014 click to fix" class="btn btn--dashed"><i class="ti ti-list-numbers"></i> Renumber</button>` : ''}
+        <button onclick="printCoverSheet()" class="btn btn--pri"><i class="ti ti-printer"></i> Print / Save PDF</button>
+        <button onclick="coverAddNewRow()" class="btn"><i class="ti ti-plus"></i> New event</button>
+        <button onclick="coverCreateDropOff()" class="btn"><i class="ti ti-truck-delivery"></i> New drop off</button>
       </div>
     </div>
     ${sortBar}
@@ -3497,7 +3497,7 @@ function renderDetail(e,role){
                   ${e.pdfMenuLink ? `<div style="margin-top:6px;display:flex;align-items:center;gap:8px">
                     <i class="ti ti-file-type-pdf" style="font-size:14px;color:var(--coral-text)"></i>
                     <a href="${e.pdfMenuLink}" target="_blank" style="font-size:12px;color:var(--blue-mid)">PDF version ready — open</a>
-                    <button onclick="removePdfVersion('${e.id}')" style="border:none;background:none;font-size:12px;color:var(--text3);cursor:pointer">remove</button>
+                    <button onclick="removePdfVersion('${e.id}')" class="btn btn--ghost btn--sm">remove</button>
                   </div>` : ''}`
                 : `<div style="display:flex;flex-direction:column;gap:8px">
                     <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -3962,7 +3962,7 @@ function renderPipeline(){
           archiveSuppressCards = true;
         } else if(nav.group==null){
           const groups = _plGroupCards(allArchiveCards, nav.mode);
-          archiveExtraHtml = `<button onclick="plFolderBack('${s.key}')" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px;margin-bottom:8px"><i class="ti ti-arrow-left" style="font-size:12px"></i>All folders</button>`
+          archiveExtraHtml = `<button onclick="plFolderBack('${s.key}')" class="btn btn--ghost btn--sm" style="margin-bottom:8px"><i class="ti ti-arrow-left" style="font-size:12px"></i>All folders</button>`
             + searchBox
             + `<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
             ${groups.map(g=>`<button onclick="plFolderOpen('${s.key}','${g.group.replace(/'/g,"\\'")}')" style="display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;padding:8px 10px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text2);cursor:pointer;font-size:12.5px"><span style="display:flex;align-items:center;gap:7px"><i class="ti ti-folder" style="font-size:14px;color:var(--brass)"></i>${g.group}</span><span class="pipeline-count">${g.items.length}</span></button>`).join('')}
@@ -3970,7 +3970,7 @@ function renderPipeline(){
           archiveSuppressCards = true;
         } else {
           cards = allArchiveCards.filter(inq=>(PL_FOLDER_MODES.find(m=>m.key===nav.mode).fn(inq)||'Other')===nav.group);
-          archiveExtraHtml = `<button onclick="plFolderOpen('${s.key}',null)" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px;margin-bottom:8px"><i class="ti ti-arrow-left" style="font-size:12px"></i>${PL_FOLDER_MODES.find(m=>m.key===nav.mode).label}</button>`
+          archiveExtraHtml = `<button onclick="plFolderOpen('${s.key}',null)" class="btn btn--ghost btn--sm" style="margin-bottom:8px"><i class="ti ti-arrow-left" style="font-size:12px"></i>${PL_FOLDER_MODES.find(m=>m.key===nav.mode).label}</button>`
             + `<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:6px"><i class="ti ti-folder-open" style="color:var(--brass)"></i>${nav.group}</div>`;
         }
       }
@@ -4032,7 +4032,7 @@ function renderPipeline(){
           ${isBooked || isPastCol ? `<button class="stage-btn" style="background:var(--bg2);color:var(--text2)" onclick="event.stopPropagation();promoteToEvent('${inq.id}')">→ Go to event week</button>` : ''}
           ${(inq.stage==='menu_sent'||inq.stage==='booked') ? `<button class="stage-btn" style="background:var(--blue-bg);color:var(--blue-text);border:0.5px solid var(--blue-border)" onclick="event.stopPropagation();openInquiryPortal('${inq.id}')" title="Client portal"><i class="ti ti-external-link" style="font-size:12px"></i> Portal</button>` : ''}
           <button class="stage-btn" style="background:var(--bg2);color:var(--text2);margin-left:auto" onclick="event.stopPropagation();openContactMenu('${inq.id}')" title="Contact client"><i class="ti ti-send" style="font-size:12px"></i> Contact</button>
-          <button onclick="event.stopPropagation();deleteInquiry('${inq.id}')" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px"><i class="ti ti-trash"></i></button>
+          <button onclick="event.stopPropagation();deleteInquiry('${inq.id}')" class="btn btn--ghost btn--sm"><i class="ti ti-trash"></i></button>
         </div>` : ''}
       </div>`;
       }).join('')}
@@ -4191,7 +4191,7 @@ function drawerDocuments(inq, role, ev){
     _docBtn('Post-event survey','ti-message-2',true,''),
   ].join('');
   return `<div class="hub-sec">Event documents <span class="rule"></span></div>
-    <button onclick="openPaperwork('${id}')" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font-size:13px;font-weight:600;padding:10px;border-radius:9px;cursor:pointer;font-family:inherit;background:var(--maroon);color:#fff;border:none;margin-bottom:13px"><i class="ti ti-files" style="font-size:16px"></i>Create event paperwork</button>
+    <button onclick="openPaperwork('${id}')" class="btn btn--pri" style="width:100%;margin-bottom:13px"><i class="ti ti-files" style="font-size:16px"></i>Create event paperwork</button>
     ${_docGroup('Documents', docs)}
     ${_docGroup('Floor plans', floor)}
     ${_docGroup('Uploaded files', files)}
@@ -4412,7 +4412,7 @@ function openDuplicateInquiryModal(inqId){
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button onclick="document.getElementById('dupInqModal').remove()" style="padding:8px 16px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);cursor:pointer">Cancel</button>
-      <button id="dup-inq-go" onclick="duplicateInquiry('${inqId}')" style="padding:8px 18px;border:none;border-radius:var(--radius);background:var(--maroon);color:#fff;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-copy" style="font-size:13px"></i> Duplicate</button>
+      <button id="dup-inq-go" onclick="duplicateInquiry('${inqId}')" class="btn btn--pri"><i class="ti ti-copy" style="font-size:13px"></i> Duplicate</button>
     </div>
   </div>`;
   document.body.appendChild(m);
@@ -4617,10 +4617,10 @@ function renderEstimateBlock(inq, role){
       <input type="number" value="${l.price||0}" min="0" step="0.01" oninput="updateEstimateLine('${inq.id}',${i},'price',this.value)" style="${inp};width:100%;text-align:right">
       <span data-amt="${i}" style="font-size:13px;text-align:right;color:var(--text2)">$${((parseFloat(l.qty||0))*(parseFloat(l.price||0))).toFixed(2)}</span>
       <span style="display:flex;gap:1px;justify-content:flex-end">
-        <button onclick="moveEstimateLine('${inq.id}',${i},-1)" title="Move up" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:1px;opacity:${i===0?'.3':'1'}" ${i===0?'disabled':''}><i class="ti ti-arrow-up"></i></button>
-        <button onclick="moveEstimateLine('${inq.id}',${i},1)" title="Move down" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:1px;opacity:${i===est.lines.length-1?'.3':'1'}" ${i===est.lines.length-1?'disabled':''}><i class="ti ti-arrow-down"></i></button>
-        <button onclick="duplicateEstimateLine('${inq.id}',${i})" title="Duplicate line" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:12px;padding:1px"><i class="ti ti-copy"></i></button>
-        <button onclick="removeEstimateLine('${inq.id}',${i})" title="Remove" style="border:none;background:none;color:var(--red-solid);cursor:pointer;font-size:13px;padding:1px"><i class="ti ti-x"></i></button>
+        <button onclick="moveEstimateLine('${inq.id}',${i},-1)" title="Move up" class="btn btn--ghost btn--sm" ${i===0?'disabled':''}><i class="ti ti-arrow-up"></i></button>
+        <button onclick="moveEstimateLine('${inq.id}',${i},1)" title="Move down" class="btn btn--ghost btn--sm" ${i===est.lines.length-1?'disabled':''}><i class="ti ti-arrow-down"></i></button>
+        <button onclick="duplicateEstimateLine('${inq.id}',${i})" title="Duplicate line" class="btn btn--ghost btn--sm"><i class="ti ti-copy"></i></button>
+        <button onclick="removeEstimateLine('${inq.id}',${i})" title="Remove" class="btn btn--ghost btn--sm"><i class="ti ti-x"></i></button>
       </span>
     </div>`).join('');
   return `<div id="estBlock-${inq.id}"><div class="detail-block" style="margin-top:1rem">${header}
@@ -5403,7 +5403,7 @@ function openManageTemplates(){
   m.innerHTML = `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.5rem;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
       <div style="font-size:16px;font-weight:600">Manage email templates</div>
-      <button onclick="editEmailTemplate('')" style="padding:6px 12px;border:none;border-radius:var(--radius);background:var(--maroon);color:#fff;font-size:12px;font-weight:500;cursor:pointer"><i class="ti ti-plus" style="font-size:12px"></i> New template</button>
+      <button onclick="editEmailTemplate('')" class="btn btn--pri"><i class="ti ti-plus" style="font-size:12px"></i> New template</button>
     </div>
     <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.5">
       Built-in templates can be edited but not deleted (they'll always exist as starting points). Any template you add is shared with your whole team.
@@ -5447,7 +5447,7 @@ function editEmailTemplate(tplId){
     </div>
     <div style="display:flex;justify-content:flex-end;gap:8px">
       <button onclick="document.getElementById('tplEditModal').remove()" style="padding:8px 16px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:13px;cursor:pointer">Cancel</button>
-      <button onclick="saveEditedTemplate('${t.id}')" style="padding:8px 18px;border:none;border-radius:var(--radius);background:var(--maroon);color:#fff;font-size:13px;font-weight:500;cursor:pointer">Save</button>
+      <button onclick="saveEditedTemplate('${t.id}')" class="btn btn--pri">Save</button>
     </div>
   </div>`;
   document.body.appendChild(m);
@@ -6113,7 +6113,7 @@ function openAttachModal(eventId, field, currentUrl, label){
       </div>
       ${currentUrl ? `<div style="margin-bottom:14px;padding:10px 14px;background:var(--green-bg);border:0.5px solid var(--green-border);border-radius:var(--radius);display:flex;align-items:center;justify-content:space-between;gap:8px">
         <a href="${currentUrl}" target="_blank" style="font-size:12px;color:var(--green-text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"><i class="ti ti-external-link" style="font-size:11px"></i> Currently attached</a>
-        <button onclick="removeAttachment('${eventId}','${field}')" style="border:none;background:none;cursor:pointer;color:var(--red-solid);font-size:11px;padding:2px 6px;border-radius:4px;white-space:nowrap">Remove</button>
+        <button onclick="removeAttachment('${eventId}','${field}')" class="btn btn--ghost btn--sm">Remove</button>
       </div>` : ''}
       <div style="margin-bottom:14px">
         <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Upload a file</div>
@@ -6127,7 +6127,7 @@ function openAttachModal(eventId, field, currentUrl, label){
         <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Or paste a URL</div>
         <div style="display:flex;gap:8px">
           <input id="attachUrlInput" type="text" placeholder="https://..." value="${currentUrl||''}" style="flex:1;padding:8px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);font-size:13px;background:var(--bg);color:var(--text);outline:none" onfocus="this.style.borderColor='var(--maroon)'" onblur="this.style.borderColor='var(--border2)'">
-          <button onclick="saveAttachUrl('${eventId}','${field}')" style="padding:8px 16px;border:none;border-radius:var(--radius);background:var(--maroon);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Save</button>
+          <button onclick="saveAttachUrl('${eventId}','${field}')" class="btn btn--pri">Save</button>
         </div>
       </div>
     </div>`;
@@ -6206,7 +6206,7 @@ function openMultiAttachModal(eventId, field, label){
         <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Or paste a URL</div>
         <div style="display:flex;gap:8px">
           <input id="maUrlInput" type="text" placeholder="https://..." style="flex:1;padding:8px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);font-size:13px;background:var(--bg);color:var(--text);outline:none">
-          <button onclick="saveMultiAttachUrl('${eventId}','${field}','${label.replace(/'/g,"\\'")}')" style="padding:8px 16px;border:none;border-radius:var(--radius);background:var(--maroon);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Add</button>
+          <button onclick="saveMultiAttachUrl('${eventId}','${field}','${label.replace(/'/g,"\\'")}')" class="btn btn--pri">Add</button>
         </div>
       </div>
     </div>`;
@@ -6226,7 +6226,7 @@ function _maRenderList(eventId, field, label){
       <i class="ti ti-file" style="font-size:15px;color:var(--text3)"></i>
       <a href="${f.url}" target="_blank" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--blue-mid);text-decoration:none;font-size:12.5px">${(f.name||'File').replace(/</g,'&lt;')}</a>
       <span style="font-size:10.5px;color:var(--text3);white-space:nowrap">${_maFmtSize(f.size)}</span>
-      <button onclick="removeMultiAttachFile('${eventId}','${field}','${label.replace(/'/g,"\\'")}',${i})" style="border:none;background:none;cursor:pointer;color:var(--red-solid);font-size:14px;padding:2px" title="Remove">&times;</button>
+      <button onclick="removeMultiAttachFile('${eventId}','${field}','${label.replace(/'/g,"\\'")}',${i})" class="btn btn--ghost btn--sm" title="Remove">&times;</button>
     </div>`).join('');
 }
 async function handleMultiAttachUpload(eventId, field, label, fileList){
@@ -6665,7 +6665,7 @@ function openRepeatEventModal(eventId){
     + '</div>'
     + '<div style="display:flex;gap:8px">'
       + '<button onclick="closeRepeatEventModal()" style="'+btn+';background:#f2f2f2;color:#333;flex:1">Cancel</button>'
-      + '<button onclick="repeatEventCreate(\''+src.id+'\')" style="'+btn+';background:var(--maroon);color:#fff;flex:1.4"><i class="ti ti-check" style="font-size:15px"></i> Create</button>'
+      + '<button onclick="repeatEventCreate(\''+src.id+'\')" class="btn btn--pri" style="flex:1.4"><i class="ti ti-check" style="font-size:15px"></i> Create</button>'
     + '</div>'
     + '</div>';
   document.body.appendChild(wrap);
@@ -7326,7 +7326,7 @@ function openClientEmailModal(inqId){
     </div>
     <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--bg2)">
       <button onclick="document.getElementById('clientEmailModal').remove()" style="padding:9px 15px;border:1px solid var(--border2);border-radius:9px;background:var(--bg2);color:var(--text2);font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
-      <button id="cem_send_btn" onclick="sendClientEmailFromModal('${inqId}')" style="padding:9px 18px;border:none;border-radius:9px;background:var(--maroon);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-send"></i>Send</button>
+      <button id="cem_send_btn" onclick="sendClientEmailFromModal('${inqId}')" class="btn btn--pri"><i class="ti ti-send"></i>Send</button>
     </div>
   </div>`;
   document.body.appendChild(m);
@@ -7505,7 +7505,7 @@ function openAddInquiryModal(){
           <div style="font-weight:600;color:#333;font-size:13px">Import from email or notes?</div>
           <div style="font-size:11px;color:#666;margin-top:2px">Paste an email or notes and Claude will extract the details for you.</div>
         </div>
-        <button onclick="aiParseLeadPrompt()" style="padding:6px 12px;border:none;border-radius:var(--radius);background:var(--maroon);color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">📋 Paste</button>
+        <button onclick="aiParseLeadPrompt()" class="btn btn--pri">📋 Paste</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="modal-row" style="margin-bottom:8px"><label>First name</label><input id="lead-firstName" placeholder="David"></div>
@@ -7564,8 +7564,8 @@ function openAddInquiryModal(){
       </div>
       <div class="modal-row" style="margin-bottom:8px"><label>Notes / comments</label><textarea id="lead-notes" placeholder="Any details..." style="min-height:60px"></textarea></div>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
-        <button onclick="closeAddLeadModal()" style="padding:8px 16px;border:1px solid var(--border2);border-radius:var(--radius);background:#fff;color:var(--text2);cursor:pointer">Cancel</button>
-        <button onclick="saveNewLead()" style="padding:8px 16px;border:none;border-radius:var(--radius);background:var(--maroon);color:#fff;font-weight:600;cursor:pointer">Add as new lead</button>
+        <button onclick="closeAddLeadModal()" class="btn">Cancel</button>
+        <button onclick="saveNewLead()" class="btn btn--pri">Add as new lead</button>
       </div>
     </div>
   `;
@@ -7789,7 +7789,7 @@ function renderSchedule(){
       card += `<div class="sched-meal-header">
         <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--blue-mid)">${coverJobNum(e.job)}${meal.jobSuffix||''} &nbsp;·&nbsp; Meal ${mi+1}</span>
         <input type="text" class="sched-meal-label" value="${(meal.label||meal.jobSuffix||'').replace(/"/g,'&quot;')}" placeholder="e.g. Friday dinner, Saturday lunch…" onblur="updateMealLabel('${e.id}',${mi},this.value)">
-        <button onclick="removeMealSection('${e.id}',${mi})" style="border:none;background:none;color:var(--red-solid);cursor:pointer;font-size:14px;padding:2px 4px"><i class="ti ti-trash"></i></button>
+        <button onclick="removeMealSection('${e.id}',${mi})" class="btn btn--ghost btn--sm"><i class="ti ti-trash"></i></button>
       </div>
       ${colHeaders}
       ${deptRows(e, false, mi)}`;
@@ -7941,8 +7941,8 @@ function renderChecklists(){
 
   let h = navReturnBreadcrumb() + '<div class="section-header"><div class="section-title">Event checklists</div>'
     + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
-    + '<button onclick="expandAllChecklists()" style="border:none;background:none;color:var(--blue-mid);cursor:pointer;font-size:12px">Expand all</button>'
-    + '<button onclick="collapseAllChecklists()" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:12px">Collapse all</button>'
+    + '<button onclick="expandAllChecklists()" class="btn btn--ghost btn--sm">Expand all</button>'
+    + '<button onclick="collapseAllChecklists()" class="btn btn--ghost btn--sm">Collapse all</button>'
     + '</div></div>';
 
   // ---- Group into This week / Upcoming / Past archive (added) ----
@@ -7968,7 +7968,7 @@ function renderChecklists(){
 
   window._clArchiveOpen = window._clArchiveOpen || false;
   h += '<div style="margin-top:1.75rem;border-top:0.5px solid var(--border);padding-top:1rem">'
-    + '<button onclick="toggleChecklistArchive()" style="display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:none;background:none;cursor:pointer;padding:.5rem 0">'
+    + '<button onclick="toggleChecklistArchive()" class="btn btn--ghost btn--sm" style="width:100%">'
     + '<i class="ti ti-chevron-'+(window._clArchiveOpen?'down':'right')+'" style="font-size:14px;color:var(--text3)"></i>'
     + '<i class="ti ti-archive" style="font-size:15px;color:var(--text3)"></i>'
     + '<span style="font-size:13px;font-weight:600;color:var(--text2)">Past event checklists</span>'
@@ -8015,8 +8015,8 @@ function checklistCardHtml(e){
       + '<div style="flex:1"><div class="cl-title" style="margin-bottom:0">'+e.job+' — '+e.name+' <span style="font-size:12px;color:var(--text3);font-weight:400">'+e.dayLabel+' · '+e.typeLabel+'</span></div></div>'
       + '<div style="display:flex;align-items:center;gap:10px" onclick="event.stopPropagation()">'
       + '<div style="font-size:12px;color:'+(pct===100?'var(--green-text)':'var(--text2)')+';font-weight:500">'+done+'/'+active.length+' <span style="font-weight:400;color:var(--text3)">done</span></div>'
-      + '<button onclick="printChecklist(\''+eid+'\')" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:3px"><i class="ti ti-printer" style="font-size:13px"></i>Print</button>'
-      + '<button onclick="downloadChecklist(\''+eid+'\')" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:3px"><i class="ti ti-download" style="font-size:13px"></i>Download</button>'
+      + '<button onclick="printChecklist(\''+eid+'\')" class="btn btn--ghost btn--sm"><i class="ti ti-printer" style="font-size:13px"></i>Print</button>'
+      + '<button onclick="downloadChecklist(\''+eid+'\')" class="btn btn--ghost btn--sm"><i class="ti ti-download" style="font-size:13px"></i>Download</button>'
       + '</div></div>'
       + '<div id="cl-body-'+eid+'" style="display:'+(isOpen?'block':'none')+'">'
       + '<div style="height:3px;background:var(--bg3);overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(pct===100?'var(--green-text)':'var(--blue-mid)')+';transition:width .3s"></div></div>'
@@ -8055,7 +8055,7 @@ function checklistCardHtml(e){
                     + p + '</label>'
                     + (p==='Other' && checked ? '<input type="text" placeholder="Type a name..." value="'+otherVal.replace(/"/g,'&quot;')+'" onchange="updateOtherName(\''+eid+'\','+idx+',this.value)" style="width:100%;margin:2px 0 5px 21px;padding:4px 6px;font-size:12px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;color:var(--text);font-family:inherit;max-width:calc(100% - 21px)">' : '');
                 }).join('')
-              + '<button onclick="toggleClAssignPopover(\''+eid+'\','+idx+')" style="margin-top:5px;width:100%;padding:5px;border:none;border-radius:6px;background:var(--maroon);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Done</button>'
+              + '<button onclick="toggleClAssignPopover(\''+eid+'\','+idx+')" class="btn btn--pri" style="margin-top:5px;width:100%">Done</button>'
               + '</div>'
             ) : '')
         + '</div>'
@@ -8066,7 +8066,7 @@ function checklistCardHtml(e){
           + (item.dueOption==='custom'
             ? '<input type="date" value="'+(item.customDue||'')+'" onchange="setCustomDue(\''+eid+'\','+idx+',this.value)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:3px 5px;font-size:11px;color:var(--text);font-family:inherit">'
             : item.dueOption
-              ? '<span style="color:var(--blue-text);font-weight:600;font-size:12px">'+calcDueDate(e.day, parseInt(item.dueOption))+'</span><button onclick="setDueOption(\''+eid+'\','+idx+',\'\')" style="display:block;border:none;background:none;color:var(--text3);cursor:pointer;font-size:10px;padding:0">change</button>'
+              ? '<span style="color:var(--blue-text);font-weight:600;font-size:12px">'+calcDueDate(e.day, parseInt(item.dueOption))+'</span><button onclick="setDueOption(\''+eid+'\','+idx+',\'\')" class="btn btn--ghost btn--sm">change</button>'
               : '<select onchange="setDueOption(\''+eid+'\','+idx+',this.value)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:3px 5px;font-size:11px;color:var(--text);font-family:inherit"><option value="">Set due...</option><option value="30">1 month before</option><option value="14">2 weeks before</option><option value="7">1 week before</option><option value="5">5 days before</option><option value="2">48 hrs before</option><option value="1">24 hrs before</option><option value="custom">Custom...</option></select>')
         + '</div>'
         // Reminder
@@ -8083,7 +8083,7 @@ function checklistCardHtml(e){
             + ['days','weeks','months'].map(u=>'<option value="'+u+'" '+(item.reminder&&item.reminder.unit===u?'selected':(!item.reminder&&u==='days'?'selected':''))+'>'+u+'</option>').join('')
           + '</select>'
           + '<span style="font-size:12px;color:var(--text3)">before the event</span>'
-          + '<button onclick="saveClReminder(\''+eid+'\','+idx+')" style="padding:5px 12px;border:none;border-radius:6px;background:var(--maroon);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Save</button>'
+          + '<button onclick="saveClReminder(\''+eid+'\','+idx+')" class="btn btn--pri">Save</button>'
           + (item.reminder ? '<button onclick="clearClReminder(\''+eid+'\','+idx+')" style="padding:5px 12px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);font-size:12px;cursor:pointer">Remove</button>' : '')
         + '</div>'
         + '</div>'; // end item
@@ -8379,7 +8379,7 @@ function renderChanges(){
         <span class="change-time"><i class="ti ti-clock" style="font-size:13px;vertical-align:-1px"></i> ${c.time}</span>
         <span class="change-job-badge">${c.job}</span>
         <span style="font-size:11px;color:var(--text3);margin-left:auto">${ackedCount}/${total} acknowledged</span>
-        <button onclick="deleteChangeEntry('${c.id}')" title="Delete this change" style="border:none;background:none;color:var(--red-solid);cursor:pointer;font-size:14px;padding:2px;margin-left:8px"><i class="ti ti-trash"></i></button>
+        <button onclick="deleteChangeEntry('${c.id}')" title="Delete this change" class="btn btn--ghost btn--sm" style="margin-left:8px"><i class="ti ti-trash"></i></button>
       </div>
       <div class="change-desc" style="margin-bottom:12px">${c.desc}</div>
       <div style="height:3px;background:var(--bg3);border-radius:2px;margin-bottom:10px;overflow:hidden">
@@ -8690,7 +8690,7 @@ function renderEventGrocery(e){
           <div class="groc-cell"><input class="groc-inp" value="${(item.name||'').replace(/"/g,'&quot;')}" onblur="saveGroceryItemField('${e.id}',${item._idx},'name',this.value)" placeholder="Item name"></div>
           <div class="groc-cell"><input class="groc-inp" style="text-align:center" value="${item.qty||''}" onblur="saveGroceryItemField('${e.id}',${item._idx},'qty',this.value)" placeholder="qty"></div>
           <div class="groc-cell"><input class="groc-inp" value="${item.supplier||''}" onblur="saveGroceryItemField('${e.id}',${item._idx},'supplier',this.value)" placeholder="supplier"></div>
-          <div class="groc-cell"><button onclick="removeGroceryItem('${e.id}',${item._idx})" style="border:none;background:none;color:var(--red-solid);cursor:pointer;font-size:14px;padding:2px"><i class="ti ti-trash"></i></button></div>
+          <div class="groc-cell"><button onclick="removeGroceryItem('${e.id}',${item._idx})" class="btn btn--ghost btn--sm"><i class="ti ti-trash"></i></button></div>
         </div>`;
       });
     });
@@ -10913,9 +10913,9 @@ function openBeo(arg){
     +'<div style="display:flex;align-items:center;gap:9px;margin-bottom:5px"><i class="ti ti-clipboard-list" style="font-size:21px;color:var(--maroon)"></i><span style="font-size:17px;font-weight:700">Banquet Event Order</span></div>'
     +'<div style="font-size:13px;color:#666;margin-bottom:17px">'+pcEsc(clientName)+(evFull?(' \u00b7 #'+pcEsc(evFull)):'')+(meals.length>1?(' \u00b7 '+meals.length+' meals'):'')+'</div>'
     +'<div style="display:flex;flex-direction:column;gap:10px">'
-    +'<button onclick="printBeo(\''+e.id+'\')" style="'+btn+';background:var(--maroon);color:#fff"><i class="ti ti-printer" style="font-size:17px"></i>Print BEO</button>'
-    +'<button onclick="downloadBeo(\''+e.id+'\')" style="'+btn+';background:#fff;color:var(--maroon);border:1.5px solid var(--maroon)"><i class="ti ti-file-type-pdf" style="font-size:17px"></i>Save as PDF</button>'
-    +'<button onclick="openBeoEditor(\''+e.id+'\')" style="'+btn+';background:#fff;color:#444;border:1.5px solid #ddd"><i class="ti ti-edit" style="font-size:16px"></i>Edit meal details</button>'
+    +'<button onclick="printBeo(\''+e.id+'\')" class="btn btn--pri"><i class="ti ti-printer" style="font-size:17px"></i>Print BEO</button>'
+    +'<button onclick="downloadBeo(\''+e.id+'\')" class="btn"><i class="ti ti-file-type-pdf" style="font-size:17px"></i>Save as PDF</button>'
+    +'<button onclick="openBeoEditor(\''+e.id+'\')" class="btn"><i class="ti ti-edit" style="font-size:16px"></i>Edit meal details</button>'
     +'</div>'
     +'<div style="font-size:11.5px;color:#999;margin-top:15px;line-height:1.5"><i class="ti ti-info-circle" style="font-size:12px"></i> Use <b>Edit meal details</b> to fill service time, linen, setup and special requests \u2014 anything left blank prints as a fill-in line.</div>'
     +'<button onclick="closeBeoModal()" style="width:100%;margin-top:13px;font-size:13px;padding:9px;border-radius:8px;cursor:pointer;background:#f3f3f3;border:none;color:#555;font-family:inherit">Close</button>'
@@ -10968,8 +10968,8 @@ function openBeoEditor(arg){
     +'<div style="padding:14px 20px;overflow-y:auto;flex:1">'+sections+'</div>'
     +'<div style="padding:13px 20px;border-top:1px solid #eee;display:flex;gap:9px;justify-content:flex-end">'
       +'<button onclick="closeBeoEditor()" style="'+fbtn+';background:#f3f3f3;color:#555">Cancel</button>'
-      +'<button onclick="saveBeoEditor(\''+e.id+'\',false)" style="'+fbtn+';background:#fff;color:var(--maroon);border:1.5px solid var(--maroon)">Save</button>'
-      +'<button onclick="saveBeoEditor(\''+e.id+'\',true)" style="'+fbtn+';background:var(--maroon);color:#fff"><i class="ti ti-printer" style="font-size:15px;vertical-align:-2px"></i> Save &amp; print</button>'
+      +'<button onclick="saveBeoEditor(\''+e.id+'\',false)" class="btn">Save</button>'
+      +'<button onclick="saveBeoEditor(\''+e.id+'\',true)" class="btn btn--pri"><i class="ti ti-printer" style="font-size:15px;vertical-align:-2px"></i> Save &amp; print</button>'
     +'</div>'
   +'</div>';
   document.body.appendChild(wrap);
@@ -11684,10 +11684,10 @@ function openPaperwork(arg){
     +'</div>'
     +'<div style="padding:13px 20px;border-top:1px solid #eee;display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end">'
       +'<button onclick="closePaperwork()" style="'+fbtn+';background:#f3f3f3;color:#555">Cancel</button>'
-      +'<button onclick="_runPaperworkCommissary(\''+e.id+'\')" style="'+fbtn+';background:#fff;color:#555;border:1.5px solid #d8d2c8"><i class="ti ti-printer" style="font-size:15px;vertical-align:-2px"></i> To commissary</button>'
-      +'<button onclick="_runPaperworkEmail(\''+e.id+'\')" style="'+fbtn+';background:#fff;color:#555;border:1.5px solid #d8d2c8"><i class="ti ti-mail" style="font-size:15px;vertical-align:-2px"></i> Email</button>'
-      +'<button onclick="_runPaperwork(\''+e.id+'\',\'pdf\')" style="'+fbtn+';background:#fff;color:var(--maroon);border:1.5px solid var(--maroon)"><i class="ti ti-file-type-pdf" style="font-size:15px;vertical-align:-2px"></i> Save PDF</button>'
-      +'<button onclick="_runPaperwork(\''+e.id+'\',\'print\')" style="'+fbtn+';background:var(--maroon);color:#fff"><i class="ti ti-printer" style="font-size:15px;vertical-align:-2px"></i> Combine &amp; print</button>'
+      +'<button onclick="_runPaperworkCommissary(\''+e.id+'\')" class="btn"><i class="ti ti-printer" style="font-size:15px;vertical-align:-2px"></i> To commissary</button>'
+      +'<button onclick="_runPaperworkEmail(\''+e.id+'\')" class="btn"><i class="ti ti-mail" style="font-size:15px;vertical-align:-2px"></i> Email</button>'
+      +'<button onclick="_runPaperwork(\''+e.id+'\',\'pdf\')" class="btn"><i class="ti ti-file-type-pdf" style="font-size:15px;vertical-align:-2px"></i> Save PDF</button>'
+      +'<button onclick="_runPaperwork(\''+e.id+'\',\'print\')" class="btn btn--pri"><i class="ti ti-printer" style="font-size:15px;vertical-align:-2px"></i> Combine &amp; print</button>'
     +'</div></div>';
   document.body.appendChild(wrap);
 }
@@ -11862,11 +11862,11 @@ function openContract(arg){
     +'</div>'
     +'<div style="padding:12px 20px;border-top:1px solid #eee;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">'
       +'<button onclick="closeContract()" style="'+fbtn+';background:#f3f3f3;color:#555">Close</button>'
-      +'<button onclick="previewContract(\''+eid+'\')" style="'+fbtn+';background:#fff;color:#444;border:1.5px solid #ddd"><i class="ti ti-eye" style="font-size:14px;vertical-align:-2px"></i> Preview</button>'
-      +'<button onclick="saveContract(\''+eid+'\')" style="'+fbtn+';background:#fff;color:var(--maroon);border:1.5px solid var(--maroon)">Save</button>'
+      +'<button onclick="previewContract(\''+eid+'\')" class="btn"><i class="ti ti-eye" style="font-size:14px;vertical-align:-2px"></i> Preview</button>'
+      +'<button onclick="saveContract(\''+eid+'\')" class="btn">Save</button>'
       +((c.status==='signed')
         ? '<button onclick="downloadSignedContract(\''+eid+'\')" style="'+fbtn+';background:var(--green-solid);color:#fff"><i class="ti ti-download" style="font-size:14px;vertical-align:-2px"></i> Signed PDF</button>'
-        : '<button onclick="sendContract(\''+eid+'\')" style="'+fbtn+';background:var(--maroon);color:#fff"><i class="ti ti-send" style="font-size:14px;vertical-align:-2px"></i> '+(c.status==='sent'?'Resend':'Send for signature')+'</button>')
+        : '<button onclick="sendContract(\''+eid+'\')" class="btn btn--pri"><i class="ti ti-send" style="font-size:14px;vertical-align:-2px"></i> '+(c.status==='sent'?'Resend':'Send for signature')+'</button>')
     +'</div></div>';
   document.body.appendChild(wrap);
 }
@@ -12800,7 +12800,7 @@ function renderEquipDetail() {
               <span style="flex:1;color:var(--text);min-width:0">${item.item}</span>
               <input type="text" value="${item.qty||''}" placeholder="qty" onchange="updateEquipQty('${id}',${idx},this.value)"
                 style="width:60px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:4px 6px;font-size:12px;color:var(--text);text-align:center;font-family:inherit">
-              <button onclick="deleteEquipItem('${id}',${idx})" style="border:none;background:none;color:var(--text3);cursor:pointer;padding:2px;font-size:13px"><i class="ti ti-trash"></i></button>
+              <button onclick="deleteEquipItem('${id}',${idx})" class="btn btn--ghost btn--sm"><i class="ti ti-trash"></i></button>
             </div>`;
           }).join('')}
           </div>
@@ -13082,7 +13082,7 @@ function _renderNotifyContactsSettings(){
       ${contacts.map((c,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2)">
         <span style="font-size:13px;font-weight:500;flex:1">${(c.name||'').replace(/</g,'&lt;')}</span>
         <span style="font-size:12px;color:var(--text3)">${(c.phone||'').replace(/</g,'&lt;')}</span>
-        <button onclick="removeNotifyContact(${i})" style="border:none;background:none;color:#b15a38;font-size:12px;cursor:pointer">Remove</button>
+        <button onclick="removeNotifyContact(${i})" class="btn btn--ghost btn--sm">Remove</button>
       </div>`).join('')}
     </div>` : `<div style="font-size:12px;color:var(--text3);margin-bottom:1rem">No contacts yet.</div>`}
     <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -13732,7 +13732,7 @@ function _renderFollowupSettings(){
     </div>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
       <button onclick="addSalespersonRow()" style="padding:7px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-plus" style="font-size:12px"></i> Add salesperson</button>
-      <button onclick="saveSalespersonEmails()" style="padding:7px 14px;border:none;border-radius:var(--radius);background:var(--maroon);color:#fff;font-size:12px;font-weight:500;cursor:pointer">Save changes</button>
+      <button onclick="saveSalespersonEmails()" class="btn btn--pri">Save changes</button>
     </div>
   </div>`;
 }
@@ -13878,7 +13878,7 @@ function renderSettings(){
       </button>
     </div>
     ${ghToken
-      ? `<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--green-text)"><i class="ti ti-circle-check"></i> Token saved — ready to push<button onclick="clearGitHubToken()" style="border:none;background:none;color:var(--text3);font-size:12px;cursor:pointer;text-decoration:underline;margin-left:8px">Clear token</button></div>`
+      ? `<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--green-text)"><i class="ti ti-circle-check"></i> Token saved — ready to push<button onclick="clearGitHubToken()" class="btn btn--ghost btn--sm" style="margin-left:8px">Clear token</button></div>`
       : `<div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Enter your GitHub Personal Access Token to enable one-click deploys:</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -15029,7 +15029,7 @@ async function renderEmail(){
   const tab = window._emailTab || 'inbox';
   const tabs = [{key:'inbox',label:'Inbox'},{key:'sent',label:'Sent'},{key:'compose',label:'Compose'}];
   h += '<div style="display:flex;gap:4px;margin-bottom:1rem;border-bottom:0.5px solid var(--border);padding-bottom:0">'
-    + tabs.map(t=>'<button onclick="window._emailTab=\''+t.key+'\';render()" style="padding:8px 16px;border:none;background:none;font-size:13px;cursor:pointer;color:'+(tab===t.key?'var(--blue-mid)':'var(--text2)')+';border-bottom:2px solid '+(tab===t.key?'var(--blue-mid)':'transparent')+';font-weight:'+(tab===t.key?'500':'400')+'">'+t.label+'</button>').join('')
+    + tabs.map(t=>'<button onclick="window._emailTab=\''+t.key+'\';render()" class="btn btn--ghost btn--sm">'+t.label+'</button>').join('')
     +'</div>';
 
   if(tab==='compose'){
@@ -15102,7 +15102,7 @@ function renderComposeAttachList(){
   return list.map(function(a,i){
     return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);background:var(--bg2);border:0.5px solid var(--border);border-radius:6px;padding:4px 8px">'
       +'<i class="ti ti-file" style="font-size:13px"></i><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+a.filename+'</span>'
-      +'<button onclick="removeComposeAttachment('+i+')" title="Remove" style="border:none;background:none;color:var(--red-solid);cursor:pointer;font-size:13px"><i class="ti ti-x"></i></button></div>';
+      +'<button onclick="removeComposeAttachment('+i+')" title="Remove" class="btn btn--ghost btn--sm"><i class="ti ti-x"></i></button></div>';
   }).join('');
 }
 
