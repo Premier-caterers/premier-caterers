@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=11">
+<link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body>
 
@@ -6099,7 +6099,17 @@ async function uploadToStorage(eventId, field, file){
     const url = await snap.ref.getDownloadURL();
     return url;
   } catch(err) {
-    showToast('Upload failed: ' + err.message);
+    // Firebase's raw codes are opaque; name the actual cause so it's
+    // clear whether this is a permissions problem or something else.
+    const code = (err && err.code) || '';
+    let msg;
+    if(code === 'storage/unauthorized') msg = 'Upload blocked \u2014 Firebase Storage rules are denying writes.';
+    else if(code === 'storage/unauthenticated') msg = 'Upload blocked \u2014 not signed in to Firebase.';
+    else if(code === 'storage/retry-limit-exceeded') msg = 'Upload timed out \u2014 check your connection.';
+    else if(code === 'storage/quota-exceeded') msg = 'Upload failed \u2014 storage quota exceeded.';
+    else msg = 'Upload failed: ' + ((err && err.message) || code || 'unknown error');
+    console.error('uploadToStorage failed', code, err);
+    showToast(msg);
     return null;
   }
 }
@@ -6239,13 +6249,20 @@ async function handleMultiAttachUpload(eventId, field, label, fileList){
   const e = events.find(x=>x.id===eventId); if(!e) return;
   if(!Array.isArray(e[field])) e[field] = [];
   showToast('Uploading '+files.length+' file'+(files.length>1?'s':'')+'\u2026');
+  // Track successes and failures separately \u2014 this previously reported
+  // "Uploaded \u2713" even when every file failed, because a null url was
+  // silently skipped and the success toast fired regardless.
+  let ok = 0, failed = 0;
   for(const file of files){
     const url = await uploadToStorage(eventId, field, file);
-    if(url) e[field].push({ url, name:file.name, size:file.size, addedAt:Date.now(), source:'you' });
+    if(url){ e[field].push({ url, name:file.name, size:file.size, addedAt:Date.now(), source:'you' }); ok++; }
+    else { failed++; }
   }
-  await _saveEvent(e);
+  if(ok) await _saveEvent(e);
   _maRenderList(eventId, field, label);
-  showToast('Uploaded \u2713');
+  if(failed && !ok) showToast('Upload failed \u2014 nothing was saved. See the error above.');
+  else if(failed) showToast('Uploaded '+ok+', but '+failed+' failed');
+  else showToast('Uploaded \u2713');
   render();
 }
 function saveMultiAttachUrl(eventId, field, label){
