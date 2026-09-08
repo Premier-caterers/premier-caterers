@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=10">
+<link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
 
@@ -2973,7 +2973,7 @@ function renderCoverSheet(){
 
   return `
     <div class="section-header">
-      <div class="section-title">Weekly Cover Sheet</div>
+      <div><div class="eyebrow">This week</div><div class="section-title">Cover sheet</div></div>
       <div style="display:flex;gap:8px;align-items:center">
         <button onclick="changeWeek(-1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">\u2039</button>
         <span style="font-size:13px;font-weight:600;color:var(--text)">${wLabel}</span>
@@ -3922,7 +3922,7 @@ function renderPipeline(){
 
   let h = `
   <div class="section-header">
-    <div class="section-title">Client Pipeline</div>
+    <div><div class="eyebrow">Sales</div><div class="section-title">Pipeline</div></div>
     ${role.canEdit ? `<button class="add-btn" onclick="openAddInquiryModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add inquiry</button>` : ''}
   </div>
   ${statHtml}
@@ -6979,7 +6979,7 @@ function renderClients(){
 
   return `<div class="view-pad">
     <div class="section-header">
-      <div class="section-title">Clients</div>
+      <div><div class="eyebrow">Sales</div><div class="section-title">Clients</div></div>
       <input id="clientsSearchInput" class="field" style="max-width:280px" type="text" placeholder="Search by name, org, phone, email…"
         value="${(window._clientsSearch||'').replace(/"/g,'&quot;')}"
         oninput="window._clientsSearch=this.value;clearTimeout(window._cliT);window._cliT=setTimeout(render,250)">
@@ -7719,7 +7719,7 @@ function renderSchedule(){
     <div class="stat-card"><div class="stat-n">${totP}</div><div class="stat-l">Porters</div></div>
   </div>
   <div class="section-header">
-    <div class="section-title">Staff schedule — ${schedWeekLabel}</div>
+    <div><div class="eyebrow">This week · ${schedWeekLabel}</div><div class="section-title">Staff schedule</div></div>
     <div style="display:flex;gap:6px">
       <button onclick="printFullSchedule()" class="icon-btn" title="Print full schedule"><i class="ti ti-printer"></i></button>
       <button onclick="downloadFullSchedule()" class="icon-btn" title="Download full schedule"><i class="ti ti-download"></i></button>
@@ -7944,7 +7944,7 @@ function renderChecklists(){
   const _pendingId = window._pendingChecklistId;
   if(_pendingId){ window._clOpen = {}; window._clOpen[_pendingId] = true; window._pendingChecklistId = null; }
 
-  let h = navReturnBreadcrumb() + '<div class="section-header"><div class="section-title">Event checklists</div>'
+  let h = navReturnBreadcrumb() + '<div class="section-header"><div><div class="eyebrow">This week</div><div class="section-title">Checklists</div></div>'
     + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
     + '<button onclick="expandAllChecklists()" class="btn btn--ghost btn--sm">Expand all</button>'
     + '<button onclick="collapseAllChecklists()" class="btn btn--ghost btn--sm">Collapse all</button>'
@@ -8345,7 +8345,7 @@ function renderChanges(){
   const weekChanges = changes.filter(c=>weekJobs.has(c.job));
   return `
   <div class="section-header">
-    <div class="section-title">Changes & updates log</div>
+    <div><div class="eyebrow">This week</div><div class="section-title">Changes log</div></div>
     <div style="display:flex;gap:8px;align-items:center">
       <button onclick="changeWeek(-1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">\u2039</button>
       <span style="font-size:13px;font-weight:600;color:var(--text)">${wLabel}</span>
@@ -8601,7 +8601,7 @@ function renderGrocery(){
   const activeDbTab   = window._grocDbTab || 'stations';
 
   let h = `<div class="section-header">
-    <div class="section-title">Grocery — ${weekLabel}</div>
+    <div><div class="eyebrow">Kitchen &amp; ops · ${weekLabel}</div><div class="section-title">Grocery</div></div>
     <div style="display:flex;gap:6px">
       <button onclick="printGroceryList()" class="icon-btn" title="Print grocery list"><i class="ti ti-printer"></i></button>
       <button onclick="downloadGroceryList()" class="icon-btn" title="Download grocery list"><i class="ti ti-download"></i></button>
@@ -9634,7 +9634,7 @@ function renderInvoices(){
   const wd = getWeekEndDate(currentWeekOffset);
   const wLabel = 'W/E '+months2[wd.getUTCMonth()]+' '+wd.getUTCDate()+', '+String(wd.getUTCFullYear()).slice(2);
 
-  let h = navReturnBreadcrumb() + '<div class="section-header" style="margin-bottom:.75rem"><div class="section-title">Quotes &amp; Invoices</div><div class="btn-row">'+viewBtnHtml+'</div></div>';
+  let h = navReturnBreadcrumb() + '<div class="section-header" style="margin-bottom:.75rem"><div><div class="eyebrow">Sales</div><div class="section-title">Quotes &amp; Invoices</div></div><div class="btn-row">'+viewBtnHtml+'</div></div>';
 
   if(invView==='default'){
     h += buildSection(wLabel, thisWeekEvts);
@@ -12126,7 +12126,7 @@ function renderReports(){
     </tr>`;
   }).join('');
 
-  return `<div class="section-header"><div class="section-title">Reports</div></div>
+  return `<div class="section-header"><div><div class="eyebrow">Office</div><div class="section-title">Reports</div></div></div>
 
   <div class="day-label">Business overview — ${thisYear}</div>
   <div class="stats-row">
@@ -12208,7 +12208,7 @@ function renderTrash(){
 
 function renderVenues(){
   let h = `<div class="section-header">
-    <div class="section-title">Venues</div>
+    <div><div class="eyebrow">Kitchen &amp; ops</div><div class="section-title">Venues</div></div>
     <button class="add-btn" onclick="openAddVenueModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add venue</button>
   </div>`;
 
@@ -12374,7 +12374,7 @@ function renderRoadmap(){
   ROADMAP_BUCKETS.forEach(b=>counts[b.key]=roadmap.filter(r=>(r.status||'later')===b.key).length);
 
   let h = `<div class="section-header">
-    <div class="section-title">Roadmap</div>
+    <div><div class="eyebrow">Office</div><div class="section-title">Roadmap</div></div>
     ${canEdit?`<button class="add-btn" onclick="openRoadmapModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add idea</button>`:''}
   </div>
   <div style="font-size:13px;color:var(--text3);margin:-6px 0 16px">What's built, what's being built, and everything planned. ${canEdit?'Change a status to move an item between columns.':''}</div>`;
@@ -15011,7 +15011,7 @@ async function confirmSendInvoiceEmail(eid){
 
 // ── RENDER EMAIL INBOX ──
 async function renderEmail(){
-  let h = '<div class="section-header"><div class="section-title">Email</div>'
+  let h = '<div class="section-header"><div><div class="eyebrow">Sales</div><div class="section-title">Email</div></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
     +(isGmailConnected()
       ? '<span style="font-size:12px;color:var(--green-text);display:flex;align-items:center;gap:4px"><i class="ti ti-circle-check"></i>'+gmailUser+'</span>'

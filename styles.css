@@ -81,7 +81,7 @@ a{color:var(--blue-mid);text-decoration:none}
    asked for, which is why nothing stood out. These give the serif a
    real presence at the two levels that carry a page: the page title
    and the big summary numbers. */
-.section-title{font-size:26px;line-height:1.12}
+.section-title{font-size:30px;line-height:1.05}
 .client-name,.inq-name,.inq-event-name,.hub-name{font-size:17px;line-height:1.25}
 .stat-n,.pl-stat .v{font-size:24px;line-height:1.05}
 .home-greeting{font-size:30px;line-height:1.08}
@@ -160,12 +160,17 @@ a{color:var(--blue-mid);text-decoration:none}
   .wk-stat{padding:0 1.15rem}
   .wk-stat__n{font-size:21px}
 }
-.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem}
-/* NOTE: font-size/family for .section-title lives in the type-scale block
-   above (26px Fraunces). This rule previously redeclared font-size:18px
-   here and silently overrode it — only colour and weight belong here. */
-.section-title{font-weight:600;color:var(--text)}
-.add-btn{display:flex;align-items:center;gap:5px;padding:7px 14px;border:none;border-radius:var(--radius);background:var(--maroon);color:#fff;font-size:13px;font-weight:500;cursor:pointer;box-shadow:var(--shadow-card)}
+/* Every screen's header is the same editorial masthead: a large serif
+   title sitting on a rule, with its actions pushed right. Restyling
+   these two shared classes carries the This Week treatment to Pipeline,
+   Clients, Reports, Invoices, Equipment and the rest without touching
+   their markup. */
+.section-header{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  margin-bottom:1.7rem;padding-bottom:1rem;border-bottom:0.5px solid var(--border2)}
+.section-title{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:30px;line-height:1.05;
+  letter-spacing:-.4px;color:var(--text)}
+@media(max-width:700px){.section-title{font-size:24px}}
+.add-btn{display:flex;align-items:center;gap:6px;padding:8px 16px;border:none;border-radius:var(--radius);background:var(--maroon);color:#fff;font-size:13px;font-weight:600;cursor:pointer;box-shadow:none}
 .add-btn:hover{background:var(--maroon-deep)}
 
 .filter-bar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:1.6rem}
