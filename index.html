@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=13">
+<link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
 
@@ -6089,18 +6089,19 @@ function formatMealDay(meal){
 
 // ── FIREBASE STORAGE UPLOADS ─────────────────────────────────
 async function uploadToStorage(eventId, field, file){
-  console.log('[upload] start', {eventId, field, name:file && file.name, size:file && file.size, hasStorage:!!storage});
-  if(!storage){ console.error('[upload] storage object is not initialized'); showToast('Storage not initialized'); return null; }
+  // Late recovery: if storage somehow wasn't set at init, try once more here
+  // rather than failing the upload outright.
+  if(!storage && typeof firebase !== 'undefined' && firebase.storage){
+    try { storage = firebase.storage(); } catch(e){ console.error('storage retry failed', e); }
+  }
+  if(!storage){ showToast('Storage unavailable \u2014 reload the page and try again.'); return null; }
   const ext = file.name.split('.').pop();
   const path = 'events/' + eventId + '/' + field + '_' + Date.now() + '.' + ext;
-  console.log('[upload] path', path);
   const ref = storage.ref(path);
   showToast('Uploading...');
   try {
     const snap = await ref.put(file);
-    console.log('[upload] put ok, getting url');
     const url = await snap.ref.getDownloadURL();
-    console.log('[upload] success', url);
     return url;
   } catch(err) {
     // Firebase's raw codes are opaque; name the actual cause so it's
@@ -6249,9 +6250,7 @@ function _maRenderList(eventId, field, label){
     </div>`).join('');
 }
 async function handleMultiAttachUpload(eventId, field, label, fileList){
-  const files = Array.from(fileList||[]);
-  console.log('[upload] handler fired, files:', files.length, files.map(f=>f.name));
-  if(!files.length){ console.warn('[upload] no files in the picker \u2014 nothing to do'); return; }
+  const files = Array.from(fileList||[]); if(!files.length) return;
   const e = events.find(x=>x.id===eventId); if(!e) return;
   if(!Array.isArray(e[field])) e[field] = [];
   showToast('Uploading '+files.length+' file'+(files.length>1?'s':'')+'\u2026');
@@ -15793,13 +15792,21 @@ window.copyScript = ()=>{ navigator.clipboard?.writeText(document.getElementById
 // ── INIT (polls until Firebase SDK available) ──
 function _startApp() {
   if(db) return; // already initialized
-  if(typeof firebase === 'undefined' || typeof firebase.firestore === 'undefined') {
+  // Wait for BOTH SDKs. Previously this only checked firebase.firestore, so on
+  // a slow load storage could still be undefined when we assigned it \u2014 and
+  // because the `if(db) return` guard above stops any retry, `storage` then
+  // stayed undefined for the whole session and every file upload silently failed.
+  if(typeof firebase === 'undefined' || typeof firebase.firestore === 'undefined' || typeof firebase.storage === 'undefined') {
     setTimeout(_startApp, 50);
     return;
   }
   if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
   db = firebase.firestore();
-  storage = firebase.storage();
+  try {
+    storage = firebase.storage();
+  } catch(e) {
+    console.error('Firebase Storage failed to initialize:', e);
+  }
   eventsCol    = db.collection('events');
   changesCol   = db.collection('changes');
   inquiriesCol = db.collection('inquiries');
