@@ -125,7 +125,7 @@ a{color:var(--blue-mid);text-decoration:none}
 .nav-badge{margin-left:auto;font-size:10px;background:var(--neutral-bg);color:var(--neutral-text);padding:1px 6px;border-radius:8px;font-weight:600}
 .nav-item.active .nav-badge{background:#fff;color:var(--maroon);border:0.5px solid var(--blue-border)}
 
-.main{flex:1;padding:1.25rem 1.4rem 2rem;overflow-x:hidden;min-width:0}
+.main{flex:1;padding:1.9rem 2.1rem 2.6rem;overflow-x:hidden;min-width:0}
 
 /* ── Banners ── */
 .banner{border-radius:var(--radius-lg);padding:.8rem 1.1rem;margin-bottom:1rem;display:flex;gap:10px;align-items:flex-start}
@@ -142,12 +142,15 @@ a{color:var(--blue-mid);text-decoration:none}
 .stat-l{font-size:11px;color:var(--text2);margin-top:3px}
 
 /* ── Section chrome ── */
-.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem}
-.section-title{font-size:18px;font-weight:600;color:var(--text)}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem}
+/* NOTE: font-size/family for .section-title lives in the type-scale block
+   above (26px Fraunces). This rule previously redeclared font-size:18px
+   here and silently overrode it — only colour and weight belong here. */
+.section-title{font-weight:600;color:var(--text)}
 .add-btn{display:flex;align-items:center;gap:5px;padding:7px 14px;border:none;border-radius:var(--radius);background:var(--maroon);color:#fff;font-size:13px;font-weight:500;cursor:pointer;box-shadow:var(--shadow-card)}
 .add-btn:hover{background:var(--maroon-deep)}
 
-.filter-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1.1rem}
+.filter-bar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:1.6rem}
 .filter-btn{padding:5px 13px;border:0.5px solid var(--border2);border-radius:16px;background:var(--bg);font-size:12px;color:var(--text2);cursor:pointer;transition:all .12s}
 .filter-btn.active{background:var(--maroon-tint);border-color:var(--blue-border);color:var(--blue-text);font-weight:500}
 
@@ -303,7 +306,7 @@ a{color:var(--blue-mid);text-decoration:none}
 .form-row textarea{min-height:70px;resize:vertical}
 
 /* ── Settings ── */
-.settings-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.3rem;margin-bottom:1rem;box-shadow:var(--shadow-card)}
+.settings-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.7rem;margin-bottom:1.4rem;box-shadow:var(--shadow-card)}
 .settings-card h3{font-size:15px;font-weight:600;color:var(--text);margin-bottom:.5rem}
 .settings-card p{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:.75rem}
 .settings-card input{width:100%;background:var(--bg3);border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px 12px;font-size:13px;color:var(--text);font-family:inherit;margin-bottom:8px}
@@ -631,7 +634,7 @@ a{color:var(--blue-mid);text-decoration:none}
 
 /* ── 3 · CARDS ── */
 .card{background:var(--bg);border:var(--hairline);border-radius:var(--radius);overflow:hidden}
-.card + .card{margin-top:12px}
+.card + .card{margin-top:16px}
 .card--flat{box-shadow:none}
 .card--raised{box-shadow:var(--shadow-card)}
 .card--accent{border-left:3px solid var(--maroon)}
@@ -667,31 +670,31 @@ a{color:var(--blue-mid);text-decoration:none}
 .field-error{font-size:11.5px;color:var(--red-text);margin-top:3px;font-weight:500}
 
 /* ── 5 · TABLE — the one list surface ── */
-.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
 .tbl th{
-  text-align:left;padding:0 9px 6px;border-bottom:0.5px solid var(--border2);
+  text-align:left;padding:0 12px 10px;border-bottom:0.5px solid var(--border2);
   font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
   color:var(--text3);white-space:nowrap
 }
-.tbl td{padding:8px 9px;border-bottom:var(--hairline);vertical-align:middle}
+.tbl td{padding:13px 12px;border-bottom:var(--hairline);vertical-align:middle}
 .tbl tbody tr:hover td{background:var(--bg2)}
 .tbl .num{text-align:right;font-variant-numeric:tabular-nums}
 .tbl .shrink{width:1%;white-space:nowrap}
 .tbl__band td{
-  background:var(--bg2);padding:6px 9px;border-bottom:var(--hairline);
+  background:var(--bg3);padding:10px 12px;border-bottom:var(--hairline);
   font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text2)
 }
 .tbl tbody tr.tbl__band:hover td{background:var(--bg2)}
 .tbl__add td{padding:0;border-bottom:var(--hairline)}
-.tbl__add .inner{display:flex;align-items:center;gap:8px;padding:7px 9px;
+.tbl__add .inner{display:flex;align-items:center;gap:8px;padding:11px 12px;
   font-size:12px;color:var(--text3);cursor:pointer}
 .tbl__add .inner:hover{background:var(--bg2);color:var(--text2)}
 .tbl__add .inner b{color:var(--maroon);font-weight:600}
 .tbl-wrap{border:var(--hairline);border-radius:var(--radius);overflow:auto;background:var(--bg)}
 .tbl-wrap > .tbl{margin:0}
 .tbl-wrap > .tbl th{padding-top:10px;background:var(--bg);position:sticky;top:0;z-index:2}
-.tbl-wrap > .tbl th:first-child,.tbl-wrap > .tbl td:first-child{padding-left:14px}
-.tbl-wrap > .tbl th:last-child,.tbl-wrap > .tbl td:last-child{padding-right:14px}
+.tbl-wrap > .tbl th:first-child,.tbl-wrap > .tbl td:first-child{padding-left:18px}
+.tbl-wrap > .tbl th:last-child,.tbl-wrap > .tbl td:last-child{padding-right:18px}
 .tbl-wrap > .tbl tr:last-child td{border-bottom:none}
 
 /* ── Day-band summary bar (the proportion strip) ── */
