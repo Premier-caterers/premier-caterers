@@ -110,13 +110,23 @@ async function loadData(){
     const cells = TRUCKS.map(t=>{
       const rec = byWeekTruck[w+'::'+t.id];
       if(!rec) return `<td class="center"><span class="pill missing">Missing</span></td>`;
-      const uncheckedCount = Object.values(rec.items||{}).filter(v=>!v).length;
+      const itemEntries = Object.entries(rec.items||{});
+      const blankCount = itemEntries.filter(([k,v])=>v===false||v===''||v==null).length;
+      const flaggedLevels = itemEntries.filter(([k,v])=>v==='Low'||v==='Empty').map(([k])=>k);
       const fuelBits = [];
       if(rec.gallonsAdded!=null) fuelBits.push(rec.gallonsAdded+' gal');
       if(rec.fillCost!=null) fuelBits.push('$'+rec.fillCost.toFixed(2));
       if(rec.defToppedOff) fuelBits.push('DEF topped off');
       const fuelLine = fuelBits.length ? `<div class="detail">${fuelBits.join(' · ')}</div>` : '';
-      return `<td class="center"><span class="pill done">✓ Done</span>${uncheckedCount?`<div class="detail">${uncheckedCount} item${uncheckedCount===1?'':'s'} left unchecked</div>`:''}${fuelLine}${rec.notes?`<div class="detail">"${rec.notes}"</div>`:''}</td>`;
+      const flagLine = flaggedLevels.length ? `<div class="detail" style="color:var(--red)">${flaggedLevels.join(', ')}</div>` : '';
+      const blankLine = blankCount ? `<div class="detail">${blankCount} item${blankCount===1?'':'s'} left blank</div>` : '';
+      const photoLine = (rec.photoUrls && Object.keys(rec.photoUrls).length)
+        ? Object.entries(rec.photoUrls).map(([label,url])=>`<div class="detail"><a href="${url}" target="_blank" rel="noopener">📷 ${label}</a></div>`).join('')
+        : '';
+      const locationLine = rec.location
+        ? `<div class="detail"><a href="https://www.google.com/maps?q=${rec.location.lat},${rec.location.lng}" target="_blank" rel="noopener">📍 Location</a></div>`
+        : `<div class="detail" style="color:var(--red)">No location captured</div>`;
+      return `<td class="center"><span class="pill done">✓ Done</span>${flagLine}${blankLine}${fuelLine}${photoLine}${locationLine}${rec.notes?`<div class="detail">"${rec.notes}"</div>`:''}</td>`;
     }).join('');
     const label = new Date(w+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
     return `<tr><td><b>Week of ${label}</b></td>${cells}</tr>`;

@@ -38,6 +38,10 @@
   .field-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0}
   .field-label{font-size:15px}
   .field-row select,.field-row input[type=number]{border:1px solid var(--hairline);border-radius:8px;padding:8px 10px;font-size:15px;font-family:inherit;width:130px;text-align:right}
+  .photo-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0 10px}
+  .photo-btn{background:var(--wine-tint);color:var(--wine);border:none;border-radius:8px;padding:8px 14px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer}
+  .photo-status{font-size:13px;color:var(--text3)}
+  .photo-status.ok{color:var(--green);font-weight:600}
   .submit-btn{width:100%;background:var(--wine);color:#fff;border:none;border-radius:12px;padding:16px;font-size:16.5px;font-weight:600;margin-top:16px;cursor:pointer}
   .submit-btn:disabled{opacity:.5}
   .submitted-note{background:var(--green-tint);color:var(--green);border-radius:10px;padding:14px;font-size:14.5px;margin-top:14px;display:flex;align-items:center;gap:8px}
@@ -57,6 +61,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script>
 const firebaseConfig = {
   apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
@@ -68,25 +73,33 @@ const firebaseConfig = {
 };
 if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const storage = firebase.storage();
 
-// Each truck's checklist items. The Reefer truck gets two extra items for
-// the refrigeration unit itself, on top of the standard vehicle items.
+// Each item is either a plain checkbox ('check'), a Full/OK/Low level pick
+// ('level'), a fuel-tank fraction pick ('fuel'), or a number entry ('number').
+// requirePhoto on an item means a photo must be attached before submitting —
+// used here for mileage, so the number is backed by an odometer photo.
+const LEVEL_OPTS = ['Full','OK','Low'];
+const FUEL_LEVELS = ['Full','3/4','Half','1/4','Empty'];
 const STANDARD_ITEMS = [
-  'Oil level checked',
-  'Tire pressure & condition checked (all tires)',
-  'Coolant / washer fluid / brake fluid levels checked',
-  'Headlights, brake lights & turn signals working',
-  'Interior clean',
-  'Exterior clean, no new dents or damage',
-  'Fuel level noted',
-  'Mileage noted'
+  { label:'Oil level checked',                                    type:'level' },
+  { label:'Tire pressure & condition checked (all tires)',        type:'check' },
+  { label:'Coolant / washer fluid / brake fluid levels checked',  type:'level' },
+  { label:'Headlights, brake lights & turn signals working',      type:'check' },
+  { label:'Interior clean',                                       type:'check' },
+  { label:'Exterior clean, no new dents or damage',                type:'check' },
+  { label:'Fuel level noted',                                     type:'fuel' },
+  { label:'Mileage noted',                                        type:'number', placeholder:'e.g. 84210', requirePhoto:true, photoLabel:'Photo of odometer' }
+];
+const REEFER_EXTRA_ITEMS = [
+  { label:'Refrigeration unit running & holding temperature', type:'check' },
+  { label:'Reefer unit fuel level checked',                   type:'check' }
 ];
 const TRUCKS = [
-  { id:'reefer', name:'Reefer truck', items: STANDARD_ITEMS.concat(['Refrigeration unit running & holding temperature','Reefer unit fuel level checked']), hasFuelSection:true },
+  { id:'reefer', name:'Reefer truck', items: STANDARD_ITEMS.concat(REEFER_EXTRA_ITEMS), hasFuelSection:true },
   { id:'large',  name:'Large truck',  items: STANDARD_ITEMS, hasFuelSection:true },
   { id:'van',    name:'Van',          items: STANDARD_ITEMS, hasFuelSection:false }
 ];
-const FUEL_LEVELS = ['Full','3/4','Half','1/4','Empty'];
 
 // "Week of" is always the most recent Tuesday (today, if today IS Tuesday) —
 // this way it doesn't matter which day he actually gets to it, everything
@@ -99,7 +112,15 @@ function weekOfTuesday(){
   return d.toISOString().slice(0,10);
 }
 const weekOf = weekOfTuesday();
-document.getElementById('weekLabel').textContent = 'Week of ' + new Date(weekOf+'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric'});
+
+// A different item requires a photo each week, on top of the mileage photo,
+// so it's never predictable which one he'll need proof for. Deterministic
+// from the week itself (not random per page load) — same item all week,
+// same item for every truck, changes automatically the following week.
+const SPOT_CHECK_POOL = STANDARD_ITEMS.filter(it=>!it.requirePhoto).map(it=>it.label);
+const weekIndex = Math.floor(new Date(weekOf+'T00:00:00').getTime() / (7*24*60*60*1000));
+const spotCheckLabel = SPOT_CHECK_POOL[((weekIndex % SPOT_CHECK_POOL.length) + SPOT_CHECK_POOL.length) % SPOT_CHECK_POOL.length];
+document.getElementById('weekLabel').innerHTML = 'Week of ' + new Date(weekOf+'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric'}) + '<br><span style="color:var(--wine);font-weight:600">This week\'s spot check: ' + spotCheckLabel + '</span>';
 
 let existing = {}; // truckId -> doc data, if already submitted this week
 
@@ -108,6 +129,27 @@ async function loadExisting(){
   snap.forEach(doc=>{ existing[doc.data().truckId] = { id: doc.id, ...doc.data() }; });
 }
 
+function itemFieldHtml(truckId, item, i){
+  const id = truckId+'-'+i;
+  let fieldHtml;
+  if(item.type==='level'){
+    fieldHtml = `<div class="field-row"><label class="field-label" for="${id}">${item.label}</label><select id="${id}"><option value="">— select —</option>${LEVEL_OPTS.map(l=>`<option value="${l}">${l}</option>`).join('')}</select></div>`;
+  } else if(item.type==='fuel'){
+    fieldHtml = `<div class="field-row"><label class="field-label" for="${id}">${item.label}</label><select id="${id}"><option value="">— select —</option>${FUEL_LEVELS.map(l=>`<option value="${l}">${l}</option>`).join('')}</select></div>`;
+  } else if(item.type==='number'){
+    fieldHtml = `<div class="field-row"><label class="field-label" for="${id}">${item.label}</label><input type="number" id="${id}" placeholder="${item.placeholder||''}"></div>`;
+  } else {
+    fieldHtml = `<div class="item"><input type="checkbox" id="${id}"><label for="${id}">${item.label}</label></div>`;
+  }
+  const needsPhoto = item.requirePhoto || item.label===spotCheckLabel;
+  if(!needsPhoto) return fieldHtml;
+  const photoLabel = item.requirePhoto ? (item.photoLabel||'Take photo') : ('This week\'s spot check — photo of: '+item.label);
+  return fieldHtml + `<div class="photo-row">
+    <input type="file" accept="image/*" capture="environment" id="${id}-photo" style="display:none" onchange="handlePhotoSelected('${id}-photo')">
+    <button type="button" class="photo-btn" onclick="document.getElementById('${id}-photo').click()"><i class="ti ti-camera"></i> ${photoLabel}</button>
+    <span class="photo-status" id="${id}-photo-status">Required</span>
+  </div>`;
+}
 function render(){
   const el = document.getElementById('app');
   el.innerHTML = TRUCKS.map(t=>{
@@ -131,6 +173,11 @@ function render(){
            <div class="field-row">
              <label class="field-label">What did the fill-up cost?</label>
              <input type="number" step="0.01" min="0" id="fillcost-${t.id}" placeholder="$">
+           </div>
+           <div class="photo-row">
+             <input type="file" accept="image/*" capture="environment" id="receipt-${t.id}-photo" style="display:none" onchange="handlePhotoSelected('receipt-${t.id}-photo')">
+             <button type="button" class="photo-btn" onclick="document.getElementById('receipt-${t.id}-photo').click()"><i class="ti ti-receipt"></i> Photo of fuel receipt</button>
+             <span class="photo-status" id="receipt-${t.id}-photo-status">Required if you filled up</span>
            </div>` : '';
     return `<div class="truck-card">
       <div class="truck-head" onclick="toggleTruck('${t.id}')">
@@ -139,7 +186,7 @@ function render(){
       </div>
       <div class="truck-body" id="body-${t.id}">
         ${done ? `<div class="submitted-note">✓ Submitted ${new Date(done.submittedAt).toLocaleString()}${done.notes?' — "'+done.notes+'"':''}</div>` :
-          `${t.items.map((item,i)=>`<div class="item"><input type="checkbox" id="${t.id}-${i}"><label for="${t.id}-${i}">${item}</label></div>`).join('')}
+          `${t.items.map((item,i)=>itemFieldHtml(t.id,item,i)).join('')}
            ${fuelSection}
            <textarea id="notes-${t.id}" placeholder="Anything to flag? (optional)"></textarea>
            <button class="submit-btn" onclick="submitTruck('${t.id}')">Submit ${t.name} checklist</button>`}
@@ -155,16 +202,54 @@ window.toggleTruck = function(id){
   });
 };
 
+window.handlePhotoSelected = function(fieldId){
+  const input = document.getElementById(fieldId);
+  const statusEl = document.getElementById(fieldId+'-status');
+  if(input.files && input.files[0] && statusEl){
+    statusEl.textContent = '✓ Photo attached';
+    statusEl.classList.add('ok');
+    statusEl.style.color = '';
+  }
+};
+// Best-effort — if the phone denies permission or GPS is unavailable, we
+// still let the submission through with location:null rather than blocking.
+function captureLocation(){
+  return new Promise((resolve)=>{
+    if(!navigator.geolocation){ resolve(null); return; }
+    const timer = setTimeout(()=>resolve(null), 8000);
+    navigator.geolocation.getCurrentPosition(
+      pos=>{ clearTimeout(timer); resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }); },
+      ()=>{ clearTimeout(timer); resolve(null); },
+      { enableHighAccuracy:true, timeout:7000 }
+    );
+  });
+}
+
 window.submitTruck = async function(id){
   const truck = TRUCKS.find(t=>t.id===id);
-  const checked = {};
-  let allChecked = true;
+  const values = {};
+  const photoFiles = {}; // item label -> File, for items with requirePhoto
+  let allComplete = true;
+  let missingPhoto = false;
   truck.items.forEach((item,i)=>{
-    const box = document.getElementById(id+'-'+i);
-    checked[item] = box.checked;
-    if(!box.checked) allChecked = false;
+    const el = document.getElementById(id+'-'+i);
+    let v, filled;
+    if(item.type==='check'){ v = el.checked; filled = el.checked; }
+    else if(item.type==='number'){ v = el.value===''?null:parseFloat(el.value); filled = el.value!==''; }
+    else { v = el.value||''; filled = !!v; }
+    values[item.label] = v;
+    if(!filled) allComplete = false;
+    if(item.requirePhoto || item.label===spotCheckLabel){
+      const photoInput = document.getElementById(id+'-'+i+'-photo');
+      if(photoInput && photoInput.files && photoInput.files[0]){
+        photoFiles[item.label] = photoInput.files[0];
+      } else {
+        missingPhoto = true;
+        const statusEl = document.getElementById(id+'-'+i+'-photo-status');
+        if(statusEl){ statusEl.textContent = 'Photo required'; statusEl.style.color = '#B3261E'; }
+      }
+    }
   });
-  if(!allChecked && !confirm('Not everything is checked off — submit anyway?')) return;
   const notes = (document.getElementById('notes-'+id).value||'').trim();
   const fuelData = {};
   if(truck.hasFuelSection){
@@ -175,16 +260,45 @@ window.submitTruck = async function(id){
     fuelData.gallonsAdded = isFinite(gal) ? gal : null;
     const cost = parseFloat(document.getElementById('fillcost-'+id).value);
     fuelData.fillCost = isFinite(cost) ? cost : null;
+
+    const filledUpToday = fuelData.gallonsAdded!=null || fuelData.fillCost!=null;
+    if(filledUpToday){
+      const receiptInput = document.getElementById('receipt-'+id+'-photo');
+      if(receiptInput && receiptInput.files && receiptInput.files[0]){
+        photoFiles['Fuel receipt'] = receiptInput.files[0];
+      } else {
+        missingPhoto = true;
+        const statusEl = document.getElementById('receipt-'+id+'-photo-status');
+        if(statusEl){ statusEl.textContent = 'Receipt photo required — you logged a fill-up'; statusEl.style.color = '#B3261E'; }
+      }
+    }
   }
+  if(missingPhoto){ alert('A required photo is missing — attach it before submitting.'); return; }
+  if(!allComplete && !confirm('Not everything is filled in — submit anyway?')) return;
+  const submitBtn = document.querySelector('#body-'+id+' .submit-btn');
+  if(submitBtn){ submitBtn.disabled = true; submitBtn.textContent = 'Submitting…'; }
   try{
+    const location = await captureLocation();
+    const photoUrls = {};
+    for(const label in photoFiles){
+      const path = 'truckPhotos/'+id+'/'+weekOf+'_'+Date.now()+'_'+label.replace(/[^a-z0-9]/gi,'_')+'.jpg';
+      const ref = storage.ref().child(path);
+      await ref.put(photoFiles[label]);
+      photoUrls[label] = await ref.getDownloadURL();
+    }
     await db.collection('truckChecklists').add({
       truckId: id, truckName: truck.name, weekOf,
-      items: checked, notes, ...fuelData, submittedAt: Date.now()
+      items: values, notes, ...fuelData, photoUrls, location,
+      submittedAt: Date.now()
     });
     await loadExisting();
     render();
-  }catch(e){ alert('Could not submit — check your connection and try again.\n'+e.message); }
+  }catch(e){
+    alert('Could not submit — check your connection and try again.\n'+e.message);
+    if(submitBtn){ submitBtn.disabled = false; submitBtn.textContent = 'Submit '+truck.name+' checklist'; }
+  }
 };
+
 
 (async function init(){
   await loadExisting();
