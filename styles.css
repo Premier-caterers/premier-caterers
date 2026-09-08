@@ -1,5 +1,5 @@
 
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 
 /* ═══════════════════════════════════════════════════════════════
@@ -9,70 +9,86 @@
    referenced inline from JS) — only their values have been redesigned.
    ═══════════════════════════════════════════════════════════════ */
 :root{
-  /* surfaces */
-  --bg:#FFFFFF;--bg2:#FAFAF9;--bg3:#F2F2EF;
-  /* text */
-  --text:#1D1F21;--text2:#63666A;--text3:#93968F;
-  /* hairlines */
-  --border:#E7E7E3;--border2:#D3D4CF;
-  /* brand */
-  --maroon:#7A2E3D;--maroon-deep:#5C2230;--maroon-tint:#F4E9EC;
-  --brass:#B98B2E;--brass-deep:#8F6A1E;--brass-tint:#FAF0DC;
-  /* primary/active accent family — kept name "blue" for compatibility, mapped to brand wine */
-  --blue-bg:#F4E9EC;--blue-text:#5C2230;--blue-mid:#7A2E3D;--blue-border:#E1C7CD;
-  /* semantic / categorical roles */
-  --amber-bg:#FAF0DC;--amber-text:#7A5710;--amber-border:#E9CE8F;--amber-solid:#C9930F;
-  --green-bg:#E7F0E3;--green-text:#37613A;--green-border:#B7D2AE;--green-solid:#3F7A44;
-  --teal-bg:#E1EEEC;--teal-text:#1F5C56;--teal-solid:#2A7A70;
-  --purple-bg:#ECE8F1;--purple-text:#4F3E68;--purple-solid:#6B5487;
-  --coral-bg:#F6E8E1;--coral-text:#8A4A2F;--coral-solid:#B15A38;
-  /* NEW — the danger quartet. Retires #8B1A1A, #C81E1E, #c0392b, #e05c5c, #B44100. */
-  --red-bg:#FBE7E5;--red-text:#A32C22;--red-border:#EFC9C5;--red-solid:#B3261E;
-  /* NEW — the neutral quartet, for "no state" chips and disabled things */
-  --neutral-bg:#F2F2EF;--neutral-text:#63666A;--neutral-border:#D3D4CF;--neutral-solid:#8B8F89;
-  /* geometry */
-  --radius-sm:6px;--radius:10px;--radius-lg:16px;
-  /* NEW — one hairline and one focus ring for the whole app */
+  /* ── EDITORIAL DIRECTION ──────────────────────────────────────
+     Warm cream surfaces, deeper wine, softened rules. Every variable
+     NAME below is unchanged (index.html references them ~1,600 times
+     from inline styles) — only the VALUES are retuned, so the whole
+     app shifts palette without a single markup change. */
+
+  /* surfaces — cream ground, paper cards, cream-tinted bands */
+  --bg:#FFFDF9;--bg2:#FBF9F5;--bg3:#F6F2EA;
+  /* text — warm ink ramp, replaces the cold grey ramp */
+  --text:#2B2620;--text2:#5C544A;--text3:#8A8072;
+  /* hairlines — warm, softer than the old cold greys */
+  --border:#EDE8DE;--border2:#E5DFD3;
+  /* brand — deeper, richer wine */
+  --maroon:#6B2436;--maroon-deep:#511A29;--maroon-tint:#F3E7E9;
+  --brass:#A8792A;--brass-deep:#7F5A1B;--brass-tint:#F7EEDA;
+  /* primary/active accent family — name kept "blue" for compatibility */
+  --blue-bg:#F3E7E9;--blue-text:#511A29;--blue-mid:#6B2436;--blue-border:#DFC6CC;
+  /* semantic roles — warmed to sit on cream rather than grey */
+  --amber-bg:#F7EEDA;--amber-text:#7A5710;--amber-border:#E4C88A;--amber-solid:#C9930F;
+  --green-bg:#E6EDE3;--green-text:#3D5C3F;--green-border:#B4CBAB;--green-solid:#3F7A44;
+  --teal-bg:#E0EBE9;--teal-text:#1F5C56;--teal-solid:#2A7A70;
+  --purple-bg:#EBE7EF;--purple-text:#4F3E68;--purple-solid:#6B5487;
+  --coral-bg:#F5E6DE;--coral-text:#8A4A2F;--coral-solid:#B15A38;
+  --red-bg:#F5E3E0;--red-text:#9B3226;--red-border:#E8C4BE;--red-solid:#A83428;
+  --neutral-bg:#F1EDE5;--neutral-text:#5C544A;--neutral-border:#E5DFD3;--neutral-solid:#8A8072;
+  /* geometry — slightly softer corners */
+  --radius-sm:7px;--radius:9px;--radius-lg:14px;
   --hairline:0.5px solid var(--border);
   --hairline2:0.5px solid var(--border2);
   --focus:0 0 0 2px var(--maroon-tint),0 0 0 3px var(--maroon);
-  /* elevation */
-  --shadow-card:0 1px 2px rgba(29,31,33,.04),0 4px 14px rgba(29,31,33,.05);
-  --shadow-card-h:0 8px 26px rgba(29,31,33,.12);
-  --shadow-overlay:0 18px 48px rgba(29,31,33,.20);
+  /* elevation — warm-tinted shadows, lighter touch (editorial uses
+     rules rather than shadows to separate things) */
+  --shadow-card:0 1px 2px rgba(43,38,32,.03),0 3px 10px rgba(43,38,32,.04);
+  --shadow-card-h:0 6px 20px rgba(43,38,32,.09);
+  --shadow-overlay:0 18px 48px rgba(43,38,32,.18);
   /* pipeline stage accents */
-  --st-new:#6C7A87;--st-menu:#B98B2E;--st-booked:#37613A;--st-past:#8B8577;--st-lost:#9B7C7C;--st-past-paid:#3F7A44;--st-past-unpaid:#B15A38;
-  /* NAV — now a white panel with a real border, not a dark slab */
-  --nav-bg:#FFFFFF;--nav-bg-hover:#F6F2F3;--nav-text:#5B5F5C;--nav-text-active:#7A2E3D;
-  --nav-border:#C6CABF;--nav-border-w:2px;--nav-label:#9A9E97;
-  /* Legacy alias: index.html referenced var(--crimson) in six places and it was
-     never defined, so it silently fell back to the retired brand red #8B1A1A.
-     Defining it here points all six at the real brand colour. */
-  --crimson:#7A2E3D;
+  --st-new:#B8ADA0;--st-menu:#C9930F;--st-booked:#3D5C3F;--st-past:#8A8072;--st-lost:#A38B8B;--st-past-paid:#3F7A44;--st-past-unpaid:#B15A38;
+  /* NAV — cream rail with a warm rule */
+  --nav-bg:#FBF9F5;--nav-bg-hover:#F3E7E9;--nav-text:#5C544A;--nav-text-active:#6B2436;
+  --nav-border:#E5DFD3;--nav-border-w:1px;--nav-label:#A89B87;
+  /* Legacy alias kept — index.html references it in six places */
+  --crimson:#6B2436;
 }
 @media(prefers-color-scheme:dark){:root{
   /* No dark-mode variant yet — mirror light so rendering stays consistent on dark-mode devices */
-  --bg:#FFFFFF;--bg2:#FAFAF9;--bg3:#F2F2EF;
-  --text:#1D1F21;--text2:#63666A;--text3:#93968F;
-  --border:#E7E7E3;--border2:#D3D4CF;
-  --maroon:#7A2E3D;--maroon-deep:#5C2230;--maroon-tint:#F4E9EC;
-  --brass:#B98B2E;--brass-deep:#8F6A1E;--brass-tint:#FAF0DC;
-  --blue-bg:#F4E9EC;--blue-text:#5C2230;--blue-mid:#7A2E3D;--blue-border:#E1C7CD;
-  --amber-bg:#FAF0DC;--amber-text:#7A5710;--amber-border:#E9CE8F;--amber-solid:#C9930F;
-  --green-bg:#E7F0E3;--green-text:#37613A;--green-border:#B7D2AE;--green-solid:#3F7A44;
-  --teal-bg:#E1EEEC;--teal-text:#1F5C56;--teal-solid:#2A7A70;
-  --purple-bg:#ECE8F1;--purple-text:#4F3E68;--purple-solid:#6B5487;
-  --coral-bg:#F6E8E1;--coral-text:#8A4A2F;--coral-solid:#B15A38;
-  --red-bg:#FBE7E5;--red-text:#A32C22;--red-border:#EFC9C5;--red-solid:#B3261E;
-  --neutral-bg:#F2F2EF;--neutral-text:#63666A;--neutral-border:#D3D4CF;--neutral-solid:#8B8F89;
-  --nav-bg:#FFFFFF;--nav-bg-hover:#F6F2F3;--nav-text:#5B5F5C;--nav-text-active:#7A2E3D;
-  --nav-border:#C6CABF;--nav-label:#9A9E97;
+  --bg:#FFFDF9;--bg2:#FBF9F5;--bg3:#F6F2EA;
+  --text:#2B2620;--text2:#5C544A;--text3:#8A8072;
+  --border:#EDE8DE;--border2:#E5DFD3;
+  --maroon:#6B2436;--maroon-deep:#511A29;--maroon-tint:#F3E7E9;
+  --brass:#A8792A;--brass-deep:#7F5A1B;--brass-tint:#F7EEDA;
+  --blue-bg:#F3E7E9;--blue-text:#511A29;--blue-mid:#6B2436;--blue-border:#DFC6CC;
+  --amber-bg:#F7EEDA;--amber-text:#7A5710;--amber-border:#E4C88A;--amber-solid:#C9930F;
+  --green-bg:#E6EDE3;--green-text:#3D5C3F;--green-border:#B4CBAB;--green-solid:#3F7A44;
+  --teal-bg:#E0EBE9;--teal-text:#1F5C56;--teal-solid:#2A7A70;
+  --purple-bg:#EBE7EF;--purple-text:#4F3E68;--purple-solid:#6B5487;
+  --coral-bg:#F5E6DE;--coral-text:#8A4A2F;--coral-solid:#B15A38;
+  --red-bg:#F5E3E0;--red-text:#9B3226;--red-border:#E8C4BE;--red-solid:#A83428;
+  --neutral-bg:#F1EDE5;--neutral-text:#5C544A;--neutral-border:#E5DFD3;--neutral-solid:#8A8072;
+  --nav-bg:#FBF9F5;--nav-bg-hover:#F3E7E9;--nav-text:#5C544A;--nav-text-active:#6B2436;
+  --nav-border:#E5DFD3;--nav-label:#A89B87;
+  --crimson:#6B2436;
 }}
 
 body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg3);color:var(--text);font-size:15px;line-height:1.5;min-height:100vh}
 button{font-family:inherit;cursor:pointer}
 a{color:var(--blue-mid);text-decoration:none}
-.brand,.section-title,.client-name,.inq-name,.stat-n,.home-greeting,.home-box-head,.inq-event-name,.hub-name,.hub-sec,.pl-stat .v{font-family:'Fraunces',Georgia,serif;letter-spacing:.1px}
+.brand,.section-title,.client-name,.inq-name,.stat-n,.home-greeting,.home-box-head,.inq-event-name,.hub-name,.hub-sec,.pl-stat .v{font-family:'Fraunces',Georgia,serif;font-weight:600;letter-spacing:-.1px}
+/* ── EDITORIAL TYPE SCALE ──────────────────────────────────────
+   The old sheet let Fraunces sit at whatever size each inline style
+   asked for, which is why nothing stood out. These give the serif a
+   real presence at the two levels that carry a page: the page title
+   and the big summary numbers. */
+.section-title{font-size:26px;line-height:1.12}
+.client-name,.inq-name,.inq-event-name,.hub-name{font-size:17px;line-height:1.25}
+.stat-n,.pl-stat .v{font-size:24px;line-height:1.05}
+.home-greeting{font-size:30px;line-height:1.08}
+/* Small-caps eyebrow above titles — the editorial signature */
+.eyebrow{font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--text3)}
+/* Job numbers read as identifiers, not prose */
+.jobnum{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;letter-spacing:.03em;color:var(--maroon)}
 
 /* ── Topbar ── */
 .topbar{background:var(--bg);border-bottom:var(--hairline);padding:0 1.25rem;display:flex;align-items:center;gap:10px;height:56px;position:sticky;top:0;z-index:100}
