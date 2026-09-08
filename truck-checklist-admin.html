@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Truck Checklist — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --wine:#7A2E3D; --wine-tint:#F3E4E2;
+    --bg:#F1F2ED; --card:#FFFFFF;
+    --text1:#1D1F21; --text2:#63666A; --text3:#93968F;
+    --hairline:#E7E7E3;
+    --green:#3F7A44; --green-tint:#E7F2E8;
+    --red:#B3261E; --red-tint:#F8ECEA;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text1);font-family:'Inter',sans-serif}
+  header{padding:24px 20px;background:var(--card);border-bottom:1px solid var(--hairline);display:flex;justify-content:space-between;align-items:center}
+  header h1{font-family:'Fraunces',serif;font-weight:700;font-size:22px;margin:0}
+  .wrap{max-width:800px;margin:0 auto;padding:24px 16px}
+  table{width:100%;border-collapse:collapse;background:var(--card);border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  th,td{padding:12px 16px;text-align:left;border-bottom:1px solid var(--hairline);font-size:14.5px}
+  th{color:var(--text3);font-weight:600;font-size:12.5px;text-transform:none}
+  td.center{text-align:center}
+  .pill{display:inline-block;padding:4px 10px;border-radius:100px;font-size:13px;font-weight:600}
+  .pill.done{background:var(--green-tint);color:var(--green)}
+  .pill.missing{background:var(--red-tint);color:var(--red)}
+  .detail{font-size:12.5px;color:var(--text3);margin-top:2px}
+  #loginOverlay{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:10}
+  .lg-box{background:var(--card);border-radius:16px;padding:32px;width:280px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.08)}
+  .lg-box h2{font-family:'Fraunces',serif;font-size:20px;margin:0 0 16px}
+  .lg-box input{width:100%;padding:10px 12px;border:1px solid var(--hairline);border-radius:8px;font-size:15px;margin-bottom:10px}
+  .lg-box button{width:100%;background:var(--wine);color:#fff;border:none;border-radius:8px;padding:12px;font-size:15px;font-weight:600;cursor:pointer}
+  .lg-err{color:var(--red);font-size:13px;margin-top:8px;min-height:16px}
+</style>
+</head>
+<body>
+<div id="loginOverlay">
+  <div class="lg-box">
+    <h2>Truck Checklist Admin</h2>
+    <input id="lgPw" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')tryLogin()">
+    <button onclick="tryLogin()">Sign in</button>
+    <div class="lg-err" id="lgErr"></div>
+  </div>
+</div>
+<div id="app" style="display:none">
+  <header>
+    <h1>Truck Checklist — Admin</h1>
+    <span style="color:var(--text2);font-size:13.5px" id="asOf"></span>
+  </header>
+  <div class="wrap"><div id="grid">Loading…</div></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
+  authDomain: "premier-caterers-internal-app.firebaseapp.com",
+  projectId: "premier-caterers-internal-app",
+  storageBucket: "premier-caterers-internal-app.firebasestorage.app",
+  messagingSenderId: "471701398759",
+  appId: "1:471701398759:web:559a7bee3b645ce545ee42"
+};
+if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Default password is "Premier2026Trucks" — change this hash to change the
+// password. To generate a new hash for a different password, ask Claude, or
+// run in any browser console: crypto.subtle.digest('SHA-256', new
+// TextEncoder().encode('yourpassword')) and hex-encode the result.
+const ADMIN_HASH = '5fd6022ba5d0e6e48f7cc215251ab0f8f7467d1ffd0d2b529c2e202a3af7a1b4';
+
+async function sha256(s){ const buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(s))); return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
+window.tryLogin = async function(){
+  const pw = document.getElementById('lgPw').value||'';
+  const h = await sha256(pw);
+  if(h===ADMIN_HASH){
+    document.getElementById('loginOverlay').style.display='none';
+    document.getElementById('app').style.display='block';
+    try{ sessionStorage.setItem('truckAdminOk','1'); }catch(e){}
+    loadData();
+  } else {
+    document.getElementById('lgErr').textContent='Incorrect password.';
+  }
+};
+try{ if(sessionStorage.getItem('truckAdminOk')==='1'){ document.getElementById('loginOverlay').style.display='none'; document.getElementById('app').style.display='block'; loadData(); } }catch(e){}
+
+const TRUCKS = [ {id:'reefer',name:'Reefer truck'}, {id:'large',name:'Large truck'}, {id:'van',name:'Van'} ];
+
+function mondayOf(dateStr){ return dateStr; } // weekOf is already the Tuesday date string
+function recentTuesdays(n){
+  const out=[]; const d=new Date();
+  const day=d.getDay(); const diff=(day>=2)?(day-2):(day+5);
+  d.setDate(d.getDate()-diff);
+  for(let i=0;i<n;i++){ out.push(new Date(d).toISOString().slice(0,10)); d.setDate(d.getDate()-7); }
+  return out;
+}
+
+async function loadData(){
+  document.getElementById('asOf').textContent = 'As of ' + new Date().toLocaleString();
+  const weeks = recentTuesdays(8); // last 8 weeks
+  const snap = await db.collection('truckChecklists').where('weekOf','in',weeks.slice(0,10)).get();
+  const byWeekTruck = {};
+  snap.forEach(doc=>{ const d=doc.data(); byWeekTruck[d.weekOf+'::'+d.truckId] = d; });
+
+  const rows = weeks.map(w=>{
+    const cells = TRUCKS.map(t=>{
+      const rec = byWeekTruck[w+'::'+t.id];
+      if(!rec) return `<td class="center"><span class="pill missing">Missing</span></td>`;
+      const uncheckedCount = Object.values(rec.items||{}).filter(v=>!v).length;
+      const fuelBits = [];
+      if(rec.gallonsAdded!=null) fuelBits.push(rec.gallonsAdded+' gal');
+      if(rec.fillCost!=null) fuelBits.push('$'+rec.fillCost.toFixed(2));
+      if(rec.defToppedOff) fuelBits.push('DEF topped off');
+      const fuelLine = fuelBits.length ? `<div class="detail">${fuelBits.join(' · ')}</div>` : '';
+      return `<td class="center"><span class="pill done">✓ Done</span>${uncheckedCount?`<div class="detail">${uncheckedCount} item${uncheckedCount===1?'':'s'} left unchecked</div>`:''}${fuelLine}${rec.notes?`<div class="detail">"${rec.notes}"</div>`:''}</td>`;
+    }).join('');
+    const label = new Date(w+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    return `<tr><td><b>Week of ${label}</b></td>${cells}</tr>`;
+  }).join('');
+
+  document.getElementById('grid').innerHTML = `<table>
+    <thead><tr><th>Week</th>${TRUCKS.map(t=>`<th class="center">${t.name}</th>`).join('')}</tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+</script>
+</body>
+</html>

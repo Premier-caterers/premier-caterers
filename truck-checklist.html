@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Truck Checklist — Premier Caterers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --wine:#7A2E3D; --wine-tint:#F3E4E2;
+    --bg:#F1F2ED; --card:#FFFFFF;
+    --text1:#1D1F21; --text2:#63666A; --text3:#93968F;
+    --hairline:#E7E7E3;
+    --green:#3F7A44; --green-tint:#E7F2E8;
+    --amber:#C9930F; --amber-tint:#FAF1DD;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text1);font-family:'Inter',sans-serif;-webkit-tap-highlight-color:transparent}
+  header{padding:28px 20px 16px;text-align:center}
+  header h1{font-family:'Fraunces',serif;font-weight:700;font-size:26px;margin:0 0 4px}
+  header .sub{color:var(--text2);font-size:14.5px}
+  .wrap{max-width:520px;margin:0 auto;padding:0 16px 60px}
+  .truck-card{background:var(--card);border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:16px;overflow:hidden}
+  .truck-head{padding:18px 20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+  .truck-head h2{font-family:'Fraunces',serif;font-size:19px;margin:0;font-weight:600}
+  .truck-head .status{font-size:13px;font-weight:600;padding:5px 12px;border-radius:100px}
+  .status.done{background:var(--green-tint);color:var(--green)}
+  .status.todo{background:var(--amber-tint);color:var(--amber)}
+  .truck-body{padding:0 20px 20px;display:none}
+  .truck-body.open{display:block}
+  .item{display:flex;align-items:flex-start;gap:14px;padding:14px 0;border-top:1px solid var(--hairline)}
+  .item:first-child{border-top:none}
+  .item input[type=checkbox]{width:26px;height:26px;flex-shrink:0;margin-top:2px;accent-color:var(--wine)}
+  .item label{font-size:16px;line-height:1.4;flex:1}
+  textarea{width:100%;border:1px solid var(--hairline);border-radius:10px;padding:12px;font-family:inherit;font-size:15px;margin-top:14px;resize:vertical;min-height:70px}
+  .section-label{font-size:12.5px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.03em;margin:18px 0 4px;padding-top:14px;border-top:1px solid var(--hairline)}
+  .field-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0}
+  .field-label{font-size:15px}
+  .field-row select,.field-row input[type=number]{border:1px solid var(--hairline);border-radius:8px;padding:8px 10px;font-size:15px;font-family:inherit;width:130px;text-align:right}
+  .submit-btn{width:100%;background:var(--wine);color:#fff;border:none;border-radius:12px;padding:16px;font-size:16.5px;font-weight:600;margin-top:16px;cursor:pointer}
+  .submit-btn:disabled{opacity:.5}
+  .submitted-note{background:var(--green-tint);color:var(--green);border-radius:10px;padding:14px;font-size:14.5px;margin-top:14px;display:flex;align-items:center;gap:8px}
+  .week-label{text-align:center;color:var(--text3);font-size:13.5px;margin-bottom:18px}
+  .loading{text-align:center;color:var(--text3);padding:40px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Truck Checklist</h1>
+  <div class="sub">Premier Caterers</div>
+</header>
+<div class="wrap">
+  <div class="week-label" id="weekLabel"></div>
+  <div id="app"><div class="loading">Loading…</div></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
+  authDomain: "premier-caterers-internal-app.firebaseapp.com",
+  projectId: "premier-caterers-internal-app",
+  storageBucket: "premier-caterers-internal-app.firebasestorage.app",
+  messagingSenderId: "471701398759",
+  appId: "1:471701398759:web:559a7bee3b645ce545ee42"
+};
+if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Each truck's checklist items. The Reefer truck gets two extra items for
+// the refrigeration unit itself, on top of the standard vehicle items.
+const STANDARD_ITEMS = [
+  'Oil level checked',
+  'Tire pressure & condition checked (all tires)',
+  'Coolant / washer fluid / brake fluid levels checked',
+  'Headlights, brake lights & turn signals working',
+  'Interior clean',
+  'Exterior clean, no new dents or damage',
+  'Fuel level noted',
+  'Mileage noted'
+];
+const TRUCKS = [
+  { id:'reefer', name:'Reefer truck', items: STANDARD_ITEMS.concat(['Refrigeration unit running & holding temperature','Reefer unit fuel level checked']), hasFuelSection:true },
+  { id:'large',  name:'Large truck',  items: STANDARD_ITEMS, hasFuelSection:true },
+  { id:'van',    name:'Van',          items: STANDARD_ITEMS, hasFuelSection:false }
+];
+const FUEL_LEVELS = ['Full','3/4','Half','1/4','Empty'];
+
+// "Week of" is always the most recent Tuesday (today, if today IS Tuesday) —
+// this way it doesn't matter which day he actually gets to it, everything
+// done in the same week groups together the same way.
+function weekOfTuesday(){
+  const d = new Date();
+  const day = d.getDay(); // 0=Sun..6=Sat, Tuesday=2
+  const diff = (day >= 2) ? (day - 2) : (day + 5);
+  d.setDate(d.getDate() - diff);
+  return d.toISOString().slice(0,10);
+}
+const weekOf = weekOfTuesday();
+document.getElementById('weekLabel').textContent = 'Week of ' + new Date(weekOf+'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric'});
+
+let existing = {}; // truckId -> doc data, if already submitted this week
+
+async function loadExisting(){
+  const snap = await db.collection('truckChecklists').where('weekOf','==',weekOf).get();
+  snap.forEach(doc=>{ existing[doc.data().truckId] = { id: doc.id, ...doc.data() }; });
+}
+
+function render(){
+  const el = document.getElementById('app');
+  el.innerHTML = TRUCKS.map(t=>{
+    const done = existing[t.id];
+    const fuelOpts = FUEL_LEVELS.map(l=>`<option value="${l}">${l}</option>`).join('');
+    const fuelSection = t.hasFuelSection ? `
+           <div class="section-label">Fuel &amp; DEF</div>
+           <div class="field-row">
+             <label class="field-label">DEF level</label>
+             <select id="def-${t.id}"><option value="">— select —</option>${fuelOpts}</select>
+           </div>
+           <div class="item"><input type="checkbox" id="deftop-${t.id}"><label for="deftop-${t.id}">Did you top off DEF?</label></div>
+           <div class="field-row">
+             <label class="field-label">Fuel level before filling up</label>
+             <select id="fuelbefore-${t.id}"><option value="">— select —</option>${fuelOpts}</select>
+           </div>
+           <div class="field-row">
+             <label class="field-label">Gallons put in today</label>
+             <input type="number" step="0.1" min="0" id="gallons-${t.id}" placeholder="e.g. 42.5">
+           </div>
+           <div class="field-row">
+             <label class="field-label">What did the fill-up cost?</label>
+             <input type="number" step="0.01" min="0" id="fillcost-${t.id}" placeholder="$">
+           </div>` : '';
+    return `<div class="truck-card">
+      <div class="truck-head" onclick="toggleTruck('${t.id}')">
+        <h2>${t.name}</h2>
+        <span class="status ${done?'done':'todo'}">${done?'✓ Done':'Needs check'}</span>
+      </div>
+      <div class="truck-body" id="body-${t.id}">
+        ${done ? `<div class="submitted-note">✓ Submitted ${new Date(done.submittedAt).toLocaleString()}${done.notes?' — "'+done.notes+'"':''}</div>` :
+          `${t.items.map((item,i)=>`<div class="item"><input type="checkbox" id="${t.id}-${i}"><label for="${t.id}-${i}">${item}</label></div>`).join('')}
+           ${fuelSection}
+           <textarea id="notes-${t.id}" placeholder="Anything to flag? (optional)"></textarea>
+           <button class="submit-btn" onclick="submitTruck('${t.id}')">Submit ${t.name} checklist</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.toggleTruck = function(id){
+  document.querySelectorAll('.truck-body').forEach(b=>{
+    if(b.id === 'body-'+id) b.classList.toggle('open');
+    else b.classList.remove('open');
+  });
+};
+
+window.submitTruck = async function(id){
+  const truck = TRUCKS.find(t=>t.id===id);
+  const checked = {};
+  let allChecked = true;
+  truck.items.forEach((item,i)=>{
+    const box = document.getElementById(id+'-'+i);
+    checked[item] = box.checked;
+    if(!box.checked) allChecked = false;
+  });
+  if(!allChecked && !confirm('Not everything is checked off — submit anyway?')) return;
+  const notes = (document.getElementById('notes-'+id).value||'').trim();
+  const fuelData = {};
+  if(truck.hasFuelSection){
+    fuelData.defLevel = document.getElementById('def-'+id).value || '';
+    fuelData.defToppedOff = document.getElementById('deftop-'+id).checked;
+    fuelData.fuelLevelBefore = document.getElementById('fuelbefore-'+id).value || '';
+    const gal = parseFloat(document.getElementById('gallons-'+id).value);
+    fuelData.gallonsAdded = isFinite(gal) ? gal : null;
+    const cost = parseFloat(document.getElementById('fillcost-'+id).value);
+    fuelData.fillCost = isFinite(cost) ? cost : null;
+  }
+  try{
+    await db.collection('truckChecklists').add({
+      truckId: id, truckName: truck.name, weekOf,
+      items: checked, notes, ...fuelData, submittedAt: Date.now()
+    });
+    await loadExisting();
+    render();
+  }catch(e){ alert('Could not submit — check your connection and try again.\n'+e.message); }
+};
+
+(async function init(){
+  await loadExisting();
+  render();
+})();
+</script>
+</body>
+</html>
