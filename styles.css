@@ -142,6 +142,24 @@ a{color:var(--blue-mid);text-decoration:none}
 .stat-l{font-size:11px;color:var(--text2);margin-top:3px}
 
 /* ── Section chrome ── */
+/* ── THIS WEEK masthead ─────────────────────────────────────────
+   Replaces five bordered stat boxes and an 18px title with one
+   editorial header: eyebrow, large serif title, and stats that sit
+   on rules rather than in cards. */
+.wk-head{margin-bottom:1.9rem}
+.wk-head__bar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.wk-head__title{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:32px;line-height:1.04;letter-spacing:-.4px;color:var(--text);margin-top:5px}
+.wk-head__actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.wk-stats{display:flex;gap:0;margin-top:1.4rem;padding:1.1rem 0;border-top:0.5px solid var(--border2);border-bottom:0.5px solid var(--border2);flex-wrap:wrap}
+.wk-stat{padding:0 2.1rem;border-left:0.5px solid var(--border);flex:0 0 auto}
+.wk-stat:first-child{padding-left:0;border-left:none}
+.wk-stat__n{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:27px;line-height:1;color:var(--text);letter-spacing:-.3px}
+.wk-stat__l{font-size:10px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--text3);margin-top:7px}
+@media(max-width:700px){
+  .wk-head__title{font-size:25px}
+  .wk-stat{padding:0 1.15rem}
+  .wk-stat__n{font-size:21px}
+}
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem}
 /* NOTE: font-size/family for .section-title lives in the type-scale block
    above (26px Fraunces). This rule previously redeclared font-size:18px
@@ -155,10 +173,12 @@ a{color:var(--blue-mid);text-decoration:none}
 .filter-btn.active{background:var(--maroon-tint);border-color:var(--blue-border);color:var(--blue-text);font-weight:500}
 
 /* ── Events grid ── */
-.day-label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:1rem 0 .5rem;padding:0 2px}
-.event-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(264px,1fr));gap:12px;margin-bottom:.25rem}
-.event-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.05rem 1.15rem;cursor:pointer;box-shadow:var(--shadow-card);transition:transform .14s,box-shadow .14s,border-color .14s}
-.event-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-card-h);border-color:var(--border2)}
+/* Day headers carry the week's structure — serif, on a rule, with air. */
+.day-label{font-family:'Fraunces',Georgia,serif;font-size:15px;font-weight:600;color:var(--text2);text-transform:none;letter-spacing:0;margin:2.1rem 0 .95rem;padding:0 0 .55rem;border-bottom:0.5px solid var(--border)}
+.day-label:first-of-type{margin-top:.4rem}
+.event-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(288px,1fr));gap:14px;margin-bottom:.25rem}
+.event-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem 1.35rem;cursor:pointer;box-shadow:none;transition:transform .14s,box-shadow .14s,border-color .14s}
+.event-card:hover{transform:translateY(-1px);box-shadow:var(--shadow-card);border-color:var(--border2)}
 .event-card.selected{border:1.5px solid var(--maroon)}
 .event-card.compact{padding:.7rem .95rem}
 .event-card.compact .ew-compact-row .client-name{font-size:14px}

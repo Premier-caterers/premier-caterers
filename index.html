@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=9">
+<link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
 
@@ -3296,23 +3296,28 @@ function renderEvents(){
     const _msg = _n + " unacknowledged change order" + (_n>1?"s":"") + " — see Changes log";
     return `<div class="banner amber" style="margin-bottom:1rem"><i class="ti ti-alert-triangle" style="font-size:16px;color:var(--amber-text);flex-shrink:0;margin-top:1px"></i><div style="font-size:13px;color:var(--amber-text)"><strong>${_msg}</strong></div></div>`;
     })()}
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;margin-bottom:1rem">
-    <div class="stat-card"><div class="stat-n">${weekEvents.filter(e=>e.name).length}</div><div class="stat-l">events</div></div>
-    <div class="stat-card"><div class="stat-n">${weekEvents.filter(e=>e.type!=='dropoff').length}</div><div class="stat-l">catered</div></div>
-    <div class="stat-card"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.waiters||0),0)}</div><div class="stat-l">waiters</div></div>
-    <div class="stat-card"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.chefs||0),0)}</div><div class="stat-l">chefs</div></div>
-    <div class="stat-card"><div class="stat-n">${weekEvents.reduce((s,e)=>s+(e.porters||0),0)}</div><div class="stat-l">porters</div></div>
-  </div>
-  <div class="section-header">
-    <div class="section-title">Events — ${weekLabel}</div>
-    <div style="display:flex;gap:6px;align-items:center">
-      <button onclick="setEventsView(eventsViewMode==='card'?'list':'card')" style="padding:5px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px">
-        <i class="ti ${eventsViewMode==='card'?'ti-list':'ti-layout-grid'}" style="font-size:13px"></i>
-        ${eventsViewMode==='card'?'List view':'Card view'}
-      </button>
-      ${role.canEdit?'<button class="add-btn" onclick="openModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add event</button>':''}
+    <div class="wk-head">
+      <div class="wk-head__bar">
+        <div>
+          <div class="eyebrow">${weekLabel}</div>
+          <h1 class="wk-head__title">This week</h1>
+        </div>
+        <div class="wk-head__actions">
+          <button class="btn btn--sm" onclick="setEventsView(eventsViewMode==='card'?'list':'card')">
+            <i class="ti ${eventsViewMode==='card'?'ti-list':'ti-layout-grid'}"></i>
+            ${eventsViewMode==='card'?'List view':'Card view'}
+          </button>
+          ${role.canEdit?'<button class="btn btn--pri" onclick="openModal()"><i class="ti ti-plus"></i> Add event</button>':''}
+        </div>
+      </div>
+      <div class="wk-stats">
+        <div class="wk-stat"><div class="wk-stat__n">${weekEvents.filter(e=>e.name).length}</div><div class="wk-stat__l">Events</div></div>
+        <div class="wk-stat"><div class="wk-stat__n">${weekEvents.filter(e=>e.type!=='dropoff').length}</div><div class="wk-stat__l">Catered</div></div>
+        <div class="wk-stat"><div class="wk-stat__n">${weekEvents.reduce((s,e)=>s+(e.waiters||0),0)}</div><div class="wk-stat__l">Waiters</div></div>
+        <div class="wk-stat"><div class="wk-stat__n">${weekEvents.reduce((s,e)=>s+(e.chefs||0),0)}</div><div class="wk-stat__l">Chefs</div></div>
+        <div class="wk-stat"><div class="wk-stat__n">${weekEvents.reduce((s,e)=>s+(e.porters||0),0)}</div><div class="wk-stat__l">Porters</div></div>
+      </div>
     </div>
-  </div>
   <div class="filter-bar">
     ${['all','monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(d=>`<button class="filter-btn ${activeDay===d?'active':''}" onclick="setDay('${d}')">${d==='all'?'All':d.charAt(0).toUpperCase()+d.slice(1)}</button>`).join('')}
   </div>`;
