@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=21">
+<link rel="stylesheet" href="styles.css?v=22">
 </head>
 <body>
 
@@ -4302,6 +4302,19 @@ function _hubPayPill(inq, role){
   else { lbl=isInv?'Not paid \u2014 collect':'Estimate \u2014 not paid'; css='color:var(--brass-deep);background:var(--brass-tint);border:1.5px dashed var(--brass)'; }
   return `<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:8px;padding:4px 10px;${css}"><i class="ti ti-circle-half-2" style="font-size:13px"></i>${lbl}</span>`;
 }
+/* Compact payment state for the dark header strip: white pill, coloured text. */
+function _hubPayStat(inq, role){
+  if(!role.canViewInvoices) return '';
+  const est=inq.estimate;
+  if(!(est && Array.isArray(est.lines) && est.lines.length)) return '';
+  const t=calcInvoiceTotals(est); const dep=parseFloat(est.deposit||0); const bal=t.grand-dep;
+  const isInv=est.status==='invoice'||est.status==='paid';
+  let lbl, col;
+  if(t.grand>0 && bal<=0.01){ lbl='Paid in full'; col='var(--green-text)'; }
+  else if(dep>0.01){ lbl='Balance due'; col='var(--brass-deep)'; }
+  else { lbl=isInv?'Not paid':'Estimate'; col='var(--maroon)'; }
+  return `<div class="hub-stat"><div class="hub-stat__pill" style="color:${col}">${lbl}</div><div class="hub-stat__l">Payment</div></div>`;
+}
 function _hubChip(txt){
   if(!txt) return '';
   return `<span style="display:inline-flex;align-items:center;font-size:12px;color:var(--text2);background:var(--bg2);border:0.5px solid var(--border2);border-radius:20px;padding:4px 11px">${pcEsc(txt)}</span>`;
@@ -4360,6 +4373,17 @@ function renderInqDetail(inq, role){
       <div class="hub-eyebrow">${evNum?('#'+pcEsc(evNum)+' \u00b7 '):''}${stageName}${contact?' \u00b7 '+contact:''}</div>
       <div class="hub-name">${inq.eventName||name||'Event'}</div>
       <div class="hub-when">${whenBits.join(' \u00b7 ')||'&nbsp;'}</div>
+      ${(()=>{
+        // Guests / food category / payment, read straight from the header.
+        // Only render the strip when there is something to show.
+        const bits = [];
+        const g = String(inq.guestCount||'').trim();
+        if(g) bits.push(`<div class="hub-stat"><div class="hub-stat__n">${pcEsc(g)}</div><div class="hub-stat__l">Guests</div></div>`);
+        if(inq.meatDairy) bits.push(`<div class="hub-stat"><div class="hub-stat__n" style="font-size:16px">${pcEsc(inq.meatDairy)}</div><div class="hub-stat__l">Food</div></div>`);
+        const pay = _hubPayStat(inq, role);
+        if(pay) bits.push(pay);
+        return bits.length ? `<div class="hub-stats">${bits.join('')}</div>` : '<div style="height:4px"></div>';
+      })()}
     </div>
     <div class="hub-body">
       ${(()=>{ const a=inqAllergies(inq);
@@ -4368,8 +4392,6 @@ function renderInqDetail(inq, role){
         return ''; })()}
       <div style="background:var(--bg);border:0.5px solid var(--border2);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:7px;align-items:center">
         ${_hubPayPill(inq, role)}
-        ${_hubChip(inq.guestCount?inq.guestCount+' guests':'')}
-        ${_hubChip(inq.meatDairy)}
         ${_hubChip((inq.eventDate||inq.eventTBD)?_dateNoteLabel(inq, formatDate):'')}
         ${_hubChip(inq.cuisine)}
       </div>
