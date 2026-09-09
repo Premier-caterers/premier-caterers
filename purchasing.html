@@ -1866,6 +1866,12 @@ async function scanRunAI(){
   const relay = getEventsRelayUrl();
   if(!relay){ _scanState.error='Set the Events relay URL in Settings first.'; renderScan(); return; }
   if(!_scanState.files.length){ _scanState.error='Add at least one file.'; renderScan(); return; }
+  // Long itemized invoices can overflow the AI's response limit when batched,
+  // which returns blank rows rather than an obvious error. Flag it up front.
+  if(_scanState.files.length >= 3 &&
+     !confirm('Scanning '+_scanState.files.length+' files together. Long itemized invoices (30+ line items each) can overrun the AI\'s response limit and come back blank \u2014 one or two at a time is safer. Continue anyway?')) {
+    return;
+  }
   // Encode all files
   _scanState.mode='scanning'; _scanState.error=''; renderScan();
   try{
@@ -1887,7 +1893,18 @@ async function scanRunAI(){
     const txt = await r.text();
     let d; try{ d=JSON.parse(txt); }catch(e){ throw new Error('Got a non-JSON response from the events@ relay. First 120 chars: '+txt.slice(0,120)); }
     if(!d.ok){ throw new Error(d.error||'Scan failed'); }
-    _scanState.parsed = d.result || {};
+    const res = d.result || {};
+    // A truncated response comes back structurally valid but hollow — rows with
+    // no name and no price. That used to land silently in the review grid as
+    // blank lines; say what happened instead.
+    if(res.documentType !== 'statement'){
+      const ls = res.lines || [];
+      const usable = ls.filter(l => (l.ourName||l.vendorItemName||'').trim() && (parseFloat(l.price)>0 || parseFloat(l.lineTotal)>0));
+      if(ls.length && !usable.length){
+        throw new Error('The AI ran out of room before it finished reading this \u2014 it returned '+ls.length+' empty line'+(ls.length===1?'':'s')+'. Try scanning fewer files at once (one invoice at a time works best for long ones).');
+      }
+    }
+    _scanState.parsed = res;
     _scanState.vendorPick = _scanState.parsed.vendorId || '';
     // If Claude named a vendor, try to match it to our list
     if(!_scanState.vendorPick && _scanState.parsed.vendorName){
@@ -2370,12 +2387,24 @@ async function testEventsRelay(){
   st.textContent='Testing…'; st.style.color='var(--text3)';
   try{
     // The events@ script's doGet returns a generic status — anything that responds with JSON is good.
-    const r=await fetch(url+(url.indexOf('?')>=0?'&':'?')+'action=parseInvoice');
+    // parseInvoice is handled in doPost, not doGet — testing it with a GET
+    // always fell through to the script's generic status response, which made
+    // this report a failure even when everything worked. POST an empty file
+    // list instead: the real handler answers "No files provided", which proves
+    // the deployed code has parseInvoice in it.
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'parseInvoice',files:[],knownVendors:[],knownProducts:[]})});
     const txt=await r.text();
-    // It will likely return an error like "no file provided" — that's a GOOD sign, means it understood the action.
-    if(/parseInvoice|no.*file|missing.*file|invoice/i.test(txt)) st.innerHTML='<span style="color:var(--green-text)">✓ Connected — parseInvoice action recognized</span>';
-    else if(/running|status/i.test(txt)) st.innerHTML='<span style="color:var(--brass-deep)">Reached the script but the parseInvoice action isn’t there yet (need to update events@ script).</span>';
-    else st.innerHTML='<span style="color:var(--maroon)">Reached the URL but response unclear: '+esc(txt.slice(0,80))+'</span>';
+    let d=null; try{ d=JSON.parse(txt); }catch(e){}
+    if(d && d.ok===false && /no files|could not be read/i.test(d.error||'')){
+      st.innerHTML='<span style="color:var(--green-text)">✓ Connected — this deployment has the current invoice scanner</span>';
+    } else if(d && (d.ok===true || d.result)){
+      st.innerHTML='<span style="color:var(--green-text)">✓ Connected</span>';
+    } else if(/running|status/i.test(txt)){
+      st.innerHTML='<span style="color:var(--brass-deep)">Reached the script, but this deployment is running older code without parseInvoice. In Apps Script: Deploy → Manage deployments → edit → New version.</span>';
+    } else {
+      st.innerHTML='<span style="color:var(--maroon)">Reached the URL but response unclear: '+esc(txt.slice(0,80))+'</span>';
+    }
   }catch(e){ st.innerHTML='<span style="color:var(--maroon)">Could not reach the URL: '+esc(e.message)+'</span>'; }
 }
 function saveOrdersRelay(){
