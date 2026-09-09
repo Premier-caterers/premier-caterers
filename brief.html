@@ -39,7 +39,7 @@
   .item[data-p="now"]{border-left-color:var(--stop)}
   .item[data-p="soon"]{border-left-style:dashed;border-left-color:var(--warn)}
   .item.done{border-left-style:dotted;border-left-color:var(--ok)}
-  .item.done .body{opacity:.55}
+  .item.done h2,.item.done .detail,.item.done .src{opacity:.5}
   .item.done h2{text-decoration:line-through;text-decoration-thickness:1px}
   .item.busy{opacity:.6}
 
@@ -61,7 +61,8 @@
   .act:hover{border-color:var(--wine);background:var(--wine-tint)}
   .act:focus-visible{outline:2px solid var(--wine);outline-offset:2px}
   .act[disabled]{opacity:.5;cursor:default}
-  .item.done .acts{display:none}
+  /* A handled item keeps its actions — you often still want it in My Day. */
+  .item.done .act{border-style:dashed}
 
   .stamp{display:none;font-family:var(--mono);font-size:11px;color:var(--ok);letter-spacing:.04em;margin-top:9px;align-items:center;gap:8px}
   .item.done .stamp{display:flex}
