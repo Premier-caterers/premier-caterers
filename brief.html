@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Premier Brief — Checklist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --wine:#7a1c33; --wine-deep:#5d1526; --wine-tint:#f6eaee;
+    --ink:#1d1a1b; --ink-soft:#514a4c; --ink-faint:#857c7e;
+    --paper:#ffffff; --ground:#f4f1f2; --rule:#e4dcde; --rail:#d6cccf;
+    --ok:#2f6b46; --warn:#8a5a12; --stop:#a3301f;
+    --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+    --disp:"Fraunces",Georgia,serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:680px;margin:0 auto;padding:0 0 64px}
+
+  header{background:var(--wine);color:#fff;padding:20px 20px 18px}
+  header h1{font-family:var(--disp);font-weight:600;font-size:24px;margin:0;letter-spacing:.01em}
+  header .sub{font-family:var(--mono);font-size:12px;opacity:.85;margin-top:6px;line-height:1.5}
+
+  .bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 20px;background:var(--paper);border-bottom:1px solid var(--rule);position:sticky;top:0;z-index:5}
+  .bar .n{font-family:var(--mono);font-size:20px;font-weight:500;line-height:1}
+  .bar .l{font-size:14px;color:var(--ink-soft)}
+  .conn{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing:.04em;display:inline-flex;align-items:center;gap:6px;color:var(--ink-faint)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--ink-faint);flex:none}
+  .conn.ok .dot{background:var(--ok)}
+  .conn.bad .dot{background:var(--stop);border-radius:1px}
+
+  .item{display:flex;gap:13px;align-items:flex-start;background:var(--paper);border-bottom:1px solid var(--rule);border-left:4px solid var(--rail);padding:16px 18px 15px}
+  .item[data-p="now"]{border-left-color:var(--stop)}
+  .item[data-p="soon"]{border-left-style:dashed;border-left-color:var(--warn)}
+  .item.done{border-left-style:dotted;border-left-color:var(--ok)}
+  .item.done .body{opacity:.55}
+  .item.done h2{text-decoration:line-through;text-decoration-thickness:1px}
+  .item.busy{opacity:.6}
+
+  .box{flex:none;width:24px;height:24px;margin-top:1px;border-radius:5px;border:1.5px solid var(--rail);background:transparent;color:transparent;font-size:14px;line-height:1;display:grid;place-items:center;cursor:pointer;padding:0}
+  .box:hover{border-color:var(--wine)}
+  .box:focus-visible{outline:2px solid var(--wine);outline-offset:2px}
+  .item.done .box{border-color:var(--ok);color:var(--ok)}
+  .body{flex:1;min-width:0}
+  h2{font-size:16px;font-weight:600;margin:0 0 4px;line-height:1.35}
+  .detail{margin:0;font-size:14.5px;color:var(--ink-soft)}
+  .src{font-family:var(--mono);font-size:11px;color:var(--wine);margin-top:8px;letter-spacing:.02em}
+
+  .flag{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;padding:2px 6px;border-radius:3px;margin-left:7px;vertical-align:2px;white-space:nowrap}
+  .flag.now{color:var(--stop);border:1px solid currentColor}
+  .flag.soon{color:var(--warn);border:1px dashed currentColor}
+
+  .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}
+  .act{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;letter-spacing:.02em;color:var(--wine-deep);text-decoration:none;border:1px solid var(--rail);border-radius:5px;padding:8px 11px;background:var(--paper);cursor:pointer;font-weight:500}
+  .act:hover{border-color:var(--wine);background:var(--wine-tint)}
+  .act:focus-visible{outline:2px solid var(--wine);outline-offset:2px}
+  .act[disabled]{opacity:.5;cursor:default}
+  .item.done .acts{display:none}
+
+  .stamp{display:none;font-family:var(--mono);font-size:11px;color:var(--ok);letter-spacing:.04em;margin-top:9px;align-items:center;gap:8px}
+  .item.done .stamp{display:flex}
+  .undo{font-family:var(--mono);font-size:11px;color:var(--wine-deep);background:none;border:0;border-bottom:1px solid var(--rail);cursor:pointer;padding:0 0 1px}
+  .undo:hover{border-color:var(--wine)}
+
+  .note{padding:16px 20px;color:var(--ink-soft);font-size:14px;background:var(--paper);border-bottom:1px solid var(--rule)}
+  .note b{color:var(--ink)}
+  .err{background:#fdf3f1;border-left:4px solid var(--stop);color:#6d2418}
+  .empty{padding:40px 22px;text-align:center;color:var(--ink-soft)}
+  .empty h2{font-family:var(--disp);font-size:20px;margin-bottom:8px}
+  footer{padding:18px 20px;color:var(--ink-faint);font-size:12.5px;font-family:var(--mono);line-height:1.6}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Premier Brief</h1>
+    <div class="sub" id="sub">Checklist</div>
+  </header>
+
+  <div class="bar">
+    <span class="n" id="n">—</span>
+    <span class="l" id="l">loading</span>
+    <span class="conn" id="conn"><span class="dot"></span><span id="connT">connecting</span></span>
+  </div>
+
+  <div id="msg"></div>
+  <div id="list"></div>
+
+  <footer>
+    Ticking an item stops it appearing in future briefs until there is new activity on it.<br>
+    Nothing here is deleted — a tick can be undone at any time.
+  </footer>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* Same project and pattern as followup-action.html. */
+  var firebaseConfig = {
+    apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
+    authDomain: "premier-caterers-internal-app.firebaseapp.com",
+    projectId: "premier-caterers-internal-app",
+    storageBucket: "premier-caterers-internal-app.firebasestorage.app",
+    messagingSenderId: "471701398759",
+    appId: "1:471701398759:web:559a7bee3b645ce545ee42"
+  };
+
+  var DISMISSALS = 'briefDismissals';
+  var MYDAY      = 'myDayItems';
+  var OWNER      = 'owner';           // matches existing myDayItems records
+
+  var db = null, payload = null;
+  var $ = function(id){ return document.getElementById(id); };
+
+  function esc(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function safeId(k){ return String(k).replace(/[\/\s]+/g,'_').slice(0,180); }
+  function safeUrl(u){
+    var s = String(u || '').trim();
+    return /^(https:\/\/|tel:|mailto:)/i.test(s) ? s : '';
+  }
+  function note(html, isErr){
+    var d = document.createElement('div');
+    d.className = 'note' + (isErr ? ' err' : '');
+    d.innerHTML = html;
+    $('msg').appendChild(d);
+  }
+  function conn(state, text){
+    var c = $('conn'); c.className = 'conn ' + state; $('connT').textContent = text;
+  }
+
+  /* ---- read the brief out of the link ---- */
+  function decode(){
+    var frag = location.hash.replace(/^#/, '');
+    if(!frag) return null;
+    var m = /(?:^|&)d=([^&]+)/.exec(frag);
+    var raw = m ? m[1] : frag;
+    try{
+      var b64 = raw.replace(/-/g,'+').replace(/_/g,'/');
+      while(b64.length % 4) b64 += '=';
+      var bin = atob(b64);
+      var bytes = new Uint8Array(bin.length);
+      for(var i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+      return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+    }catch(e){ return undefined; }   // undefined = present but unreadable
+  }
+
+  function count(){
+    var open = document.querySelectorAll('.item:not(.done)').length;
+    $('n').textContent = open;
+    $('l').textContent = open === 0 ? 'all clear' : (open === 1 ? 'still needs you' : 'still need you');
+  }
+
+  function render(items){
+    var list = $('list');
+    items.forEach(function(it, i){
+      var key = it.k || ('item-' + i);
+      var row = document.createElement('div');
+      row.className = 'item';
+      if(it.p === 'now' || it.p === 'soon') row.setAttribute('data-p', it.p);
+      row.dataset.key = key;
+
+      var flag = it.f ? '<span class="flag ' + (it.p === 'soon' ? 'soon' : 'now') + '">' + esc(it.f) + '</span>' : '';
+
+      var acts = '';
+      (it.a || []).forEach(function(a){
+        var u = safeUrl(a.u);
+        if(!u) return;
+        acts += '<a class="act" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + esc(a.l || 'Open') + '</a>';
+      });
+      acts += '<button class="act js-myday" type="button">Add to My Day</button>';
+
+      row.innerHTML =
+        '<button class="box" type="button" aria-pressed="false" aria-label="Mark handled">&#10003;</button>' +
+        '<div class="body">' +
+          '<h2>' + esc(it.h || 'Untitled') + flag + '</h2>' +
+          (it.d ? '<p class="detail">' + esc(it.d) + '</p>' : '') +
+          (it.s ? '<div class="src">' + esc(it.s) + '</div>' : '') +
+          '<div class="acts">' + acts + '</div>' +
+          '<div class="stamp"><span>&#10003; Handled — hidden from future briefs</span>' +
+            '<button class="undo" type="button">Undo</button></div>' +
+        '</div>';
+
+      row.querySelector('.box').addEventListener('click', function(){ dismiss(row, it, true); });
+      row.querySelector('.undo').addEventListener('click', function(){ dismiss(row, it, false); });
+      row.querySelector('.js-myday').addEventListener('click', function(){ toMyDay(this, it); });
+      list.appendChild(row);
+    });
+    count();
+  }
+
+  /* ---- writes ---- */
+  function dismiss(row, it, on){
+    if(!db){ note('Not connected, so that tick was not saved. Check your connection and reopen the link.', true); return; }
+    row.classList.add('busy');
+    var box = row.querySelector('.box');
+    db.collection(DISMISSALS).doc(safeId(row.dataset.key)).set({
+      key: String(row.dataset.key),
+      active: !!on,
+      text: String(it.h || ''),
+      source: String(it.s || ''),
+      dismissedAt: on ? Date.now() : 0,
+      updatedAt: Date.now(),
+      via: 'brief.html'
+    }, { merge: true })
+    .then(function(){
+      row.classList.toggle('done', !!on);
+      box.setAttribute('aria-pressed', on ? 'true' : 'false');
+      count();
+    })
+    .catch(function(){
+      note('That tick could not be saved. Nothing was changed — try again in a moment.', true);
+    })
+    .then(function(){ row.classList.remove('busy'); });
+  }
+
+  function toMyDay(btn, it){
+    if(!db){ note('Not connected, so nothing was added to My Day.', true); return; }
+    btn.disabled = true;
+    var was = btn.textContent;
+    btn.textContent = 'Adding…';
+    db.collection(MYDAY).add({
+      owner: OWNER,
+      type: 'todo',
+      text: String(it.h || '').slice(0, 400),
+      status: 'pending',
+      createdAt: Date.now(),
+      source: 'Brief',
+      briefKey: String(it.k || '')
+    })
+    .then(function(){ btn.textContent = '✓ In My Day'; })
+    .catch(function(){
+      btn.textContent = was; btn.disabled = false;
+      note('Could not add that to My Day. Nothing was saved.', true);
+    });
+  }
+
+  /* ---- boot ---- */
+  function boot(){
+    payload = decode();
+
+    if(payload === undefined){
+      $('list').innerHTML = '<div class="empty"><h2>This link looks damaged</h2>' +
+        '<p>Some mail apps shorten long links. Open the brief in Gmail and tap the button there instead.</p></div>';
+      $('n').textContent = '—'; $('l').textContent = '';
+      return;
+    }
+    if(payload === null){
+      $('list').innerHTML = '<div class="empty"><h2>Open this from a brief</h2>' +
+        '<p>This page shows the items from one brief. Tap <b>Open the checklist</b> in any Premier Brief email.</p></div>';
+      $('n').textContent = '—'; $('l').textContent = '';
+      return;
+    }
+
+    if(payload.t) $('sub').textContent = payload.t + (payload.w ? ' · ' + payload.w : '');
+    var items = Array.isArray(payload.items) ? payload.items : [];
+    if(!items.length){
+      $('list').innerHTML = '<div class="empty"><h2>Nothing needed you</h2><p>That brief had no open items.</p></div>';
+      $('n').textContent = '0'; $('l').textContent = 'all clear';
+    }else{
+      render(items);
+    }
+
+    try{
+      if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+      conn('ok', 'saving is on');
+    }catch(e){
+      conn('bad', 'offline');
+      note('Could not reach the database, so ticks will not save. Everything below still reads fine.', true);
+      return;
+    }
+
+    /* reflect anything already ticked, so reopening the link is accurate */
+    db.collection(DISMISSALS).get().then(function(snap){
+      var on = {};
+      snap.forEach(function(d){ var v = d.data() || {}; if(v.active) on[safeId(v.key || d.id)] = true; });
+      document.querySelectorAll('.item').forEach(function(row){
+        if(on[safeId(row.dataset.key)]){
+          row.classList.add('done');
+          row.querySelector('.box').setAttribute('aria-pressed','true');
+        }
+      });
+      count();
+    }).catch(function(){ /* leave as rendered */ });
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script>
+</body>
+</html>
