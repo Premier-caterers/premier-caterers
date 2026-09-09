@@ -1755,14 +1755,14 @@ function renderScan(){
   </div>` : '';
   el.innerHTML = `${pendingHtml}${reviewHtml}<div class="scan-step">
     <h3>1. Upload a vendor invoice or price sheet</h3>
-    <div class="desc">PDFs, photos (JPG/PNG), or screenshots. You can drop several files at once — they'll be combined into one review.</div>
+    <div class="desc">PDFs, photos (JPG/PNG), screenshots, or CSV/spreadsheet exports. You can drop several files at once — they'll be combined into one review.</div>
     <div class="scan-drop" id="scanDrop" onclick="document.getElementById('scanFileInput').click()">
       <div class="icons"><i class="ti ti-upload"></i></div>
       <div class="big">Click to choose files — or drag &amp; drop here</div>
       <div class="small">From your phone, you can use your camera too.</div>
     </div>
     <button class="btn ghost" type="button" style="margin-top:10px" onclick="document.getElementById('scanCameraInput').click()"><i class="ti ti-camera"></i> Scan with Camera</button>
-    <input id="scanFileInput" type="file" accept="image/*,application/pdf" multiple capture="environment" style="display:none" onchange="scanHandleFiles(this.files)">
+    <input id="scanFileInput" type="file" accept="image/*,application/pdf,.csv,text/csv,.txt,text/plain" multiple capture="environment" style="display:none" onchange="scanHandleFiles(this.files)">
     <input id="scanCameraInput" type="file" accept="image/*" capture="environment" style="display:none" onchange="scanHandleFiles(this.files)">
     ${filesHtml}
     ${errHtml}
