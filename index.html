@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=20">
+<link rel="stylesheet" href="styles.css?v=21">
 </head>
 <body>
 
@@ -54,7 +54,7 @@
   #loginOverlay .lg-back{width:100%;padding:10px;border:none;background:none;color:#999;font-size:13px;cursor:pointer;margin-top:8px}
   #loginOverlay .lg-err{color:var(--red-solid);font-size:13px;min-height:18px;margin-bottom:6px}
   #userBar .ub-name{font-size:13px;color:var(--text2,#444);display:inline-flex;align-items:center;gap:5px;margin-right:10px}
-  #userBar .ub-out{padding:5px 12px;border:0.5px solid var(--border2,#ccc);border-radius:8px;background:var(--bg2,#f3f3f3);color:var(--text2,#444);font-size:12px;cursor:pointer}
+  #userBar .ub-out{padding:5px 12px;border:0.5px solid var(--border2,#ccc);border-radius:8px;background:var(--bg2,var(--bg3));color:var(--text2,#444);font-size:12px;cursor:pointer}
   /* Wider hub drawer — overrides styles.css (loads later in the document) */
   #hubDrawer{width:min(1040px,96vw)!important;max-width:96vw!important}
   /* Mobile top-bar: prevent the Live sync button from covering Log out on iPhone.
@@ -70,8 +70,8 @@
   }
   .drow.add-hover{cursor:pointer;border-radius:6px}
   .drow.add-hover .add-cta{color:var(--text3,#999)}
-  .drow.add-hover:hover{background:var(--bg2,#f3f3f3)}
-  .drow.add-hover:hover .add-cta{color:var(--blue-mid,#185FA5)}
+  .drow.add-hover:hover{background:var(--bg2,var(--bg3))}
+  .drow.add-hover:hover .add-cta{color:var(--blue-mid,var(--teal-solid))}
 </style>
 <div id="loginOverlay"><div class="lg-card"><div id="loginStep"></div></div></div>
 <!-- =================== END LOGIN OVERLAY (added) =================== -->
@@ -338,7 +338,7 @@ function _tbdBadge(inq){
 // corner, plus a dashed outline. Clicking it opens the mark-as-handled menu.
 function _unansweredBadge(inq){
   if(!inquiryHasUnansweredEmail(inq)) return '';
-  return `<span title="Client emailed — no reply yet. Click to mark handled." onclick="event.stopPropagation();markEmailHandled('${inq.id}')" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#FFE9DC;border:1.5px dashed var(--coral-solid);color:var(--coral-solid);margin-left:6px;flex-shrink:0;cursor:pointer;position:relative"><i class="ti ti-mail-filled" style="font-size:11px"></i><span style="position:absolute;top:-2px;right:-2px;width:7px;height:7px;background:var(--coral-solid);border-radius:50%;border:1.5px solid var(--bg)"></span></span>`;
+  return `<span title="Client emailed — no reply yet. Click to mark handled." onclick="event.stopPropagation();markEmailHandled('${inq.id}')" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--brass-tint);border:1.5px dashed var(--coral-solid);color:var(--coral-solid);margin-left:6px;flex-shrink:0;cursor:pointer;position:relative"><i class="ti ti-mail-filled" style="font-size:11px"></i><span style="position:absolute;top:-2px;right:-2px;width:7px;height:7px;background:var(--coral-solid);border-radius:50%;border:1.5px solid var(--bg)"></span></span>`;
 }
 
 // Portal message badge — client sent a message through the portal with no reply.
@@ -361,7 +361,7 @@ function _unansweredHubBanner(inq){
   const rec = unansweredMap[em] || {};
   const subj = rec.subject ? String(rec.subject).slice(0, 80) : '';
   const when = rec.lastInboundAt ? new Date(rec.lastInboundAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
-  return `<div style="margin-top:12px;padding:12px 14px;background:#FFE9DC;border:1.5px dashed var(--coral-solid);border-radius:var(--radius);display:flex;gap:12px;align-items:center">
+  return `<div style="margin-top:12px;padding:12px 14px;background:var(--brass-tint);border:1.5px dashed var(--coral-solid);border-radius:var(--radius);display:flex;gap:12px;align-items:center">
     <i class="ti ti-mail-filled" style="font-size:20px;color:var(--coral-solid);flex-shrink:0"></i>
     <div style="flex:1;min-width:0">
       <div style="font-weight:600;color:var(--coral-solid);font-size:13px">Client emailed \u2014 no reply sent yet</div>
@@ -387,11 +387,11 @@ function _followupBadge(inq){
     const now = Date.now();
     const notifiedAt = parseInt(pending.lastNotifiedAt||0,10);
     const label = notifiedAt ? ('Nudge '+(pending.nudgeCount||1)+' sent') : (sendAt > now ? 'Follow-up in '+_hrsUntil(sendAt) : 'Follow-up due');
-    return `<span title="${_actEsc(label)} \u2014 salesperson: ${_actEsc(pending.salesperson||'?')}" style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:8px;background:#FEF1D6;border:1.5px dashed #A66900;color:#7A4A00;font-size:10px;font-weight:600;margin-left:6px;flex-shrink:0"><i class="ti ti-hourglass" style="font-size:10px"></i>${label}</span>`;
+    return `<span title="${_actEsc(label)} \u2014 salesperson: ${_actEsc(pending.salesperson||'?')}" style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:8px;background:#FEF1D6;border:1.5px dashed var(--brass);color:var(--brass-deep);font-size:10px;font-weight:600;margin-left:6px;flex-shrink:0"><i class="ti ti-hourglass" style="font-size:10px"></i>${label}</span>`;
   }
   if(last){
     if(last.status === 'sent'){
-      return `<span title="Follow-up sent" style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:8px;background:#E1F5EE;border:0.5px solid var(--teal-solid);color:var(--teal-solid);font-size:10px;font-weight:600;margin-left:6px;flex-shrink:0"><i class="ti ti-mail-check" style="font-size:10px"></i>Follow-up sent</span>`;
+      return `<span title="Follow-up sent" style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:8px;background:var(--green-bg);border:0.5px solid var(--teal-solid);color:var(--teal-solid);font-size:10px;font-weight:600;margin-left:6px;flex-shrink:0"><i class="ti ti-mail-check" style="font-size:10px"></i>Follow-up sent</span>`;
     }
     if(last.status === 'skipped_in_contact' || last.status === 'skipped_not_needed' || last.status === 'auto_skipped'){
       const short = last.status === 'skipped_in_contact' ? 'Skipped: in contact' :
@@ -1371,7 +1371,7 @@ function startFirebaseListeners(){
               if(modal && !document.getElementById('cem_followup_banner')){
                 const banner = document.createElement('div');
                 banner.id = 'cem_followup_banner';
-                banner.style.cssText = 'padding:10px 14px;background:#FEF1D6;border:1px dashed #A66900;color:#7A4A00;font-size:12px;margin:0 20px 12px;border-radius:8px;display:flex;gap:8px;align-items:center';
+                banner.style.cssText = 'padding:10px 14px;background:#FEF1D6;border:1px dashed var(--brass);color:var(--brass-deep);font-size:12px;margin:0 20px 12px;border-radius:8px;display:flex;gap:8px;align-items:center';
                 banner.innerHTML = '<i class="ti ti-hourglass" style="font-size:14px"></i> Editing the follow-up reminder for '+_actEsc(r.clientName||'')+'. Sending here will mark the reminder as done.';
                 const body = modal.querySelector('div[style*="padding:18px 20px"]');
                 if(body) body.insertBefore(banner, body.firstChild);
@@ -3065,7 +3065,7 @@ function printCoverSheet(){
   weekEvents.forEach(e=>{
     const hasMeals = (e.meals||[]).length > 0;
     const mainLabel = hasMeals ? (e.mainLabel||'a') : '';
-    const bg = ri++%2===0 ? '#ffffff' : '#f2f2f2';
+    const bg = ri++%2===0 ? '#ffffff' : 'var(--bg3)';
     rows += `<tr style="background:${bg}">
       <td style="padding:5px 8px;border:1px solid #ccc;font-size:11px;font-weight:700">${esc(coverJobNum(e.job))}${mainLabel?`<span style="color:var(--maroon)">${esc(mainLabel)}</span>`:''}</td>
       ${td(e.name,true)}
@@ -3083,7 +3083,7 @@ function printCoverSheet(){
       ${td(e.manager)}
     </tr>`;
     (e.meals||[]).forEach(meal=>{
-      const mbg = ri++%2===0 ? '#ffffff' : '#f2f2f2';
+      const mbg = ri++%2===0 ? '#ffffff' : 'var(--bg3)';
       rows += `<tr style="background:${mbg}">
         <td style="padding:5px 8px 5px 14px;border:1px solid #ccc;font-size:11px;font-weight:700">↳ ${esc(coverJobNum(e.job))}${esc(meal.jobSuffix||'')}</td>
         ${td(meal.name||e.name)}
@@ -5655,7 +5655,7 @@ const _ACT_META = {
   stage:      {icon:'ti-arrow-badge-right',color:'#b45309'},
   payment:    {icon:'ti-cash',             color:'#16a34a'},
   edit:       {icon:'ti-pencil',           color:'#9333ea'},
-  task:       {icon:'ti-checkbox',         color:'#B0894B'},
+  task:       {icon:'ti-checkbox',         color:'var(--brass)'},
   note:       {icon:'ti-note',             color:'#6b7280'}
 };
 
@@ -5967,7 +5967,7 @@ function toggleTask(taskId){
 }
 function _actTaskRow(t){
   return '<div onclick="toggleTask(\''+t.id+'\')" style="display:flex;align-items:flex-start;gap:9px;padding:6px 0;cursor:pointer">'
-    + '<div style="width:17px;height:17px;border-radius:5px;border:1.5px solid #B0894B;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;'+(t.done?'background:#B0894B':'')+'">'+(t.done?'<span style="color:#fff;font-size:11px;line-height:1">\u2713</span>':'')+'</div>'
+    + '<div style="width:17px;height:17px;border-radius:5px;border:1.5px solid var(--brass);flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;'+(t.done?'background:var(--brass)':'')+'">'+(t.done?'<span style="color:#fff;font-size:11px;line-height:1">\u2713</span>':'')+'</div>'
     + '<div style="flex:1;min-width:0">'
     +   '<div style="font-size:12.5px;line-height:1.35;color:'+(t.done?'var(--text3)':'var(--text)')+';'+(t.done?'text-decoration:line-through':'')+'">'+_actEsc(t.detail)+'</div>'
     +   (t.done&&t.doneBy?'<div style="font-size:10.5px;color:var(--text3);margin-top:1px">'+_actEsc(t.doneBy)+' \u00b7 '+_actFmt(t.doneAt)+'</div>':'')
@@ -5982,7 +5982,7 @@ function renderAiPanel(msg){
   var hasSummary = inq && inq.aiSummary && inq.aiSummary.text;
   var html='';
   html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
-    + '<div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px"><i class="ti ti-sparkles" style="color:#B0894B"></i>AI summary</div>'
+    + '<div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px"><i class="ti ti-sparkles" style="color:var(--brass)"></i>AI summary</div>'
     + '<button id="aiSumBtn" onclick="summarizeClient(true)" style="font-size:11px;padding:5px 10px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-refresh"></i>'+(hasSummary?'Refresh':'Generate')+'</button>'
     + '</div>';
   if(msg){
@@ -6725,7 +6725,7 @@ function openRepeatEventModal(eventId){
   wrap.onclick=function(ev){ if(ev.target===wrap) closeRepeatEventModal(); };
   const btn='display:flex;align-items:center;justify-content:center;gap:8px;width:100%;font-size:14px;font-weight:600;padding:12px;border-radius:9px;cursor:pointer;font-family:inherit;border:none';
   wrap.innerHTML = '<div style="background:#fff;border-radius:15px;max-width:400px;width:90%;padding:22px 22px 18px;font-family:inherit">'
-    + '<div style="display:flex;align-items:center;gap:9px;margin-bottom:5px"><i class="ti ti-repeat" style="font-size:21px;color:var(--maroon)"></i><span style="font-size:17px;font-weight:700;color:#1a1a1a">Repeat this event</span></div>'
+    + '<div style="display:flex;align-items:center;gap:9px;margin-bottom:5px"><i class="ti ti-repeat" style="font-size:21px;color:var(--maroon)"></i><span style="font-size:17px;font-weight:700;color:var(--text)">Repeat this event</span></div>'
     + '<div style="font-size:13px;color:#666;margin-bottom:16px">'+pcEsc(src.name||'Client')+(src.job?(' \u00b7 #'+pcEsc(displayJob(src.job))):'')+'</div>'
     + '<label style="font-size:12px;font-weight:600;color:#444;display:block;margin-bottom:5px">New event date</label>'
     + '<input type="date" id="repeatEventDate" value="'+defaultDate+'" style="width:100%;padding:9px 10px;border:1px solid #ccc;border-radius:8px;font-size:14px;margin-bottom:12px;font-family:inherit;box-sizing:border-box">'
@@ -6734,7 +6734,7 @@ function openRepeatEventModal(eventId){
       + '<b>Nothing is locked</b> \u2014 review and edit anything before it goes out. If this week\u2019s notes mention a one-off request, clear them.'
     + '</div>'
     + '<div style="display:flex;gap:8px">'
-      + '<button onclick="closeRepeatEventModal()" style="'+btn+';background:#f2f2f2;color:#333;flex:1">Cancel</button>'
+      + '<button onclick="closeRepeatEventModal()" style="'+btn+';background:var(--bg3);color:#333;flex:1">Cancel</button>'
       + '<button onclick="repeatEventCreate(\''+src.id+'\')" class="btn btn--pri" style="flex:1.4"><i class="ti ti-check" style="font-size:15px"></i> Create</button>'
     + '</div>'
     + '</div>';
@@ -10762,7 +10762,7 @@ function _beoPayState(e, inq){
     if(hasInvoice){
       const balance = grand-paid;
       const multi = slots.length>1 ? ' \u00b7 '+slots.length+' invoices' : '';
-      if(grand>0 && balance<=0.01) return {label:'PAID IN FULL', sub:'No balance to collect'+multi, css:'color:#0C447C;background:#E6F1FB;border:2px solid #185FA5'};
+      if(grand>0 && balance<=0.01) return {label:'PAID IN FULL', sub:'No balance to collect'+multi, css:'color:#0C447C;background:#E6F1FB;border:2px solid var(--teal-solid)'};
       if(paid>0.01) return {label:'PARTIAL \u2014 COLLECT BALANCE', sub:'Confirm balance before service'+multi, css:'color:var(--brass-deep);background:var(--brass-tint);border:2px solid var(--brass)'};
       return {label:'NOT PAID \u2014 COLLECT', sub:'Payment due'+multi, css:'color:var(--brass-deep);background:var(--brass-tint);border:2px dashed var(--brass)'};
     }
@@ -10771,7 +10771,7 @@ function _beoPayState(e, inq){
   const est = inq && inq.estimate;
   if(est && Array.isArray(est.lines) && est.lines.length){
     const t=calcInvoiceTotals(est); const dep=parseFloat(est.deposit||0); const bal=t.grand-dep;
-    if(t.grand>0 && bal<=0.01) return {label:'PAID IN FULL', sub:'No balance to collect', css:'color:#0C447C;background:#E6F1FB;border:2px solid #185FA5'};
+    if(t.grand>0 && bal<=0.01) return {label:'PAID IN FULL', sub:'No balance to collect', css:'color:#0C447C;background:#E6F1FB;border:2px solid var(--teal-solid)'};
     if(dep>0.01) return {label:'PARTIAL \u2014 COLLECT BALANCE', sub:'Confirm balance before service', css:'color:var(--brass-deep);background:var(--brass-tint);border:2px solid var(--brass)'};
     return {label:'NOT PAID \u2014 COLLECT', sub:'Payment due', css:'color:var(--brass-deep);background:var(--brass-tint);border:2px dashed var(--brass)'};
   }
@@ -10904,17 +10904,17 @@ function buildBeoHTML(eventId){
 
   const css = `
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;font-size:12px;line-height:1.4}
+    body{font-family:Arial,Helvetica,sans-serif;color:var(--text);font-size:12px;line-height:1.4}
     .beo-page{max-width:760px;margin:0 auto;padding:34px 40px}
     .beo-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
     .beo-co{font-size:24px;font-weight:800;color:var(--maroon);letter-spacing:.01em}
     .beo-co-sub{font-size:11px;color:#666;margin-top:2px}
-    .beo-evbox{background:#FBE2A6;border:2px solid var(--brass);border-radius:10px;padding:7px 14px;text-align:center;min-width:120px}
+    .beo-evbox{background:var(--brass-tint);border:2px solid var(--brass);border-radius:10px;padding:7px 14px;text-align:center;min-width:120px}
     .beo-evlabel{font-size:9px;font-weight:700;letter-spacing:.12em;color:var(--brass-deep);text-transform:uppercase}
     .beo-evnum{line-height:1;margin-top:2px}
     .beo-evprefix{font-size:13px;font-weight:600;color:#633806}
-    .beo-evseq{font-size:30px;font-weight:800;color:#5a3205}
-    .beo-title{font-size:15px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#1a1a1a;border-top:2px solid var(--maroon);border-bottom:2px solid var(--maroon);padding:7px 0;margin:14px 0 0;text-align:center}
+    .beo-evseq{font-size:30px;font-weight:800;color:var(--brass-deep)}
+    .beo-title{font-size:15px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--text);border-top:2px solid var(--maroon);border-bottom:2px solid var(--maroon);padding:7px 0;margin:14px 0 0;text-align:center}
     .beo-allergy{display:flex;align-items:center;gap:9px;background:var(--red-solid);color:#fff;border-radius:8px;padding:9px 13px;margin:12px 0 0;font-size:13px;font-weight:700}
     .beo-allergy-ic{font-size:18px}
     .beo-info{display:flex;gap:12px;margin:14px 0 4px}
@@ -10925,8 +10925,8 @@ function buildBeoHTML(eventId){
     .beo-pay{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.02em;border-radius:7px;padding:4px 9px;margin-top:3px}
     .beo-meal{border:1.5px solid var(--maroon);border-radius:10px;padding:0;margin-top:16px;overflow:hidden;page-break-inside:avoid}
     .beo-meal-head{display:flex;align-items:center;gap:10px;background:#f7efe6;border-bottom:1.5px solid var(--maroon);padding:8px 12px}
-    .beo-letter{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:#FBE2A6;border:1.5px solid var(--brass);border-radius:6px;font-weight:800;font-size:15px;color:#5a3205}
-    .beo-meal-name{font-size:15px;font-weight:800;color:#1a1a1a;flex:1}
+    .beo-letter{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:var(--brass-tint);border:1.5px solid var(--brass);border-radius:6px;font-weight:800;font-size:15px;color:var(--brass-deep)}
+    .beo-meal-name{font-size:15px;font-weight:800;color:var(--text);flex:1}
     .beo-meal-when{font-size:12px;font-weight:600;color:var(--maroon)}
     .beo-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-bottom:1px solid #eee}
     .beo-fld{padding:8px 12px;border-right:1px solid #eee;border-bottom:1px solid #eee}
@@ -10939,7 +10939,7 @@ function buildBeoHTML(eventId){
     .beo-special{display:flex;background:var(--brass-tint)}
     .beo-special-k{width:120px;flex-shrink:0;padding:8px 12px;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--brass-deep)}
     .beo-special-k i{font-style:normal;font-weight:800;color:var(--brass)}
-    .beo-special-v{flex:1;padding:8px 12px;font-size:12.5px;color:#5a3205}
+    .beo-special-v{flex:1;padding:8px 12px;font-size:12.5px;color:var(--brass-deep)}
     .beo-summary-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--maroon);margin:16px 0 8px}
     .beo-summary{width:100%;border-collapse:collapse}
     .beo-summary th{background:var(--maroon);color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.06em;padding:7px 9px;text-align:left}
@@ -11708,7 +11708,7 @@ function openPaperwork(arg){
   const row=(checked,disabled,id,label,sub,extra)=>'<label style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid #e2dcd2;border-radius:10px;margin-bottom:9px;'+(disabled?'opacity:.5':'cursor:pointer')+'">'
     +'<input type="checkbox" id="'+id+'" '+(checked?'checked':'')+' '+(disabled?'disabled':'')+' style="width:18px;height:18px;accent-color:var(--maroon)">'
     +'<span style="flex:1"><span style="font-size:14px;font-weight:600;display:block">'+label+'</span><span style="font-size:11.5px;color:#888">'+sub+'</span></span>'+(extra||'')+'</label>';
-  const cpx=(cid,def)=>'<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#666">copies <input type="number" id="'+cid+'" value="'+def+'" min="1" max="9" style="width:44px;padding:5px;border:1px solid #d8d2c8;border-radius:6px;font-family:inherit;text-align:center"></span>';
+  const cpx=(cid,def)=>'<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#666">copies <input type="number" id="'+cid+'" value="'+def+'" min="1" max="9" style="width:44px;padding:5px;border:1px solid var(--border2);border-radius:6px;font-family:inherit;text-align:center"></span>';
   const wrap=document.createElement('div');
   wrap.id='ppModal';
   wrap.setAttribute('style','position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:inherit;padding:18px');
@@ -11753,7 +11753,7 @@ function openPaperwork(arg){
       +'<div style="font-size:11.5px;color:#888;padding:6px 2px 0;line-height:1.5"><i class="ti ti-info-circle" style="font-size:12px"></i> Everything is built into one crisp PDF. Set a copies count on any part. Anything pulled via the Apps Script relay needs your Apps Script URL saved in Settings.</div>'
     +'</div>'
     +'<div style="padding:13px 20px;border-top:1px solid #eee;display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end">'
-      +'<button onclick="closePaperwork()" style="'+fbtn+';background:#f3f3f3;color:#555">Cancel</button>'
+      +'<button onclick="closePaperwork()" style="'+fbtn+';background:var(--bg3);color:#555">Cancel</button>'
       +'<button onclick="_runPaperworkCommissary(\''+e.id+'\')" class="btn"><i class="ti ti-printer" style="font-size:15px;vertical-align:-2px"></i> To commissary</button>'
       +'<button onclick="_runPaperworkEmail(\''+e.id+'\')" class="btn"><i class="ti ti-mail" style="font-size:15px;vertical-align:-2px"></i> Email</button>'
       +'<button onclick="_runPaperwork(\''+e.id+'\',\'pdf\')" class="btn"><i class="ti ti-file-type-pdf" style="font-size:15px;vertical-align:-2px"></i> Save PDF</button>'
@@ -11861,10 +11861,10 @@ function contractSignLink(eid){
 }
 function contractStatusInfo(eid){
   const c=contracts[eid];
-  if(!c) return {key:'none',label:'Not created',icon:'ti-file-certificate',color:'#888',bg:'#f3f3f3',border:'1px dotted #bbb'};
+  if(!c) return {key:'none',label:'Not created',icon:'ti-file-certificate',color:'#888',bg:'var(--bg3)',border:'1px dotted #bbb'};
   if(c.status==='signed') return {key:'signed',label:'Signed',icon:'ti-circle-check',color:'var(--green-solid)',bg:'#e9f7ee',border:'2px solid var(--green-solid)'};
   if(c.status==='sent') return {key:'sent',label:'Awaiting signature',icon:'ti-clock',color:'var(--brass-deep)',bg:'var(--brass-tint)',border:'2px dashed var(--brass)'};
-  return {key:'draft',label:'Draft',icon:'ti-pencil',color:'#555',bg:'#f3f3f3',border:'1px dotted #999'};
+  return {key:'draft',label:'Draft',icon:'ti-pencil',color:'#555',bg:'var(--bg3)',border:'1px dotted #999'};
 }
 function _contractCertLines(c){
   if(!c || c.status!=='signed') return [];
@@ -11926,12 +11926,12 @@ function openContract(arg){
     +'<div style="padding:15px 20px;overflow-y:auto;flex:1">'
       +prebookBlock+signedBlock+sentBlock
       +'<label style="font-size:11.5px;font-weight:600;color:#666;display:block;margin-bottom:5px">Client email</label>'
-      +'<input id="contract-email" value="'+String(c.signerEmail||inq.email||'').replace(/"/g,'&quot;')+'" placeholder="client@email.com" style="width:100%;padding:8px 10px;border:1px solid #d8d2c8;border-radius:8px;font-size:13px;font-family:inherit;margin-bottom:14px">'
+      +'<input id="contract-email" value="'+String(c.signerEmail||inq.email||'').replace(/"/g,'&quot;')+'" placeholder="client@email.com" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:13px;font-family:inherit;margin-bottom:14px">'
       +'<label style="font-size:11.5px;font-weight:600;color:#666;display:block;margin-bottom:5px">Contract terms <span style="font-weight:400;color:#999">\u2014 edit freely; this is what the client agrees to</span></label>'
-      +'<textarea id="contract-terms" style="width:100%;min-height:230px;padding:10px;border:1px solid #d8d2c8;border-radius:8px;font-size:12px;font-family:inherit;line-height:1.55;resize:vertical">'+pcEsc(c.terms||CONTRACT_TEMPLATE)+'</textarea>'
+      +'<textarea id="contract-terms" style="width:100%;min-height:230px;padding:10px;border:1px solid var(--border2);border-radius:8px;font-size:12px;font-family:inherit;line-height:1.55;resize:vertical">'+pcEsc(c.terms||CONTRACT_TEMPLATE)+'</textarea>'
     +'</div>'
     +'<div style="padding:12px 20px;border-top:1px solid #eee;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">'
-      +'<button onclick="closeContract()" style="'+fbtn+';background:#f3f3f3;color:#555">Close</button>'
+      +'<button onclick="closeContract()" style="'+fbtn+';background:var(--bg3);color:#555">Close</button>'
       +'<button onclick="previewContract(\''+eid+'\')" class="btn"><i class="ti ti-eye" style="font-size:14px;vertical-align:-2px"></i> Preview</button>'
       +'<button onclick="saveContract(\''+eid+'\')" class="btn">Save</button>'
       +((c.status==='signed')
@@ -12766,7 +12766,7 @@ function renderEquipDetail() {
       <div style="display:flex;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap">
         ${['Meat','Dairy','Parve'].map(t=>{
           const sel = mdp0===t;
-          const col = t==='Meat'?'var(--maroon)':t==='Dairy'?'#1A5F8B':'#7A6B00';
+          const col = t==='Meat'?'var(--maroon)':t==='Dairy'?'var(--teal-text)':'#7A6B00';
           return `<button onclick="setEquipMDP('${id}','${t}')" style="flex:1;min-width:80px;padding:14px;border-radius:var(--radius-lg);border:2px solid ${sel?col:'var(--border2)'};font-size:16px;font-weight:800;cursor:pointer;transition:all .15s;letter-spacing:.05em;${sel?'background:'+col+';color:#fff':'background:var(--bg);color:var(--text2)'}">${t.toUpperCase()}</button>`;
         }).join('')}
       </div>
@@ -12802,9 +12802,9 @@ function renderEquipDetail() {
       </div>
       <div style="display:flex;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap">
         ${['Meat','Dairy','Parve'].map(t=>{
-          const colors={Meat:'background:var(--maroon);color:#fff',Dairy:'background:#1A5F8B;color:#fff',Parve:'background:#8B7A1A;color:#fff'};
+          const colors={Meat:'background:var(--maroon);color:#fff',Dairy:'background:var(--teal-text);color:#fff',Parve:'background:var(--brass);color:#fff'};
           const sel = mdp===t;
-          return `<button onclick="setEquipMDP('${id}','${t}')" style="flex:1;min-width:80px;padding:12px;border-radius:var(--radius-lg);border:2px solid ${sel?(t==='Meat'?'var(--maroon)':t==='Dairy'?'#1A5F8B':'#8B7A1A'):'var(--border2)'};font-size:15px;font-weight:700;cursor:pointer;transition:all .15s;${sel?colors[t]:'background:var(--bg);color:var(--text2)'}">${t.toUpperCase()}</button>`;
+          return `<button onclick="setEquipMDP('${id}','${t}')" style="flex:1;min-width:80px;padding:12px;border-radius:var(--radius-lg);border:2px solid ${sel?(t==='Meat'?'var(--maroon)':t==='Dairy'?'var(--teal-text)':'var(--brass)'):'var(--border2)'};font-size:15px;font-weight:700;cursor:pointer;transition:all .15s;${sel?colors[t]:'background:var(--bg);color:var(--text2)'}">${t.toUpperCase()}</button>`;
         }).join('')}
       </div>
       <div class="banner amber" style="margin-bottom:1rem">
@@ -12848,7 +12848,7 @@ function renderEquipDetail() {
     <div class="detail-panel">
       <div class="detail-header">
         <div class="detail-title">${e.job} — ${e.name} · Add quantities
-          ${eq.meatDairyParve ? `<span style="margin-left:10px;padding:3px 12px;border-radius:8px;font-size:13px;font-weight:700;${eq.meatDairyParve==='Meat'?'background:var(--maroon);color:#fff':eq.meatDairyParve==='Dairy'?'background:#1A5F8B;color:#fff':'background:#8B7A1A;color:#fff'}">${eq.meatDairyParve.toUpperCase()}</span>` : ''}
+          ${eq.meatDairyParve ? `<span style="margin-left:10px;padding:3px 12px;border-radius:8px;font-size:13px;font-weight:700;${eq.meatDairyParve==='Meat'?'background:var(--maroon);color:#fff':eq.meatDairyParve==='Dairy'?'background:var(--teal-text);color:#fff':'background:var(--brass);color:#fff'}">${eq.meatDairyParve.toUpperCase()}</span>` : ''}
         </div>
         <div class="detail-actions">
           <button class="icon-btn" onclick="backToSelecting('${id}')" title="Back to selection"><i class="ti ti-arrow-left"></i></button>
@@ -12899,7 +12899,7 @@ function renderEquipDetail() {
     <div class="detail-panel">
       <div class="detail-header">
         <div class="detail-title">${e.job} — ${e.name} · Equipment list complete
-          ${eq.meatDairyParve ? `<span style="margin-left:10px;padding:3px 12px;border-radius:8px;font-size:13px;font-weight:700;${eq.meatDairyParve==='Meat'?'background:var(--maroon);color:#fff':eq.meatDairyParve==='Dairy'?'background:#1A5F8B;color:#fff':'background:#8B7A1A;color:#fff'}">${eq.meatDairyParve.toUpperCase()}</span>` : ''}
+          ${eq.meatDairyParve ? `<span style="margin-left:10px;padding:3px 12px;border-radius:8px;font-size:13px;font-weight:700;${eq.meatDairyParve==='Meat'?'background:var(--maroon);color:#fff':eq.meatDairyParve==='Dairy'?'background:var(--teal-text);color:#fff':'background:var(--brass);color:#fff'}">${eq.meatDairyParve.toUpperCase()}</span>` : ''}
         </div>
         <div class="detail-actions">
           <button class="icon-btn" onclick="backToQuantities('${id}')" title="Edit quantities"><i class="ti ti-edit"></i></button>
@@ -13067,7 +13067,7 @@ function printList(id) {
   if (!e||!eq) return;
   const sections = [...new Set(eq.items.map(i=>i.section))];
   const dateStr = new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-  const mdpColor = eq.meatDairyParve==='Meat'?'var(--maroon)':eq.meatDairyParve==='Dairy'?'#1A5F8B':'#7A6B00';
+  const mdpColor = eq.meatDairyParve==='Meat'?'var(--maroon)':eq.meatDairyParve==='Dairy'?'var(--teal-text)':'#7A6B00';
   const mdpBg = eq.meatDairyParve==='Meat'?'#FFF0F0':eq.meatDairyParve==='Dairy'?'#F0F4FF':'#FFFFF0';
 
   const sectionsHtml = sections.map(sec=>{
@@ -13769,18 +13769,18 @@ function _renderFollowupSettings(){
       24 hours after a menu is sent, the assigned salesperson gets an email asking whether to send a follow-up to the client. They can approve, skip, or edit before sending. If nobody answers, up to 3 nudges are sent 8 hours apart, then auto-skipped. No emails are sent during quiet hours (11:30\u202fPM\u20136:30\u202fAM daily, plus Friday 6\u202fPM\u2013Saturday 6\u202fPM ET).
     </div>
 
-    <div style="display:flex;align-items:center;gap:10px;padding:12px;background:${testMode?'#EEEDFE':'#E1F5EE'};border:${testMode?'1.5px dashed #534AB7':'1.5px solid var(--teal-solid)'};border-radius:var(--radius);margin-bottom:14px">
-      <i class="ti ti-${testMode?'flask-2':'circle-check-filled'}" style="font-size:22px;color:${testMode?'#534AB7':'var(--teal-solid)'};flex-shrink:0"></i>
+    <div style="display:flex;align-items:center;gap:10px;padding:12px;background:${testMode?'#EEEDFE':'var(--green-bg)'};border:${testMode?'1.5px dashed var(--purple-solid)':'1.5px solid var(--teal-solid)'};border-radius:var(--radius);margin-bottom:14px">
+      <i class="ti ti-${testMode?'flask-2':'circle-check-filled'}" style="font-size:22px;color:${testMode?'var(--purple-solid)':'var(--teal-solid)'};flex-shrink:0"></i>
       <div style="flex:1">
         <div style="font-weight:700;color:${testMode?'#3C3489':'var(--teal-solid)'};font-size:13px">${testMode?'TEST MODE ON \u2014 no real emails to salespeople or clients':'LIVE MODE \u2014 real emails will be sent'}</div>
         <div style="font-size:11px;color:var(--text2);margin-top:2px;line-height:1.5">${testMode?('All approval emails and client follow-ups are redirected to the test address below. Nothing reaches Shelley, Josh, or any real client. Flip to LIVE only after you\u2019ve seen the flow work end to end.'):('Approval emails go to salespeople. Approved follow-ups go to real clients. Turn on test mode if you want to dress-rehearse changes.')}</div>
         ${testMode ? `<div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span style="font-size:11px;color:var(--text2)">Redirect all follow-up emails to:</span>
           <input id="followup-test-email" type="email" value="${_actEsc(testEmail)}" placeholder="you@example.com" style="flex:1;min-width:180px;background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius);padding:5px 9px;font-size:11px;color:var(--text);font-family:inherit">
-          <button onclick="saveFollowupTestEmail()" style="padding:5px 10px;border:none;border-radius:var(--radius);background:#534AB7;color:#fff;font-size:11px;font-weight:600;cursor:pointer">Save</button>
+          <button onclick="saveFollowupTestEmail()" style="padding:5px 10px;border:none;border-radius:var(--radius);background:var(--purple-solid);color:#fff;font-size:11px;font-weight:600;cursor:pointer">Save</button>
         </div>` : ''}
       </div>
-      <button onclick="toggleFollowupTestMode()" title="${testMode?'Switch to LIVE mode (real emails)':'Switch to TEST mode (safe)'}" style="padding:7px 14px;border:none;border-radius:var(--radius);background:${testMode?'var(--teal-solid)':'#534AB7'};color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">${testMode?'Go LIVE':'Back to TEST'}</button>
+      <button onclick="toggleFollowupTestMode()" title="${testMode?'Switch to LIVE mode (real emails)':'Switch to TEST mode (safe)'}" style="padding:7px 14px;border:none;border-radius:var(--radius);background:${testMode?'var(--teal-solid)':'var(--purple-solid)'};color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">${testMode?'Go LIVE':'Back to TEST'}</button>
     </div>
 
     <div style="display:flex;align-items:center;gap:10px;padding:12px;background:${paused?'#FFF3F3':'var(--bg2)'};border:${paused?'1.5px dashed var(--maroon)':'0.5px solid var(--border2)'};border-radius:var(--radius);margin-bottom:14px">
@@ -13797,7 +13797,7 @@ function _renderFollowupSettings(){
     <div id="salespeople-list" style="display:flex;flex-direction:column;gap:6px" oninput="_markSalespeopleDirty()" onchange="_markSalespeopleDirty()">
       ${_renderSalespeopleRows()}
     </div>
-    <div id="sp-unsaved-note" style="display:none;margin-top:8px;padding:8px 12px;background:var(--amber-bg,#FFF3D6);border:1.5px dashed var(--amber-text,#A66900);border-radius:var(--radius);color:var(--amber-text,#7A4A00);font-size:12px;font-weight:600">
+    <div id="sp-unsaved-note" style="display:none;margin-top:8px;padding:8px 12px;background:var(--amber-bg,#FFF3D6);border:1.5px dashed var(--amber-text,var(--brass));border-radius:var(--radius);color:var(--amber-text,var(--brass-deep));font-size:12px;font-weight:600">
       <i class="ti ti-alert-triangle" style="font-size:13px"></i> You have unsaved changes to salespeople \u2014 click "Save changes" below or they will be lost.
     </div>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
@@ -13827,7 +13827,7 @@ function _renderSalespeopleRows(){
     <div class="sp-row" data-idx="${i}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <input class="sp-name" type="text" value="${_actEsc(name)}" placeholder="Salesperson name" style="width:130px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;color:var(--text);font-family:inherit">
       <input class="sp-email" type="email" value="${_actEsc(map[name]||'')}" placeholder="email@thepremiercaterer.com" style="flex:1;min-width:200px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;color:var(--text);font-family:inherit">
-      <label title="Check when this person's Gmail Send-mail-as delegation is set up (events@ can send as them). Until checked, emails from them fall back to events@." style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);cursor:pointer;user-select:none;padding:4px 8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:${readyFlags[name]?'#E1F5EE':'var(--bg2)'}">
+      <label title="Check when this person's Gmail Send-mail-as delegation is set up (events@ can send as them). Until checked, emails from them fall back to events@." style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);cursor:pointer;user-select:none;padding:4px 8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:${readyFlags[name]?'var(--green-bg)':'var(--bg2)'}">
         <input class="sp-ready" type="checkbox" ${readyFlags[name]?'checked':''} style="cursor:pointer;margin:0">
         <span style="white-space:nowrap">${readyFlags[name]?'\u2713 Send-as ready':'Send-as pending'}</span>
       </label>
@@ -15807,7 +15807,7 @@ function openEventGrocery(eventId){
   pcgShowPanel(`<div style="display:flex;align-items:center;gap:10px;padding:26px 4px">
       <i class="ti ti-loader-2" style="font-size:19px;color:var(--maroon,var(--maroon))"></i>
       <div><div style="font-weight:600">Reading the menu…</div>
-      <div style="font-size:12px;color:var(--text3,#9A8E84);margin-top:2px">Matching the dishes against your master grocery list.</div></div>
+      <div style="font-size:12px;color:var(--text3,var(--text3));margin-top:2px">Matching the dishes against your master grocery list.</div></div>
     </div>`);
 
   const qs = 'action=generateGrocery'
@@ -15830,7 +15830,7 @@ function openEventGrocery(eventId){
         <div style="display:flex;align-items:center;gap:8px;font-weight:600;color:var(--maroon,var(--maroon))">
           <i class="ti ti-alert-triangle" style="font-size:17px"></i>Could not build the list</div>
         <div style="font-size:13px;color:var(--text2,#6B6058);margin-top:8px;line-height:1.55">${pcgEsc(err.message)}</div>
-        <div style="font-size:12px;color:var(--text3,#9A8E84);margin-top:10px;line-height:1.5">
+        <div style="font-size:12px;color:var(--text3,var(--text3));margin-top:10px;line-height:1.5">
           The menu has to be a Google Doc, and the Apps Script needs the Grocery.gs file with a fresh deployment.</div>
       </div>`);
     });
@@ -15847,7 +15847,7 @@ function pcgShowPanel(html){
     w.onclick = ev => { if(ev.target===w) pcgClosePanel(); };
     document.body.appendChild(w);
   }
-  w.innerHTML = `<div style="background:var(--bg,#fff);border:0.5px solid var(--border2,#DDD3C4);border-radius:var(--radius-lg,14px);
+  w.innerHTML = `<div style="background:var(--bg,#fff);border:0.5px solid var(--border2,var(--border2));border-radius:var(--radius-lg,14px);
       box-shadow:0 10px 40px rgba(43,36,32,.22);max-width:560px;width:100%;max-height:82vh;overflow:auto;padding:18px 20px"
       onclick="event.stopPropagation()">${html}</div>`;
 }
@@ -15865,14 +15865,14 @@ function pcgShowResult(d){
       </div>` : '';
 
   const unBlock = un.length
-    ? `<div style="border:0.5px solid var(--border2,#DDD3C4);border-radius:9px;overflow:hidden;margin-bottom:14px">
+    ? `<div style="border:0.5px solid var(--border2,var(--border2));border-radius:9px;overflow:hidden;margin-bottom:14px">
         <div style="background:var(--maroon-tint,#F3E4E2);color:var(--maroon,var(--maroon));padding:7px 11px;font-size:11px;
              font-weight:700;letter-spacing:.05em;display:flex;align-items:center;gap:6px">
           <i class="ti ti-help-circle" style="font-size:13px"></i>${un.length} ITEM${un.length===1?'':'S'} NOT IN THE MASTER LIST YET</div>
         <div style="padding:8px 11px;max-height:190px;overflow:auto">
           ${un.map(u=>`<div style="font-size:12px;color:var(--text2,#6B6058);padding:3px 0;border-bottom:0.5px solid var(--border,#EAE2D6);line-height:1.45">&ndash; ${pcgEsc(u)}</div>`).join('')}
         </div>
-        <div style="padding:7px 11px;font-size:11px;color:var(--text3,#9A8E84);background:var(--bg2,#FCFAF6);line-height:1.5">
+        <div style="padding:7px 11px;font-size:11px;color:var(--text3,var(--text3));background:var(--bg2,#FCFAF6);line-height:1.5">
           These are on the menu but have no rows in the master grocery sheet, so nothing was added for them.
           They are listed at the top of the sheet too.</div>
       </div>`
@@ -15885,10 +15885,10 @@ function pcgShowResult(d){
       <i class="ti ti-shopping-cart" style="font-size:20px;color:var(--maroon,var(--maroon));margin-top:2px"></i>
       <div style="flex:1;min-width:0">
         <div style="font-family:'Fraunces',Georgia,serif;font-size:17px;font-weight:600;line-height:1.25">Grocery list ready</div>
-        <div style="font-size:12px;color:var(--text3,#9A8E84);margin-top:3px">
+        <div style="font-size:12px;color:var(--text3,var(--text3));margin-top:3px">
           ${d.matchedCount} menu item${d.matchedCount===1?'':'s'} matched &middot; ${d.lineCount} grocery lines &middot; master tab &ldquo;${pcgEsc(d.tab)}&rdquo;</div>
       </div>
-      <button onclick="pcgClosePanel()" style="background:none;border:none;cursor:pointer;color:var(--text3,#9A8E84);font-size:19px;line-height:1;padding:0 2px" aria-label="Close">&times;</button>
+      <button onclick="pcgClosePanel()" style="background:none;border:none;cursor:pointer;color:var(--text3,var(--text3));font-size:19px;line-height:1;padding:0 2px" aria-label="Close">&times;</button>
     </div>
     ${warn}${unBlock}
     <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -15897,10 +15897,10 @@ function pcgShowResult(d){
                 text-decoration:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit">
         <i class="ti ti-external-link" style="font-size:14px"></i>Open the grocery sheet</a>
       <button onclick="pcgClosePanel()"
-         style="background:var(--bg2,#FCFAF6);border:0.5px solid var(--border2,#DDD3C4);border-radius:8px;
+         style="background:var(--bg2,#FCFAF6);border:0.5px solid var(--border2,var(--border2));border-radius:8px;
                 padding:8px 14px;font-size:13px;font-family:inherit;cursor:pointer">Done</button>
     </div>
-    <div style="font-size:11px;color:var(--text3,#9A8E84);margin-top:11px;line-height:1.5">
+    <div style="font-size:11px;color:var(--text3,var(--text3));margin-top:11px;line-height:1.5">
       Saved to this event, and filed in Drive with the client's other documents.
       Quantities marked &ldquo;yes&rdquo; or &ldquo;?&rdquo; in the master come through blank to fill in.</div>
   `);
@@ -16001,7 +16001,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if(main && !main.innerHTML.trim() && window._appStarted){
       console.warn('Page was blank — forcing render');
       try{ render(); } catch(e){ 
-        main.innerHTML = '<div style="padding:2rem;font-size:14px;color:#666">Loading... if this persists, please open the file from a web server or Netlify.<br><br><button onclick="location.reload()" style="padding:8px 16px;border:none;border-radius:6px;background:#185FA5;color:#fff;cursor:pointer;font-size:13px">Retry</button></div>'; 
+        main.innerHTML = '<div style="padding:2rem;font-size:14px;color:#666">Loading... if this persists, please open the file from a web server or Netlify.<br><br><button onclick="location.reload()" style="padding:8px 16px;border:none;border-radius:6px;background:var(--teal-solid);color:#fff;cursor:pointer;font-size:13px">Retry</button></div>'; 
       }
     }
   }, 1500);
