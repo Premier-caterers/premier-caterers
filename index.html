@@ -137,16 +137,24 @@
 </div>
 
 <div class="modal-wrap" id="addModal">
-  <div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto">
-    <h3>Add new event</h3>
-    <div style="font-size:12px;color:var(--text3);margin:-6px 0 12px">This creates a booked event — it appears in the Booked pipeline column and on its week's events page.</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div class="modal-row" style="margin-bottom:0"><label>First name</label><input id="m-firstName" placeholder="David"></div>
-      <div class="modal-row" style="margin-bottom:0"><label>Last name</label><input id="m-lastName" placeholder="Smith"></div>
+  <div class="modal" style="max-width:640px;max-height:90vh;overflow-y:auto">
+    <div class="eyebrow" style="margin-bottom:5px">New event</div>
+    <h3 id="wizTitle" style="margin:0 0 4px">Client &amp; event</h3>
+    <div style="font-size:12.5px;color:var(--text3);margin-bottom:20px">This creates a booked event — it appears in the Booked pipeline column and on its week's events page.</div>
+
+    <!-- Step rail -->
+    <div class="wiz-steps">
+      <div class="wiz-step is-active" id="wizStepTab1"><span class="wiz-step__n">1</span>Client &amp; event</div>
+      <div class="wiz-line"></div>
+      <div class="wiz-step" id="wizStepTab2"><span class="wiz-step__n">2</span>Food &amp; venue</div>
+      <div class="wiz-line"></div>
+      <div class="wiz-step" id="wizStepTab3"><span class="wiz-step__n">3</span>Details</div>
     </div>
-    <div class="modal-row"><label>Organization / business name <span style="color:var(--text3);font-weight:400">(optional — used as the client name when filled)</span></label><input id="m-organization" placeholder="e.g. Congregation Beth Sholom"></div>
-    <div class="modal-row"><label>Event name</label><input id="m-eventName" placeholder="Smith Bar Mitzvah"></div>
-    <div class="modal-row"><label>Event type</label>
+
+    <!-- The three <select>s below stay in the DOM (hidden) and remain the single
+         source of truth. The chips just write into them, so addEvent() reads
+         exactly the same fields it always did — no save-logic changes. -->
+    <div style="display:none">
       <select id="m-type">
         <option value="">Select…</option>
         <option value="Wedding">Wedding</option>
@@ -164,39 +172,74 @@
         <option value="Drop off catering">Drop off catering</option>
         <option value="Other">Other</option>
       </select>
-    </div>
-    <div class="modal-row"><label>Event date</label><input type="date" id="m-eventDate"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div class="modal-row" style="margin-bottom:0"><label>Phone</label><input id="m-phone" placeholder="201-555-1234"></div>
-      <div class="modal-row" style="margin-bottom:0"><label>Email</label><input type="email" id="m-email" placeholder="client@email.com"></div>
-    </div>
-    <div class="modal-row"><label>Venue name</label><input id="m-venueName" placeholder="The venue / hall"></div>
-    <div class="modal-row"><label>Venue location / address</label><input id="m-venueLocation" placeholder="123 Main St, Teaneck"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div class="modal-row" style="margin-bottom:0"><label>Guest count</label><input id="m-guestCount" placeholder="150"></div>
-      <div class="modal-row" style="margin-bottom:0"><label>Meat / Dairy / Parve</label>
-        <select id="m-meatDairy"><option value="">Select…</option><option value="Meat">Meat</option><option value="Dairy">Dairy</option><option value="Parve">Parve</option></select>
-      </div>
-    </div>
-    <div class="modal-row"><label>Cuisine / style</label><input id="m-cuisine" placeholder="e.g. traditional, Mediterranean…"></div>
-    <div class="modal-row"><label>Is this over Shabbos?</label>
+      <select id="m-meatDairy"><option value="">Select…</option><option value="Meat">Meat</option><option value="Dairy">Dairy</option><option value="Parve">Parve</option></select>
       <select id="m-shabbos"><option value="No">No</option><option value="Yes">Yes</option></select>
     </div>
-    <div class="modal-row"><label>How did you find us?</label><input id="m-howFound" placeholder="Referral, website, event…"></div>
-    <div class="modal-row"><label>Referred by</label><input id="m-referredBy" placeholder="Name"></div>
-    <div class="modal-row"><label>Event attended (if referred from one)</label><input id="m-eventAttended" placeholder="Whose event"></div>
-    <div class="modal-row"><label>Party planner</label><input id="m-plannerName" placeholder="Planner name"></div>
-    <div class="modal-row"><label>Salesperson</label>
-      <select id="m-salesperson"></select>
+
+    <!-- ───── STEP 1 ───── -->
+    <div class="wiz-panel" id="wizPanel1">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="modal-row" style="margin-bottom:0"><label>First name</label><input id="m-firstName" placeholder="David"></div>
+        <div class="modal-row" style="margin-bottom:0"><label>Last name</label><input id="m-lastName" placeholder="Smith"></div>
+      </div>
+      <div class="modal-row" style="margin-top:15px"><label>Organization / business name <span style="color:var(--text3);font-weight:400">(optional — used as the client name when filled)</span></label><input id="m-organization" placeholder="e.g. Congregation Beth Sholom"></div>
+      <div class="modal-row"><label>Event name</label><input id="m-eventName" placeholder="Smith Bar Mitzvah"></div>
+
+      <div class="modal-row">
+        <label>Event type</label>
+        <div class="chipset chipset--grid" id="chips-type"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="modal-row" style="margin-bottom:0"><label>Event date</label><input type="date" id="m-eventDate"></div>
+        <div class="modal-row" style="margin-bottom:0"><label>Guest count</label><input id="m-guestCount" placeholder="150"></div>
+      </div>
     </div>
-    <div class="modal-row"><label>Job # (optional)</label><input id="m-job" placeholder="Auto-generated (or enter custom #)"></div>
-    <div class="modal-row"><label>Notes / comments</label><textarea id="m-notes" placeholder="Any details..."></textarea></div>
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-      <button class="btn-save" onclick="addEvent()">Add booked event</button>
+
+    <!-- ───── STEP 2 ───── -->
+    <div class="wiz-panel" id="wizPanel2" style="display:none">
+      <div class="modal-row">
+        <label>Meat / Dairy / Parve</label>
+        <div class="chipset" id="chips-md"></div>
+      </div>
+      <div class="modal-row">
+        <label>Is this over Shabbos?</label>
+        <div class="chipset" id="chips-shabbos"></div>
+      </div>
+      <div class="modal-row"><label>Cuisine / style</label><input id="m-cuisine" placeholder="e.g. traditional, Mediterranean…"></div>
+      <div class="modal-row"><label>Venue name</label><input id="m-venueName" placeholder="The venue / hall"></div>
+      <div class="modal-row"><label>Venue location / address</label><input id="m-venueLocation" placeholder="123 Main St, Teaneck"></div>
+    </div>
+
+    <!-- ───── STEP 3 ───── -->
+    <div class="wiz-panel" id="wizPanel3" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="modal-row" style="margin-bottom:0"><label>Phone</label><input id="m-phone" placeholder="201-555-1234"></div>
+        <div class="modal-row" style="margin-bottom:0"><label>Email</label><input type="email" id="m-email" placeholder="client@email.com"></div>
+      </div>
+      <div class="modal-row" style="margin-top:15px"><label>How did you find us?</label><input id="m-howFound" placeholder="Referral, website, event…"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="modal-row" style="margin-bottom:0"><label>Referred by</label><input id="m-referredBy" placeholder="Name"></div>
+        <div class="modal-row" style="margin-bottom:0"><label>Event attended</label><input id="m-eventAttended" placeholder="Whose event"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:15px">
+        <div class="modal-row" style="margin-bottom:0"><label>Party planner</label><input id="m-plannerName" placeholder="Planner name"></div>
+        <div class="modal-row" style="margin-bottom:0"><label>Salesperson</label><select id="m-salesperson"></select></div>
+      </div>
+      <div class="modal-row" style="margin-top:15px"><label>Job # (optional)</label><input id="m-job" placeholder="Auto-generated (or enter custom #)"></div>
+      <div class="modal-row"><label>Notes / comments</label><textarea id="m-notes" placeholder="Any details..."></textarea></div>
+    </div>
+
+    <div class="modal-actions" style="border-top:1px solid var(--border);padding-top:16px;margin-top:20px">
+      <button class="btn btn--ghost" onclick="closeModal()">Cancel</button>
+      <span style="flex:1"></span>
+      <button class="btn" id="wizBack" onclick="wizGo(_wizStep-1)" style="display:none">← Back</button>
+      <button class="btn btn--pri" id="wizNext" onclick="wizGo(_wizStep+1)">Continue →</button>
+      <button class="btn btn--pri" id="wizSave" onclick="addEvent()" style="display:none"><i class="ti ti-check"></i> Add booked event</button>
     </div>
   </div>
 </div>
+
 
 <div class="modal-wrap" id="clientReportModal">
   <div class="modal" id="clientReportModalInner" style="max-width:720px;max-height:88vh;overflow-y:auto"></div>
@@ -14065,8 +14108,111 @@ function openModal(){
   if(de) de.value = we.toISOString().split('T')[0];
   document.getElementById('addModal').classList.add('open');
   _populateSalespersonSelect('m-salesperson', _defaultSalesperson());
+  wizRenderChips();
+  wizGo(1);
 }
 function closeModal(){ document.getElementById('addModal').classList.remove('open'); }
+
+/* ══ ADD EVENT WIZARD ═══════════════════════════════════════════════
+   Splits the old 17-field wall into three steps, and swaps the three
+   native dropdowns for visual chips.
+
+   The <select>s themselves still exist (hidden) and remain the source
+   of truth — chips write into them via chipPick(). addEvent() therefore
+   reads exactly the same elements it always has, so none of the save,
+   validation, calendar or pipeline logic needed to change.
+   ═══════════════════════════════════════════════════════════════════ */
+var _wizStep = 1;
+var WIZ_TITLES = { 1:'Client & event', 2:'Food & venue', 3:'Details' };
+
+// icon + short label per event type; value must match the <option> exactly
+var WIZ_TYPES = [
+  ['Wedding','ti-rings-wedding','Wedding'],
+  ['Bar mitzvah over shabbos','ti-star-of-david','Bar mitzvah (Shabbos)'],
+  ['Bar mitzvah party - not shabbos','ti-confetti','Bar mitzvah party'],
+  ['Bas mitzvah party - not shabbos','ti-confetti','Bas mitzvah party'],
+  ['Kiddush','ti-glass-full','Kiddush'],
+  ['Bris','ti-baby-carriage','Bris'],
+  ['Shabbos meals','ti-candle','Shabbos meals'],
+  ['Sheva Brachos','ti-hearts','Sheva Brachos'],
+  ['Aufruf','ti-book','Aufruf'],
+  ['Engagement party','ti-diamond','Engagement'],
+  ['Corporate event','ti-building','Corporate'],
+  ['Organization event','ti-users-group','Organization'],
+  ['Drop off catering','ti-truck-delivery','Drop off'],
+  ['Other','ti-dots','Other']
+];
+var WIZ_MD = [['Meat','ti-meat'],['Dairy','ti-cheese'],['Parve','ti-salad']];
+var WIZ_SHABBOS = [['No','ti-sun'],['Yes','ti-candle']];
+
+function _wizChipHtml(selectId, value, icon, label, current){
+  var on = (String(value) === String(current)) ? ' is-on' : '';
+  return '<button type="button" class="chipopt'+on+'" data-sel="'+selectId+'" data-val="'+pcEsc(value)+'" ' +
+         'onclick="chipPick(\''+selectId+'\', this)">' +
+         '<i class="ti '+icon+'"></i><span>'+pcEsc(label)+'</span></button>';
+}
+
+/** Paint all three chip groups from whatever the hidden selects currently hold. */
+function wizRenderChips(){
+  var t = document.getElementById('m-type');
+  var md = document.getElementById('m-meatDairy');
+  var sh = document.getElementById('m-shabbos');
+  var ct = document.getElementById('chips-type');
+  var cm = document.getElementById('chips-md');
+  var cs = document.getElementById('chips-shabbos');
+  if(ct) ct.innerHTML = WIZ_TYPES.map(function(r){ return _wizChipHtml('m-type', r[0], r[1], r[2], t?t.value:''); }).join('');
+  if(cm) cm.innerHTML = WIZ_MD.map(function(r){ return _wizChipHtml('m-meatDairy', r[0], r[1], r[0], md?md.value:''); }).join('');
+  if(cs) cs.innerHTML = WIZ_SHABBOS.map(function(r){ return _wizChipHtml('m-shabbos', r[0], r[1], r[0], sh?sh.value:'No'); }).join('');
+}
+
+/** Clicking a chip sets the hidden <select> — the single source of truth. */
+function chipPick(selectId, el){
+  var sel = document.getElementById(selectId);
+  if(sel){
+    sel.value = el.getAttribute('data-val');
+    try{ sel.dispatchEvent(new Event('change', {bubbles:true})); }catch(e){}
+  }
+  var group = el.parentElement;
+  if(group) group.querySelectorAll('.chipopt').forEach(function(c){ c.classList.remove('is-on'); });
+  el.classList.add('is-on');
+}
+
+function wizGo(step){
+  step = Math.max(1, Math.min(3, step));
+  // Nudge for the two things addEvent() will reject anyway, so it's caught
+  // on the step where the field actually lives rather than at the end.
+  if(step > 1 && _wizStep === 1){
+    var fn = (document.getElementById('m-firstName')||{}).value || '';
+    var ln = (document.getElementById('m-lastName')||{}).value || '';
+    var org = (document.getElementById('m-organization')||{}).value || '';
+    var dt = (document.getElementById('m-eventDate')||{}).value || '';
+    if(!fn.trim() && !ln.trim() && !org.trim()){ alert('Please enter a client name (or an organization) before continuing.'); return; }
+    if(!dt){ alert('Please set the event date — it decides which week the event lands on.'); return; }
+  }
+  _wizStep = step;
+  for(var i=1;i<=3;i++){
+    var p = document.getElementById('wizPanel'+i);
+    if(p) p.style.display = (i===step) ? '' : 'none';
+    var tab = document.getElementById('wizStepTab'+i);
+    if(tab){
+      tab.classList.toggle('is-active', i===step);
+      tab.classList.toggle('is-done', i<step);
+    }
+  }
+  var title = document.getElementById('wizTitle');
+  if(title) title.textContent = WIZ_TITLES[step] || '';
+  var back = document.getElementById('wizBack');
+  var next = document.getElementById('wizNext');
+  var save = document.getElementById('wizSave');
+  if(back) back.style.display = (step>1) ? '' : 'none';
+  if(next) next.style.display = (step<3) ? '' : 'none';
+  if(save) save.style.display = (step===3) ? '' : 'none';
+  var modal = document.querySelector('#addModal .modal');
+  if(modal) modal.scrollTop = 0;
+}
+window.chipPick = chipPick;
+window.wizGo = wizGo;
+window.wizRenderChips = wizRenderChips;
 
 function addEvent(){
   try{
