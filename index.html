@@ -3957,10 +3957,10 @@ function renderPipeline(){
   const sBooked = inquiries.filter(i=>i.stage==='booked').length;
   const sWeek = inquiries.filter(i=>i.stage==='booked' && plBookedBucket(i)==='this_week').length;
   const statHtml = `<div class="pl-stats">
-    <div class="pl-stat"><div class="k">New leads</div><div class="v">${sNew}</div></div>
-    <div class="pl-stat"><div class="k">Menu sent</div><div class="v">${sMenu}</div></div>
+    <div class="pl-stat pl-stat--teal"><div class="k">New leads</div><div class="v">${sNew}</div></div>
+    <div class="pl-stat pl-stat--amber"><div class="k">Menu sent</div><div class="v">${sMenu}</div></div>
     <div class="pl-stat accent"><div class="k">Booked</div><div class="v">${sBooked}</div></div>
-    <div class="pl-stat"><div class="k">This week</div><div class="v">${sWeek}</div></div>
+    <div class="pl-stat pl-stat--purple"><div class="k">This week</div><div class="v">${sWeek}</div></div>
   </div>`;
 
   let h = `
@@ -7047,10 +7047,10 @@ function renderClients(){
       </div>`;
     }).join('');
 
-    const acts = `<div class="btn-row" style="margin-top:10px">
-      <button class="btn" onclick="event.stopPropagation();openClientReport('${g.key}')"><i class="ti ti-report-money"></i> Report</button>
-      ${role.canEdit?`<button class="btn" onclick="event.stopPropagation();newEventForClient('${g.key}','new')"><i class="ti ti-plus"></i> New potential event</button>`:''}
-      ${role.canEdit?`<button class="btn btn--pri" onclick="event.stopPropagation();newEventForClient('${g.key}','booked')"><i class="ti ti-calendar-plus"></i> New booked event</button>`:''}
+    const acts = `<div class="icon-tile-row" style="margin-top:10px">
+      <div class="icon-tile icon-tile--purple" onclick="event.stopPropagation();openClientReport('${g.key}')"><div class="icon-tile-icon"><i class="ti ti-report-money"></i></div><div class="icon-tile-label">Report</div></div>
+      ${role.canEdit?`<div class="icon-tile icon-tile--teal" onclick="event.stopPropagation();newEventForClient('${g.key}','new')"><div class="icon-tile-icon"><i class="ti ti-plus"></i></div><div class="icon-tile-label">New potential event</div></div>`:''}
+      ${role.canEdit?`<div class="icon-tile icon-tile--maroon" onclick="event.stopPropagation();newEventForClient('${g.key}','booked')"><div class="icon-tile-icon"><i class="ti ti-calendar-plus"></i></div><div class="icon-tile-label">New booked event</div></div>`:''}
     </div>`;
 
     return anchor+head+`<tr class="cl-open"><td colspan="6">
@@ -7800,10 +7800,10 @@ function renderSchedule(){
   const totP = staffEvents.reduce((s,e)=>s+(parseInt(e.porters)||0),0);
 
   let h = `<div class="stats-row">
-    <div class="stat-card"><div class="stat-n">${totW}</div><div class="stat-l">Waiters</div></div>
-    <div class="stat-card"><div class="stat-n">${totB}</div><div class="stat-l">Bartenders</div></div>
-    <div class="stat-card"><div class="stat-n">${totC}</div><div class="stat-l">Chefs</div></div>
-    <div class="stat-card"><div class="stat-n">${totP}</div><div class="stat-l">Porters</div></div>
+    <div class="stat-card stat-card--maroon"><div class="stat-n">${totW}</div><div class="stat-l">Waiters</div></div>
+    <div class="stat-card stat-card--teal"><div class="stat-n">${totB}</div><div class="stat-l">Bartenders</div></div>
+    <div class="stat-card stat-card--purple"><div class="stat-n">${totC}</div><div class="stat-l">Chefs</div></div>
+    <div class="stat-card stat-card--amber"><div class="stat-n">${totP}</div><div class="stat-l">Porters</div></div>
   </div>
   <div class="section-header">
     <div><div class="eyebrow">This week · ${schedWeekLabel}</div><div class="section-title">Staff schedule</div></div>
