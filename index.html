@@ -8318,7 +8318,7 @@ async function _clSyncReminder(eid, idx){
   try{
     const e = events.find(x=>x.id===eid); if(!e) return;
     const item = checklists[eid]?.[idx]; if(!item || !item.reminder) return;
-    const base = getEventIsoDate(e.day); if(!base) { showToast('No event day set — reminder not scheduled'); return; }
+    const base = getEventIsoDate(e); if(!base) { showToast('No event day set — reminder not scheduled'); return; }
     const days = _clUnitDays(item.reminder.amount, item.reminder.unit);
     const due = new Date(base.getTime()); due.setDate(due.getDate()-days);
     const dueAtTs = due.getTime();
@@ -9537,17 +9537,17 @@ function getFullEventDate(e){
     friday:'Friday', saturday:'Saturday', sunday:'Sunday'
   };
   const fullDay = dayFull[e.day] || e.dayLabel || '';
-  if(e.eventDate){
-    const parts = e.eventDate.split('-');
+  // Prefer an explicit eventDate; otherwise derive the real calendar date from
+  // this event's own weekOf + day. (Used to fall back to a hardcoded, frozen
+  // June 2026 lookup table here — that showed the wrong date for every event
+  // without an explicit eventDate set.)
+  const iso = e.eventDate || (typeof _dateFromWeekOfAndDay==='function' ? _dateFromWeekOfAndDay(e.weekOf, e.day) : null);
+  if(iso){
+    const parts = iso.split('-');
     if(parts.length===3){
       const dateStr = parseInt(parts[1]) + '/' + parseInt(parts[2]) + '/' + parts[0];
       return fullDay + (fullDay?', ':'') + dateStr;
     }
-  }
-  const dateObj = eventDayDates[e.day];
-  if(dateObj){
-    const dateStr = (dateObj.getUTCMonth()+1) + '/' + dateObj.getUTCDate() + '/' + dateObj.getUTCFullYear();
-    return fullDay + ', ' + dateStr;
   }
   return fullDay;
 }
@@ -14468,8 +14468,14 @@ const eventDayDates = {
   sunday:    new Date('2026-06-07'),
 };
 
-function getEventIsoDate(day){
-  return eventDayDates[day] || null;
+function getEventIsoDate(e){
+  // Accepts either the event object (preferred, uses its real weekOf+day) or,
+  // for backward compatibility, a bare day-of-week string.
+  if(typeof e==='string'){ return eventDayDates[e] || null; }
+  if(!e) return null;
+  const iso = e.eventDate || (typeof _dateFromWeekOfAndDay==='function' ? _dateFromWeekOfAndDay(e.weekOf, e.day) : null);
+  if(iso) return new Date(iso+'T12:00:00Z');
+  return eventDayDates[e.day] || null;
 }
 
 function calcDueDate(day, daysBack){
