@@ -5136,6 +5136,15 @@ async function attachInqMenu(id){
   inq.menus.push({ name:'Menu (added manually)', url:trimmed, fileId:(trimmed.match(/[-\w]{25,}/)||[''])[0] });
   inq.menuLink = inq.menus[0].url;
   await _saveInquiry(inq);
+  // Keep any linked event's menu link in sync too — the cover sheet, staff
+  // drawer, and client portal all read ev.menuLink, not inq.menuLink.
+  events.filter(x=>x.inquiryId===inq.id).forEach(ev=>{
+    if(ev.menuLink!==trimmed){
+      ev.menuLink = trimmed;
+      _saveEvent(ev);
+      if(typeof syncClientPortal==='function') syncClientPortal(ev.id).catch(function(){});
+    }
+  });
   logActivity(inq.id,'menu','Menu link added manually',{url:trimmed});
   showToast('Menu added ✓');
   render();
@@ -10285,7 +10294,13 @@ async function saveMenuAttach(eid){
   const url = document.getElementById('menuAttachInput')?.value?.trim();
   if(!url) return;
   const e = events.find(x=>x.id===baseEventIdOf(eid));
-  if(e){ e.menuLink = url; await _saveEvent(e); }
+  if(e){
+    e.menuLink = url;
+    await _saveEvent(e);
+    const inq = inquiries.find(x=>x.id===e.inquiryId);
+    if(inq && inq.menuLink!==url){ inq.menuLink = url; _saveInquiry(inq); }
+    if(typeof syncClientPortal==='function') syncClientPortal(e.id).catch(function(){});
+  }
   if(invoices[eid]){ invoices[eid].menuLink = url; }
   document.getElementById('menuAttachModal')?.remove();
   showToast('Menu attached ✓');
@@ -12725,6 +12740,9 @@ async function saveQuickMenu(eid){
   if(!e) return;
   e.menuLink = url;
   await _saveEvent(e);
+  const inq = inquiries.find(x=>x.id===e.inquiryId);
+  if(inq && inq.menuLink!==url){ inq.menuLink = url; _saveInquiry(inq); }
+  if(typeof syncClientPortal==='function') syncClientPortal(e.id).catch(function(){});
   document.querySelectorAll('.menu-paste-box').forEach(el=>el.remove());
   showToast('Menu linked ✓');
   render();
@@ -14367,7 +14385,21 @@ function saveAttachDoc(){
   const url = document.getElementById('attachInput').value.trim();
   if(!url) return;
   const e = events.find(x=>x.id===_attachEventId);
-  if(e){ e[_attachField] = url; save(); }
+  if(e){
+    e[_attachField] = url;
+    save();
+    if(_attachField==='menuLink'){
+      // Keep the linked inquiry's menu link in sync too — email-sending reads
+      // inq.menuLink, not ev.menuLink, so without this the link "can't be found."
+      const inq = inquiries.find(x=>x.id===e.inquiryId);
+      if(inq && inq.menuLink!==url){
+        inq.menuLink = url;
+        _saveInquiry(inq);
+      }
+      // Refresh the client portal doc so the portal's menu link isn't stale either
+      if(typeof syncClientPortal==='function') syncClientPortal(e.id).catch(function(){});
+    }
+  }
   closeAttachModal();
   render();
   setTimeout(()=>{ selectedId=_attachEventId||selectedId; document.querySelector('.detail-panel')?.scrollIntoView({behavior:'smooth',block:'nearest'}); },50);
