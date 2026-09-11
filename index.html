@@ -12788,7 +12788,7 @@ function renderEquipDetail() {
       <div style="display:flex;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap">
         ${['Meat','Dairy','Parve'].map(t=>{
           const sel = mdp0===t;
-          const col = t==='Meat'?'var(--maroon)':t==='Dairy'?'var(--teal-text)':'#7A6B00';
+          const col = t==='Meat'?'var(--maroon)':t==='Dairy'?'var(--teal-text)':'var(--brass)';
           return `<button onclick="setEquipMDP('${id}','${t}')" style="flex:1;min-width:80px;padding:14px;border-radius:var(--radius-lg);border:2px solid ${sel?col:'var(--border2)'};font-size:16px;font-weight:800;cursor:pointer;transition:all .15s;letter-spacing:.05em;${sel?'background:'+col+';color:#fff':'background:var(--bg);color:var(--text2)'}">${t.toUpperCase()}</button>`;
         }).join('')}
       </div>
@@ -12854,8 +12854,8 @@ function renderEquipDetail() {
       }).join('')}
       <div style="position:sticky;bottom:0;background:var(--bg);padding:1rem 0 .25rem;border-top:0.5px solid var(--border);margin-top:1rem;display:flex;align-items:center;justify-content:space-between">
         <span style="font-size:13px;color:var(--text2)" id="equip-count-bottom-${id}">${checkedCount} items selected</span>
-        <button class="btn-save" id="equip-next-${id}" onclick="advanceToQuantities('${id}')" ${checkedCount===0?'disabled style="opacity:.4"':''}>
-          Next — build list <i class="ti ti-arrow-right" style="font-size:13px"></i>
+        <button class="btn btn--pri" id="equip-next-${id}" onclick="advanceToQuantities('${id}')" ${checkedCount===0?'disabled':''}>
+          Next — build list <i class="ti ti-arrow-right"></i>
         </button>
       </div>
     </div>`;
@@ -12901,13 +12901,13 @@ function renderEquipDetail() {
       <div style="padding:1rem 0;border-top:0.5px solid var(--border);margin-top:.5rem">
         <div id="addExtraArea"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="add-btn" onclick="showAddItemForm('${id}')"><i class="ti ti-plus" style="font-size:14px"></i> Add custom item</button>
-          <button onclick="addFromOriginalList('${id}')" style="display:flex;align-items:center;gap:5px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);font-size:13px;color:var(--text2);cursor:pointer"><i class="ti ti-list-search" style="font-size:14px"></i> Add from original list</button>
+          <button class="btn btn--pri btn--sm" onclick="showAddItemForm('${id}')"><i class="ti ti-plus"></i> Add custom item</button>
+          <button onclick="addFromOriginalList('${id}')" class="btn btn--sm"><i class="ti ti-list-search"></i> Add from original list</button>
         </div>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;padding-top:1rem;border-top:0.5px solid var(--border)">
-        <button class="btn-cancel" onclick="backToSelecting('${id}')">← Back</button>
-        <button class="btn-save" onclick="completeList('${id}')">List creation complete <i class="ti ti-check" style="font-size:13px"></i></button>
+        <button class="btn" onclick="backToSelecting('${id}')"><i class="ti ti-arrow-left"></i> Back</button>
+        <button class="btn btn--pri" onclick="completeList('${id}')">List creation complete <i class="ti ti-check"></i></button>
       </div>
     </div>`;
     el.scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -12929,9 +12929,9 @@ function renderEquipDetail() {
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap">
-        <button class="btn-save" onclick="printList('${id}')"><i class="ti ti-printer" style="font-size:14px"></i> Print list</button>
-        <button class="btn-cancel" onclick="backToQuantities('${id}')"><i class="ti ti-edit" style="font-size:13px"></i> Edit</button>
-        <button class="btn-cancel" onclick="confirmClearEquip('${id}')"><i class="ti ti-refresh" style="font-size:13px"></i> Start over</button>
+        <button class="btn btn--pri" onclick="printList('${id}')"><i class="ti ti-printer"></i> Print list</button>
+        <button class="btn" onclick="backToQuantities('${id}')"><i class="ti ti-edit"></i> Edit</button>
+        <button class="btn" onclick="confirmClearEquip('${id}')"><i class="ti ti-refresh"></i> Start over</button>
       </div>
       ${sections.map(sec => {
         const secItems = eq.items.filter(i=>i.section===sec);
