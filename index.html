@@ -8116,7 +8116,7 @@ function checklistCardHtml(e){
 
     // Column headers
     h += '<div style="display:grid;grid-template-columns:26px 26px 1fr 168px 150px 108px 30px 26px;gap:8px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">'
-      + '<span title="Done">Done</span><span title="Not applicable">N/A</span><span>Task</span><span>Assigned to</span><span>Notes</span><span>Due date</span><span title="Reminder">🔔</span><span title="Add to change log">📋</span>'
+      + '<span title="Done">Done</span><span title="Not applicable">N/A</span><span>Task</span><span>Assigned to</span><span>Notes</span><span>Due date</span><span title="Reminder"><i class="ti ti-bell"></i></span><span title="Add to change log"><i class="ti ti-clipboard-list"></i></span>'
       + '</div>';
 
     rawItems.forEach(function(item, idx){
@@ -8176,7 +8176,7 @@ function checklistCardHtml(e){
           + '</select>'
           + '<span style="font-size:12px;color:var(--text3)">before the event</span>'
           + '<button onclick="saveClReminder(\''+eid+'\','+idx+')" class="btn btn--pri">Save</button>'
-          + (item.reminder ? '<button onclick="clearClReminder(\''+eid+'\','+idx+')" style="padding:5px 12px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);font-size:12px;cursor:pointer">Remove</button>' : '')
+          + (item.reminder ? '<button onclick="clearClReminder(\''+eid+'\','+idx+')" class="btn btn--ghost btn--sm">Remove</button>' : '')
         + '</div>'
         + '</div>'; // end item
 
@@ -8184,7 +8184,7 @@ function checklistCardHtml(e){
 
     // Add task button
     h += '<div style="margin-top:.75rem">'
-      + '<button onclick="openAddTaskModal(\''+eid+'\')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;cursor:pointer"><i class="ti ti-plus" style="font-size:13px"></i>Add task</button>'
+      + '<button onclick="openAddTaskModal(\''+eid+'\')" class="btn btn--pri btn--sm"><i class="ti ti-plus"></i>Add task</button>'
       + '</div>';
 
     h += '</div></div></div>'; // close body, card
