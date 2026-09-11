@@ -25,9 +25,9 @@
 
   header{background:var(--wine);color:#fff;padding:20px 20px 18px}
   header h1{font-family:var(--disp);font-weight:600;font-size:24px;margin:0;letter-spacing:.01em}
-  header .sub{font-family:var(--mono);font-size:12px;opacity:.85;margin-top:6px;line-height:1.5}
+  header .sub{font-family:var(--mono);font-size:12px;opacity:.88;margin-top:6px;line-height:1.5}
 
-  .bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 20px;background:var(--paper);border-bottom:1px solid var(--rule);position:sticky;top:0;z-index:5}
+  .bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 20px;background:var(--paper);border-bottom:1px solid var(--rule)}
   .bar .n{font-family:var(--mono);font-size:20px;font-weight:500;line-height:1}
   .bar .l{font-size:14px;color:var(--ink-soft)}
   .conn{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing:.04em;display:inline-flex;align-items:center;gap:6px;color:var(--ink-faint)}
@@ -35,6 +35,18 @@
   .conn.ok .dot{background:var(--ok)}
   .conn.bad .dot{background:var(--stop);border-radius:1px}
 
+  /* ---------- one-click done view ---------- */
+  .done-card{background:var(--paper);border:1px solid var(--rule);border-left:5px solid var(--ok);border-radius:6px;margin:22px 18px;padding:24px 22px}
+  .done-card.pending{border-left-color:var(--rail)}
+  .done-card.failed{border-left-color:var(--stop);border-left-style:dashed}
+  .done-mark{font-family:var(--mono);font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--ok);display:flex;align-items:center;gap:9px;margin-bottom:12px}
+  .done-card.pending .done-mark{color:var(--ink-faint)}
+  .done-card.failed .done-mark{color:var(--stop)}
+  .done-card h2{font-family:var(--disp);font-size:20px;font-weight:600;margin:0 0 8px;line-height:1.3}
+  .done-card p{margin:0;color:var(--ink-soft);font-size:15px}
+  .done-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+
+  /* ---------- checklist view ---------- */
   .item{display:flex;gap:13px;align-items:flex-start;background:var(--paper);border-bottom:1px solid var(--rule);border-left:4px solid var(--rail);padding:16px 18px 15px}
   .item[data-p="now"]{border-left-color:var(--stop)}
   .item[data-p="soon"]{border-left-style:dashed;border-left-color:var(--warn)}
@@ -61,16 +73,13 @@
   .act:hover{border-color:var(--wine);background:var(--wine-tint)}
   .act:focus-visible{outline:2px solid var(--wine);outline-offset:2px}
   .act[disabled]{opacity:.5;cursor:default}
-  /* A handled item keeps its actions — you often still want it in My Day. */
+  .act.primary{border-color:var(--wine);border-width:2px;color:var(--wine-deep)}
   .item.done .act{border-style:dashed}
 
   .stamp{display:none;font-family:var(--mono);font-size:11px;color:var(--ok);letter-spacing:.04em;margin-top:9px;align-items:center;gap:8px}
   .item.done .stamp{display:flex}
-  .undo{font-family:var(--mono);font-size:11px;color:var(--wine-deep);background:none;border:0;border-bottom:1px solid var(--rail);cursor:pointer;padding:0 0 1px}
-  .undo:hover{border-color:var(--wine)}
 
   .note{padding:16px 20px;color:var(--ink-soft);font-size:14px;background:var(--paper);border-bottom:1px solid var(--rule)}
-  .note b{color:var(--ink)}
   .err{background:#fdf3f1;border-left:4px solid var(--stop);color:#6d2418}
   .empty{padding:40px 22px;text-align:center;color:var(--ink-soft)}
   .empty h2{font-family:var(--disp);font-size:20px;margin-bottom:8px}
@@ -85,18 +94,18 @@
     <div class="sub" id="sub">Checklist</div>
   </header>
 
-  <div class="bar">
+  <div class="bar" id="bar" hidden>
     <span class="n" id="n">—</span>
     <span class="l" id="l">loading</span>
     <span class="conn" id="conn"><span class="dot"></span><span id="connT">connecting</span></span>
   </div>
 
   <div id="msg"></div>
-  <div id="list"></div>
+  <div id="main"></div>
 
-  <footer>
-    Ticking an item stops it appearing in future briefs until there is new activity on it.<br>
-    Nothing here is deleted — a tick can be undone at any time.
+  <footer id="foot">
+    Marking an item done stops it appearing in future briefs until there is new activity on it.<br>
+    Nothing is ever deleted — it can be undone at any time.
   </footer>
 </div>
 
@@ -106,7 +115,6 @@
 (function(){
   "use strict";
 
-  /* Same project and pattern as followup-action.html. */
   var firebaseConfig = {
     apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
     authDomain: "premier-caterers-internal-app.firebaseapp.com",
@@ -118,9 +126,10 @@
 
   var DISMISSALS = 'briefDismissals';
   var MYDAY      = 'myDayItems';
-  var OWNER      = 'owner';           // matches existing myDayItems records
+  var OWNER      = 'owner';
+  var PAGE       = 'https://premier-caterers.github.io/premier-caterers/brief.html';
 
-  var db = null, payload = null;
+  var db = null;
   var $ = function(id){ return document.getElementById(id); };
 
   function esc(s){
@@ -142,8 +151,107 @@
   function conn(state, text){
     var c = $('conn'); c.className = 'conn ' + state; $('connT').textContent = text;
   }
+  function connect(){
+    try{
+      if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+      return true;
+    }catch(e){ return false; }
+  }
+  function qp(name){
+    var m = new RegExp('[?&]' + name + '=([^&#]*)').exec(location.search);
+    if(!m) return null;
+    try{ return decodeURIComponent(m[1].replace(/\+/g,' ')); }catch(e){ return m[1]; }
+  }
 
-  /* ---- read the brief out of the link ---- */
+  /* write (or clear) one dismissal */
+  function setDismissal(key, on, extra){
+    var payload = {
+      key: String(key),
+      active: !!on,
+      dismissedAt: on ? Date.now() : 0,
+      updatedAt: Date.now(),
+      via: 'brief.html'
+    };
+    if(extra && extra.text)   payload.text   = String(extra.text);
+    if(extra && extra.source) payload.source = String(extra.source);
+    return db.collection(DISMISSALS).doc(safeId(key)).set(payload, { merge: true });
+  }
+
+  function addMyDay(text, key){
+    return db.collection(MYDAY).add({
+      owner: OWNER, type: 'todo',
+      text: String(text || '').slice(0, 400),
+      status: 'pending', createdAt: Date.now(),
+      source: 'Brief', briefKey: String(key || '')
+    });
+  }
+
+  /* ================= one-click done ================= */
+  function doneView(key, title){
+    $('foot').hidden = false;
+    $('sub').textContent = 'Marking one item done';
+    var main = $('main');
+    main.innerHTML =
+      '<div class="done-card pending" id="card">' +
+        '<div class="done-mark" id="mark">Saving…</div>' +
+        (title ? '<h2>' + esc(title) + '</h2>' : '<h2>That item</h2>') +
+        '<p id="cardMsg">Recording this so it stops coming back.</p>' +
+        '<div class="done-actions" id="cardActs"></div>' +
+      '</div>';
+
+    var card = $('card'), mark = $('mark'), cmsg = $('cardMsg'), acts = $('cardActs');
+
+    if(!connect()){
+      card.className = 'done-card failed';
+      mark.textContent = 'Not saved';
+      cmsg.textContent = 'Could not reach the database, so nothing was recorded. Reopen this link when you have a connection and it will save then.';
+      return;
+    }
+
+    setDismissal(key, true, { text: title || '' })
+      .then(function(){
+        card.className = 'done-card';
+        mark.innerHTML = '&#10003; Done';
+        cmsg.textContent = 'Hidden from future briefs unless there is new activity on it.';
+
+        var undo = document.createElement('button');
+        undo.className = 'act'; undo.type = 'button'; undo.textContent = 'Undo';
+        undo.addEventListener('click', function(){
+          undo.disabled = true; undo.textContent = 'Undoing…';
+          setDismissal(key, false).then(function(){
+            card.className = 'done-card pending';
+            mark.textContent = 'Put back';
+            cmsg.textContent = 'This item will appear in the next brief as normal.';
+            undo.remove();
+          }).catch(function(){
+            undo.disabled = false; undo.textContent = 'Undo';
+            note('Could not undo that. Nothing was changed.', true);
+          });
+        });
+        acts.appendChild(undo);
+
+        if(title){
+          var md = document.createElement('button');
+          md.className = 'act'; md.type = 'button'; md.textContent = 'Also add to My Day';
+          md.addEventListener('click', function(){
+            md.disabled = true; md.textContent = 'Adding…';
+            addMyDay(title, key)
+              .then(function(){ md.textContent = '✓ In My Day'; })
+              .catch(function(){ md.disabled = false; md.textContent = 'Also add to My Day';
+                note('Could not add that to My Day.', true); });
+          });
+          acts.appendChild(md);
+        }
+      })
+      .catch(function(){
+        card.className = 'done-card failed';
+        mark.textContent = 'Not saved';
+        cmsg.textContent = 'Something went wrong writing that. Nothing was recorded — try the link again.';
+      });
+  }
+
+  /* ================= full checklist ================= */
   function decode(){
     var frag = location.hash.replace(/^#/, '');
     if(!frag) return null;
@@ -156,7 +264,7 @@
       var bytes = new Uint8Array(bin.length);
       for(var i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
       return JSON.parse(new TextDecoder('utf-8').decode(bytes));
-    }catch(e){ return undefined; }   // undefined = present but unreadable
+    }catch(e){ return undefined; }
   }
 
   function count(){
@@ -165,127 +273,79 @@
     $('l').textContent = open === 0 ? 'all clear' : (open === 1 ? 'still needs you' : 'still need you');
   }
 
-  function render(items){
-    var list = $('list');
-    items.forEach(function(it, i){
-      var key = it.k || ('item-' + i);
-      var row = document.createElement('div');
-      row.className = 'item';
-      if(it.p === 'now' || it.p === 'soon') row.setAttribute('data-p', it.p);
-      row.dataset.key = key;
-
-      var flag = it.f ? '<span class="flag ' + (it.p === 'soon' ? 'soon' : 'now') + '">' + esc(it.f) + '</span>' : '';
-
-      var acts = '';
-      (it.a || []).forEach(function(a){
-        var u = safeUrl(a.u);
-        if(!u) return;
-        acts += '<a class="act" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + esc(a.l || 'Open') + '</a>';
-      });
-      acts += '<button class="act js-myday" type="button">Add to My Day</button>';
-
-      row.innerHTML =
-        '<button class="box" type="button" aria-pressed="false" aria-label="Mark handled">&#10003;</button>' +
-        '<div class="body">' +
-          '<h2>' + esc(it.h || 'Untitled') + flag + '</h2>' +
-          (it.d ? '<p class="detail">' + esc(it.d) + '</p>' : '') +
-          (it.s ? '<div class="src">' + esc(it.s) + '</div>' : '') +
-          '<div class="acts">' + acts + '</div>' +
-          '<div class="stamp"><span>&#10003; Handled — hidden from future briefs</span>' +
-            '<button class="undo" type="button">Undo</button></div>' +
-        '</div>';
-
-      row.querySelector('.box').addEventListener('click', function(){ dismiss(row, it, true); });
-      row.querySelector('.undo').addEventListener('click', function(){ dismiss(row, it, false); });
-      row.querySelector('.js-myday').addEventListener('click', function(){ toMyDay(this, it); });
-      list.appendChild(row);
-    });
-    count();
-  }
-
-  /* ---- writes ---- */
-  function dismiss(row, it, on){
-    if(!db){ note('Not connected, so that tick was not saved. Check your connection and reopen the link.', true); return; }
+  function toggle(row, it, on){
+    if(!db){ note('Not connected, so that was not saved.', true); return; }
     row.classList.add('busy');
     var box = row.querySelector('.box');
-    db.collection(DISMISSALS).doc(safeId(row.dataset.key)).set({
-      key: String(row.dataset.key),
-      active: !!on,
-      text: String(it.h || ''),
-      source: String(it.s || ''),
-      dismissedAt: on ? Date.now() : 0,
-      updatedAt: Date.now(),
-      via: 'brief.html'
-    }, { merge: true })
-    .then(function(){
-      row.classList.toggle('done', !!on);
-      box.setAttribute('aria-pressed', on ? 'true' : 'false');
-      count();
-    })
-    .catch(function(){
-      note('That tick could not be saved. Nothing was changed — try again in a moment.', true);
-    })
-    .then(function(){ row.classList.remove('busy'); });
+    setDismissal(row.dataset.key, on, { text: it.h, source: it.s })
+      .then(function(){
+        row.classList.toggle('done', !!on);
+        box.setAttribute('aria-pressed', on ? 'true' : 'false');
+        count();
+      })
+      .catch(function(){ note('That could not be saved. Nothing was changed.', true); })
+      .then(function(){ row.classList.remove('busy'); });
   }
 
-  function toMyDay(btn, it){
-    if(!db){ note('Not connected, so nothing was added to My Day.', true); return; }
-    btn.disabled = true;
-    var was = btn.textContent;
-    btn.textContent = 'Adding…';
-    db.collection(MYDAY).add({
-      owner: OWNER,
-      type: 'todo',
-      text: String(it.h || '').slice(0, 400),
-      status: 'pending',
-      createdAt: Date.now(),
-      source: 'Brief',
-      briefKey: String(it.k || '')
-    })
-    .then(function(){ btn.textContent = '✓ In My Day'; })
-    .catch(function(){
-      btn.textContent = was; btn.disabled = false;
-      note('Could not add that to My Day. Nothing was saved.', true);
-    });
-  }
-
-  /* ---- boot ---- */
-  function boot(){
-    payload = decode();
-
-    if(payload === undefined){
-      $('list').innerHTML = '<div class="empty"><h2>This link looks damaged</h2>' +
-        '<p>Some mail apps shorten long links. Open the brief in Gmail and tap the button there instead.</p></div>';
-      $('n').textContent = '—'; $('l').textContent = '';
-      return;
-    }
-    if(payload === null){
-      $('list').innerHTML = '<div class="empty"><h2>Open this from a brief</h2>' +
-        '<p>This page shows the items from one brief. Tap <b>Open the checklist</b> in any Premier Brief email.</p></div>';
-      $('n').textContent = '—'; $('l').textContent = '';
-      return;
-    }
-
+  function checklistView(payload){
+    $('bar').hidden = false;
     if(payload.t) $('sub').textContent = payload.t + (payload.w ? ' · ' + payload.w : '');
     var items = Array.isArray(payload.items) ? payload.items : [];
+
     if(!items.length){
-      $('list').innerHTML = '<div class="empty"><h2>Nothing needed you</h2><p>That brief had no open items.</p></div>';
+      $('main').innerHTML = '<div class="empty"><h2>Nothing needed you</h2><p>That brief had no open items.</p></div>';
       $('n').textContent = '0'; $('l').textContent = 'all clear';
     }else{
-      render(items);
+      items.forEach(function(it, i){
+        var key = it.k || ('item-' + i);
+        var row = document.createElement('div');
+        row.className = 'item';
+        if(it.p === 'now' || it.p === 'soon') row.setAttribute('data-p', it.p);
+        row.dataset.key = key;
+
+        var flag = it.f ? '<span class="flag ' + (it.p === 'soon' ? 'soon' : 'now') + '">' + esc(it.f) + '</span>' : '';
+        var acts = '';
+        (it.a || []).forEach(function(a){
+          var u = safeUrl(a.u);
+          if(!u) return;
+          acts += '<a class="act" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + esc(a.l || 'Open') + '</a>';
+        });
+        acts += '<button class="act js-myday" type="button">Add to My Day</button>';
+
+        row.innerHTML =
+          '<button class="box" type="button" aria-pressed="false" aria-label="Mark done">&#10003;</button>' +
+          '<div class="body">' +
+            '<h2>' + esc(it.h || 'Untitled') + flag + '</h2>' +
+            (it.d ? '<p class="detail">' + esc(it.d) + '</p>' : '') +
+            (it.s ? '<div class="src">' + esc(it.s) + '</div>' : '') +
+            '<div class="acts">' + acts + '</div>' +
+            '<div class="stamp"><span>&#10003; Done — hidden from future briefs</span></div>' +
+          '</div>';
+
+        row.querySelector('.box').addEventListener('click', function(){
+          toggle(row, it, !row.classList.contains('done'));
+        });
+        row.querySelector('.js-myday').addEventListener('click', function(){
+          var b = this;
+          if(!db){ note('Not connected, so nothing was added to My Day.', true); return; }
+          b.disabled = true; b.textContent = 'Adding…';
+          addMyDay(it.h, it.k)
+            .then(function(){ b.textContent = '✓ In My Day'; })
+            .catch(function(){ b.disabled = false; b.textContent = 'Add to My Day';
+              note('Could not add that to My Day.', true); });
+        });
+        $('main').appendChild(row);
+      });
+      count();
     }
 
-    try{
-      if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-      db = firebase.firestore();
-      conn('ok', 'saving is on');
-    }catch(e){
+    if(!connect()){
       conn('bad', 'offline');
       note('Could not reach the database, so ticks will not save. Everything below still reads fine.', true);
       return;
     }
+    conn('ok', 'saving is on');
 
-    /* reflect anything already ticked, so reopening the link is accurate */
     db.collection(DISMISSALS).get().then(function(snap){
       var on = {};
       snap.forEach(function(d){ var v = d.data() || {}; if(v.active) on[safeId(v.key || d.id)] = true; });
@@ -296,7 +356,26 @@
         }
       });
       count();
-    }).catch(function(){ /* leave as rendered */ });
+    }).catch(function(){});
+  }
+
+  /* ================= boot ================= */
+  function boot(){
+    var doneKey = qp('done');
+    if(doneKey){ doneView(doneKey, qp('t')); return; }
+
+    var payload = decode();
+    if(payload === undefined){
+      $('main').innerHTML = '<div class="empty"><h2>This link looks damaged</h2>' +
+        '<p>Some mail apps shorten long links. Open the brief in Gmail and tap the button there instead.</p></div>';
+      return;
+    }
+    if(payload === null){
+      $('main').innerHTML = '<div class="empty"><h2>Open this from a brief</h2>' +
+        '<p>This page shows the items from one brief. Tap <b>Open the checklist</b> in any Premier Brief email.</p></div>';
+      return;
+    }
+    checklistView(payload);
   }
 
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
