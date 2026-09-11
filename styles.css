@@ -603,7 +603,7 @@ a{color:var(--blue-mid);text-decoration:none}
 .cs-foot-btn-secondary:hover{background:var(--bg2)}
 
 /* ── Home / Dashboard (now themed off shared variables, not hardcoded hex) ── */
-.home-header{margin-bottom:1.3rem;background:linear-gradient(135deg,var(--maroon),var(--maroon-deep));border-radius:var(--radius-lg);padding:22px 26px;box-shadow:var(--shadow-card-h)}
+.home-header{margin-bottom:1.3rem;background:var(--maroon);border-radius:var(--radius-lg);padding:22px 26px;box-shadow:var(--shadow-card)}
 .home-greeting{font-size:24px;font-weight:600;color:#fff}
 .home-sub{font-size:13px;color:rgba(255,255,255,.82);margin-top:4px}
 .home-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-bottom:1.6rem}
