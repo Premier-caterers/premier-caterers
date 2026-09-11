@@ -2886,7 +2886,7 @@ function renderCoverSheet(){
     ${sorts.map(s=>{
       const active = coverSortKey===s.key;
       const arrow  = active ? (coverSortDir===1?' \u2191':' \u2193') : '';
-      return `<button onclick="setCoverSort('${s.key}')" style="padding:4px 12px;border:0.5px solid ${active?'var(--maroon)':'var(--border2)'};border-radius:20px;background:${active?'var(--maroon)':'var(--bg2)'};color:${active?'#fff':'var(--text2)'};font-size:11px;font-weight:${active?'700':'500'};cursor:pointer;white-space:nowrap">${s.label}${arrow}</button>`;
+      return `<button onclick="setCoverSort('${s.key}')" class="filter-btn ${active?'active':''}">${s.label}${arrow}</button>`;
     }).join('')}
   </div>`;
 
@@ -3003,7 +3003,7 @@ function renderCoverSheet(){
     </tr>
     <tr><td colspan="${cols.length}" class="cs-temp-bar">
       <button onclick="coverCommitRow(${ri})" class="btn btn--pri" style="margin-right:6px">\u2713 Save row</button>
-      <button onclick="coverDiscardRow(${ri})" style="padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text2);font-size:12px;cursor:pointer">\u2715 Discard</button>
+      <button onclick="coverDiscardRow(${ri})" class="btn btn--ghost btn--sm">\u2715 Discard</button>
     </td></tr>`;
   });
 
@@ -3011,17 +3011,17 @@ function renderCoverSheet(){
     <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:2.5rem;text-align:center;color:var(--text2)">
       <i class="ti ti-table-off" style="font-size:32px;margin-bottom:1rem;display:block;color:var(--text3)"></i>
       <div style="font-size:15px;font-weight:500;margin-bottom:.5rem">No events for ${wLabel}</div>
-      <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" style="padding:8px 16px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;cursor:pointer;margin-top:.5rem">\u2190 Back to current week</button>
+      <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" class="btn" style="margin-top:.5rem"><i class="ti ti-arrow-left"></i> Back to current week</button>
     </div>` : '';
 
   return `
     <div class="section-header">
       <div><div class="eyebrow">This week</div><div class="section-title">Cover sheet</div></div>
       <div style="display:flex;gap:8px;align-items:center">
-        <button onclick="changeWeek(-1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">\u2039</button>
+        <button onclick="changeWeek(-1)" class="icon-btn" title="Previous week"><i class="ti ti-chevron-left"></i></button>
         <span style="font-size:13px;font-weight:600;color:var(--text)">${wLabel}</span>
-        <button onclick="changeWeek(1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">\u203a</button>
-        <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" style="padding:5px 12px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:12px;cursor:pointer">Current week</button>
+        <button onclick="changeWeek(1)" class="icon-btn" title="Next week"><i class="ti ti-chevron-right"></i></button>
+        <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" class="btn btn--sm">Current week</button>
         ${coverWeekNumberingOff(weekStr) ? `<button onclick="renumberWeek('${weekStr}')" title="This week's event numbers are out of order \u2014 click to fix" class="btn btn--dashed"><i class="ti ti-list-numbers"></i> Renumber</button>` : ''}
         <button onclick="printCoverSheet()" class="btn btn--pri"><i class="ti ti-printer"></i> Print / Save PDF</button>
         <button onclick="coverAddNewRow()" class="btn"><i class="ti ti-plus"></i> New event</button>
