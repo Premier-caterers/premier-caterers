@@ -8434,10 +8434,10 @@ function renderChanges(){
   <div class="section-header">
     <div><div class="eyebrow">This week</div><div class="section-title">Changes log</div></div>
     <div style="display:flex;gap:8px;align-items:center">
-      <button onclick="changeWeek(-1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">\u2039</button>
+      <button onclick="changeWeek(-1)" class="icon-btn" title="Previous week"><i class="ti ti-chevron-left"></i></button>
       <span style="font-size:13px;font-weight:600;color:var(--text)">${wLabel}</span>
-      <button onclick="changeWeek(1)" style="border:none;background:var(--bg2);color:var(--text2);cursor:pointer;font-size:16px;padding:4px 10px;border-radius:var(--radius)">\u203a</button>
-      <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" style="padding:5px 12px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:12px;cursor:pointer">Current week</button>
+      <button onclick="changeWeek(1)" class="icon-btn" title="Next week"><i class="ti ti-chevron-right"></i></button>
+      <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" class="btn btn--sm">Current week</button>
     </div>
   </div>
   <div class="new-change-form">
@@ -8449,8 +8449,8 @@ function renderChanges(){
     <div style="margin-bottom:10px">
       <div style="font-size:12px;font-weight:500;color:var(--text2);margin-bottom:6px">Notify:</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
-        <button onclick="selectAllDepts()" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--blue-border);border-radius:6px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer">Entire staff</button>
-        <button onclick="clearAllDepts()" style="font-size:11px;padding:3px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text2);cursor:pointer">Clear all</button>
+        <button onclick="selectAllDepts()" class="btn btn--ghost btn--sm">Entire staff</button>
+        <button onclick="clearAllDepts()" class="btn btn--ghost btn--sm">Clear all</button>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:6px" id="deptCheckboxes">
         ${changeDepts.map(d=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);cursor:pointer">
@@ -8458,7 +8458,7 @@ function renderChanges(){
         </label>`).join('')}
       </div>
     </div>
-    <div style="text-align:right"><button class="btn-save" onclick="addChange()">Log change</button></div>
+    <div style="text-align:right"><button class="btn btn--pri" onclick="addChange()">Log change</button></div>
   </div>
   ${weekChanges.length? '' : '<div style="text-align:center;padding:2rem 0;color:var(--text3);font-size:13px">No changes logged for this week.</div>'}
   ${weekChanges.map(c=>{
