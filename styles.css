@@ -267,11 +267,11 @@ a{color:var(--blue-mid);text-decoration:none}
 /* ── Detail panel / forms ── */
 .detail-panel{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.3rem;margin-top:1rem;box-shadow:var(--shadow-card)}
 /* ── Large icon tiles (Zoho-style quick actions) ── */
-.icon-tile-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
-.icon-tile{background:var(--bg);border:0.5px solid var(--border);border-radius:14px;padding:14px 10px;text-align:center;cursor:pointer;transition:transform var(--ease),box-shadow var(--ease)}
+.icon-tile-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:10px}
+.icon-tile{background:var(--bg);border:0.5px solid var(--border);border-radius:14px;padding:16px 10px;text-align:center;cursor:pointer;transition:transform var(--ease),box-shadow var(--ease);position:relative}
 .icon-tile:hover{transform:translateY(-2px);box-shadow:var(--shadow-card-h)}
-.icon-tile-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 8px}
-.icon-tile-icon i{font-size:22px}
+.icon-tile-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 8px}
+.icon-tile-icon i{font-size:24px}
 .icon-tile-label{font-size:12.5px;font-weight:600;color:var(--text)}
 .icon-tile--maroon .icon-tile-icon{background:var(--maroon-tint)}
 .icon-tile--maroon .icon-tile-icon i{color:var(--maroon)}
@@ -279,6 +279,11 @@ a{color:var(--blue-mid);text-decoration:none}
 .icon-tile--teal .icon-tile-icon i{color:var(--teal-text)}
 .icon-tile--purple .icon-tile-icon{background:var(--purple-bg)}
 .icon-tile--purple .icon-tile-icon i{color:var(--purple-text)}
+.icon-tile--muted{cursor:not-allowed}
+.icon-tile--muted:hover{transform:none;box-shadow:none}
+.icon-tile--muted .icon-tile-icon{background:var(--bg3)}
+.icon-tile--muted .icon-tile-icon i{color:var(--text3)}
+.icon-tile--muted .icon-tile-label{color:var(--text3)}
 .detail-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
 .detail-title{font-size:17px;font-weight:600;color:var(--text)}
 .detail-actions{display:flex;gap:6px}
