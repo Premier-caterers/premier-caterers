@@ -7867,7 +7867,7 @@ function renderSchedule(){
         ${hasUnansweredPortalMessage(e)?`<span title="Unanswered client portal message" style="display:inline-flex;align-items:center;gap:3px;background:var(--red-solid);color:#fff;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:9px"><i class="ti ti-message-circle" style="font-size:10px"></i>portal</span>`:''}
         <span style="font-size:12px;color:var(--text2)">${e.dayLabel||''} · ${e.typeLabel||''}</span>
         <div style="margin-left:auto;display:flex;gap:4px">
-          <button onclick="addMealSection('${e.id}')" style="padding:4px 10px;font-size:12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-plus" style="font-size:12px"></i>Add meal</button>
+          <button onclick="addMealSection('${e.id}')" class="btn btn--ghost btn--sm"><i class="ti ti-plus"></i>Add meal</button>
           <button class="icon-btn" onclick="printEventSchedule('${e.id}')" title="Print"><i class="ti ti-printer"></i></button>
           <button class="icon-btn" onclick="downloadEventSchedule('${e.id}')" title="Download"><i class="ti ti-download"></i></button>
         </div>
@@ -9852,14 +9852,14 @@ function renderInvoiceDetail(scrollToView){
         ${changes.some(c=>c.job===e.job&&(c.notifyDepts||changeDepts).includes('Invoice')&&!(c.acks||{})['Invoice'])?'<span style="margin-left:8px;padding:3px 10px;border-radius:8px;background:var(--amber-bg);color:var(--amber-text);font-size:12px;font-weight:600;border:1.5px solid var(--amber-text)">⚠ CHANGE ORDER PENDING</span>':''}
       </div>
       <div class="detail-actions">
-        ${inv.status==='quote'?`<button class="btn-save" style="font-size:12px;padding:5px 12px" onclick="approveQuote('${eid}')">Approve quote</button>`:''}
-        ${inv.status==='approved'?`<button class="btn-save" style="font-size:12px;padding:5px 12px" onclick="convertToInvoice('${eid}')">Convert to invoice</button>`:''}
-        ${inv.status==='invoice'&&!inv._editOverride?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--amber-text)" onclick="unlockInvoiceEdit('${eid}')"><i class="ti ti-pencil" style="font-size:12px"></i> Edit invoice</button>`:''}
-        ${inv.status==='invoice'&&inv._editOverride?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--green-text)" onclick="openPaymentModal('${eid}')">Record payment</button>`:''}
-        ${inv.status==='invoice'&&!inv._editOverride?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--green-text)" onclick="openPaymentModal('${eid}')">Record payment</button>`:''}
-        ${inv.status==='paid'&&calcInvoiceTotals(inv).balance>0.01?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--green-text)" onclick="openPaymentModal('${eid}')"><i class="ti ti-cash" style="font-size:12px"></i> Record payment</button>`:''}
-        ${inv.status==='paid'&&!inv._editOverride?`<button class="btn-save" style="font-size:12px;padding:5px 12px;background:var(--amber-text)" onclick="unlockInvoiceEdit('${eid}')"><i class="ti ti-pencil" style="font-size:12px"></i> Edit invoice</button>`:''}
-        ${inv.status==='paid'&&inv._editOverride?`<button style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);cursor:pointer" onclick="lockInvoiceEdit('${eid}')">Lock edits</button>`:''}
+        ${inv.status==='quote'?`<button class="btn btn--pri btn--sm" onclick="approveQuote('${eid}')">Approve quote</button>`:''}
+        ${inv.status==='approved'?`<button class="btn btn--pri btn--sm" onclick="convertToInvoice('${eid}')">Convert to invoice</button>`:''}
+        ${inv.status==='invoice'&&!inv._editOverride?`<button class="btn btn--sm" style="background:var(--amber-text);border-color:var(--amber-text);color:#fff" onclick="unlockInvoiceEdit('${eid}')"><i class="ti ti-pencil"></i> Edit invoice</button>`:''}
+        ${inv.status==='invoice'&&inv._editOverride?`<button class="btn btn--ok btn--sm" onclick="openPaymentModal('${eid}')">Record payment</button>`:''}
+        ${inv.status==='invoice'&&!inv._editOverride?`<button class="btn btn--ok btn--sm" onclick="openPaymentModal('${eid}')">Record payment</button>`:''}
+        ${inv.status==='paid'&&calcInvoiceTotals(inv).balance>0.01?`<button class="btn btn--ok btn--sm" onclick="openPaymentModal('${eid}')"><i class="ti ti-cash"></i> Record payment</button>`:''}
+        ${inv.status==='paid'&&!inv._editOverride?`<button class="btn btn--sm" style="background:var(--amber-text);border-color:var(--amber-text);color:#fff" onclick="unlockInvoiceEdit('${eid}')"><i class="ti ti-pencil"></i> Edit invoice</button>`:''}
+        ${inv.status==='paid'&&inv._editOverride?`<button class="btn btn--sm" onclick="lockInvoiceEdit('${eid}')">Lock edits</button>`:''}
         <button class="icon-btn" onclick="printInvoice('${eid}')" title="Print"><i class="ti ti-printer"></i></button>
         <button class="icon-btn" onclick="downloadInvoice('${eid}')" title="Download as HTML"><i class="ti ti-download"></i></button>
         <button class="icon-btn" onclick="openSendInvoiceEmail('${eid}')" title="Send by email" style="color:var(--blue-mid)"><i class="ti ti-send"></i></button>
