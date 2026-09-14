@@ -75,7 +75,15 @@ tbody tr:hover{background:var(--bg2)}
 .empty{text-align:center;color:var(--text3);padding:48px 20px}
 .icon-btn{border:none;background:transparent;color:var(--text3);cursor:pointer;font-size:16px;padding:5px;border-radius:6px}
 .icon-btn:hover{background:var(--bg3);color:var(--maroon)}
-.cmp-pick select{width:100%;max-width:440px;padding:11px 13px;border:1px solid var(--border2);border-radius:10px;background:var(--bg)}
+.cmp-layout{display:flex;gap:20px;align-items:flex-start}
+.cmp-side{width:260px;flex-shrink:0;position:sticky;top:16px}
+.cmp-picker-list{max-height:520px;overflow-y:auto;border:1px solid var(--border2);border-radius:10px;margin-top:10px;background:var(--bg)}
+.cmp-pick-item{display:flex;align-items:flex-start;gap:8px;padding:9px 11px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px}
+.cmp-pick-item:last-child{border-bottom:none}
+.cmp-pick-item:hover{background:var(--bg2)}
+.cmp-pick-item input{margin-top:3px}
+.cmp-main{flex:1;min-width:0}
+.cmp-toolbar{display:flex;align-items:center;gap:12px;margin-bottom:12px}
 .cmp-meta{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0;color:var(--text2);font-size:13px}
 .cmp-meta b{color:var(--text);font-family:'Fraunces',Georgia,serif}
 
@@ -283,6 +291,11 @@ tbody tr:hover{background:var(--bg2)}
 .modal-head .h{font-family:'Fraunces',Georgia,serif;font-size:18px;font-weight:600}
 .modal-body{padding:18px 20px;max-height:68vh;overflow-y:auto}
 .modal-foot{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--bg2)}
+.inv-link{font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.inv-link i{font-size:12px}
+.prod-vendor-row{display:flex;align-items:center;gap:10px;padding:3px 0;font-size:12.5px}
+.prod-vendor-row:not(:last-child){border-bottom:0.5px solid var(--border)}
+.prod-vendor-row .muted{margin-left:auto}
 .fld{margin-bottom:13px}
 .fld label{display:block;font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:4px}
 .fld input,.fld select,.fld textarea{width:100%;padding:9px 11px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text)}
@@ -352,8 +365,16 @@ tbody tr:hover{background:var(--bg2)}
 
     <div class="view" id="view-compare">
       <div class="row-head"><div class="title">Compare Vendors</div></div>
-      <div class="cmp-pick"><select id="cmpProduct" onchange="renderCompare()"><option value="">Choose one of your products…</option></select></div>
-      <div id="cmpResult"></div>
+      <div class="cmp-layout">
+        <div class="cmp-side">
+          <div class="search"><i class="ti ti-search"></i><input id="cmpSearch" placeholder="Search by item or vendor…" oninput="renderComparePicker()"></div>
+          <div id="cmpPickerList" class="cmp-picker-list"></div>
+        </div>
+        <div class="cmp-main">
+          <div id="cmpToolbar"></div>
+          <div id="cmpResult"></div>
+        </div>
+      </div>
     </div>
 
     <div class="view" id="view-items">
@@ -561,7 +582,7 @@ function applyEditPerms(){ const show=canEdit(); ['addItemBtn','addVendorBtn','b
 //   vendorId, vendorItemName, vendorCode, packSize, unit, packDesc, price, date, category, notes
 // priceHistory collection: archived prior prices when you record a new quote.
 //   {itemId, ourName, vendorId, packSize, unit, price, date, by, ts}
-let vendors=[], items=[], priceHistory=[];
+let vendors=[], items=[], priceHistory=[], productGroups=[];
 // jobEvents: read-only mirror of the main app's `events` collection — used only
 // to populate the "tie this invoice to an event" picker on Scan Invoice and the
 // Job Costs tab. Purchasing never writes to this collection.
@@ -583,6 +604,7 @@ function startData(){
   db.collection('vendors').onSnapshot(s=>{ vendors=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
   db.collection('vendorItems').onSnapshot(s=>{ items=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
   db.collection('priceHistory').onSnapshot(s=>{ priceHistory=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
+  db.collection('productGroups').onSnapshot(s=>{ productGroups=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }, err=>{ console.warn('productGroups listener error:', err); });
   db.collection('events').onSnapshot(s=>{ jobEvents=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }, err=>{ console.warn('events listener (read-only) error:', err); });
   db.collection('eventPurchases').onSnapshot(s=>{ eventPurchases=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); });
   db.collection('pendingInvoiceScans').where('status','==','pending').onSnapshot(s=>{ pendingInvoiceScans=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.receivedAt||0)-(a.receivedAt||0)); renderScan(); }, err=>{ console.warn('pendingInvoiceScans listener error:', err); });
@@ -595,7 +617,36 @@ function startData(){
   startRepliesData();
   startRepliesPolling();
 }
-function renderAll(){ renderDashboard(); renderAlerts(); renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); renderOrderPicker(); renderOrderHistory(); renderReplies(); renderScan(); renderJobCosts(); }
+function renderAll(){ backfillLastPurchaseIdsOnce(); renderDashboard(); renderAlerts(); renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); renderOrderPicker(); renderOrderHistory(); renderReplies(); renderScan(); renderJobCosts(); }
+// One-time backfill: items priced before the lastPurchaseId link existed
+// have no invoice to point their "View invoice" link at. This matches each
+// such item to the eventPurchases record for the same vendor + product name
+// (preferring an exact date match against the item's own recorded date,
+// falling back to the most recent match) and stamps lastPurchaseId onto it.
+// Idempotent and safe to re-run — only touches items still missing it, and
+// the _lastPurchaseBackfillRan guard keeps it from re-scanning every render.
+let _lastPurchaseBackfillRan = false;
+async function backfillLastPurchaseIdsOnce(){
+  if(_lastPurchaseBackfillRan) return;
+  if(!items.length || !eventPurchases.length) return; // wait until both have actually loaded
+  _lastPurchaseBackfillRan = true;
+  try{
+    const needs = items.filter(x=>!x.lastPurchaseId);
+    if(!needs.length) return;
+    let fixed = 0;
+    for(const x of needs){
+      const candidates = eventPurchases.filter(p=>p.vendorId===x.vendorId && (p.lines||[]).some(l=>normName(l.ourName||'')===normName(x.ourName||'')));
+      if(!candidates.length) continue;
+      let match = x.date ? candidates.find(p=>p.invoiceDate===x.date) : null;
+      if(!match) match = candidates.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))[0];
+      if(match){
+        await db.collection('vendorItems').doc(x.id).set({ lastPurchaseId: match.id }, {merge:true});
+        fixed++;
+      }
+    }
+    console.log('Backfilled lastPurchaseId for', fixed, 'of', needs.length, 'item(s) missing it');
+  }catch(e){ console.warn('lastPurchaseId backfill skipped:', e); _lastPurchaseBackfillRan = false; }
+}
 
 function vendorName(id){ const v=vendors.find(x=>x.id===id); return v?v.name:'(unknown vendor)'; }
 function jobDateLabel(e){ if(!e||!e.eventDate) return ''; const p=String(e.eventDate).split('-'); return p.length===3?(parseInt(p[1])+'/'+parseInt(p[2])+'/'+p[0].slice(-2)):e.eventDate; }
@@ -606,6 +657,7 @@ function fmtMoney(n){ n=parseFloat(n); return isNaN(n)?'—':'$'+n.toLocaleStrin
 function fmtDate(d){ if(!d) return '—'; const p=String(d).split('-'); return p.length===3?(parseInt(p[1])+'/'+parseInt(p[2])+'/'+p[0].slice(-2)):d; }
 function unitCost(price,packSize){ price=parseFloat(price); packSize=parseFloat(packSize); if(isNaN(price)||isNaN(packSize)||packSize<=0) return null; return price/packSize; }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escJs(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 function normName(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
 // "Sold by" unit: new items store soldBy; older items fall back to their old unit field.
 function soldByOf(x){ return x.soldBy || x.unit || ''; }
@@ -627,13 +679,54 @@ function ucSuffix(x){
 function ourProducts(){
   const map={};
   items.forEach(x=>{ const k=normName(x.ourName); if(!k) return;
-    if(!map[k]) map[k]={ key:k, name:x.ourName, useFor:x.useFor||'', category:x.category||'', items:[], _ts:0 };
+    if(!map[k]) map[k]={ key:k, name:x.ourName, useFor:x.useFor||'', category:x.category||'', items:[], _ts:0, _memberKeys:[k] };
     const g=map[k]; g.items.push(x);
     const ts=x.updatedAt||x.createdAt||0;
     if(ts>=g._ts){ g._ts=ts; g.name=x.ourName||g.name; if(x.useFor) g.useFor=x.useFor; if(x.category) g.category=x.category; }
   });
-  return Object.values(map).sort((a,b)=>a.name.localeCompare(b.name));
+  // Fold in persistent merges — two differently-named items that were
+  // explicitly linked as "the same product" (e.g. one vendor calls it
+  // "Breaded Eggplant Long", another "Eggplant, Breaded, Cut"). Neither name
+  // is renamed; they just combine into one comparable group. The most
+  // recently updated member's name leads as the group's display name.
+  const consumed = new Set();
+  const merged = [];
+  productGroups.forEach(pg=>{
+    const memberKeys = (pg.memberKeys||[]).filter(k=>map[k] && !consumed.has(k));
+    if(memberKeys.length<2) return;
+    const groups = memberKeys.map(k=>map[k]).sort((a,b)=>b._ts-a._ts);
+    const primary = groups[0];
+    merged.push({
+      key: 'grp_'+pg.id, name: primary.name, useFor: primary.useFor, category: primary.category,
+      items: [].concat(...groups.map(g=>g.items)), _ts: primary._ts,
+      _memberKeys: memberKeys
+    });
+    memberKeys.forEach(k=>consumed.add(k));
+  });
+  const rest = Object.values(map).filter(g=>!consumed.has(g.key));
+  return merged.concat(rest).sort((a,b)=>a.name.localeCompare(b.name));
 }
+// Persistently links two or more products (by their ourProducts() keys) as
+// the same product. If any key already belongs to an existing group, folds
+// into that one rather than creating a second, overlapping group.
+async function mergeProductGroup(keys){
+  keys = (keys||[]).filter(Boolean);
+  if(keys.length<2){ toast('Pick at least two products to link.'); return; }
+  const existingDoc = productGroups.find(pg=>(pg.memberKeys||[]).some(k=>keys.includes(k)));
+  const allKeys = Array.from(new Set([...(existingDoc?(existingDoc.memberKeys||[]):[]), ...keys]));
+  try{
+    if(existingDoc){ await db.collection('productGroups').doc(existingDoc.id).set({memberKeys:allKeys, updatedAt:Date.now()}, {merge:true}); }
+    else{ await db.collection('productGroups').add({memberKeys:allKeys, createdAt:Date.now()}); }
+    toast('Linked as the same product ✓');
+    _cmpSelectedKeys = new Set();
+  }catch(e){ alert('Could not link: '+e.message); }
+}
+window.mergeProductGroup = mergeProductGroup;
+function mergeSelectedCompare(){
+  const groups = ourProducts().filter(g=>_cmpSelectedKeys.has(g.key));
+  mergeProductGroup([].concat(...groups.map(g=>g._memberKeys||[g.key])));
+}
+window.mergeSelectedCompare = mergeSelectedCompare;
 
 // ════════ JOB COSTS / INVOICES ════════
 // eventPurchases now doubles as a general invoice log: every scan is recorded
@@ -667,6 +760,25 @@ async function deleteEventPurchase(id){
   catch(e){ alert('Could not delete: '+e.message); }
 }
 window.deleteEventPurchase = deleteEventPurchase;
+
+// Opens a single invoice record (by eventPurchases doc id) in a modal —
+// reused from Compare Vendors, Our Products, and Costs & Invoices so "View
+// invoice" behaves the same everywhere. lastPurchaseId can point at an
+// invoice logged before this feature existed and then deleted, so this
+// fails soft with a small explanatory message rather than a blank modal.
+function viewPurchase(purchaseId){
+  if(!purchaseId) return;
+  const p = eventPurchases.find(x=>x.id===purchaseId);
+  if(!p){ toast('That invoice is no longer on file (may have been deleted).'); return; }
+  openModal('<div class="modal-head"><div class="h">Invoice</div><button class="icon-btn" onclick="closeModal()"><i class="ti ti-x"></i></button></div><div class="modal-body">'+_jcInvoiceCard(p)+'</div>');
+}
+window.viewPurchase = viewPurchase;
+// Small inline link, used next to items throughout — same "View invoice"
+// treatment everywhere a lastPurchaseId is available.
+function invoiceLink(purchaseId){
+  if(!purchaseId) return '';
+  return `<a href="javascript:void(0)" onclick="viewPurchase('${esc(purchaseId)}')" class="inv-link"><i class="ti ti-file-text"></i> View invoice</a>`;
+}
 
 function renderJobCosts(){
   const el=document.getElementById('jobCostsBody'); if(!el) return;
@@ -706,9 +818,12 @@ function renderJobCostsByEvent(el, modeToggle){
   const vendorRows = Object.entries(byVendor).sort((a,b)=>b[1]-a[1]);
 
   const byItem = {};
+  // purchases is already sorted newest-first, so the first purchase we see
+  // for a given item is its most recent one — that's what "last purchased"
+  // and the invoice link below point at.
   purchases.forEach(p=>(p.lines||[]).forEach(l=>{
     const k = normName(l.ourName||''); if(!k) return;
-    if(!byItem[k]) byItem[k]={ name:l.ourName, soldBy:l.soldBy||'', qty:0, total:0 };
+    if(!byItem[k]) byItem[k]={ name:l.ourName, soldBy:l.soldBy||'', qty:0, total:0, lastDate:p.invoiceDate||'', lastPurchaseId:p.id };
     byItem[k].qty += parseFloat(l.qty)||0; byItem[k].total += parseFloat(l.lineTotal)||0;
   }));
   const itemRows = Object.values(byItem).sort((a,b)=>b.total-a.total);
@@ -718,8 +833,8 @@ function renderJobCostsByEvent(el, modeToggle){
     '<div class="dash-sec"><div class="dash-sec-title">By vendor</div><div class="card"><table><thead><tr><th>Vendor</th><th class="num">Total</th></tr></thead><tbody>'+
       vendorRows.map(([nm,tot])=>`<tr><td>${esc(nm)}</td><td class="num">${fmtMoney(tot)}</td></tr>`).join('')+
     '</tbody></table></div></div>'+
-    '<div class="dash-sec"><div class="dash-sec-title">Totals by item</div><div class="card"><table><thead><tr><th>Item</th><th class="num">Qty</th><th>Sold by</th><th class="num">Total</th></tr></thead><tbody>'+
-      itemRows.map(r=>`<tr><td>${esc(r.name)}</td><td class="num">${r.qty||'—'}</td><td class="muted">${esc(r.soldBy)}</td><td class="num">${fmtMoney(r.total)}</td></tr>`).join('')+
+    '<div class="dash-sec"><div class="dash-sec-title">Totals by item</div><div class="card"><table><thead><tr><th>Item</th><th class="num">Qty</th><th>Sold by</th><th class="num">Total</th><th>Last purchased</th><th></th></tr></thead><tbody>'+
+      itemRows.map(r=>`<tr><td>${esc(r.name)}</td><td class="num">${r.qty||'—'}</td><td class="muted">${esc(r.soldBy)}</td><td class="num">${fmtMoney(r.total)}</td><td class="muted">${r.lastDate?fmtDate(r.lastDate):'—'}</td><td>${invoiceLink(r.lastPurchaseId)}</td></tr>`).join('')+
     '</tbody></table></div></div>'+
     '<div class="dash-sec"><div class="dash-sec-title">Every invoice</div>'+ purchases.map(_jcInvoiceCard).join('') +'</div>';
 }
@@ -748,15 +863,15 @@ function renderJobCostsByVendor(el, modeToggle){
   const byItem = {};
   purchases.forEach(p=>(p.lines||[]).forEach(l=>{
     const k = normName(l.ourName||''); if(!k) return;
-    if(!byItem[k]) byItem[k]={ name:l.ourName, soldBy:l.soldBy||'', qty:0, total:0 };
+    if(!byItem[k]) byItem[k]={ name:l.ourName, soldBy:l.soldBy||'', qty:0, total:0, lastDate:p.invoiceDate||'', lastPurchaseId:p.id };
     byItem[k].qty += parseFloat(l.qty)||0; byItem[k].total += parseFloat(l.lineTotal)||0;
   }));
   const itemRows = Object.values(byItem).sort((a,b)=>b.total-a.total);
 
   el.innerHTML = modeToggle + pickerHtml +
     `<div class="dash-grid" style="margin-top:14px">${tile('Total spent', fmtMoney(grandTotal))}${tile('Invoices', purchases.length)}${tile('Line items', itemRows.length)}</div>` +
-    '<div class="dash-sec"><div class="dash-sec-title">Totals by item</div><div class="card"><table><thead><tr><th>Item</th><th class="num">Qty</th><th>Sold by</th><th class="num">Total</th></tr></thead><tbody>'+
-      itemRows.map(r=>`<tr><td>${esc(r.name)}</td><td class="num">${r.qty||'—'}</td><td class="muted">${esc(r.soldBy)}</td><td class="num">${fmtMoney(r.total)}</td></tr>`).join('')+
+    '<div class="dash-sec"><div class="dash-sec-title">Totals by item</div><div class="card"><table><thead><tr><th>Item</th><th class="num">Qty</th><th>Sold by</th><th class="num">Total</th><th>Last purchased</th><th></th></tr></thead><tbody>'+
+      itemRows.map(r=>`<tr><td>${esc(r.name)}</td><td class="num">${r.qty||'—'}</td><td class="muted">${esc(r.soldBy)}</td><td class="num">${fmtMoney(r.total)}</td><td class="muted">${r.lastDate?fmtDate(r.lastDate):'—'}</td><td>${invoiceLink(r.lastPurchaseId)}</td></tr>`).join('')+
     '</tbody></table></div></div>'+
     '<div class="dash-sec"><div class="dash-sec-title">Every invoice</div>'+ purchases.map(_jcInvoiceCard).join('') +'</div>';
 }
@@ -774,9 +889,20 @@ function renderVendors(){
   const rows=vendors.filter(v=>!ql||(v.name||'').toLowerCase().includes(ql)||(v.rep||'').toLowerCase().includes(ql)||(v.contact||'').toLowerCase().includes(ql)).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const el=document.getElementById('vendorsTable'); if(!el) return;
   if(!rows.length){ el.innerHTML='<div class="empty">No vendors yet.'+(canEdit()?' Click “Add vendor”.':'')+'</div>'; return; }
-  el.innerHTML='<table><thead><tr><th>Vendor</th><th>Contact</th><th>Phone</th><th>Email</th><th>Terms</th>'+(canEdit()?'<th></th>':'')+'</tr></thead><tbody>'+
-    rows.map(v=>`<tr><td><b>${esc(v.name)}</b></td><td>${esc(v.contact||v.rep||'—')}</td><td>${esc(v.phone||'—')}</td><td>${v.email?`<a href="mailto:${esc(v.email)}">${esc(v.email)}</a>`:'—'}</td><td>${esc(v.terms||'—')}</td>${canEdit()?`<td style="text-align:right"><button class="icon-btn" onclick="openVendor('${v.id}')"><i class="ti ti-edit"></i></button></td>`:''}</tr>`).join('')+'</tbody></table>';
+  el.innerHTML='<table><thead><tr><th>Vendor</th><th>Contact</th><th>Phone</th><th>Email</th><th>Terms</th><th></th>'+(canEdit()?'<th></th>':'')+'</tr></thead><tbody>'+
+    rows.map(v=>`<tr><td><b>${esc(v.name)}</b></td><td>${esc(v.contact||v.rep||'—')}</td><td>${esc(v.phone||'—')}</td><td>${v.email?`<a href="mailto:${esc(v.email)}">${esc(v.email)}</a>`:'—'}</td><td>${esc(v.terms||'—')}</td><td style="white-space:nowrap"><button class="btn ghost sm" onclick="viewVendorInvoices('${v.id}')" title="This vendor's invoices"><i class="ti ti-file-invoice"></i> Invoices</button> <button class="btn ghost sm" onclick="viewVendorProducts('${v.id}')" title="This vendor's products"><i class="ti ti-list"></i> Products</button></td>${canEdit()?`<td style="text-align:right"><button class="icon-btn" onclick="openVendor('${v.id}')"><i class="ti ti-edit"></i></button></td>`:''}</tr>`).join('')+'</tbody></table>';
 }
+function viewVendorInvoices(vendorId){
+  _jcMode='vendor'; _jcVendorPick=vendorId; showView('jobcosts'); renderJobCosts();
+}
+window.viewVendorInvoices = viewVendorInvoices;
+function viewVendorProducts(vendorId){
+  showView('items');
+  const inp=document.getElementById('iSearch');
+  if(inp) inp.value = vendorName(vendorId);
+  renderItems();
+}
+window.viewVendorProducts = viewVendorProducts;
 
 // ── All Items ──
 function renderItems(){
@@ -806,41 +932,87 @@ function renderProducts(){
   const el=document.getElementById('productsTable'); if(!el) return;
   if(!rows.length){ el.innerHTML='<div class="empty">No products yet — add items and they’ll group here by the name you give them.</div>'; return; }
   el.innerHTML='<table><thead><tr><th>Our product</th><th>What we use it for</th><th>Category</th><th>Vendors</th><th>Best unit cost</th></tr></thead><tbody>'+
-    rows.map(g=>{ const costs=g.items.map(x=>unitCost(x.price,x.packSize)).filter(c=>c!=null); const best=costs.length?Math.min.apply(null,costs):null; const vend=new Set(g.items.map(x=>x.vendorId)).size;
-      return `<tr style="cursor:pointer" onclick="compareProduct('${esc(g.key)}')">
-        <td><b>${esc(g.name)}</b></td>
+    rows.map(g=>{
+      const costs=g.items.map(x=>unitCost(x.price,x.packSize)).filter(c=>c!=null); const best=costs.length?Math.min.apply(null,costs):null;
+      // One row per vendor — if a vendor has more than one quote on file for
+      // this product, show only their most recent one here.
+      const byVendor = {};
+      g.items.forEach(x=>{ const cur=byVendor[x.vendorId]; if(!cur || (x.updatedAt||x.createdAt||0)>(cur.updatedAt||cur.createdAt||0)) byVendor[x.vendorId]=x; });
+      const vendorRows = Object.values(byVendor).sort((a,b)=>vendorName(a.vendorId).localeCompare(vendorName(b.vendorId)));
+      const vendorHtml = vendorRows.map(x=>`<div class="prod-vendor-row"><b>${esc(vendorName(x.vendorId))}</b><span class="muted">${fmtDate(x.date)}</span>${invoiceLink(x.lastPurchaseId)}</div>`).join('') || '—';
+      return `<tr>
+        <td style="cursor:pointer" onclick="compareProduct('${escJs(g.key)}')"><b>${esc(g.name)}</b></td>
         <td class="muted">${esc(g.useFor||'—')}</td>
         <td>${g.category?`<span class="chip cat">${esc(g.category)}</span>`:'—'}</td>
-        <td>${vend}</td>
+        <td>${vendorHtml}</td>
         <td class="unit-cost">${best!=null?fmtMoney(best):'—'}</td>
       </tr>`;}).join('')+'</tbody></table>';
 }
 
 // ── Compare ──
-function fillProductPicker(){
-  const sel=document.getElementById('cmpProduct'); if(!sel) return; const cur=sel.value;
-  sel.innerHTML='<option value="">Choose one of your products…</option>'+ourProducts().map(g=>`<option value="${esc(g.key)}">${esc(g.name)}${g.category?' — '+esc(g.category):''}</option>`).join('');
-  if(cur) sel.value=cur;
+let _cmpSelectedKeys = new Set();
+function fillProductPicker(){ renderComparePicker(); }
+function renderComparePicker(){
+  const ql = ((document.getElementById('cmpSearch')||{}).value||'').toLowerCase();
+  const list = document.getElementById('cmpPickerList'); if(!list) return;
+  const groups = ourProducts().filter(g=>{
+    if(!ql) return true;
+    if(g.name.toLowerCase().includes(ql)) return true;
+    return g.items.some(x=>vendorName(x.vendorId).toLowerCase().includes(ql));
+  });
+  if(!groups.length){ list.innerHTML='<div class="empty" style="padding:10px 4px">No matches.</div>'; return; }
+  list.innerHTML = groups.map(g=>{
+    const vNames = Array.from(new Set(g.items.map(x=>vendorName(x.vendorId)))).join(', ');
+    const checked = _cmpSelectedKeys.has(g.key);
+    return `<label class="cmp-pick-item"><input type="checkbox" ${checked?'checked':''} onchange="toggleCmpPick('${escJs(g.key)}')">
+      <span><b>${esc(g.name)}</b><div class="sub">${esc(vNames)}</div></span>
+    </label>`;
+  }).join('');
 }
+function toggleCmpPick(key){
+  if(_cmpSelectedKeys.has(key)) _cmpSelectedKeys.delete(key); else _cmpSelectedKeys.add(key);
+  renderCompare();
+}
+window.toggleCmpPick = toggleCmpPick;
 function fillOurNameList(){ const dl=document.getElementById('ourNameList'); if(dl) dl.innerHTML=ourProducts().map(g=>`<option value="${esc(g.name)}">`).join(''); }
-function compareProduct(key){ showView('compare'); const sel=document.getElementById('cmpProduct'); if(sel) sel.value=key; renderCompare(); }
+function compareProduct(key){ showView('compare'); _cmpSelectedKeys = new Set([key]); renderCompare(); }
 function renderCompare(){
-  const sel=document.getElementById('cmpProduct'); const out=document.getElementById('cmpResult'); if(!out) return;
-  const key=sel?sel.value:''; if(!key){ out.innerHTML='<div class="empty">Pick one of your products to see how every vendor packs and prices it — cheapest unit cost first.</div>'; return; }
-  const g=ourProducts().find(x=>x.key===key); if(!g){ out.innerHTML='<div class="empty">No data for that product.</div>'; return; }
-  let list=g.items.map(x=>({...x,_uc:unitCost(x.price,x.packSize)})).sort((a,b)=>{ if(a._uc==null)return 1; if(b._uc==null)return -1; return a._uc-b._uc; });
+  renderComparePicker();
+  const out=document.getElementById('cmpResult'); const toolbar=document.getElementById('cmpToolbar'); if(!out) return;
+  if(!_cmpSelectedKeys.size){
+    if(toolbar) toolbar.innerHTML='';
+    out.innerHTML='<div class="empty">Check one or more of your products on the left to see how every vendor packs and prices them — cheapest unit cost first. Check more than one when different vendors call the same product by different names, then link them as the same product so they stay grouped from now on.</div>';
+    return;
+  }
+  const allGroups = ourProducts();
+  const groups = allGroups.filter(g=>_cmpSelectedKeys.has(g.key));
+  if(!groups.length){ out.innerHTML='<div class="empty">No data for that selection.</div>'; if(toolbar) toolbar.innerHTML=''; return; }
+  const names = groups.map(g=>g.name);
+  let list = [].concat(...groups.map(g=>g.items.map(x=>({...x,_groupName:g.name}))))
+    .map(x=>({...x,_uc:unitCost(x.price,x.packSize)}))
+    .sort((a,b)=>{ if(a._uc==null)return 1; if(b._uc==null)return -1; return a._uc-b._uc; });
   const costs=list.map(x=>x._uc).filter(c=>c!=null); const lowest=costs.length?Math.min.apply(null,costs):null;
+  const canMerge = groups.length>=2;
+  if(toolbar){
+    toolbar.innerHTML = canMerge
+      ? `<div class="cmp-toolbar"><span class="muted">Comparing: ${names.map(esc).join(' + ')}</span><button class="btn sm" onclick="mergeSelectedCompare()">Link as same product</button></div>`
+      : '';
+  }
   out.innerHTML =
-    `<div class="cmp-meta"><span>Product: <b>${esc(g.name)}</b></span>${g.useFor?`<span>Used for: <b>${esc(g.useFor)}</b></span>`:''}<span>Vendor options: <b>${list.length}</b></span></div>`+
-    '<div class="card"><table><thead><tr><th>Vendor</th><th>Vendor’s item</th><th>Sold by</th><th>Price per unit</th><th>Cost each</th><th>Date</th></tr></thead><tbody>'+
-    list.map(x=>`<tr class="${x._uc!=null&&lowest!=null&&x._uc===lowest?'lowest':''}">
+    `<div class="cmp-meta"><span>Product${groups.length>1?'s':''}: <b>${names.map(esc).join(' + ')}</b></span><span>Vendor options: <b>${list.length}</b></span></div>`+
+    '<div class="card"><table><thead><tr><th>Vendor</th><th>Vendor’s item</th><th>Sold by</th><th>Price per unit</th><th>Cost each</th><th>Date</th><th></th></tr></thead><tbody>'+
+    list.map(x=>{
+      const note = (x._groupName && x.ourName && normName(x.ourName)!==normName(x._groupName))
+        ? `<div class="sub">${esc(vendorName(x.vendorId))} calls this "${esc(x.ourName)}"</div>` : '';
+      return `<tr class="${x._uc!=null&&lowest!=null&&x._uc===lowest?'lowest':''}">
       <td><b>${esc(vendorName(x.vendorId))}</b></td>
-      <td>${esc(x.vendorItemName||'—')}${x.vendorCode?`<div class="sub">#${esc(x.vendorCode)}</div>`:''}</td>
+      <td>${esc(x.vendorItemName||'—')}${x.vendorCode?`<div class="sub">#${esc(x.vendorCode)}</div>`:''}${note}</td>
       <td>${packLabel(x)}</td>
       <td>${fmtMoney(x.price)}</td>
       <td class="unit-cost">${x._uc!=null?fmtMoney(x._uc)+ucSuffix(x):'—'}${x._uc!=null&&lowest!=null&&x._uc===lowest?'<span class="tag-low">lowest</span>':''}</td>
       <td class="muted">${fmtDate(x.date)}</td>
-    </tr>`).join('')+'</tbody></table></div>'+
+      <td>${invoiceLink(x.lastPurchaseId)}</td>
+    </tr>`;}).join('')+'</tbody></table></div>'+
     '<div class="hint" style="margin-top:10px">Cost each = price per unit ÷ how many per unit. Compare the same product across vendors to spot the best deal.</div>';
 }
 
@@ -921,7 +1093,7 @@ function renderAlerts(){
     html += '<div class="alert-sec"><div class="alert-sec-head sev-hi"><div class="icn"><i class="ti ti-alert-triangle"></i></div><div class="ttl">Unit mismatches<div class="sub">Same product, different units across vendors \u2014 unit cost comparison will be wrong</div></div><div class="count">'+a.unitMismatch.length+'</div></div>';
     html += a.unitMismatch.map(({g,units})=>`<div class="alert-row">
       <div class="what"><b>${esc(g.name)}</b><div class="sub">vendors using: ${units.map(u=>'<span class="chip cat">'+esc(u||'(none)')+'</span>').join(' ')}</div></div>
-      <button class="fix" onclick="compareProduct('${esc(g.key)}')">Compare \u2192</button>
+      <button class="fix" onclick="compareProduct('${escJs(g.key)}')">Compare \u2192</button>
     </div>`).join('');
     html += '</div>';
   }
@@ -961,7 +1133,7 @@ function renderAlerts(){
     html += '<div class="alert-sec"><div class="alert-sec-head sev-lo"><div class="icn"><i class="ti ti-copy"></i></div><div class="ttl">Likely duplicate product names<div class="sub">Names that look almost identical \u2014 may be the same product entered twice</div></div><div class="count">'+a.dupes.length+'</div></div>';
     html += a.dupes.map(set=>`<div class="alert-row">
       <div class="what"><b>Possible match</b><div class="sub">${set.map(g=>esc(g.name)+' ('+g.items.length+' items)').join(' \u2194 ')}</div></div>
-      <button class="fix" onclick="compareProduct('${esc(set[0].key)}')">Open first</button>
+      <button class="fix" onclick="compareProduct('${escJs(set[0].key)}')">Open first</button>
     </div>`).join('');
     html += '</div>';
   }
@@ -1067,7 +1239,7 @@ function renderDashboard(){
     '<div class="dash-sec"><div class="dash-sec-title">Best buys <span class="note">lowest unit cost per product</span></div>'+
       (bestBuys.length
         ? '<div class="card"><table><thead><tr><th>Product</th><th>Cheapest vendor</th><th>Unit cost</th><th>Vendors</th></tr></thead><tbody>'+
-            bestBuys.map(b=>`<tr style="cursor:pointer" onclick="compareProduct('${esc(normName(b.name))}')">
+            bestBuys.map(b=>`<tr style="cursor:pointer" onclick="compareProduct('${escJs(normName(b.name))}')">
               <td><b>${esc(b.name)}</b></td>
               <td>${esc(b.vendor)}</td>
               <td class="unit-cost">${fmtMoney(b.uc)}/${esc(b.unit)}</td>
@@ -1597,6 +1769,12 @@ async function saveOnePendingScan(p){
   if(!dupMatch && p.isRevision && p.revisionTargetId){
     dupMatch = eventPurchases.find(ep=>ep.id===p.revisionTargetId) || null;
   }
+  // Reserve the eventPurchases doc id now (or reuse the existing one) so each
+  // vendorItems row saved below can be tagged with exactly which invoice last
+  // priced it — that's what powers the "View invoice" links on Compare
+  // Vendors, Our Products, and Costs & Invoices.
+  const purchaseRef = dupMatch ? db.collection('eventPurchases').doc(dupMatch.id) : db.collection('eventPurchases').doc();
+  const savedPurchaseId = purchaseRef.id;
 
   let newItems=0, repriced=0;
   for(const r of rows){
@@ -1621,6 +1799,7 @@ async function saveOnePendingScan(p){
         vendorCode: r.vendorCode || existing.vendorCode || '',
         date: invoiceDate || existing.date || '',
         notes: r.notes || existing.notes || '',
+        lastPurchaseId: savedPurchaseId,
         updatedAt: stamp, updatedBy: userLabel()
       }, {merge:true});
       repriced++;
@@ -1632,6 +1811,7 @@ async function saveOnePendingScan(p){
         packDesc: (parseFloat(r.packSize)>1?(r.soldBy+' of '+r.packSize):r.soldBy),
         packSize: parseFloat(r.packSize), price: parseFloat(r.price),
         date: invoiceDate || '', notes: r.notes||'',
+        lastPurchaseId: savedPurchaseId,
         createdAt: stamp, updatedAt: stamp, source: 'scan'
       });
       newItems++;
@@ -1652,17 +1832,13 @@ async function saveOnePendingScan(p){
     lines: purchaseLines, totalAmount: purchaseTotal,
     updatedAt: stamp, updatedBy: userLabel(), source: 'scan'
   };
-  let savedPurchaseId = '';
   if(dupMatch){
-    savedPurchaseId = dupMatch.id;
     if(p.fileUrl){ fields.fileUrlRevised = p.fileUrl; fields.fileNameRevised = p.fileName||'invoice'; }
-    await db.collection('eventPurchases').doc(dupMatch.id).set(fields, {merge:true});
   } else {
     fields.createdAt = stamp; fields.createdBy = userLabel();
-    const ref = await db.collection('eventPurchases').add(fields);
-    savedPurchaseId = ref.id;
-    if(p.fileUrl){ await ref.set({fileUrlOriginal:p.fileUrl, fileNameOriginal:p.fileName||'invoice'}, {merge:true}); }
+    if(p.fileUrl){ fields.fileUrlOriginal = p.fileUrl; fields.fileNameOriginal = p.fileName||'invoice'; }
   }
+  await purchaseRef.set(fields, {merge:true});
   await db.collection('pendingInvoiceScans').doc(p.id).set({status:'saved', savedPurchaseId}, {merge:true});
 }
 window.togglePendingBulkMode = togglePendingBulkMode;
@@ -2239,6 +2415,13 @@ async function scanSaveAll(){
     }catch(e){ console.error('Invoice file upload failed:', e); return null; }
   }
 
+  // Reserve the eventPurchases doc id now (or reuse the existing one) so each
+  // vendorItems row saved below can be tagged with exactly which invoice last
+  // priced it — powers the "View invoice" links on Compare Vendors, Our
+  // Products, and Costs & Invoices.
+  const purchaseRef = dupMatch ? db.collection('eventPurchases').doc(dupMatch.id) : db.collection('eventPurchases').doc();
+  const savedPurchaseId = purchaseRef.id;
+
   let newItems=0, repriced=0;
   try{
     for(const r of rows){
@@ -2265,6 +2448,7 @@ async function scanSaveAll(){
           vendorCode: r.vendorCode || existing.vendorCode || '',
           date: invoiceDate || existing.date || '',
           notes: r.notes || existing.notes || '',
+          lastPurchaseId: savedPurchaseId,
           updatedAt: stamp, updatedBy: userLabel()
         }, {merge:true});
         repriced++;
@@ -2282,13 +2466,13 @@ async function scanSaveAll(){
           price: parseFloat(r.price),
           date: invoiceDate || '',
           notes: r.notes||'',
+          lastPurchaseId: savedPurchaseId,
           createdAt: stamp, updatedAt: stamp,
           source: 'scan'
         });
         newItems++;
       }
     }
-    let savedPurchaseId = '';
     {
       const ev = _scanState.jobEventId ? jobEventById(_scanState.jobEventId) : null;
       const purchaseLines = rows.map(r=>{
@@ -2312,17 +2496,14 @@ async function scanSaveAll(){
         // Replace in place — keep the same record (and its original file),
         // overwrite the line items/total/date with this version, and attach
         // this file as the "revised" copy.
-        savedPurchaseId = dupMatch.id;
-        const rev = await _uploadInvoiceFile(dupMatch.id, 'revised');
+        const rev = await _uploadInvoiceFile(savedPurchaseId, 'revised');
         if(rev){ fields.fileUrlRevised = rev.url; fields.fileNameRevised = rev.name; }
-        await db.collection('eventPurchases').doc(dupMatch.id).set(fields, {merge:true});
       } else {
         fields.createdAt = stamp; fields.createdBy = userLabel();
-        const ref = await db.collection('eventPurchases').add(fields);
-        savedPurchaseId = ref.id;
-        const orig = await _uploadInvoiceFile(ref.id, 'original');
-        if(orig){ await ref.set({fileUrlOriginal:orig.url, fileNameOriginal:orig.name}, {merge:true}); }
+        const orig = await _uploadInvoiceFile(savedPurchaseId, 'original');
+        if(orig){ fields.fileUrlOriginal = orig.url; fields.fileNameOriginal = orig.name; }
       }
+      await purchaseRef.set(fields, {merge:true});
     }
     if(_scanState.pendingId){
       try{ await db.collection('pendingInvoiceScans').doc(_scanState.pendingId).set({status:'saved', savedPurchaseId}, {merge:true}); }catch(e){}
