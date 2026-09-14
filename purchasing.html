@@ -1011,7 +1011,7 @@ function renderCompare(){
       <td>${fmtMoney(x.price)}</td>
       <td class="unit-cost">${x._uc!=null?fmtMoney(x._uc)+ucSuffix(x):'—'}${x._uc!=null&&lowest!=null&&x._uc===lowest?'<span class="tag-low">lowest</span>':''}</td>
       <td class="muted">${fmtDate(x.date)}</td>
-      <td>${invoiceLink(x.lastPurchaseId)}</td>
+      <td style="white-space:nowrap">${invoiceLink(x.lastPurchaseId)} ${canEdit()?`<button class="icon-btn" onclick="openItem('${x.id}')" title="Fix how this is priced/packed"><i class="ti ti-edit"></i></button>`:''}</td>
     </tr>`;}).join('')+'</tbody></table></div>'+
     '<div class="hint" style="margin-top:10px">Cost each = price per unit ÷ how many per unit. Compare the same product across vendors to spot the best deal.</div>';
 }
