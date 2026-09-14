@@ -100,6 +100,7 @@
     <button class="nav-item" onclick="window.open('https://premier-caterers.github.io/premier-caterers/truck-checklist-admin.html','_blank')"><i class="ti ti-truck"></i>Truck Checklist<i class="ti ti-external-link" style="font-size:11px;margin-left:auto;opacity:.5"></i></button>
     <div class="sidebar-label" id="grpOffice">Office</div>
     <button class="nav-item" id="nav-myday" onclick="showView('myday')"><i class="ti ti-sun"></i>My Day</button>
+    <button class="nav-item" id="nav-followups" onclick="showView('followups')"><i class="ti ti-alert-triangle"></i>Follow-ups<span class="nav-badge" id="followupsBadge" style="display:none">0</span></button>
     <button class="nav-item" id="nav-reports" onclick="showView('reports')"><i class="ti ti-chart-bar"></i>Reports</button>
     <button class="nav-item" id="nav-roadmap" onclick="showView('roadmap')"><i class="ti ti-map-2"></i>Roadmap</button>
     <div class="sidebar-label" id="setupLabel">Setup</div>
@@ -2249,7 +2250,7 @@ const roles = {
 };
 
 /* ===================== LOGIN / ACCESS CONTROL (added) ===================== */
-const ALL_SECTIONS = ['home','myday','pipeline','clients','events','coversheet','schedule','checklists','changes','invoices','reports','grocery','equipment','venues','roadmap','email','trash','settings'];
+const ALL_SECTIONS = ['home','myday','pipeline','clients','events','coversheet','schedule','checklists','changes','invoices','reports','grocery','equipment','venues','roadmap','followups','email','trash','settings'];
 const access = {
   admin:   ALL_SECTIONS.slice(),
   kenny:   ALL_SECTIONS.slice(),
@@ -2257,7 +2258,7 @@ const access = {
   josh:    ALL_SECTIONS.filter(s=>!['reports','trash','settings'].includes(s)),
   // My Day is a personal, per-user space — kitchen is a shared login used by
   // multiple people, so it doesn't get one.
-  kitchen: ALL_SECTIONS.filter(s=>!['reports','trash','settings','email','invoices','myday'].includes(s)),
+  kitchen: ALL_SECTIONS.filter(s=>!['reports','trash','settings','email','invoices','myday','followups'].includes(s)),
 };
 const OWNER_HASH   = 'd4ae28692a6a51cd93378a6ae5d3c004920edfaaa688e4dbeefb8cbe4730dcae'; // 736868
 const DEFAULT_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4'; // 1234
@@ -2558,6 +2559,7 @@ function render(){
            currentView==='equipment' ? renderEquipment() :
            currentView==='venues'    ? renderVenues()    :
            currentView==='roadmap'   ? renderRoadmap()   :
+           currentView==='followups' ? renderFollowups() :
            currentView==='trash'     ? renderTrash()     :
            currentView==='email'     ? '<div id="emailPlaceholder"></div>' :
            currentView==='settings'  ? renderSettings()  : '';
@@ -8422,6 +8424,14 @@ function updateBadge(){ updatePipelineBadge();
   }catch(_){ n=0; }
   const b=document.getElementById('checkBadge');
   if(b){ b.textContent=n; b.style.display = n ? '' : 'none'; }
+  try{
+    const fb=document.getElementById('followupsBadge');
+    if(fb){
+      const f=computeFollowups();
+      const fn=f.noDeposit.length+f.noContract.length+f.partialUnpaid.length+f.checklistIncomplete.length+f.pastUnpaid.length;
+      fb.textContent=fn; fb.style.display = fn ? '' : 'none';
+    }
+  }catch(_){}
   const tb=document.getElementById('trashBadge'); if(tb){ if(trash&&trash.length){ tb.textContent=trash.length; tb.style.display=''; } else { tb.style.display='none'; } }
 }
 
@@ -9616,6 +9626,108 @@ function calcInvoiceTotals(inv){
   const grand = subtotal + logistics + tax;
   const balance = grand - parseFloat(inv.deposit||0);
   return {subtotal, logistics, tax, grand, balance, logRate};
+}
+
+// ════════ FOLLOW-UPS ════════
+// Five things worth checking on every booked event: no deposit collected, no
+// signed contract, a balance still outstanding while the event is upcoming
+// (i.e. mid payment-plan), the day-of checklist not finished as the event
+// nears, and -- the most urgent -- the event already happened with money
+// still owed. "Booked" needs no separate check here: every entry in `events`
+// only exists because its inquiry reached stage:'booked' in the first place.
+// Matches the deposit amount written into CONTRACT_TEMPLATE's payment
+// schedule ("non-refundable deposit of $1,000..."). A contract can opt out
+// of requiring one via its depositRequired flag (see openContract's
+// checkbox) -- when that's set, the deposit milestone is treated as $0.
+const CONTRACT_DEPOSIT_AMT = 1000;
+function _eventDateObj(e){
+  const iso = e.eventDate || (typeof _dateFromWeekOfAndDay==='function' ? _dateFromWeekOfAndDay(e.weekOf, e.day) : null);
+  if(!iso) return null;
+  const d = new Date(iso+'T12:00:00Z');
+  return isNaN(d) ? null : d;
+}
+// Per the contract's own schedule: 50% of the remaining balance (after the
+// deposit) is due 30 days out, the full remaining balance 72 hours out.
+// Returns which milestone has passed without enough paid, or null if
+// current payment is on track (or too far out for either to apply yet).
+function _scheduleStatus(grand, paid, depositReq, dateObj, today){
+  if(grand==null || !dateObj) return null;
+  const daysOut = Math.round((dateObj-today)/86400000);
+  const remainderBase = Math.max(0, grand-depositReq);
+  const expectedBy30 = depositReq + 0.5*remainderBase;
+  if(daysOut<=3 && paid < grand-0.01) return { milestone:'72 hours before the event (full balance)', shortBy:grand-paid };
+  if(daysOut<=30 && paid < expectedBy30-0.01) return { milestone:'30 days before the event (50% of remainder)', shortBy:expectedBy30-paid };
+  return null;
+}
+function computeFollowups(){
+  const today = new Date(); today.setUTCHours(0,0,0,0);
+  const in7 = new Date(today.getTime()+7*86400000);
+  const noDeposit=[], noContract=[], partialUnpaid=[], checklistIncomplete=[], pastUnpaid=[];
+  (typeof events!=='undefined'?events:[]).filter(isActiveEvent).forEach(e=>{
+    const dateObj = _eventDateObj(e);
+    const inv = invoices[e.id];
+    const hasLines = inv && Array.isArray(inv.lines) && inv.lines.length;
+    const totals = hasLines ? calcInvoiceTotals(inv) : null;
+    const deposit = inv ? parseFloat(inv.deposit||0) : 0;
+    const balance = totals ? totals.balance : null;
+    const c = (typeof contracts!=='undefined') ? contracts[e.id] : null;
+    const depositReq = (c && c.depositRequired===false) ? 0 : CONTRACT_DEPOSIT_AMT;
+
+    if(depositReq>0 && deposit<=0) noDeposit.push({e, dateObj});
+
+    if(!c || c.status!=='signed') noContract.push({e, dateObj});
+
+    if(totals && dateObj && dateObj>=today){
+      const sched = _scheduleStatus(totals.grand, deposit, depositReq, dateObj, today);
+      if(sched) partialUnpaid.push({e, dateObj, milestone:sched.milestone, shortBy:sched.shortBy});
+    }
+
+    if(dateObj && dateObj<=in7){
+      const chItems = (checklists[e.id]||[]).filter(it=>!it.na);
+      const openCount = chItems.filter(it=>!(it.done || (it.assignees && it.assignees.some(a=>a.done)))).length;
+      if(chItems.length && openCount>0) checklistIncomplete.push({e, dateObj, openCount});
+    }
+
+    if(dateObj && dateObj<today && balance!=null && balance>0.01){
+      pastUnpaid.push({e, dateObj, balance});
+    }
+  });
+  const byDate=(a,b)=>(a.dateObj?a.dateObj.getTime():8.64e15)-(b.dateObj?b.dateObj.getTime():8.64e15);
+  [noDeposit,noContract,partialUnpaid,checklistIncomplete,pastUnpaid].forEach(l=>l.sort(byDate));
+  return {noDeposit,noContract,partialUnpaid,checklistIncomplete,pastUnpaid};
+}
+function _fuDateLabel(dateObj){
+  return dateObj ? dateObj.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : 'No date set';
+}
+function _fuBox(title, icon, list, metaFn){
+  const MAXF = 25;
+  return `<div class="home-box">
+    <div class="home-box-head"><i class="ti ${icon}"></i> ${title} <span class="home-box-count">${list.length}</span></div>
+    <div class="home-box-body">
+      ${list.length===0 ? `<div class="home-empty">All clear</div>` :
+        list.slice(0,MAXF).map(r=>`
+          <button class="home-row" onclick="showView('events');openEventHub('${r.e.id}')">
+            <span class="home-row-pill">${displayJob(r.e.job)}</span>
+            <span class="home-row-main">${r.e.name||''}</span>
+            <span class="home-row-meta">${metaFn(r)}</span>
+            <i class="ti ti-chevron-right home-row-chev"></i>
+          </button>`).join('')
+        + (list.length>MAXF ? `<div class="home-row home-row-more" style="cursor:default">+${list.length-MAXF} more</div>` : '')}
+    </div>
+  </div>`;
+}
+function renderFollowups(){
+  const f = computeFollowups();
+  const total = f.noDeposit.length+f.noContract.length+f.partialUnpaid.length+f.checklistIncomplete.length+f.pastUnpaid.length;
+  return `<div class="section-header"><div><div class="eyebrow">Office</div><div class="section-title">Follow-ups</div></div></div>
+    <div style="margin:-6px 0 16px;font-size:13px;color:var(--text2)">Booked events that need attention — ${total} item${total===1?'':'s'} across the checks below.</div>
+    <div style="display:flex;flex-direction:column;gap:14px;max-width:720px">
+      ${_fuBox('Booked, no deposit yet','ti-cash-off',f.noDeposit, r=>_fuDateLabel(r.dateObj))}
+      ${_fuBox('No signed contract','ti-file-off',f.noContract, r=>_fuDateLabel(r.dateObj))}
+      ${_fuBox('Payment behind contract schedule','ti-credit-card-pay',f.partialUnpaid, r=>_fuDateLabel(r.dateObj)+' \u00b7 missed '+r.milestone+' \u00b7 $'+r.shortBy.toFixed(2)+' short')}
+      ${_fuBox('Final checklist incomplete','ti-checklist',f.checklistIncomplete, r=>_fuDateLabel(r.dateObj)+' \u00b7 '+r.openCount+' item'+(r.openCount===1?'':'s')+' open')}
+      ${_fuBox('Event passed, not paid in full','ti-alert-triangle',f.pastUnpaid, r=>_fuDateLabel(r.dateObj)+' \u00b7 $'+r.balance.toFixed(2)+' owed')}
+    </div>`;
 }
 
 function renderInvoices(){
@@ -11922,11 +12034,12 @@ function _contractCertLines(c){
 }
 function closeContract(){ const m=document.getElementById('contractModal'); if(m) m.remove(); }
 function _readContractForm(eid){
-  const eEl=document.getElementById('contract-email'), tEl=document.getElementById('contract-terms');
+  const eEl=document.getElementById('contract-email'), tEl=document.getElementById('contract-terms'), ndEl=document.getElementById('contract-noDeposit');
   const r=_contractResolve(eid); const key=r.eid||eid; const ev=_contractEventLike(key,r.e,r.inq);
   const c=_ensureContract(key, ev, r.inq);
   if(eEl) c.signerEmail=eEl.value.trim();
   if(tEl){ c.terms=tEl.value; c.termsEdited=(String(tEl.value).trim()!==String(CONTRACT_TEMPLATE).trim()); }
+  if(ndEl) c.depositRequired = !ndEl.checked;
   return c;
 }
 function openContract(arg){
@@ -11963,6 +12076,9 @@ function openContract(arg){
     +'</div>'
     +'<div style="padding:15px 20px;overflow-y:auto;flex:1">'
       +prebookBlock+signedBlock+sentBlock
+      +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:14px;cursor:pointer;padding:9px 11px;background:var(--bg2);border-radius:8px">'
+        +'<input type="checkbox" id="contract-noDeposit" '+(c.depositRequired===false?'checked':'')+'> No deposit required for this event'
+      +'</label>'
       +'<label style="font-size:11.5px;font-weight:600;color:#666;display:block;margin-bottom:5px">Client email</label>'
       +'<input id="contract-email" value="'+String(c.signerEmail||inq.email||'').replace(/"/g,'&quot;')+'" placeholder="client@email.com" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:13px;font-family:inherit;margin-bottom:14px">'
       +'<label style="font-size:11.5px;font-weight:600;color:#666;display:block;margin-bottom:5px">Contract terms <span style="font-weight:400;color:#999">\u2014 edit freely; this is what the client agrees to</span></label>'
@@ -12014,10 +12130,13 @@ function buildContractHTML(eid){
   const pr=_contractPricing(key,inq);
   const termsHtml=pcEsc(c.terms||CONTRACT_TEMPLATE).replace(/\n/g,'<br>');
   const money=v=>'$'+(parseFloat(v||0)).toFixed(2);
+  const noDepositNotice = (c.depositRequired===false)
+    ? '<div style="margin:10px 0;padding:8px 11px;background:#FFF8E6;border:1px solid #E8CE8A;border-radius:6px;font-size:12px;color:#6b5510">No deposit is required for this event.</div>' : '';
   const priceRows = pr ? ('<table style="width:100%;border-collapse:collapse;margin:6px 0 4px;font-size:13px">'
       +'<tr><td style="padding:3px 0">Estimated total</td><td style="text-align:right">'+money(pr.grand)+'</td></tr>'
-      +'<tr><td style="padding:3px 0">Deposit</td><td style="text-align:right">'+money(pr.deposit)+'</td></tr>'
-      +'<tr><td style="padding:3px 0;font-weight:700;border-top:1px solid #ccc">Balance</td><td style="text-align:right;font-weight:700;border-top:1px solid #ccc">'+money(pr.balance)+'</td></tr></table>') : '';
+      +'<tr><td style="padding:3px 0">Deposit</td><td style="text-align:right">'+(c.depositRequired===false?'Not required':money(pr.deposit))+'</td></tr>'
+      +'<tr><td style="padding:3px 0;font-weight:700;border-top:1px solid #ccc">Balance</td><td style="text-align:right;font-weight:700;border-top:1px solid #ccc">'+money(pr.balance)+'</td></tr></table>')
+    : '<div style="margin:6px 0 4px;font-size:12px;color:#888;font-style:italic">Pricing not finalized yet — an estimate hasn\u2019t been built for this event. Add one before sending for signature so the client sees real numbers.</div>';
   const sigBlock=(c.status==='signed')
     ? ('<div style="margin-top:8px"><div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.06em">Signature</div>'
        +(c.signatureDataUrl?'<img src="'+c.signatureDataUrl+'" style="max-height:80px;display:block;margin:6px 0">':'')
@@ -12043,6 +12162,7 @@ function buildContractHTML(eid){
       +'<div><div class="k">Guests</div>'+pcEsc(inq.guestCount||'\u2014')+'</div>'
     +'</div>'
     +priceRows
+    +noDepositNotice
     +'<div class="terms">'+termsHtml+'</div>'
     +sigBlock
     +((c.status==='signed')?('<div style="margin-top:22px;border:1px solid #ccc;border-radius:8px;padding:12px 14px;background:#fafafa;font-size:11px;color:#444"><div style="font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8B1A1A;margin-bottom:6px">Electronic Signature Certificate</div>'+_contractCertLines(c).map(l=>'<div style="margin:3px 0;word-break:break-all"><span style="color:#888">'+pcEsc(l[0])+':</span> '+pcEsc(l[1])+'</div>').join('')+'</div>'):'')
