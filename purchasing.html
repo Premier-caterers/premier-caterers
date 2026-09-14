@@ -236,8 +236,11 @@ tbody tr:hover{background:var(--bg2)}
 .op-vendor .cost{font-size:11px;color:var(--text3);font-family:'Fraunces',Georgia,serif}
 .op-vendor .tag{display:inline-block;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:1px 6px;border-radius:9px;margin-top:2px;width:fit-content}
 .op-vendor .tag.cheap{background:var(--green-bg);color:var(--green-text)}
+.op-vendor .tag.switch{background:#FBEAEA;color:#A32020}
 .op-vendor .tag.manual{background:var(--brass-tint);color:var(--brass-deep)}
 .op-vendor .tag.none{background:var(--bg3);color:var(--text3)}
+@keyframes opTagFlash{0%,100%{opacity:1}50%{opacity:.4}}
+.op-vendor .tag.flash{animation:opTagFlash 1.6s ease-in-out infinite}
 .op-pack{font-size:11.5px;color:var(--text2)}
 .op-qty input{width:70px;padding:7px 8px;border:1px solid var(--border2);border-radius:7px;text-align:center;font-size:13px}
 .op-qty input:focus{outline:none;border-color:var(--maroon)}
@@ -2854,27 +2857,42 @@ function selectedVendorItem(g){
 }
 function isManualPick(g){ const sel=orderCart[g.key]; if(!sel||!sel.vendorItemId) return false; return !!sel.manual; }
 
+let _opOpenCats = new Set(); // category names currently expanded — empty by default (all start collapsed)
+function toggleOpCat(c){
+  if(_opOpenCats.has(c)) _opOpenCats.delete(c); else _opOpenCats.add(c);
+  renderOrderPicker();
+}
+window.toggleOpCat = toggleOpCat;
 function renderOrderPicker(){
   const list=document.getElementById('ordersList'); if(!list) return;
   const q=((document.getElementById('oSearch')||{}).value||'').toLowerCase();
-  const groups=ourProducts().filter(g=>!q||g.name.toLowerCase().includes(q)||(g.useFor||'').toLowerCase().includes(q)||(g.category||'').toLowerCase().includes(q));
+  const groups=ourProducts().filter(g=>!q||g.name.toLowerCase().includes(q)||(g.useFor||'').toLowerCase().includes(q)||(g.category||'').toLowerCase().includes(q)||g.items.some(x=>vendorName(x.vendorId).toLowerCase().includes(q)));
   if(!groups.length){ list.innerHTML='<div class="dash-empty">No products yet — add items first so they can be ordered.</div>'; renderCart(); return; }
   // group by category
   const byCat={};
   groups.forEach(g=>{ const c=g.category||'Uncategorized'; (byCat[c]=byCat[c]||[]).push(g); });
   const cats=Object.keys(byCat).sort();
+  // Searching a category open is more useful than making you click through it
+  // — expand any category a live search actually matched, without touching
+  // the ones you've manually opened/closed.
+  if(q) cats.forEach(c=>_opOpenCats.add(c));
   list.innerHTML = cats.map(c=>{
     const rows=byCat[c].map(g=>{
       const pick=selectedVendorItem(g);
       const cur=orderCart[g.key];
       const qty=cur?cur.qty:'';
       let vendorBlock;
-      if(!pick){ vendorBlock=`<div class="op-vendor"><span class="name muted" onclick="openVendorPick(event,'${esc(g.key)}')">No price on file</span><span class="tag none">no quote</span></div>`; }
+      if(!pick){ vendorBlock=`<div class="op-vendor"><span class="name muted" onclick="openVendorPick(event,'${escJs(g.key)}')">No price on file</span><span class="tag none">no quote</span></div>`; }
       else{
         const uc=unitCost(pick.price,pick.packSize);
         const isMan=isManualPick(g);
-        const tagHtml = isMan ? '<span class="tag manual">manual</span>' : (g.items.length>1 ? '<span class="tag cheap">cheapest</span>' : '');
-        vendorBlock=`<div class="op-vendor"><span class="name" onclick="openVendorPick(event,'${esc(g.key)}')">${esc(vendorName(pick.vendorId))} <i class="ti ti-chevron-down" style="font-size:11px;opacity:.6"></i></span><span class="cost">${uc!=null?fmtMoney(uc)+ucSuffix(pick):'—'}</span>${tagHtml}</div>`;
+        const cheapest=cheapestItem(g);
+        const isCheapest = cheapest && pick.id===cheapest.id;
+        const priceTag = isCheapest
+          ? '<span class="tag cheap flash">cheapest from this vendor</span>'
+          : (cheapest ? `<span class="tag switch flash">cheaper from ${esc(vendorName(cheapest.vendorId))}</span>` : '');
+        const manTag = isMan ? '<span class="tag manual">manual</span>' : '';
+        vendorBlock=`<div class="op-vendor"><span class="name" onclick="openVendorPick(event,'${escJs(g.key)}')">${esc(vendorName(pick.vendorId))} <i class="ti ti-chevron-down" style="font-size:11px;opacity:.6"></i></span><span class="cost">${uc!=null?fmtMoney(uc)+ucSuffix(pick):'—'}</span>${manTag}${priceTag}</div>`;
       }
       const packTxt = pick ? packLabel(pick) : '—';
       const conv = (pick && qty && pick.price) ? `<div class="conv">${qty} ${esc(soldByOf(pick))} × ${fmtMoney(pick.price)} = <b>${fmtMoney(parseFloat(qty)*parseFloat(pick.price))}</b></div>` : '';
@@ -2882,10 +2900,11 @@ function renderOrderPicker(){
         <div class="op-prod"><b>${esc(g.name)}</b>${g.useFor?`<div class="sub">${esc(g.useFor)}</div>`:''}</div>
         ${vendorBlock}
         <div class="op-pack">${esc(packTxt)}</div>
-        <div class="op-qty"><input type="number" min="0" step="any" value="${esc(qty)}" placeholder="cases" oninput="setQty('${esc(g.key)}', this.value)"><div class="op-conv-wrap">${conv}</div></div>
+        <div class="op-qty"><input type="number" min="0" step="any" value="${esc(qty)}" placeholder="cases" oninput="setQty('${escJs(g.key)}', this.value)"><div class="op-conv-wrap">${conv}</div></div>
       </div>`;
     }).join('');
-    return `<div class="cat-group" data-cat="${esc(c)}"><div class="cat-head" onclick="this.parentNode.classList.toggle('collapsed')"><span>${esc(c)} <span style="color:var(--text3);font-weight:400;font-size:12px">· ${byCat[c].length}</span></span><i class="ti ti-chevron-down chev"></i></div><div class="cat-body">${rows}</div></div>`;
+    const open = _opOpenCats.has(c);
+    return `<div class="cat-group${open?'':' collapsed'}" data-cat="${esc(c)}"><div class="cat-head" onclick="toggleOpCat('${escJs(c)}')"><span>${esc(c)} <span style="color:var(--text3);font-weight:400;font-size:12px">· ${byCat[c].length}</span></span><i class="ti ti-chevron-down chev"></i></div><div class="cat-body">${rows}</div></div>`;
   }).join('');
   renderCart();
 }
