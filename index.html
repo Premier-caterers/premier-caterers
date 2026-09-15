@@ -5411,6 +5411,7 @@ function openMenuEmail(inq, link){
       : (contracts[('inq_'+inq.id)] || (typeof contractSignLink==='function' && contractSignLink('inq_'+inq.id))) ? ''
         : '<div style="font-size:11px;color:var(--text3);margin-bottom:.5rem;display:flex;align-items:center;gap:5px"><i class="ti ti-info-circle" style="font-size:12px"></i> No contract yet for this event \u2014 create one to include a signing link automatically.</div>')
     +'<div style="font-size:11px;color:var(--text3);margin-bottom:1rem">The current menu will be attached as a PDF file — the client gets it directly, with no Google Drive permission needed.</div>'
+    +manualAttachWidgetHtml('menu')
     +'<div style="display:flex;gap:8px;justify-content:flex-end">'
     +'<button class="btn-cancel" onclick="document.getElementById(\'sendEmailModal\').remove()">Cancel</button>'
     +'<button class="btn-save" id="menu-email-send" onclick="confirmSendMenuEmail()"><i class="ti ti-send" style="font-size:13px"></i> Send</button>'
@@ -5610,6 +5611,7 @@ async function confirmSendMenuEmail(){
       }
     }
   }
+  attachments = attachments.concat(takeManualAttachments('menu'));
   if(btn) btn.textContent='Sending...';
   const htmlBody = '<div style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap;line-height:1.6">'+body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1">$1</a>')+'</div>';
   const fromChoice = (document.getElementById('menu-email-from')||{}).value || 'events';
@@ -10838,6 +10840,7 @@ events@thepremiercaterer.com`;
     +'<div class="modal-row"><label>Subject</label><input type="text" id="pmt-email-subject" value="'+subject.replace(/"/g,'&quot;')+'"></div>'
     +'<div class="modal-row"><label>Message</label><textarea id="pmt-email-body" style="min-height:220px">'+body+'</textarea></div>'
     +'<div style="font-size:11px;color:var(--text3);margin-bottom:1rem">The updated invoice — showing this payment in the history and the new balance — will be attached as a PDF.</div>'
+    +manualAttachWidgetHtml('payment')
     +'<div style="display:flex;gap:8px;justify-content:flex-end">'
     +'<button class="btn-cancel" onclick="document.getElementById(\'sendEmailModal\').remove()">Cancel</button>'
     +'<button class="btn-save" id="pmt-email-send" onclick="confirmSendPaymentEmail(\''+eid+'\')"><i class="ti ti-send" style="font-size:13px"></i> Send</button>'
@@ -10890,6 +10893,7 @@ async function confirmSendPaymentEmail(eid){
     // Fall back to sending the email without an attachment rather than failing outright.
     console.warn('Invoice PDF build failed, sending without attachment:', err);
   }
+  attachments = attachments.concat(takeManualAttachments('payment'));
   if(btn) btn.textContent='Sending...';
   const htmlBody = '<div style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap;line-height:1.6">'+body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1">$1</a>')+'</div>';
   const fromChoice = (document.getElementById('pmt-email-from')||{}).value || 'events';
@@ -15553,7 +15557,9 @@ function openSendInvoiceEmail(eid){
     +'<div class="modal-row"><label>To</label><input type="email" id="email-to" value="'+toEmail.replace(/"/g,'&quot;')+'" placeholder="client@email.com"></div>'
     +'<div class="modal-row"><label>Subject</label><input type="text" id="email-subject" value="'+subject.replace(/"/g,'&quot;')+'"></div>'
     +'<div class="modal-row"><label>Message</label><textarea id="email-body" style="min-height:180px">'+body+'</textarea></div>'
-    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem"><input type="checkbox" id="email-attach-invoice" checked style="accent-color:var(--blue-mid)"><label for="email-attach-invoice" style="font-size:13px;color:var(--text2)">Include invoice details in email body</label></div>'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:.5rem"><input type="checkbox" id="email-attach-invoice" checked style="accent-color:var(--blue-mid)"><label for="email-attach-invoice" style="font-size:13px;color:var(--text2)">Also paste invoice details into the email body</label></div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-bottom:1rem">The '+docType.toLowerCase()+' is always attached as a PDF — this just controls whether it\'s also shown inline in the message.</div>'
+    +manualAttachWidgetHtml('invoice')
     +'<div style="display:flex;gap:8px;justify-content:flex-end">'
     +'<button class="btn-cancel" onclick="document.getElementById(\'sendEmailModal\').remove()">Cancel</button>'
     +'<button class="btn-save" onclick="confirmSendInvoiceEmail(\''+eid+'\')"><i class="ti ti-send" style="font-size:13px"></i> Send</button>'
@@ -15591,15 +15597,33 @@ async function confirmSendInvoiceEmail(eid){
   const attachInvoice = document.getElementById('email-attach-invoice')?.checked;
   if(!to){ alert('Please enter a recipient email.'); return; }
   const btn = document.querySelector('#sendEmailModal .btn-save');
-  if(btn){ btn.disabled=true; btn.textContent='Sending...'; }
+  if(btn){ btn.disabled=true; btn.textContent='Building PDF...'; }
   let htmlBody = '<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap">'+body+'</pre>';
   if(attachInvoice){
     const invHtml = buildInvoiceHTML(eid);
     htmlBody = '<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap">'+body+'</pre><br><hr><br>' + invHtml;
   }
+  // The invoice/estimate PDF is always attached — whether or not it's also
+  // pasted into the body above. A client should never receive this email
+  // without a real PDF they can open and keep.
+  let attachments = [];
+  try{
+    const invHtmlForPdf = buildInvoiceHTML(eid);
+    const b64 = await htmlToPdfBase64(invHtmlForPdf);
+    attachments = [{ filename: invoiceFileName(eid)+'.pdf', mime:'application/pdf', base64:b64 }];
+  }catch(err){
+    console.warn('Invoice PDF build failed, sending without attachment:', err);
+    if(btn) btn.textContent='Sending...';
+    if(!confirm('The invoice PDF could not be built, so this email would go out with no attachment. Send anyway?')){
+      if(btn){ btn.disabled=false; btn.textContent='Send'; }
+      return;
+    }
+  }
+  attachments = attachments.concat(takeManualAttachments('invoice'));
+  if(btn) btn.textContent='Sending...';
   const fromChoice = (document.getElementById('inv-email-from')||{}).value || 'events';
   const sendAs = fromChoice === 'events' ? '' : fromAddressEmail(fromChoice);
-  const ok = await sendGmailEmail(to, subject, body, htmlBody, undefined, sendAs);
+  const ok = await sendGmailEmail(to, subject, body, htmlBody, attachments, sendAs);
   if(ok){
     // Save sent record
     if(invoices[eid]){ invoices[eid].lastEmailedDate = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
@@ -15747,6 +15771,62 @@ function removeComposeAttachment(i){
   if(!window._composeAttachments) return;
   window._composeAttachments.splice(i,1);
   const el=document.getElementById('compose-attach-list'); if(el) el.innerHTML=renderComposeAttachList();
+}
+
+// ── GENERIC MANUAL ATTACH WIDGET ─────────────────────────────
+// A drop-in "attach another file" control for any send-email modal, keyed by
+// a state name (window['_manualAttach_'+key]) so several modals can each hold
+// their own list without clashing. Mirrors the general Compose tab's own
+// attachment UI/behavior exactly, just reusable everywhere else an email gets
+// sent — every one of them should let you attach something extra manually,
+// on top of whatever it already auto-attaches.
+function manualAttachWidgetHtml(key, label){
+  const listId = 'manual-attach-list-'+key;
+  return '<div class="modal-row">'
+    + '<label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">'+(label||'Attach another file (optional)')+'</label>'
+    + '<input type="file" multiple onchange="addManualAttachments(\''+key+'\',this.files)" style="font-size:12px;width:100%">'
+    + '<div id="'+listId+'" style="margin-top:6px;display:flex;flex-direction:column;gap:4px">'+renderManualAttachList(key)+'</div>'
+    + '</div>';
+}
+function renderManualAttachList(key){
+  const list = window['_manualAttach_'+key] || [];
+  if(!list.length) return '';
+  return list.map(function(a,i){
+    return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);background:var(--bg2);border:0.5px solid var(--border);border-radius:6px;padding:4px 8px">'
+      +'<i class="ti ti-paperclip" style="font-size:13px"></i><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+a.filename+'</span>'
+      +'<button type="button" onclick="removeManualAttachment(\''+key+'\','+i+')" title="Remove" class="btn btn--ghost btn--sm"><i class="ti ti-x"></i></button></div>';
+  }).join('');
+}
+function addManualAttachments(key, fileList){
+  const stateKey = '_manualAttach_'+key;
+  if(!window[stateKey]) window[stateKey] = [];
+  const files = Array.prototype.slice.call(fileList||[]);
+  let pending = files.length;
+  if(!pending) return;
+  files.forEach(function(file){
+    if(file.size > 24*1024*1024){ alert('"'+file.name+'" is larger than 24 MB and may be too big to email.'); }
+    const reader = new FileReader();
+    reader.onload = function(){
+      const b64 = String(reader.result).split(',')[1] || '';
+      window[stateKey].push({ filename:file.name, mime:file.type||'application/octet-stream', base64:b64 });
+      pending--;
+      if(pending<=0){ const el=document.getElementById('manual-attach-list-'+key); if(el) el.innerHTML=renderManualAttachList(key); }
+    };
+    reader.onerror = function(){ pending--; };
+    reader.readAsDataURL(file);
+  });
+}
+function removeManualAttachment(key, i){
+  const stateKey = '_manualAttach_'+key;
+  if(!window[stateKey]) return;
+  window[stateKey].splice(i,1);
+  const el=document.getElementById('manual-attach-list-'+key); if(el) el.innerHTML=renderManualAttachList(key);
+}
+function takeManualAttachments(key){
+  const stateKey = '_manualAttach_'+key;
+  const list = window[stateKey] || [];
+  window[stateKey] = []; // clear for next time this modal opens
+  return list;
 }
 
 async function refreshInbox(){
