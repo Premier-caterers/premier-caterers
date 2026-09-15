@@ -7,6 +7,8 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -3428,9 +3430,28 @@ async function bulkSave(){
   if(errCount){ document.getElementById('bulkStatus').textContent=errCount+' row'+(errCount===1?'':'s')+' need fixing — others ready'; document.getElementById('bulkStatus').className='bulk-status err'; }
   if(!toSave.length){ if(!errCount) alert('No rows to save.'); return; }
   if(errCount && !confirm('Save '+toSave.length+' valid row'+(toSave.length===1?'':'s')+' and skip the '+errCount+' with errors?')) return;
-  // Commit
-  const batch=db.batch(); const ts=Date.now();
+
+  // Match each row against an existing item for this vendor — by vendor code
+  // first (most reliable), falling back to a normalized name match when the
+  // row has no code. Matched rows update the existing item in place (old
+  // price archived to history, exactly like "New quote" does one at a time)
+  // instead of creating a duplicate. Category is only touched if the pasted
+  // row actually has one — an existing item's category is never blanked out.
+  const matched = [], fresh = [];
   toSave.forEach(r=>{
+    let ex = null;
+    if(r.vendorCode) ex = items.find(x=>x.vendorId===vendorId && x.vendorCode && normName(x.vendorCode)===normName(r.vendorCode));
+    if(!ex) ex = items.find(x=>x.vendorId===vendorId && normName(x.ourName)===normName(r.ourName));
+    if(ex) matched.push({r,ex}); else fresh.push(r);
+  });
+
+  if(matched.length && !confirm(
+    fresh.length+' new item'+(fresh.length===1?'':'s')+' will be added.\n'+
+    matched.length+' item'+(matched.length===1?'':'s')+' already exist'+(matched.length===1?'s':'')+' for this vendor and will be updated in place (old price saved to history, existing category kept) instead of duplicated.\n\nContinue?'
+  )) return;
+
+  const batch=db.batch(); const ts=Date.now();
+  fresh.forEach(r=>{
     const ref=db.collection('vendorItems').doc();
     batch.set(ref, {
       vendorId,
@@ -3448,7 +3469,34 @@ async function bulkSave(){
       createdAt: ts, updatedAt: ts
     });
   });
-  try{ await batch.commit(); toast('Saved '+toSave.length+' item'+(toSave.length===1?'':'s')+' ✓'); closeBulkAdd(); }
+  matched.forEach(({r,ex})=>{
+    const histRef = db.collection('priceHistory').doc();
+    batch.set(histRef, {
+      itemId: ex.id, ourName: ex.ourName||'', vendorId: ex.vendorId||'',
+      price: ex.price||0, packSize: ex.packSize||0, unit: ex.unit||'',
+      packDesc: ex.packDesc||'', vendorItemName: ex.vendorItemName||'', vendorCode: ex.vendorCode||'',
+      date: ex.date||'', notes: ex.notes||'',
+      archivedAt: ts, archivedBy: userLabel(), ts: ex.updatedAt||ex.createdAt||ts
+    });
+    const updateFields = {
+      soldBy: r.soldBy, unit: r.soldBy,
+      vendorItemName: r.vendorItemName||ex.vendorItemName||'',
+      vendorCode: r.vendorCode||ex.vendorCode||'',
+      packDesc: (parseFloat(r.packSize)>1?(r.soldBy+' of '+r.packSize):r.soldBy),
+      packSize: parseFloat(r.packSize),
+      price: parseFloat(r.price),
+      date: r.date||ex.date||'',
+      notes: r.notes||ex.notes||'',
+      updatedAt: ts, updatedBy: userLabel()
+    };
+    if(r.category) updateFields.category = r.category; // only overwrite if the pasted row actually has one
+    batch.set(db.collection('vendorItems').doc(ex.id), updateFields, {merge:true});
+  });
+  try{
+    await batch.commit();
+    toast('Added '+fresh.length+', updated '+matched.length+' ✓');
+    closeBulkAdd();
+  }
   catch(e){ alert('Could not save: '+e.message); }
 }
 window.openBulkAdd = openBulkAdd;
