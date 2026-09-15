@@ -3798,6 +3798,11 @@ function plCardFoot(inq){
 }
 // ── PAYMENT STATE (3-state, colorblind-safe: pattern + colour + tooltip) ──
 function pcEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+let _invSearchTimer = null;
+function _invSearchDebounced(){
+  clearTimeout(_invSearchTimer);
+  _invSearchTimer = setTimeout(render, 280);
+}
 function plPayState(inq){
   try{
     const evId='inq_'+inq.id;
@@ -9738,6 +9743,8 @@ function renderInvoices(){
   const pastEvts     = allEvts.filter(e=>(e.weekOf||'2026-05-31') < currentWeekStr);
   const futureEvts   = allEvts.filter(e=>(e.weekOf||'2026-05-31') > currentWeekStr);
   const invView = window._invView || 'default';
+  const invSearch = (window._invSearch||'').trim().toLowerCase();
+  const invSort = window._invSort || 'date_asc';
 
   const viewBtns = [
     {key:'default', label:'This week'},
@@ -9757,6 +9764,34 @@ function renderInvoices(){
     if(invView==='all')    return evts;
     // default: show all (no status filter)
     return evts;
+  }
+  function filterBySearch(evts){
+    if(!invSearch) return evts;
+    return evts.filter(e=>{
+      const hay = [e.name, displayJob(e.job), e.typeLabel||e.type, e.addr].join(' ').toLowerCase();
+      return hay.indexOf(invSearch) !== -1;
+    });
+  }
+  function invSortVal(e, key){
+    if(key==='client') return (e.name||'').toLowerCase();
+    if(key==='balance' || key==='amount'){
+      let sum=0; invoiceSlotsForEvent(e.id).forEach(k=>{ const iv=invoices[k]; if(!iv) return; const t=calcInvoiceTotals(iv); sum += key==='balance' ? Math.max(0,t.balance) : t.grand; });
+      return sum;
+    }
+    if(key==='status'){
+      const order={none:0,quote:1,approved:2,invoice:3,paid:4};
+      let worst=0; invoiceSlotsForEvent(e.id).forEach(k=>{ const st=invoices[k]?.status||'none'; worst=Math.max(worst, order[st]||0); });
+      return worst;
+    }
+    return e.weekOf||'';
+  }
+  function applySort(evts){
+    const [key,dir] = invSort.split('_');
+    const mul = dir==='desc' ? -1 : 1;
+    return evts.slice().sort((a,b)=>{
+      const av=invSortVal(a,key), bv=invSortVal(b,key);
+      if(av<bv) return -1*mul; if(av>bv) return 1*mul; return 0;
+    });
   }
 
   function buildRow(e){
@@ -9812,8 +9847,8 @@ function renderInvoices(){
   }
 
   function buildSection(label, evts){
-    const filtered = filterByStatus(evts).sort((a,b)=>(a.weekOf||'').localeCompare(b.weekOf||''));
-    if(!filtered.length) return '<div class="empty-note">No events for '+label.toLowerCase()+'.</div>';
+    const filtered = applySort(filterBySearch(filterByStatus(evts)));
+    if(!filtered.length) return '<div class="empty-note">No events for '+label.toLowerCase()+(invSearch?' matching "'+pcEsc(invSearch)+'"':'')+'.</div>';
     const tot = filtered.reduce(function(acc,e){
       invoiceSlotsForEvent(e.id).forEach(function(k){
         const iv=invoices[k]; if(!iv) return;
@@ -9839,11 +9874,27 @@ function renderInvoices(){
     return '<button class="btn' + (invView===b.key?' btn--pri':'') + '" onclick="window._invView=\'' + b.key + '\';render()">' + b.label + '</button>';
   }).join('');
 
+  const sortOpts = [
+    ['date_asc','Date (oldest first)'],['date_desc','Date (newest first)'],
+    ['client','Client (A\u2013Z)'],
+    ['amount_desc','Amount (highest first)'],['amount','Amount (lowest first)'],
+    ['balance_desc','Balance (highest first)'],
+    ['status_desc','Status']
+  ];
+  const sortHtml = '<select onchange="window._invSort=this.value;render()" style="padding:7px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit">'
+    + sortOpts.map(function(o){ return '<option value="'+o[0]+'" '+(invSort===o[0]?'selected':'')+'>'+o[1]+'</option>'; }).join('')
+    + '</select>';
+  const searchHtml = '<div style="position:relative"><i class="ti ti-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text3)"></i>'
+    + '<input type="text" value="'+pcEsc(window._invSearch||'')+'" placeholder="Search client, event #, type..." oninput="window._invSearch=this.value;_invSearchDebounced()" style="padding:7px 10px 7px 28px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;width:220px">'
+    + '</div>';
+  const reportsBtnHtml = '<button class="btn" onclick="openInvoiceReports()"><i class="ti ti-report-money" style="font-size:14px;vertical-align:-2px"></i> Reports &amp; statements</button>';
+
   const months2=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const wd = getWeekEndDate(currentWeekOffset);
   const wLabel = 'W/E '+months2[wd.getUTCMonth()]+' '+wd.getUTCDate()+', '+String(wd.getUTCFullYear()).slice(2);
 
-  let h = navReturnBreadcrumb() + '<div class="section-header" style="margin-bottom:.75rem"><div><div class="eyebrow">Sales</div><div class="section-title">Quotes &amp; Invoices</div></div><div class="btn-row">'+viewBtnHtml+'</div></div>';
+  let h = navReturnBreadcrumb() + '<div class="section-header" style="margin-bottom:.5rem"><div><div class="eyebrow">Sales</div><div class="section-title">Quotes &amp; Invoices</div></div><div class="btn-row">'+viewBtnHtml+'</div></div>'
+    + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:.9rem">'+searchHtml+sortHtml+'<div style="flex:1"></div>'+reportsBtnHtml+'</div>';
 
   if(invView==='default'){
     h += buildSection(wLabel, thisWeekEvts);
@@ -9860,6 +9911,171 @@ function renderInvoices(){
 
 
 let activeInvoiceId = null;
+window._reportRows = [];
+
+// ── REPORTS & STATEMENTS ─────────────────────────────────────
+// A filterable, printable view across every invoice/quote in the system —
+// by date range, client, event type, and status — with CSV export and,
+// when exactly one client is selected, a proper statement-of-account
+// printout (running balance) instead of a plain report table.
+function openInvoiceReports(){
+  document.getElementById('invReportsModal')?.remove();
+  const clients = [...new Set(events.map(e=>e.name).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const types = [...new Set(events.map(e=>e.typeLabel||e.type).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const statusOpts = [['','All statuses'],['none','No quote'],['quote','Quote'],['approved','Approved'],['invoice','Invoice open'],['paid','Paid']];
+  const m = document.createElement('div');
+  m.id = 'invReportsModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:1.5rem';
+  m.innerHTML = `
+    <div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.5rem;width:100%;max-width:900px;max-height:92vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.25)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <div style="font-size:17px;font-weight:600;color:var(--text)">Reports &amp; statements</div>
+        <button onclick="document.getElementById('invReportsModal').remove()" style="border:none;background:none;cursor:pointer;font-size:20px;color:var(--text3)">&times;</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:.9rem">
+        <div><label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:3px">From date</label>
+          <input type="date" id="rep-from" style="width:100%;padding:7px 9px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit"></div>
+        <div><label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:3px">To date</label>
+          <input type="date" id="rep-to" style="width:100%;padding:7px 9px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit"></div>
+        <div><label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:3px">Client</label>
+          <select id="rep-client" style="width:100%;padding:7px 9px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit"><option value="">All clients</option>${clients.map(c=>'<option value="'+pcEsc(c)+'">'+pcEsc(c)+'</option>').join('')}</select></div>
+        <div><label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:3px">Event type</label>
+          <select id="rep-type" style="width:100%;padding:7px 9px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit"><option value="">All types</option>${types.map(t=>'<option value="'+pcEsc(t)+'">'+pcEsc(t)+'</option>').join('')}</select></div>
+        <div><label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:3px">Status</label>
+          <select id="rep-status" style="width:100%;padding:7px 9px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit">${statusOpts.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('')}</select></div>
+        <div style="display:flex;align-items:flex-end"><button class="btn btn--pri" onclick="generateInvoiceReport()" style="width:100%"><i class="ti ti-filter" style="font-size:14px;vertical-align:-2px"></i> Generate</button></div>
+      </div>
+      <div id="invReportResults"><div class="empty-note">Set your filters and click Generate.</div></div>
+    </div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', ev=>{ if(ev.target===m) m.remove(); });
+}
+function generateInvoiceReport(){
+  const from = document.getElementById('rep-from')?.value||'';
+  const to = document.getElementById('rep-to')?.value||'';
+  const client = document.getElementById('rep-client')?.value||'';
+  const type = document.getElementById('rep-type')?.value||'';
+  const status = document.getElementById('rep-status')?.value||'';
+
+  let rows = [];
+  events.forEach(e=>{
+    if(from && (e.weekOf||'') < from) return;
+    if(to && (e.weekOf||'') > to) return;
+    if(client && e.name !== client) return;
+    if(type && (e.typeLabel||e.type) !== type) return;
+    const slots = invoiceSlotsForEvent(e.id);
+    const useSlots = slots.length ? slots : [e.id];
+    useSlots.forEach(k=>{
+      const inv = invoices[k];
+      const st = inv ? (inv.status||'none') : 'none';
+      if(status && st !== status) return;
+      if(!status && !inv && slots.length) return; // don't fabricate a row for an event with real slots but no invoice on this one
+      const t = inv ? calcInvoiceTotals(inv) : {grand:0,balance:0};
+      const deposit = inv ? parseFloat(inv.deposit||0) : 0;
+      rows.push({
+        eid:k, job:displayJob(e.job)||e.job||'', client:e.name||'', date:e.weekOf||'',
+        dateDisp:getFullEventDate(e), type:e.typeLabel||e.type||'', status:st,
+        invoiced:t.grand||0, paid:Math.max(0,(t.grand||0)-(t.balance||0)), balance:Math.max(0,t.balance||0)
+      });
+    });
+  });
+  rows.sort((a,b)=> a.date.localeCompare(b.date) || a.client.localeCompare(b.client));
+  window._reportRows = rows;
+  window._reportClientFilter = client;
+
+  const statusLabels = {none:'No quote',quote:'Quote',approved:'Approved',invoice:'Invoice open',paid:'Paid'};
+  const totInv = rows.reduce((s,r)=>s+r.invoiced,0);
+  const totPaid = rows.reduce((s,r)=>s+r.paid,0);
+  const totBal = rows.reduce((s,r)=>s+r.balance,0);
+
+  const el = document.getElementById('invReportResults');
+  if(!el) return;
+  if(!rows.length){ el.innerHTML = '<div class="empty-note">No invoices match those filters.</div>'; return; }
+
+  let runningBal = 0;
+  const isStatement = !!client;
+  const rowsHtml = rows.map(r=>{
+    if(isStatement) runningBal += r.invoiced - r.paid;
+    return '<tr>'
+      + '<td class="shrink"><span class="job-pill">'+pcEsc(r.job)+'</span></td>'
+      + (isStatement?'':'<td>'+pcEsc(r.client)+'</td>')
+      + '<td class="shrink u-nowrap">'+pcEsc(r.dateDisp)+'</td>'
+      + '<td class="shrink">'+pcEsc(r.type)+'</td>'
+      + '<td class="shrink">'+(statusLabels[r.status]||r.status)+'</td>'
+      + '<td class="num shrink">'+(r.invoiced>0?'$'+r.invoiced.toFixed(2):'\u2014')+'</td>'
+      + '<td class="num shrink u-muted">'+(r.paid>0?'$'+r.paid.toFixed(2):'\u2014')+'</td>'
+      + '<td class="num shrink"'+(r.balance>0.01?' style="color:var(--red-solid);font-weight:600"':'')+'>'+(r.balance>0.01?'$'+r.balance.toFixed(2):'\u2014')+'</td>'
+      + (isStatement?'<td class="num shrink" style="font-weight:600">$'+runningBal.toFixed(2)+'</td>':'')
+      + '</tr>';
+  }).join('');
+
+  el.innerHTML = '<div class="tbl-wrap"><table class="tbl">'
+    + '<thead><tr><th>Event</th>'+(isStatement?'':'<th>Client</th>')+'<th>Date</th><th>Type</th><th>Status</th>'
+    + '<th class="num">Invoiced</th><th class="num">Paid</th><th class="num">Balance</th>'+(isStatement?'<th class="num">Running bal.</th>':'')+'</tr></thead>'
+    + '<tbody>'+rowsHtml+'</tbody>'
+    + '<tfoot><tr style="font-weight:700;border-top:1.5px solid var(--border2)"><td'+(isStatement?'':' colspan="2"')+'>'+rows.length+' invoice'+(rows.length===1?'':'s')+'</td><td colspan="2"></td><td></td>'
+    + '<td class="num">$'+totInv.toFixed(2)+'</td><td class="num">$'+totPaid.toFixed(2)+'</td>'
+    + '<td class="num" style="color:'+(totBal>0.01?'var(--red-solid)':'inherit')+'">$'+totBal.toFixed(2)+'</td>'+(isStatement?'<td></td>':'')+'</tr></tfoot>'
+    + '</table></div>'
+    + '<div style="display:flex;gap:8px;margin-top:.9rem;justify-content:flex-end">'
+    + '<button class="btn" onclick="downloadInvoiceReportCsv()"><i class="ti ti-file-spreadsheet" style="font-size:14px;vertical-align:-2px"></i> Download CSV</button>'
+    + '<button class="btn btn--pri" onclick="printInvoiceReport()"><i class="ti ti-printer" style="font-size:14px;vertical-align:-2px"></i> '+(isStatement?'Print statement':'Print report')+'</button>'
+    + '</div>';
+}
+function downloadInvoiceReportCsv(){
+  const rows = window._reportRows||[];
+  if(!rows.length) return;
+  const statusLabels = {none:'No quote',quote:'Quote',approved:'Approved',invoice:'Invoice open',paid:'Paid'};
+  const head = ['Event','Client','Date','Type','Status','Invoiced','Paid','Balance'];
+  const csvRows = [head.join(',')];
+  rows.forEach(r=>{
+    const line = [r.job, r.client, r.date, r.type, statusLabels[r.status]||r.status, r.invoiced.toFixed(2), r.paid.toFixed(2), r.balance.toFixed(2)]
+      .map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',');
+    csvRows.push(line);
+  });
+  const blob = new Blob([csvRows.join('\n')], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'Premier_Caterers_Report_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+}
+function printInvoiceReport(){
+  const rows = window._reportRows||[];
+  if(!rows.length) return;
+  const client = window._reportClientFilter||'';
+  const isStatement = !!client;
+  const statusLabels = {none:'No quote',quote:'Quote',approved:'Approved',invoice:'Invoice open',paid:'Paid'};
+  const th = s => '<th style="padding:6px 8px;border:1px solid #999;background:#f0f0f0;font-size:10px;font-weight:700;text-align:left;white-space:nowrap">'+s+'</th>';
+  const td = (s,bold,right) => '<td style="padding:5px 8px;border:1px solid #ccc;font-size:11px;'+(bold?'font-weight:700;':'')+(right?'text-align:right;':'')+'">'+(s==null||s===''?'&mdash;':s)+'</td>';
+  let runningBal = 0;
+  const bodyRows = rows.map(r=>{
+    if(isStatement) runningBal += r.invoiced - r.paid;
+    return '<tr>'+td(r.job,true)+(isStatement?'':td(r.client))+td(r.dateDisp)+td(r.type)+td(statusLabels[r.status]||r.status)
+      + td(r.invoiced>0?'$'+r.invoiced.toFixed(2):'',false,true)
+      + td(r.paid>0?'$'+r.paid.toFixed(2):'',false,true)
+      + td(r.balance>0.01?'$'+r.balance.toFixed(2):'',false,true)
+      + (isStatement?td('$'+runningBal.toFixed(2),true,true):'')
+      + '</tr>';
+  }).join('');
+  const totInv = rows.reduce((s,r)=>s+r.invoiced,0), totPaid = rows.reduce((s,r)=>s+r.paid,0), totBal = rows.reduce((s,r)=>s+r.balance,0);
+  const cols = ['Event'].concat(isStatement?[]:['Client'],['Date','Type','Status','Invoiced','Paid','Balance'],isStatement?['Running bal.']:[]);
+  const title = isStatement ? ('Statement of Account \u2014 '+client) : 'Invoice Report';
+  const now = new Date();
+  const html = '<!DOCTYPE html><html><head><title>'+title+'</title>'
+    + '<style>body{font-family:Arial,sans-serif;margin:24px}table{border-collapse:collapse;width:100%}</style></head><body>'
+    + '<h2 style="margin:0 0 4px">Premier Caterers</h2>'
+    + '<div style="font-size:14px;color:#555;margin-bottom:14px">'+title+' &middot; generated '+now.toLocaleDateString()+'</div>'
+    + '<table><thead><tr>'+cols.map(th).join('')+'</tr></thead><tbody>'+bodyRows+'</tbody>'
+    + '<tfoot><tr style="font-weight:700">'+td(rows.length+' invoice'+(rows.length===1?'':'s'),true)+(isStatement?'':td(''))+td('')+td('')+td('')
+      + td('$'+totInv.toFixed(2),true,true)+td('$'+totPaid.toFixed(2),true,true)+td('$'+totBal.toFixed(2),true,true)+(isStatement?td(''):'')+'</tr></tfoot>'
+    + '</table>'
+    + (isStatement && totBal>0.01 ? '<div style="margin-top:20px;font-size:14px;font-weight:700;color:#B3261E">Total balance due: $'+totBal.toFixed(2)+'</div>' : '')
+    + '<script>window.onload=function(){window.print();}<\\/script></body></html>';
+  const w = window.open('','_blank','width=1000,height=700');
+  if(w){ w.document.write(html); w.document.close(); }
+}
+
 
 function openInvoice(eid){
   activeInvoiceId = eid;
