@@ -13453,6 +13453,14 @@ function aggregateInvoiceForPortal(evId){
 // export-URL behavior if the relay isn't reachable, so sync never breaks.
 async function _hostedMenuPdfUrl(sourceLink, storagePath){
   if(!sourceLink) return '';
+  // Late recovery: storage can still be unset at this point in the session
+  // even after the app has otherwise loaded (see uploadToStorage's identical
+  // retry) — without this, a hosting attempt here silently no-ops instead of
+  // erroring, which is indistinguishable from success except that the link
+  // never actually gets rehosted.
+  if(!storage && typeof firebase !== 'undefined' && firebase.storage){
+    try { storage = firebase.storage(); } catch(e){ console.error('storage retry failed (menu PDF hosting):', e); }
+  }
   try{
     if(typeof fetchMenuPdfBase64==='function' && typeof _b64ToBytes==='function' && storage){
       const b64 = await fetchMenuPdfBase64(sourceLink);
@@ -13460,6 +13468,12 @@ async function _hostedMenuPdfUrl(sourceLink, storagePath){
       const ref = storage.ref(storagePath);
       const snap = await ref.put(bytes, {contentType:'application/pdf'});
       return await snap.ref.getDownloadURL();
+    } else {
+      console.warn('menu PDF hosting skipped \u2014 missing dependency:', {
+        fetchMenuPdfBase64: typeof fetchMenuPdfBase64,
+        _b64ToBytes: typeof _b64ToBytes,
+        storage: !!storage
+      });
     }
   }catch(err){ console.error('menu PDF hosting failed, falling back to export URL:', err); }
   return (typeof menuPdfUrl==='function' ? menuPdfUrl(sourceLink) : sourceLink);
