@@ -5254,9 +5254,9 @@ async function createMenuFromTemplate(id){
 // Convert a Google Docs/Sheets/Drive link into a PDF export URL (always latest version)
 function menuPdfUrl(link){
   if(!link) return '#';
-  const doc = link.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
-  const sheet = link.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-  const file = link.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  const doc = link.match(/\/document\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
+  const sheet = link.match(/\/spreadsheets\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
+  const file = link.match(/\/file\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
   if(doc)   return `https://docs.google.com/document/d/${doc[1]}/export?format=pdf`;
   if(sheet) return `https://docs.google.com/spreadsheets/d/${sheet[1]}/export?format=pdf`;
   if(file)  return `https://drive.google.com/uc?export=download&id=${file[1]}`;
@@ -14719,7 +14719,7 @@ function driveImgUrl(url){
   if(!url) return '';
   // Handle drive.google.com/file/d/FILE_ID/view or /edit or ?id=FILE_ID
   let id = '';
-  const m1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  const m1 = url.match(/\/file\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
   const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
   const m3 = url.match(/\/open\?id=([a-zA-Z0-9_-]+)/);
   if(m1) id = m1[1];
@@ -14792,9 +14792,9 @@ function createPdfVersion(id){
 
   // Convert Google Drive view/edit link to PDF export link
   let pdfUrl = '';
-  const docMatch = e.menuLink.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
-  const sheetMatch = e.menuLink.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-  const driveMatch = e.menuLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  const docMatch = e.menuLink.match(/\/document\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
+  const sheetMatch = e.menuLink.match(/\/spreadsheets\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
+  const driveMatch = e.menuLink.match(/\/file\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
 
   // Always use export URL so it reflects latest version of the doc
   if(docMatch)        pdfUrl = `https://docs.google.com/document/d/${docMatch[1]}/export?format=pdf`;
@@ -15448,10 +15448,13 @@ async function sendGmailEmail(to, subject, body, htmlBody, attachments, sendAs){
 // as base64 bytes, using the connected Google account's own access. This is what
 // lets us attach a real PDF file so the client never needs Drive permission.
 async function fetchMenuPdfBase64(link){
-  const docM   = link.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
-  const sheetM = link.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-  const slideM = link.match(/\/presentation\/d\/([a-zA-Z0-9_-]+)/);
-  const fileM  = link.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || link.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  // Google inserts an optional /u/0/, /u/1/, etc. segment (which account you're
+  // signed in as) into copied URLs — e.g. .../document/u/0/d/ID/edit. Without
+  // allowing for it here, any link copied that way failed to match at all.
+  const docM   = link.match(/\/document\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
+  const sheetM = link.match(/\/spreadsheets\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
+  const slideM = link.match(/\/presentation\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
+  const fileM  = link.match(/\/file\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/) || link.match(/[?&]id=([a-zA-Z0-9_-]+)/);
   const fileId = (docM&&docM[1]) || (sheetM&&sheetM[1]) || (slideM&&slideM[1]) || (fileM&&fileM[1]);
   if(!fileId) throw new Error('Could not read the menu file ID from the link.');
 
