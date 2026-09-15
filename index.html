@@ -13442,11 +13442,34 @@ function aggregateInvoiceForPortal(evId){
   };
 }
 
-function buildPortalCatererDocs(e){
+// Google's /export?format=pdf trick (menuPdfUrl()) changes the FORMAT but not
+// the ACCESS — a client with no view permission on the underlying Doc is still
+// blocked. This actually fetches the PDF bytes (via the Apps Script relay,
+// which runs under an authenticated identity that already has access) and
+// re-hosts them on Firebase Storage, which is publicly readable with no
+// Google sign-in at all. Uses a stable path so repeat syncs just overwrite
+// the same file rather than piling up copies. Falls back to the old
+// export-URL behavior if the relay isn't reachable, so sync never breaks.
+async function _hostedMenuPdfUrl(sourceLink, storagePath){
+  if(!sourceLink) return '';
+  try{
+    if(typeof fetchMenuPdfBase64==='function' && typeof _b64ToBytes==='function' && storage){
+      const b64 = await fetchMenuPdfBase64(sourceLink);
+      const bytes = _b64ToBytes(b64);
+      const ref = storage.ref(storagePath);
+      const snap = await ref.put(bytes, {contentType:'application/pdf'});
+      return await snap.ref.getDownloadURL();
+    }
+  }catch(err){ console.error('menu PDF hosting failed, falling back to export URL:', err); }
+  return (typeof menuPdfUrl==='function' ? menuPdfUrl(sourceLink) : sourceLink);
+}
+
+async function buildPortalCatererDocs(e){
   const docs = {};
   const menuRaw = e.menuLink || e.pdfMenuLink || '';
   if(menuRaw){
-    docs.menuPdf = { name:'Menu (PDF)', url: (typeof menuPdfUrl==='function' ? menuPdfUrl(menuRaw) : menuRaw) };
+    const url = await _hostedMenuPdfUrl(menuRaw, 'events/'+e.id+'/menu_portal.pdf');
+    docs.menuPdf = { name:'Menu (PDF)', url };
   }
   try{
     const c = (typeof contracts!=='undefined') ? contracts[e.id] : null;
@@ -13493,7 +13516,7 @@ async function syncClientPortal(eid, opts){
   if(!p) return false;
 
   const inv = aggregateInvoiceForPortal(eid);
-  const catererDocuments = buildPortalCatererDocs(e);
+  const catererDocuments = await buildPortalCatererDocs(e);
 
   const patch = {
     eventName: e.name || p.eventName || '',
@@ -13608,7 +13631,7 @@ function _findPortalIdForInquiry(inqId){
   return hit || null;
 }
 
-function _buildInquiryCatererDocs(inq){
+async function _buildInquiryCatererDocs(inq){
   const docs = {};
   // Menus live in inq.menus[] (current format, supports multiple named menus);
   // inq.menuLink / pdfMenuLink are the legacy single-link fallback. Checking
@@ -13616,16 +13639,19 @@ function _buildInquiryCatererDocs(inq){
   // never made it to the client portal at all.
   const menuList = [];
   if(Array.isArray(inq.menus) && inq.menus.length){
-    inq.menus.forEach(function(m){
+    for(let i=0;i<inq.menus.length;i++){
+      const m = inq.menus[i];
       if(m && m.url){
-        menuList.push({ name: m.name || 'Menu (PDF)', url: (typeof menuPdfUrl==='function' ? menuPdfUrl(m.url) : m.url) });
+        const url = await _hostedMenuPdfUrl(m.url, 'inquiries/'+inq.id+'/menu_portal_'+i+'.pdf');
+        menuList.push({ name: m.name || 'Menu (PDF)', url });
       }
-    });
+    }
   }
   if(!menuList.length){
     const menuRaw = inq.menuLink || inq.pdfMenuLink || (inq.estimate && inq.estimate.menuLink) || '';
     if(menuRaw){
-      menuList.push({ name:'Menu (PDF)', url: (typeof menuPdfUrl==='function' ? menuPdfUrl(menuRaw) : menuRaw) });
+      const url = await _hostedMenuPdfUrl(menuRaw, 'inquiries/'+inq.id+'/menu_portal.pdf');
+      menuList.push({ name:'Menu (PDF)', url });
     }
   }
   if(menuList.length){
@@ -13739,7 +13765,7 @@ async function createInquiryPortal(inqId, opts){
     eventDate: f.eventDate,
     venue: f.venue,
     stage: 'prospect',
-    catererDocuments: _buildInquiryCatererDocs(inq),
+    catererDocuments: await _buildInquiryCatererDocs(inq),
     invoiceSnapshot: est,
     depositAmount: est.depositAmount || 0,
     depositPaid: false,
@@ -13792,7 +13818,7 @@ async function syncProspectPortal(inqId){
       venue: f.venue,
       invoiceSnapshot: est,
       depositAmount: est.depositAmount || 0,
-      catererDocuments: _buildInquiryCatererDocs(inq)
+      catererDocuments: await _buildInquiryCatererDocs(inq)
     };
     await clientPortalsCol.doc(portalId).update(patch);
     clientPortals[portalId] = Object.assign({}, existing, patch);
@@ -13818,7 +13844,7 @@ async function createClientPortal(eid){
     eventType: e.typeLabel || '',
     eventDate: e.dayLabel || '',
     venue: e.addr || '',
-    catererDocuments: buildPortalCatererDocs(e),
+    catererDocuments: await buildPortalCatererDocs(e),
     invoiceSnapshot: inv || { number:'', total:0, paid:0, items:[] },
     depositAmount: (inv && inv.depositAmount) || 0,
     depositPaid: false,
