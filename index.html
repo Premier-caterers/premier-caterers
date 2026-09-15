@@ -13361,6 +13361,7 @@ function clientPortalHubCard(inq, ev, role){
       return `<div style="font-size:12px;color:var(--text2);margin-bottom:8px">${unread?'<span style="background:var(--red-solid);color:#fff;font-size:10px;font-weight:600;padding:1px 8px;border-radius:10px;margin-right:6px">unanswered</span>':''}Prospect portal is live (pre-booking).</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button onclick="openInquiryPortal('${inq.id}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--blue-border);border-radius:7px;background:var(--blue-bg);color:var(--blue-text);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-external-link" style="font-size:13px"></i>Open portal</button>
+          <button onclick="syncProspectPortal('${inq.id}',{manual:true})" title="Push the latest menu &amp; estimate to the client" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-refresh" style="font-size:13px"></i>Sync now</button>
           <button onclick="copyPortalLink('${purl.replace(/'/g,"&#39;")}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-copy" style="font-size:13px"></i>Copy link</button>
           <button onclick="toggleStaffPortalForm('inq_${inq.id}','${existing.token||''}')" style="font-size:12px;padding:6px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-edit" style="font-size:13px"></i>Edit details</button>
         </div>`;
@@ -13800,7 +13801,8 @@ async function createInquiryPortal(inqId, opts){
 // pre-booking stage. Once the client is actually booked, syncPortalInvoiceOnly
 // takes over and this becomes a no-op, so real invoice data is never
 // overwritten with stale quote data.
-async function syncProspectPortal(inqId){
+async function syncProspectPortal(inqId, opts){
+  opts = opts || {};
   try{
     const inq = inquiries.find(x=>x.id===inqId);
     if(!inq) return;
@@ -13822,8 +13824,10 @@ async function syncProspectPortal(inqId){
     };
     await clientPortalsCol.doc(portalId).update(patch);
     clientPortals[portalId] = Object.assign({}, existing, patch);
+    if(opts.manual){ try{ showToast('Portal synced \u2713'); }catch(_){} render(); }
   }catch(err){
     console.warn('syncProspectPortal failed:', err);
+    if(opts.manual) alert('Sync failed \u2014 please check your connection and try again.');
   }
 }
 async function createClientPortal(eid){
