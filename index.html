@@ -2738,6 +2738,7 @@ async function coverCommitRow(ri){
     if(!confirm(msg)) return;
 
     const wi = weekInfoFromDate(weekDate.toISOString().split('T')[0]) || {};
+    const _fridayDate = new Date(weekDate.getTime() - 2*24*60*60*1000).toISOString().split('T')[0]; // Fri = week-ending Sunday minus 2 days
     const newEvent = {
       id: 'ev_' + Date.now(),
       job: fullJob,
@@ -2745,6 +2746,7 @@ async function coverCommitRow(ri){
       name: row.name,
       type: 'other', typeLabel: row.typeLabel||'',
       day: 'friday', dayLabel: row.dayLabel||'',
+      eventDate: _fridayDate,
       addr: row.addr||'',
       weekOf: weekStr,
       waiters: parseInt(row.waiters)||0, waiterTime: row.waiterTime||'',
@@ -6707,6 +6709,7 @@ function createEventFromInquiry(inq){
     // Update key fields but keep any staffing/edits already made
     existing.weekOf = wi.weekOf || existing.weekOf;
     existing.day = wi.day || existing.day;
+    existing.eventDate = inq.eventDate || existing.eventDate;
     existing.dayLabel = dayLabel || existing.dayLabel;
     existing.type = type; existing.typeLabel = inq.eventType || typeLabelMap[type] || 'Event';
     existing.name = clientPrimary(inq) || existing.name;
@@ -6750,6 +6753,7 @@ function createEventFromInquiry(inq){
     email: inq.email||'', phone: inq.phone||'',
     type, typeLabel: inq.eventType || typeLabelMap[type] || 'Event',
     day: wi.day || 'friday', dayLabel,
+    eventDate: inq.eventDate || '',
     weekOf: wi.weekOf || '',
     waiters:0, waiterNames:'', waiterTime:'-', waiterTime2:'',
     bartenders:0, bartenderNames:'', bartenderTime:'', bartenderTime2:'',
@@ -6868,6 +6872,7 @@ function repeatEventCreate(eventId){
     addr: src.addr || '', email: src.email||'', phone: src.phone||'',
     type: src.type, typeLabel: src.typeLabel,
     day: wi.day, dayLabel,
+    eventDate: targetDateStr,
     weekOf: wi.weekOf || '',
     waiters: src.waiters||0, waiterNames: src.waiterNames||'', waiterTime: src.waiterTime||'-', waiterTime2: src.waiterTime2||'',
     bartenders: src.bartenders||0, bartenderNames: src.bartenderNames||'', bartenderTime: src.bartenderTime||'', bartenderTime2: src.bartenderTime2||'',
