@@ -2450,6 +2450,10 @@ function closeMobileNav(){
   if(ov) ov.classList.remove('open');
 }
 function showView(v){
+  if(activeInvoiceId && window._invoiceDirty && window._invoiceDirty[activeInvoiceId]){
+    if(!confirm('You have unsaved changes on the open invoice. Leave without saving?')) return;
+    window._invoiceDirty[activeInvoiceId] = false;
+  }
   closeMobileNav();
   /* ---- access control (added) ---- */
   if(!authUser){ showLogin(); return; }
@@ -10129,6 +10133,10 @@ function openInvoice(eid){
 }
 
 function closeInvoiceDetail(){
+  if(activeInvoiceId && window._invoiceDirty && window._invoiceDirty[activeInvoiceId]){
+    if(!confirm('You have unsaved changes on this invoice. Leave without saving?')) return;
+    window._invoiceDirty[activeInvoiceId] = false;
+  }
   activeInvoiceId = null;
   render(); // returns to the invoice list
 }
@@ -10138,7 +10146,7 @@ function unlockInvoiceEdit(eid){
   const inv = invoices[eid];
   if(!inv) return;
   const statusLabel = inv.status==='paid' ? 'paid in full' : 'already been sent to the client';
-  if(!confirm('This invoice has been '+statusLabel+'.\n\nAre you sure you want to edit it? All changes save immediately.\n\nClick OK to unlock editing.')) return;
+  if(!confirm('This invoice has been '+statusLabel+'.\n\nAre you sure you want to edit it? Line item changes only save once you click Save '+(inv.status==='invoice'?'invoice':'quote')+' below \u2014 the deposit field saves right away.\n\nClick OK to unlock editing.')) return;
   inv._editOverride = true;
   renderInvoiceDetail();
 }
@@ -10326,7 +10334,7 @@ function renderInvoiceDetail(scrollToView){
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
           <span style="color:var(--text2)">Deposit paid</span>
-          ${canEdit?`<input type="number" value="${inv.deposit||0}" min="0" step="0.01" oninput="updateDeposit('${eid}',this.value)" class="field field--sm field--num" style="width:120px">`:('$'+parseFloat(inv.deposit||0).toFixed(2))}
+          ${canEdit?`<input type="number" value="${inv.deposit||0}" min="0" step="0.01" onchange="updateDeposit('${eid}',this.value)" class="field field--sm field--num" style="width:120px">`:('$'+parseFloat(inv.deposit||0).toFixed(2))}
         </div>
         <div style="display:flex;justify-content:space-between;padding:10px 0;font-size:15px;font-weight:600;color:${tots.balance<=0?'var(--green-text)':'var(--crimson,var(--maroon))'}">
           <span>Balance due</span>
@@ -10413,6 +10421,7 @@ function updateInvoiceLine(eid,idx,field,val){
   if(!invoices[eid]) return;
   invoices[eid].lines[idx][field] = field==='description' ? val : parseFloat(val)||0;
   if(field==='qty'||field==='price') refreshInvoiceMath(eid);
+  window._invoiceDirty = window._invoiceDirty || {}; window._invoiceDirty[eid] = true;
   // description needs no re-render at all — the input already shows what was typed.
 }
 
@@ -10424,15 +10433,38 @@ function toggleInvoiceLineFlag(eid,idx,flag){
   renderInvoiceDetail();
 }
 
-function updateDeposit(eid,val){
+async function updateDeposit(eid,val){
   if(!invoices[eid]) return;
-  invoices[eid].deposit = parseFloat(val)||0;
+  const inv = invoices[eid];
+  const newVal = parseFloat(val)||0;
+  const prevVal = parseFloat(inv.deposit||0);
+  const delta = newVal - prevVal;
+  inv.deposit = newVal;
+  // Log the change as a payment-history entry too, so the record of who paid
+  // what and when stays complete even when this quick field is used instead
+  // of the formal "Record payment" flow — and save right away rather than
+  // waiting for the separate Save button, since a deposit edit is exactly the
+  // kind of change that shouldn't be at risk of being lost if forgotten.
+  if(Math.abs(delta) >= 0.01){
+    ensurePaymentsArray(inv);
+    inv.payments.push({
+      id: _uid(),
+      date: new Date().toISOString().split('T')[0],
+      amount: delta,
+      method: 'Manual adjustment',
+      checkNumber: '',
+      note: 'Deposit field edited directly (was $'+prevVal.toFixed(2)+', now $'+newVal.toFixed(2)+')',
+      recordedAt: Date.now()
+    });
+  }
   refreshInvoiceMath(eid);
+  await _saveInvoice(eid, inv);
 }
 
 function updateInvoiceNotes(eid,val){
   if(!invoices[eid]) return;
   invoices[eid].notes = val;
+  window._invoiceDirty = window._invoiceDirty || {}; window._invoiceDirty[eid] = true;
 }
 
 
@@ -10680,6 +10712,7 @@ async function saveMenuAttach(eid){
 async function saveInvoiceNow(eid){
   if(!invoices[eid]) return;
   await _saveInvoice(eid, invoices[eid]);
+  if(window._invoiceDirty) window._invoiceDirty[eid] = false;
   showToast('Saved ✓');
 }
 
@@ -12241,7 +12274,23 @@ function _healContractTerms(){
     });
   }catch(err){ console.error('heal contract terms:',err); }
 }
-function _contractToken(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,10); }
+// Cryptographically random — this token is the ONLY thing standing between a
+// public, unauthenticated signing link and someone else's contract, so it
+// needs real randomness. The old version (timestamp + Math.random()) had a
+// predictable prefix and a comparatively small random tail; this is a proper
+// 128-bit random token. Existing contracts already holding an old-style token
+// keep working (this only ever fires for a contract that doesn't have one yet).
+function _contractToken(){
+  try{
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }catch(e){
+    // Extremely old browser without crypto.getRandomValues — fall back rather
+    // than leave the contract with no token at all.
+    return Date.now().toString(36)+Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,10);
+  }
+}
 function _ensureContract(eid, ev, inq){
   inq=inq||{};
   let c=contracts[eid];
@@ -13130,7 +13179,7 @@ function renderEquipment() {
   const all = events;
   let h = navReturnBreadcrumb() + `
   <div class="section-header">
-    <div class="section-title">Equipment — W/E Jun 7</div>
+    <div class="section-title">Equipment</div>
   </div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-bottom:1.25rem">
     ${all.map(e => {
@@ -13604,7 +13653,14 @@ async function removeNotifyContact(idx){
 const PORTAL_BASE_URL = 'https://premier-caterers.github.io/premier-caterers/portal.html';
 
 function _genPortalToken(){
-  return Array.from({length:24}, ()=> 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random()*36)]).join('');
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  try{
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b=>alphabet[b % alphabet.length]).join('');
+  }catch(e){
+    return Array.from({length:24}, ()=> alphabet[Math.floor(Math.random()*36)]).join('');
+  }
 }
 
 function clientPortalHubCard(inq, ev, role){
