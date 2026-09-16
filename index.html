@@ -4262,8 +4262,22 @@ function drawerDocuments(inq, role, ev){
     ${_docGroup('Documents', docs)}
     ${_docGroup('Floor plans', floor)}
     ${_docGroup('Uploaded files', files)}
+    ${insuranceCompanyLinks_()}
     ${_docGroup('After the event', after)}
     ${clientUploadsBlock(ev)}`;
+}
+
+// Quick access to the insurance carriers themselves (to pull a fresh
+// certificate of insurance), separate from the per-event Insurance upload
+// button just above — same for every event, so it's not event-specific data.
+function insuranceCompanyLinks_(){
+  return `<div style="margin:2px 0 14px;padding:10px 12px;background:var(--bg2);border:0.5px solid var(--border);border-radius:8px;font-size:12px;line-height:1.7;color:var(--text2)">
+    <div style="font-weight:600;color:var(--text3);text-transform:uppercase;font-size:10px;letter-spacing:.05em;margin-bottom:5px">Insurance company access</div>
+    <div><b style="color:var(--text)">Liability (Hiscox)</b> — <a href="https://www.hiscox.com/manage-your-policy/get-certificate-of-insurance" target="_blank" style="color:var(--blue-text)">Get certificate of insurance</a><br>
+    Policy P101.137.852.4 &middot; premier.caterers@yahoo.com</div>
+    <div style="margin-top:7px"><b style="color:var(--text)">Workman's comp (Employers)</b> — <a href="https://www.employers.com" target="_blank" style="color:var(--blue-text)">employers.com</a><br>
+    premier.caterers@yahoo.com / Employers2016!</div>
+  </div>`;
 }
 
 function drawerStaffDetails(inq, ev, role){
