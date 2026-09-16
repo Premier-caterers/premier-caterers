@@ -3214,11 +3214,11 @@ window._ewDayCollapsed = window._ewDayCollapsed || {};   // {day: true} collapse
 window._ewCardCollapsed = window._ewCardCollapsed || {}; // {eventId: true|false} explicit per-card override
 function ewCardCompact(e){
   if(e.id in window._ewCardCollapsed) return window._ewCardCollapsed[e.id];
-  return !!window._ewDayCollapsed[e.day];
+  return !!window._ewDayCollapsed[eventDayOfWeek(e)];
 }
 function toggleEwDay(day){
   window._ewDayCollapsed[day] = !window._ewDayCollapsed[day];
-  events.forEach(e=>{ if(e.day===day) delete window._ewCardCollapsed[e.id]; });
+  events.forEach(e=>{ if(eventDayOfWeek(e)===day) delete window._ewCardCollapsed[e.id]; });
   render();
 }
 function toggleEwCard(eid){
@@ -3329,9 +3329,9 @@ function renderEvents(){
       </div>
     </div>`;
   }
-  const filtered = activeDay==='all' ? weekEvents : weekEvents.filter(e=>e.day===activeDay);
+  const filtered = activeDay==='all' ? weekEvents : weekEvents.filter(e=>eventDayOfWeek(e)===activeDay);
   const byDay={};
-  filtered.forEach(e=>{ if(!byDay[e.day]) byDay[e.day]=[]; byDay[e.day].push(e); });
+  filtered.forEach(e=>{ const dk=eventDayOfWeek(e); if(!byDay[dk]) byDay[dk]=[]; byDay[dk].push(e); });
 
   let h=`
   ${(()=>{
@@ -6143,10 +6143,33 @@ window.submitActivityNote= submitActivityNote;
 window.loadClientEmails  = loadClientEmails;
 
 
+// Canonical day-of-week for an event — always derived from eventDate when
+// present, rather than trusting the separately-stored, manually-edited `day`
+// field. That field is set from its own dropdown in the edit form, fully
+// independent of the actual date — if someone corrects an event's date
+// without also remembering to update the Day dropdown, the two silently
+// drift apart (a real date paired with the wrong weekday name, and events
+// grouped/filed under the wrong day). Falls back to the stored field only
+// when there's no eventDate to compute from.
+function eventDayOfWeek(e){
+  if(e && e.eventDate){
+    const parts = e.eventDate.split('-');
+    if(parts.length===3){
+      const y=parseInt(parts[0],10), mo=parseInt(parts[1],10), da=parseInt(parts[2],10);
+      const dt = new Date(Date.UTC(y, mo-1, da));
+      if(!isNaN(dt.getTime())){
+        const names=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+        return names[dt.getUTCDay()];
+      }
+    }
+  }
+  return (e && e.day) || '';
+}
+
 function formatEventDay(e){
   // Always return "Day M/D" e.g. "Mon 6/9"
   const dayShort = {monday:'Mon',tuesday:'Tue',wednesday:'Wed',thursday:'Thu',friday:'Fri',saturday:'Sat',sunday:'Sun'};
-  const d = dayShort[(e.day||'').toLowerCase()] || '';
+  const d = dayShort[eventDayOfWeek(e).toLowerCase()] || '';
   if(e.eventDate){
     const parts = e.eventDate.split('-');
     if(parts.length===3) return (d?d+' ':'') + parseInt(parts[1])+'/'+parseInt(parts[2]);
@@ -8188,7 +8211,7 @@ function checklistCardHtml(e){
           + (item.dueOption==='custom'
             ? '<input type="date" value="'+(item.customDue||'')+'" onchange="setCustomDue(\''+eid+'\','+idx+',this.value)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:3px 5px;font-size:11px;color:var(--text);font-family:inherit">'
             : item.dueOption
-              ? '<span style="color:var(--blue-text);font-weight:600;font-size:12px">'+calcDueDate(e.day, parseInt(item.dueOption))+'</span><button onclick="setDueOption(\''+eid+'\','+idx+',\'\')" class="btn btn--ghost btn--sm">change</button>'
+              ? '<span style="color:var(--blue-text);font-weight:600;font-size:12px">'+calcDueDate(e, parseInt(item.dueOption))+'</span><button onclick="setDueOption(\''+eid+'\','+idx+',\'\')" class="btn btn--ghost btn--sm">change</button>'
               : '<select onchange="setDueOption(\''+eid+'\','+idx+',this.value)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:3px 5px;font-size:11px;color:var(--text);font-family:inherit"><option value="">Set due...</option><option value="30">1 month before</option><option value="14">2 weeks before</option><option value="7">1 week before</option><option value="5">5 days before</option><option value="2">48 hrs before</option><option value="1">24 hrs before</option><option value="custom">Custom...</option></select>')
         + '</div>'
         // Reminder
@@ -11905,7 +11928,7 @@ async function buildPacketPdfBytes(eventId, opts){
     items.forEach(it=>{
       const isDone = it.done!==undefined ? !!it.done : !!(it.assignees && it.assignees.some(a=>a.done));
       const people = (it.assignees||[]).map(a=> a.person==='Other' ? (a.otherName||'Other') : a.person).filter(Boolean).join(', ');
-      const due = it.dueOption==='custom' ? (it.customDue||'') : (it.dueOption ? calcDueDate(e.day, parseInt(it.dueOption)) : '');
+      const due = it.dueOption==='custom' ? (it.customDue||'') : (it.dueOption ? calcDueDate(e, parseInt(it.dueOption)) : '');
       const metaBits = [people, due?('Due '+due):'', it.notes||''].filter(Boolean);
       fB(11);
       const taskLines = doc.splitTextToSize(it.text, colW-26);
