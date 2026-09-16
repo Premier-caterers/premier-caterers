@@ -2260,8 +2260,13 @@ const access = {
   // multiple people, so it doesn't get one.
   kitchen: ALL_SECTIONS.filter(s=>!['reports','trash','settings','email','invoices','myday','followups'].includes(s)),
 };
-const OWNER_HASH   = 'd4ae28692a6a51cd93378a6ae5d3c004920edfaaa688e4dbeefb8cbe4730dcae'; // 736868
-const DEFAULT_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4'; // 1234
+// SHA-256 hash of the Settings unlock password. Deliberately no plaintext
+// comment here — the previous version had one, and since this file has been
+// live on GitHub, that password should be treated as already exposed to
+// anyone who viewed the raw source or opened dev tools. Changing this value
+// requires computing a fresh SHA-256 hash of the new password (not typing
+// the password directly), so the plaintext never sits in the file again.
+const OWNER_HASH   = 'b7bf192de33d190cf5b324da9947e5402e0467684060c18eeee73671f95cdd1c';
 let authUser = null;            // 'owner' | 'shelley' | 'josh' | 'kitchen'
 let settingsUnlocked = false;
 
