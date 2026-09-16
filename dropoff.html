@@ -57,6 +57,9 @@ a{color:var(--maroon);text-decoration:none}
 
 /* item grid */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.pick-section-prompt{grid-column:1/-1;text-align:center;padding:50px 20px;color:var(--text2);font-size:14px;font-weight:600}
+.pick-section-arrow{font-size:30px;color:var(--maroon);animation:pickBounce 1.1s ease-in-out infinite}
+@keyframes pickBounce{0%,100%{transform:translateY(0);opacity:1}50%{transform:translateY(-8px);opacity:.45}}
 .card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;display:flex;flex-direction:column;gap:8px}
 .card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .card-name{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:15.5px;line-height:1.3}
@@ -351,6 +354,7 @@ let catLoaded = false;
 
 let searchQuery = '';
 let activeCat = null;      // single-select category filter — clicking a new one replaces the old
+let hasChosenCategory = false; // once true, stays true for the session — the "pick a section" prompt never comes back
 // cart: keyed "itemId::sizeIdx" -> qty
 let cart = {};
 let itemNotes = {};        // keyed itemId -> note text
@@ -400,9 +404,10 @@ function allCategories(){
   catalog.forEach(it=> (it.categories||[]).forEach(c=>set.add(c)) );
   return Array.from(set).sort();
 }
-function onSearchInput(v){ searchQuery = v; renderItemGrid(); }
+function onSearchInput(v){ searchQuery = v; if(v.trim()) hasChosenCategory = true; renderItemGrid(); }
 function toggleCat(cat){
   activeCat = (activeCat === cat) ? null : cat;
+  hasChosenCategory = true;
   renderItemGrid();
 }
 function renderCatChips(){
@@ -423,6 +428,15 @@ function filteredItems(){
 function cartKey(itemId, sizeIdx){ return itemId+'::'+sizeIdx; }
 function renderItemGrid(){
   renderCatChips();
+  if(!hasChosenCategory){
+    document.getElementById('itemEmpty').style.display = 'none';
+    document.getElementById('itemGrid').innerHTML = `<div class="pick-section-prompt">
+      <div class="pick-section-arrow">&#8593;</div>
+      <div>Choose a section above to see its items</div>
+    </div>`;
+    updateCartBar();
+    return;
+  }
   const items = filteredItems();
   const grid = document.getElementById('itemGrid');
   document.getElementById('itemEmpty').style.display = items.length ? 'none' : '';
@@ -925,6 +939,7 @@ async function reorderFrom(orderId){
       cart[cartKey(item.id, sizeIdx)] = l.qty;
       if(l.note) itemNotes[item.id] = l.note;
     });
+    hasChosenCategory = true; // reordering is itself an intentional action — don't hide the items they just added behind the empty-state prompt
     showView('order');
     showToast('Items added — review quantities before checking out');
   }catch(e){ console.error(e); }
@@ -1063,70 +1078,74 @@ function renderStaffOrders(){
 // day to day). Adds the order's items onto that event's invoice as new
 // line items and removes the standalone inquiry this order had created.
 //
-// Job numbers (like "#14") reset every week, so the same number exists in
-// many different weeks over a year — matching on the number alone could
-// silently grab the wrong week's event. Since the order already carries its
-// own delivery date, that's used to find the SAME week's #14 specifically.
-// If that still turns up more than one candidate (e.g. the delivery date
-// doesn't land where expected), every match is listed with its own date so
-// staff pick the right one deliberately instead of it being guessed.
+// Events are identified by an "eventNumber" field in the format
+// YY-MMDD-NN, where MMDD is the week-ending Sunday and NN is the
+// zero-padded sequence within that week (e.g. "26-1122-04" — confirmed
+// directly against a real Firestore document, not guessed). Since the
+// order already carries its own delivery date, that's used to compute
+// the matching week and build the exact eventNumber to look up — so
+// entering "4" finds the SAME week's event, not just any #4 ever created.
+// If that exact match doesn't turn anything up (e.g. the delivery date
+// doesn't land where expected), every event ending in that same sequence
+// number is listed with its own date so staff pick the right one
+// deliberately instead of it being guessed.
 function weekEndingSunday(dateStr){
   const parts = String(dateStr||'').split('-').map(Number);
   if(parts.length!==3 || !parts[0]) return null;
   const dt = new Date(Date.UTC(parts[0], parts[1]-1, parts[2]));
   const day = dt.getUTCDay(); // 0 = Sunday
   dt.setUTCDate(dt.getUTCDate() + (day===0 ? 0 : (7-day)));
-  return dt.getUTCFullYear()+'-'+String(dt.getUTCMonth()+1).padStart(2,'0')+'-'+String(dt.getUTCDate()).padStart(2,'0');
+  return {yy:String(dt.getUTCFullYear()).slice(-2), mm:String(dt.getUTCMonth()+1).padStart(2,'0'), dd:String(dt.getUTCDate()).padStart(2,'0')};
 }
 async function promptLinkOrder(orderId){
   const jobNum = prompt('Enter the job number of the existing event this order belongs to (e.g. 14 or #14):');
   if(!jobNum) return;
   const clean = jobNum.replace('#','').trim();
-  // Job numbers might be stored with or without a leading zero (e.g. "#4"
-  // vs "#04") depending on how that event was created — rather than guess
-  // one exact format, every plausible variant is checked at once.
-  const numeric = parseInt(clean,10);
-  const variants = new Set([clean, '0'+clean]);
-  if(!isNaN(numeric)) variants.add(String(numeric));
-  const jobVals = Array.from(variants).map(v=>'#'+v);
-  const jobVal = jobVals[0]; // for display only
+  const paddedSeq = clean.padStart(2,'0');
   try{
     const orderDoc = await ordersCol.doc(orderId).get();
     const order = orderDoc.data();
-    const targetWeek = weekEndingSunday(order.deliveryDate);
+    const wk = weekEndingSunday(order.deliveryDate);
 
     let candidates = [];
-    if(targetWeek){
-      const preciseSnap = await db.collection('events').where('job','in',jobVals).where('weekOf','==',targetWeek).get();
+    let exactEventNumber = null;
+    if(wk){
+      exactEventNumber = wk.yy+'-'+wk.mm+wk.dd+'-'+paddedSeq;
+      const preciseSnap = await db.collection('events').where('eventNumber','==',exactEventNumber).get();
       preciseSnap.forEach(d=> candidates.push(d));
     }
     if(!candidates.length){
-      // Fall back to every event with this job number, across all weeks —
-      // this only runs when the delivery-date match found nothing, so it's
-      // the safety net, not the normal path.
-      const broadSnap = await db.collection('events').where('job','in',jobVals).get();
-      broadSnap.forEach(d=> candidates.push(d));
+      // Fall back to every event whose number ends in this same sequence,
+      // across all weeks — this only runs when the delivery-date match
+      // found nothing, so it's the safety net, not the normal path.
+      const broadSnap = await db.collection('events').get();
+      const suffixRe = new RegExp('-'+paddedSeq+'[a-z]?$', 'i');
+      broadSnap.forEach(d=>{ if(suffixRe.test(d.data().eventNumber||'')) candidates.push(d); });
     }
-    if(!candidates.length){ alert('No event found with job '+jobVal+' (checked with and without a leading zero). Double check the number.'); return; }
+    if(!candidates.length){
+      alert('No event found with job #'+clean+(exactEventNumber?(' (looked for event number '+exactEventNumber+')'):'')+'. Double check the number.');
+      return;
+    }
 
     let eventDoc;
     if(candidates.length===1){
       eventDoc = candidates[0];
     } else {
-      // More than one #14 exists across different weeks and the delivery
-      // date didn't pin down a single one — list them all so this is a
-      // deliberate pick, not a guess.
+      // More than one event ends in this sequence number across different
+      // weeks and the delivery date didn't pin down a single one — list
+      // them all so this is a deliberate pick, not a guess.
       const lines = candidates.map((d,i)=>{
         const ev = d.data();
-        return (i+1)+') '+jobVal+' — '+(ev.eventDate||ev.weekOf||'no date')+' — '+(ev.name||ev.eventName||'(no name)');
+        return (i+1)+') '+(ev.eventNumber||'#'+clean)+' — '+(ev.eventDate||'no date')+' — '+(ev.name||ev.eventName||'(no name)');
       });
-      const pick = prompt('Found '+candidates.length+' events with job '+jobVal+' — which one? Type the number:\n\n'+lines.join('\n'));
+      const pick = prompt('Found '+candidates.length+' events matching #'+clean+' — which one? Type the number:\n\n'+lines.join('\n'));
       const idx = parseInt(pick,10)-1;
       if(!(idx>=0 && idx<candidates.length)){ alert('Cancelled — no valid selection made.'); return; }
       eventDoc = candidates[idx];
     }
 
     const eventId = eventDoc.id;
+    const linkedNumber = eventDoc.data().eventNumber || ('#'+clean);
     const invRef = db.collection('invoices').doc(eventId);
     const invDoc = await invRef.get();
     const newLines = order.lines.map(l=>({
@@ -1143,7 +1162,7 @@ async function promptLinkOrder(orderId){
       await db.collection('inquiries').doc(order.linkedInquiryId).delete().catch(()=>{});
     }
     await ordersCol.doc(orderId).set({linkedEventId:eventId, linkedInquiryId:null}, {merge:true});
-    showToast('Linked to '+jobVal+' — items added to that invoice');
+    showToast('Linked to '+linkedNumber+' — items added to that invoice');
   }catch(e){ console.error(e); alert('Something went wrong linking this order.'); }
 }
 
