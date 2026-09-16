@@ -183,6 +183,20 @@ a{color:var(--maroon);text-decoration:none}
       <div class="field"><label for="coCEmail">Email</label><input id="coCEmail" type="email" placeholder="name@email.com" oninput="onCheckoutEmailInput()"></div>
     </div>
     <div class="section">
+      <div class="section-title">Payment</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:4px" id="paymentChoices"></div>
+      <div id="zelleInfoBox" style="display:none;margin-top:10px;padding:12px 14px;background:var(--bg3);border-radius:9px;font-size:13px">
+        <b>Zelle</b><br>201-250-9487 &nbsp;or&nbsp; premier.caterers@yahoo.com<br>
+        <span style="color:var(--text3);font-size:12px">Please check with us which to use.</span>
+      </div>
+      <div id="ccFeeNote" style="display:none;margin-top:10px;font-size:12.5px;color:var(--text2)">A 3.4% credit card processing fee will be added to your total.</div>
+    </div>
+    <div class="section">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="coTaxExempt" onchange="renderCheckoutRecap()" style="width:16px;height:16px"> Tax exempt
+      </label>
+    </div>
+    <div class="section">
       <div class="field"><label for="coNotes">Notes for the kitchen (optional)</label><textarea id="coNotes" rows="3" placeholder="Allergies, gate codes, anything we should know..."></textarea></div>
     </div>
     <div class="lg-err" id="checkoutErr"></div>
@@ -218,6 +232,52 @@ a{color:var(--maroon);text-decoration:none}
       <div class="search"><i class="ti ti-search"></i><input type="text" id="staffOrderSearch" placeholder="Search by client name or email..." oninput="renderStaffOrders()"></div>
     </div>
     <div style="overflow-x:auto"><table class="tbl" id="staffOrdersTbl"></table></div>
+  </div>
+
+  <!-- ============ STAFF: EDIT ORDER ============ -->
+  <div class="view" id="view-editOrder">
+    <div style="margin-bottom:16px"><a href="#" onclick="showView('staffOrders');return false"><i class="ti ti-arrow-left"></i> Back to all orders</a></div>
+    <div id="editOrderLinkedNote"></div>
+    <div class="section">
+      <div class="section-title">Client &amp; delivery info</div>
+      <div class="grid2" style="margin-bottom:14px">
+        <div class="field"><label for="eoName">Name / occasion</label><input id="eoName" type="text"></div>
+        <div class="field"><label for="eoLoc">Location name</label><input id="eoLoc" type="text"></div>
+        <div class="field"><label for="eoDate">Delivery date</label><input id="eoDate" type="date"></div>
+        <div class="field"><label for="eoTime">Delivery time</label><input id="eoTime" type="time"></div>
+        <div class="field"><label for="eoCName">Contact name</label><input id="eoCName" type="text"></div>
+        <div class="field"><label for="eoCPhone">Cell number</label><input id="eoCPhone" type="tel"></div>
+        <div class="field"><label for="eoCEmail">Email</label><input id="eoCEmail" type="email"></div>
+      </div>
+      <div class="field"><label for="eoAddr">Address</label><input id="eoAddr" type="text"></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Items</div>
+      <div id="eoItemsList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="eoAddItemSelect" style="flex:1;min-width:200px;padding:9px 11px;border:1px solid var(--border);border-radius:9px"></select>
+        <button class="btn btn-ghost btn-sm" onclick="eoAddItem()">+ Add item</button>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">Pricing</div>
+      <div class="grid2" style="margin-bottom:14px">
+        <div class="field"><label for="eoDeliveryFee">Delivery fee ($)</label><input id="eoDeliveryFee" type="number" step="0.01" min="0" oninput="renderEditOrderTotals()"></div>
+        <div class="field"><label for="eoDiscount">Discount ($)</label><input id="eoDiscount" type="number" step="0.01" min="0" oninput="renderEditOrderTotals()"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px">
+        <input type="checkbox" id="eoTaxExempt" onchange="renderEditOrderTotals()" style="width:16px;height:16px"> Tax exempt
+      </label>
+      <div class="field"><label for="eoPaymentType">Payment type</label>
+        <select id="eoPaymentType" onchange="renderEditOrderTotals()"></select>
+      </div>
+    </div>
+    <div class="section" id="eoTotalsBox"></div>
+    <div class="section">
+      <div class="field"><label for="eoNotes">Notes</label><textarea id="eoNotes" rows="3"></textarea></div>
+    </div>
+    <div class="lg-err" id="eoErr"></div>
+    <button class="btn btn-pri" style="width:100%;padding:14px" onclick="saveEditedOrder()">Save changes</button>
   </div>
 
   <!-- ============ STAFF: CATALOG MANAGEMENT ============ -->
@@ -315,7 +375,7 @@ function showView(v){
   currentView = v;
   window.scrollTo(0,0);
   if(v==='order') renderItemGrid();
-  if(v==='checkout') renderCheckoutRecap();
+  if(v==='checkout'){ renderPaymentChoices(); renderCheckoutRecap(); }
   if(v==='staffOrders') renderStaffOrders();
   if(v==='staffCatalog') renderCatalogTable();
   updateTopbar();
@@ -426,6 +486,17 @@ function updateCartBar(){
   document.getElementById('cartTotal').textContent = '$'+money(cartTotal());
 }
 
+const TAX_RATE = 0.06625;   // NJ sales tax — matches the rate used everywhere else in the main app
+const CC_FEE_RATE = 0.034;  // matches the rate already quoted to clients on the portal
+const PAYMENT_METHODS = [
+  {id:'cash', label:'Cash'},
+  {id:'check', label:'Check'},
+  {id:'zelle', label:'Zelle'},
+  {id:'credit', label:'Credit card (3.4% fee added)'},
+  {id:'masterbill', label:'Add to events master bill'}
+];
+let paymentType = 'cash';
+
 function goCheckout(){
   if(!cartCount()){ return; }
   showView('checkout');
@@ -442,8 +513,90 @@ function recapHtml(lines, total){
   html += `<div class="recap-total"><div>Total</div><div class="mono">$${money(total)}</div></div>`;
   return html;
 }
+// Full breakdown recap for a complete, submitted order — used anywhere the
+// whole order object is available (confirmation, My Orders, staff views),
+// so the shown total always visibly adds up instead of just a flat number.
+// Falls back gracefully for older orders saved before these fields existed.
+function orderRecapHtml(order){
+  const lines = order.lines||[];
+  if(!lines.length) return '<div class="empty">No items.</div>';
+  const hasBreakdown = order.subtotal!=null;
+  let html = lines.map(l=>{
+    const noteHtml = l.note ? `<div class="recap-note">&#9998; ${esc(l.note)}</div>` : '';
+    return `<div class="recap-line-wrap">
+      <div class="recap-line"><div>${l.qty}&times; ${esc(l.itemName)} <span style="color:var(--text3)">(${esc(l.sizeLabel)})</span></div><div class="mono">$${money(l.price*l.qty)}</div></div>
+      ${noteHtml}
+    </div>`;
+  }).join('');
+  if(hasBreakdown){
+    html += `<div class="recap-line"><div>Subtotal</div><div class="mono">$${money(order.subtotal)}</div></div>`;
+    if(order.deliveryFee) html += `<div class="recap-line"><div>Delivery fee</div><div class="mono">$${money(order.deliveryFee)}</div></div>`;
+    html += order.taxExempt
+      ? `<div class="recap-line"><div>Sales tax</div><div class="mono" style="color:var(--text3)">Exempt</div></div>`
+      : `<div class="recap-line"><div>Sales tax</div><div class="mono">$${money(order.taxAmount)}</div></div>`;
+    if(order.ccFeeAmount) html += `<div class="recap-line"><div>Credit card fee</div><div class="mono">$${money(order.ccFeeAmount)}</div></div>`;
+    if(order.discount) html += `<div class="recap-line"><div>Discount</div><div class="mono">&minus;$${money(order.discount)}</div></div>`;
+    const payLabel = (PAYMENT_METHODS.find(p=>p.id===order.paymentType)||{}).label;
+    if(payLabel) html += `<div class="recap-line" style="color:var(--text3);font-size:12px"><div>Payment</div><div>${esc(payLabel)}</div></div>`;
+  }
+  html += `<div class="recap-total"><div>Total</div><div class="mono">$${money(order.total)}</div></div>`;
+  return html;
+}
+// Delivery fee always starts at $0 for a new order — it's something staff
+// may add after reviewing the order (see the Edit order screen), not
+// something the client sets themselves.
+function computeOrderTotals(lines, taxExempt, payType, deliveryFee){
+  deliveryFee = deliveryFee || 0;
+  const subtotal = lines.reduce((s,l)=> s + l.price*l.qty, 0);
+  const taxable = subtotal + deliveryFee;
+  const taxAmount = taxExempt ? 0 : taxable*TAX_RATE;
+  const preFeeTotal = subtotal + deliveryFee + taxAmount;
+  const ccFeeAmount = payType==='credit' ? preFeeTotal*CC_FEE_RATE : 0;
+  const grandTotal = preFeeTotal + ccFeeAmount;
+  return {subtotal, deliveryFee, taxAmount, ccFeeAmount, grandTotal};
+}
+function renderPaymentChoices(){
+  document.getElementById('paymentChoices').innerHTML = PAYMENT_METHODS.map(pm=>
+    `<label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer">
+      <input type="radio" name="payType" value="${pm.id}" ${paymentType===pm.id?'checked':''} onchange="onPaymentTypeChange('${pm.id}')" style="width:16px;height:16px">
+      ${esc(pm.label)}
+    </label>`
+  ).join('');
+  updatePaymentVisibility();
+}
+function onPaymentTypeChange(id){
+  paymentType = id;
+  updatePaymentVisibility();
+  renderCheckoutRecap();
+}
+function updatePaymentVisibility(){
+  document.getElementById('zelleInfoBox').style.display = paymentType==='zelle' ? '' : 'none';
+  document.getElementById('ccFeeNote').style.display = paymentType==='credit' ? '' : 'none';
+}
 function renderCheckoutRecap(){
-  document.getElementById('checkoutRecap').innerHTML = recapHtml(cartLines(), cartTotal());
+  const lines = cartLines();
+  const taxExempt = !!(document.getElementById('coTaxExempt')||{}).checked;
+  const t = computeOrderTotals(lines, taxExempt, paymentType, 0);
+  let html = lines.map(l=>{
+    const noteHtml = l.note ? `<div class="recap-note">&#9998; ${esc(l.note)}</div>` : '';
+    return `<div class="recap-line-wrap">
+      <div class="recap-line"><div>${l.qty}&times; ${esc(l.itemName)} <span style="color:var(--text3)">(${esc(l.sizeLabel)})</span></div><div class="mono">$${money(l.price*l.qty)}</div></div>
+      ${noteHtml}
+    </div>`;
+  }).join('');
+  html += `<div class="recap-line"><div>Subtotal</div><div class="mono">$${money(t.subtotal)}</div></div>`;
+  html += `<div class="recap-line-wrap">
+    <div class="recap-line"><div>Delivery fee</div><div class="mono">$${money(t.deliveryFee)}</div></div>
+    <div class="recap-note" style="color:var(--text3)">The caterer may add a delivery fee to this order after reviewing it.</div>
+  </div>`;
+  html += taxExempt
+    ? `<div class="recap-line"><div>Sales tax</div><div class="mono" style="color:var(--text3)">Exempt</div></div>`
+    : `<div class="recap-line"><div>Sales tax (${(TAX_RATE*100).toFixed(3)}%)</div><div class="mono">$${money(t.taxAmount)}</div></div>`;
+  if(paymentType==='credit'){
+    html += `<div class="recap-line"><div>Credit card fee (${(CC_FEE_RATE*100).toFixed(1)}%)</div><div class="mono">$${money(t.ccFeeAmount)}</div></div>`;
+  }
+  html += `<div class="recap-total"><div>Total</div><div class="mono">$${money(t.grandTotal)}</div></div>`;
+  document.getElementById('checkoutRecap').innerHTML = html;
 }
 
 /* =====================================================================
@@ -509,10 +662,19 @@ async function submitOrder(){
   btn.disabled = true; btn.textContent = 'Placing order…';
 
   const lines = cartLines();
-  const total = cartTotal();
+  const taxExempt = !!document.getElementById('coTaxExempt').checked;
+  const t = computeOrderTotals(lines, taxExempt, paymentType, 0);
   const order = {
     status: 'submitted',
-    lines, total,
+    lines,
+    subtotal: t.subtotal,
+    deliveryFee: t.deliveryFee,
+    taxExempt: taxExempt,
+    taxAmount: t.taxAmount,
+    paymentType: paymentType,
+    ccFeeAmount: t.ccFeeAmount,
+    discount: 0,
+    total: t.grandTotal,
     clientName: document.getElementById('coName').value.trim(),
     locationName: document.getElementById('coLoc').value.trim(),
     deliveryDate: document.getElementById('coDate').value,
@@ -550,7 +712,7 @@ async function submitOrder(){
   btn.disabled = false; btn.textContent = 'Place order';
 }
 function renderConfirmation(order){
-  document.getElementById('confirmRecap').innerHTML = recapHtml(order.lines, order.total);
+  document.getElementById('confirmRecap').innerHTML = orderRecapHtml(order);
 }
 
 // Sends the "order placed" email to staff. Reuses the SAME Apps Script
@@ -565,6 +727,24 @@ async function getRelayUrl(){
     _relayUrlCache = url;
     return url;
   }catch(e){ return ''; }
+}
+// Shared price-breakdown rows for both emails below, so tax/delivery/fee
+// show consistently everywhere an order total appears, not just a flat number.
+function emailBreakdownHtml(order){
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:4px">';
+  html += '<tr><td style="padding:4px 10px 4px 0;color:#666">Subtotal</td><td style="padding:4px 0;text-align:right;font-family:monospace">$'+money(order.subtotal!=null?order.subtotal:order.total)+'</td></tr>';
+  if(order.deliveryFee) html += '<tr><td style="padding:4px 10px 4px 0;color:#666">Delivery fee</td><td style="padding:4px 0;text-align:right;font-family:monospace">$'+money(order.deliveryFee)+'</td></tr>';
+  if(order.subtotal!=null){
+    html += order.taxExempt
+      ? '<tr><td style="padding:4px 10px 4px 0;color:#666">Sales tax</td><td style="padding:4px 0;text-align:right;color:#888">Exempt</td></tr>'
+      : '<tr><td style="padding:4px 10px 4px 0;color:#666">Sales tax</td><td style="padding:4px 0;text-align:right;font-family:monospace">$'+money(order.taxAmount)+'</td></tr>';
+  }
+  if(order.ccFeeAmount) html += '<tr><td style="padding:4px 10px 4px 0;color:#666">Credit card fee</td><td style="padding:4px 0;text-align:right;font-family:monospace">$'+money(order.ccFeeAmount)+'</td></tr>';
+  if(order.discount) html += '<tr><td style="padding:4px 10px 4px 0;color:#666">Discount</td><td style="padding:4px 0;text-align:right;font-family:monospace">&minus;$'+money(order.discount)+'</td></tr>';
+  const payLabel = (PAYMENT_METHODS.find(p=>p.id===order.paymentType)||{}).label;
+  if(payLabel) html += '<tr><td style="padding:4px 10px 4px 0;color:#666">Payment</td><td style="padding:4px 0;text-align:right;color:#666;font-size:12px">'+esc(payLabel)+'</td></tr>';
+  html += '</table>';
+  return html;
 }
 async function sendOrderPlacedEmail(order, orderId){
   const relay = await getRelayUrl();
@@ -602,6 +782,7 @@ async function sendOrderPlacedEmail(order, orderId){
     + '<th style="padding:7px 10px;text-align:right;font-size:11px;color:#888">TOTAL</th></tr>'
     + rows
     + '</table>'
+    + emailBreakdownHtml(order)
     + '<div style="text-align:right;margin-top:12px;font-size:16px;font-weight:bold;color:#7A2E3D">Total: $'+money(order.total)+'</div>'
     + '<p style="margin:20px 0 0;font-size:11px;color:#999">Order id: '+esc(orderId)+' &middot; Automated notification from the Drop-Off Ordering app.</p>'
     + '</div></div>';
@@ -622,7 +803,7 @@ async function sendOrderPlacedEmail(order, orderId){
       method: 'POST',
       body: JSON.stringify({
         action: 'gmailSend',
-        to: 'events@thepremiercaterer.com',
+        to: 'events@thepremiercaterer.com,barry.h.nash@gmail.com,47515733707@print.brother.com',
         subject: 'New drop-off order — '+(order.clientName||order.contactName),
         body: plainBody,
         htmlBody: htmlBody
@@ -661,6 +842,7 @@ async function sendClientConfirmationEmail(order, orderId){
     + '<th style="padding:7px 10px;text-align:right;font-size:11px;color:#888">TOTAL</th></tr>'
     + rows
     + '</table>'
+    + emailBreakdownHtml(order)
     + '<div style="text-align:right;margin-top:8px;font-size:16px;font-weight:bold;color:#7A2E3D">Total: $'+money(order.total)+'</div>'
     + '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:18px;border-top:1px solid #eee;padding-top:10px">'
     + (order.deliveryDate ? '<tr><td style="padding:5px 12px 5px 0;color:#666;white-space:nowrap">Delivery</td><td style="padding:5px 0;font-weight:500;color:#222">'+esc(order.deliveryDate)+' '+esc(order.deliveryTime||'')+'</td></tr>' : '')
@@ -723,7 +905,7 @@ async function lookupMyOrders(){
           <div><b>${esc(o.clientName||'Order')}</b> <span style="color:var(--text3);font-size:12px">${esc(dateLabel)}</span></div>
           <button class="btn btn-ghost btn-sm" onclick="reorderFrom('${doc.id}')">Order this again</button>
         </div>
-        ${recapHtml(o.lines||[], o.total||0)}
+        ${orderRecapHtml(o)}
       </div>`;
     });
     listEl.innerHTML = html;
@@ -863,13 +1045,15 @@ function renderStaffOrders(){
     const statusLabel = o.linkedEventId ? 'Linked to event' : (o.status==='submitted' ? 'Submitted' : 'Draft — in progress');
     const linkBtn = (o.status==='submitted' && !o.linkedEventId)
       ? `<button class="btn btn-ghost btn-sm" onclick="promptLinkOrder('${o.id}')">Link to event</button>` : '';
+    const editBtn = o.status==='submitted'
+      ? `<button class="btn btn-ghost btn-sm" onclick="openEditOrder('${o.id}')" style="margin-left:6px">Edit</button>` : '';
     html += `<tr>
       <td><b>${esc(o.clientName||o.contactName||'—')}</b><br><span style="color:var(--text3);font-size:11.5px">${esc(o.contactEmail||o.clientEmail||'')}</span></td>
       <td>${esc(o.deliveryDate||'')} ${esc(o.deliveryTime||'')}<br><span style="color:var(--text3);font-size:11.5px">${esc(o.locationName||'')}</span></td>
       <td>${itemCount} item${itemCount===1?'':'s'}</td>
       <td class="mono">$${money(o.total||0)}</td>
       <td><span class="pill-status ${statusClass}">${statusLabel}</span></td>
-      <td>${linkBtn}</td>
+      <td>${linkBtn}${editBtn}</td>
     </tr>`;
   });
   tbl.innerHTML = html;
@@ -898,7 +1082,14 @@ async function promptLinkOrder(orderId){
   const jobNum = prompt('Enter the job number of the existing event this order belongs to (e.g. 14 or #14):');
   if(!jobNum) return;
   const clean = jobNum.replace('#','').trim();
-  const jobVal = '#'+clean;
+  // Job numbers might be stored with or without a leading zero (e.g. "#4"
+  // vs "#04") depending on how that event was created — rather than guess
+  // one exact format, every plausible variant is checked at once.
+  const numeric = parseInt(clean,10);
+  const variants = new Set([clean, '0'+clean]);
+  if(!isNaN(numeric)) variants.add(String(numeric));
+  const jobVals = Array.from(variants).map(v=>'#'+v);
+  const jobVal = jobVals[0]; // for display only
   try{
     const orderDoc = await ordersCol.doc(orderId).get();
     const order = orderDoc.data();
@@ -906,17 +1097,17 @@ async function promptLinkOrder(orderId){
 
     let candidates = [];
     if(targetWeek){
-      const preciseSnap = await db.collection('events').where('job','==',jobVal).where('weekOf','==',targetWeek).get();
+      const preciseSnap = await db.collection('events').where('job','in',jobVals).where('weekOf','==',targetWeek).get();
       preciseSnap.forEach(d=> candidates.push(d));
     }
     if(!candidates.length){
       // Fall back to every event with this job number, across all weeks —
       // this only runs when the delivery-date match found nothing, so it's
       // the safety net, not the normal path.
-      const broadSnap = await db.collection('events').where('job','==',jobVal).get();
+      const broadSnap = await db.collection('events').where('job','in',jobVals).get();
       broadSnap.forEach(d=> candidates.push(d));
     }
-    if(!candidates.length){ alert('No event found with job '+jobVal+'. Double check the number.'); return; }
+    if(!candidates.length){ alert('No event found with job '+jobVal+' (checked with and without a leading zero). Double check the number.'); return; }
 
     let eventDoc;
     if(candidates.length===1){
@@ -954,6 +1145,160 @@ async function promptLinkOrder(orderId){
     await ordersCol.doc(orderId).set({linkedEventId:eventId, linkedInquiryId:null}, {merge:true});
     showToast('Linked to '+jobVal+' — items added to that invoice');
   }catch(e){ console.error(e); alert('Something went wrong linking this order.'); }
+}
+
+/* =====================================================================
+   STAFF: EDIT ORDER — full editing of an already-placed order: client
+   info, line items (qty/notes/add/remove), delivery fee, discount, tax
+   exemption, and payment type. Note: if this order is already linked to
+   an event's invoice, changes here do NOT automatically re-sync that
+   invoice — the invoice was a one-time copy made at link time, so a
+   heads-up is shown telling staff to update that invoice separately in
+   the main app if needed.
+   ===================================================================== */
+let eoOrderId = null;
+let eoLines = [];
+
+async function openEditOrder(orderId){
+  try{
+    const doc = await ordersCol.doc(orderId).get();
+    if(!doc.exists){ alert('Could not find that order.'); return; }
+    const o = doc.data();
+    eoOrderId = orderId;
+    eoLines = (o.lines||[]).map(l=>Object.assign({}, l)); // work on a copy
+
+    document.getElementById('eoName').value = o.clientName||'';
+    document.getElementById('eoLoc').value = o.locationName||'';
+    document.getElementById('eoDate').value = o.deliveryDate||'';
+    document.getElementById('eoTime').value = o.deliveryTime||'';
+    document.getElementById('eoCName').value = o.contactName||'';
+    document.getElementById('eoCPhone').value = o.contactPhone||'';
+    document.getElementById('eoCEmail').value = o.contactEmail||'';
+    document.getElementById('eoAddr').value = o.address||'';
+    document.getElementById('eoNotes').value = o.notes||'';
+    document.getElementById('eoDeliveryFee').value = o.deliveryFee||0;
+    document.getElementById('eoDiscount').value = o.discount||0;
+    document.getElementById('eoTaxExempt').checked = !!o.taxExempt;
+
+    document.getElementById('eoPaymentType').innerHTML = PAYMENT_METHODS.map(pm=>
+      `<option value="${pm.id}" ${o.paymentType===pm.id?'selected':''}>${esc(pm.label)}</option>`).join('');
+
+    document.getElementById('editOrderLinkedNote').innerHTML = o.linkedEventId
+      ? `<div class="section" style="background:var(--brass-tint);border-color:var(--brass)"><b>Heads up:</b> this order is already linked to an event's invoice. Changes saved here update the order record, but won't automatically update that invoice — adjust it separately in the main app if needed.</div>`
+      : '';
+
+    eoPopulateAddItemSelect();
+    renderEditOrderItems();
+    renderEditOrderTotals();
+    document.getElementById('eoErr').textContent = '';
+    showView('editOrder');
+  }catch(e){ console.error(e); alert('Could not load that order.'); }
+}
+function eoPopulateAddItemSelect(){
+  const sel = document.getElementById('eoAddItemSelect');
+  const opts = [];
+  catalog.forEach(it=>{
+    (it.sizes||[]).forEach((sz,idx)=>{
+      opts.push(`<option value="${it.id}::${idx}">${esc(it.name)} — ${esc(sz.label)} ($${money(sz.price)})</option>`);
+    });
+  });
+  sel.innerHTML = opts.join('');
+}
+function eoAddItem(){
+  const val = document.getElementById('eoAddItemSelect').value;
+  if(!val) return;
+  const [itemId, sizeIdxStr] = val.split('::');
+  const item = catalog.find(x=>x.id===itemId);
+  if(!item) return;
+  const sz = item.sizes[parseInt(sizeIdxStr,10)];
+  if(!sz) return;
+  eoLines.push({itemId, itemName:item.name, sizeLabel:sz.label, price:sz.price, qty:1, note:''});
+  renderEditOrderItems();
+  renderEditOrderTotals();
+}
+function eoStepQty(idx, delta){
+  eoLines[idx].qty = Math.max(1, (eoLines[idx].qty||1) + delta);
+  renderEditOrderItems();
+  renderEditOrderTotals();
+}
+function eoUpdateNote(idx, val){ eoLines[idx].note = val; }
+function eoRemoveItem(idx){
+  eoLines.splice(idx,1);
+  renderEditOrderItems();
+  renderEditOrderTotals();
+}
+function renderEditOrderItems(){
+  const el = document.getElementById('eoItemsList');
+  if(!eoLines.length){ el.innerHTML = '<div class="empty">No items — add at least one below.</div>'; return; }
+  el.innerHTML = eoLines.map((l,idx)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;flex-wrap:wrap">
+      <div style="flex:1;min-width:160px">
+        <div style="font-weight:600;font-size:13.5px">${esc(l.itemName)}</div>
+        <div style="font-size:11.5px;color:var(--text3)">${esc(l.sizeLabel)} &middot; $${money(l.price)} each</div>
+        <input type="text" placeholder="Note" value="${esc(l.note||'')}" oninput="eoUpdateNote(${idx},this.value)" style="margin-top:5px;width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
+      </div>
+      <div class="stepper on">
+        <button onclick="eoStepQty(${idx},-1)">&minus;</button>
+        <div class="n">${l.qty}</div>
+        <button onclick="eoStepQty(${idx},1)">+</button>
+      </div>
+      <div class="mono" style="min-width:60px;text-align:right">$${money(l.price*l.qty)}</div>
+      <button onclick="eoRemoveItem(${idx})" style="width:28px;height:28px;border:1px solid var(--border);background:var(--bg);border-radius:7px;color:var(--red)">&times;</button>
+    </div>
+  `).join('');
+}
+function renderEditOrderTotals(){
+  const taxExempt = document.getElementById('eoTaxExempt').checked;
+  const payType = document.getElementById('eoPaymentType').value;
+  const deliveryFee = parseFloat(document.getElementById('eoDeliveryFee').value)||0;
+  const discount = parseFloat(document.getElementById('eoDiscount').value)||0;
+  const t = computeOrderTotals(eoLines, taxExempt, payType, deliveryFee);
+  const grandTotal = Math.max(0, t.grandTotal - discount);
+  document.getElementById('eoTotalsBox').innerHTML = `
+    <div class="recap-line"><div>Subtotal</div><div class="mono">$${money(t.subtotal)}</div></div>
+    <div class="recap-line"><div>Delivery fee</div><div class="mono">$${money(t.deliveryFee)}</div></div>
+    <div class="recap-line"><div>Sales tax</div><div class="mono">${taxExempt?'Exempt':'$'+money(t.taxAmount)}</div></div>
+    ${t.ccFeeAmount?`<div class="recap-line"><div>Credit card fee</div><div class="mono">$${money(t.ccFeeAmount)}</div></div>`:''}
+    ${discount?`<div class="recap-line"><div>Discount</div><div class="mono">&minus;$${money(discount)}</div></div>`:''}
+    <div class="recap-total"><div>Total</div><div class="mono">$${money(grandTotal)}</div></div>
+  `;
+}
+async function saveEditedOrder(){
+  const errEl = document.getElementById('eoErr'); errEl.textContent = '';
+  if(!eoLines.length){ errEl.textContent = 'Add at least one item.'; return; }
+  const taxExempt = document.getElementById('eoTaxExempt').checked;
+  const payType = document.getElementById('eoPaymentType').value;
+  const deliveryFee = parseFloat(document.getElementById('eoDeliveryFee').value)||0;
+  const discount = parseFloat(document.getElementById('eoDiscount').value)||0;
+  const t = computeOrderTotals(eoLines, taxExempt, payType, deliveryFee);
+  const grandTotal = Math.max(0, t.grandTotal - discount);
+  const updated = {
+    lines: eoLines,
+    subtotal: t.subtotal,
+    deliveryFee: t.deliveryFee,
+    taxExempt: taxExempt,
+    taxAmount: t.taxAmount,
+    paymentType: payType,
+    ccFeeAmount: t.ccFeeAmount,
+    discount: discount,
+    total: grandTotal,
+    clientName: document.getElementById('eoName').value.trim(),
+    locationName: document.getElementById('eoLoc').value.trim(),
+    deliveryDate: document.getElementById('eoDate').value,
+    deliveryTime: document.getElementById('eoTime').value,
+    address: document.getElementById('eoAddr').value.trim(),
+    contactName: document.getElementById('eoCName').value.trim(),
+    contactPhone: document.getElementById('eoCPhone').value.trim(),
+    contactEmail: document.getElementById('eoCEmail').value.trim(),
+    clientEmail: document.getElementById('eoCEmail').value.trim(),
+    notes: document.getElementById('eoNotes').value.trim(),
+    updatedAt: Date.now()
+  };
+  try{
+    await ordersCol.doc(eoOrderId).set(updated, {merge:true});
+    showToast('Order updated');
+    showView('staffOrders');
+  }catch(e){ console.error(e); errEl.textContent = 'Something went wrong saving — please try again.'; }
 }
 
 /* =====================================================================
