@@ -238,10 +238,12 @@ a{color:var(--maroon);text-decoration:none}
   <div class="lg-box" id="loginBox">
     <div class="lg-title">Staff sign in</div>
     <div class="lg-sub">Sign in to manage the menu or view all orders</div>
-    <input id="lgEmail" class="lg-input" type="email" placeholder="Email" onkeydown="if(event.key==='Enter')document.getElementById('lgPw').focus()">
-    <input id="lgPw" class="lg-input" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')staffLoginSubmit()">
+    <form onsubmit="event.preventDefault(); staffLoginSubmit();" autocomplete="on">
+    <input id="lgEmail" class="lg-input" type="email" name="username" autocomplete="username" placeholder="Email" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('lgPw').focus();}">
+    <input id="lgPw" class="lg-input" type="password" name="password" autocomplete="current-password" placeholder="Password">
     <div class="lg-err" id="lgErr"></div>
-    <button class="lg-go" onclick="staffLoginSubmit()">Sign in</button>
+    <button class="lg-go" type="submit">Sign in</button>
+    </form>
     <button class="lg-back" onclick="closeStaffLogin()">&larr; back to ordering</button>
   </div>
 </div>
