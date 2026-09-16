@@ -1186,8 +1186,7 @@ function renderDocuments(){
   if(vInput) vInput.addEventListener('change', function(){
     const file = vInput.files[0]; if(!file) return;
     handleUpload(file, 'vendor', 'vendorDocs').then(function(meta){
-      const list = (portalDoc.clientVendorDocs||[]).concat([meta]);
-      return db.collection('clientPortals').doc(pid).set({ clientVendorDocs: list }, { merge:true });
+      return db.collection('clientPortals').doc(pid).set({ clientVendorDocs: firebase.firestore.FieldValue.arrayUnion(meta) }, { merge:true });
     }).catch(function(){ alert('Upload failed. Please try again.'); });
   });
 
@@ -1292,10 +1291,11 @@ async function sendQuestion(){
       attachment = await handleUpload(file, 'chat', 'messages');
     }
     const msg = { from:'client', text: text, attachment: attachment, sentAt: Date.now() };
-    const msgs = (portalDoc.messages || []).concat([msg]);
-    // Clear the composer immediately; the live listener will paint the new message.
+    // arrayUnion is atomic server-side — protects against a staff reply and
+    // this client message landing at nearly the same moment and one silently
+    // overwriting the other.
     textEl.value = ''; fileEl.value = '';
-    await db.collection('clientPortals').doc(pid).set({ messages: msgs }, { merge:true });
+    await db.collection('clientPortals').doc(pid).set({ messages: firebase.firestore.FieldValue.arrayUnion(msg) }, { merge:true });
     btn.disabled = false; btn.textContent = 'Send';
   }catch(e){
     btn.disabled = false; btn.textContent = 'Send';

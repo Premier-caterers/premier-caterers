@@ -14257,12 +14257,16 @@ async function sendCatererReply(eid){
   const inputEl = document.getElementById('cpReply-'+eid);
   const text = (inputEl.value||'').trim();
   if(!text) return;
-  const p = clientPortals[e.portalId] || { messages: [] };
-  const msgs = (p.messages||[]).concat([{ from:'caterer', text: text, attachment: null, sentAt: Date.now() }]);
+  const newMsg = { from:'caterer', text: text, attachment: null, sentAt: Date.now() };
   inputEl.disabled = true;
   try{
-    await clientPortalsCol.doc(e.portalId).set({ messages: msgs }, { merge:true });
-    clientPortals[e.portalId] = Object.assign({}, p, { messages: msgs });
+    // arrayUnion is atomic server-side — two messages arriving at nearly the
+    // same moment (e.g. a staff reply and a client message crossing paths)
+    // both land correctly instead of one silently overwriting the other,
+    // which a manual read-then-write-the-whole-array approach can't guarantee.
+    await clientPortalsCol.doc(e.portalId).set({ messages: firebase.firestore.FieldValue.arrayUnion(newMsg) }, { merge:true });
+    const p = clientPortals[e.portalId] || { messages: [] };
+    clientPortals[e.portalId] = Object.assign({}, p, { messages: (p.messages||[]).concat([newMsg]) });
     render();
   }catch(err){
     inputEl.disabled = false;
