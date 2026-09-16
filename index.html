@@ -7842,8 +7842,8 @@ function renderSchedule(){
     {key:'bartenders', label:'Bartenders', countKey:'bartenders',    namesKey:'bartenderNames', t1:'bartenderTime', t2:'bartenderTime2', cls:'r-bartender'},
     {key:'chefs',      label:'Chefs',      countKey:'chefs',         namesKey:'chefNames',      t1:'chefTime',      t2:'chefTime2',      cls:'r-chef'},
     {key:'porters',    label:'Porters',    countKey:'porters',       namesKey:'porterNames',    t1:'porterTime',    t2:'porterTime2',    cls:'r-porter'},
-    {key:'mashgiach',  label:'Mashgiach',  countKey:'mashgiachCount',namesKey:'mashgiachNames', t1:'waiterTime',    t2:'',               cls:'r-mashgiach'},
-    {key:'manager',    label:'Manager',    countKey:'managerCount',  namesKey:'manager',        t1:'chefTime',      t2:'',               cls:'r-manager'},
+    {key:'mashgiach',  label:'Mashgiach',  countKey:'mashgiachCount',namesKey:'mashgiachNames', t1:'mashgiachTime', t2:'',               cls:'r-mashgiach'},
+    {key:'manager',    label:'Manager',    countKey:'managerCount',  namesKey:'manager',        t1:'managerTime',   t2:'',               cls:'r-manager'},
   ];
 
   const schedWeekDate = getWeekEndDate(currentWeekOffset);
@@ -8049,8 +8049,8 @@ function saveSchedEdit(id){
     {countKey:'bartenders',    namesKey:'bartenderNames', key:'bartenders', t1:'bartenderTime', t2:'bartenderTime2'},
     {countKey:'chefs',         namesKey:'chefNames',      key:'chefs',      t1:'chefTime',      t2:'chefTime2'},
     {countKey:'porters',       namesKey:'porterNames',    key:'porters',    t1:'porterTime',    t2:'porterTime2'},
-    {countKey:'mashgiachCount',namesKey:'mashgiachNames', key:'mashgiach',  t1:'waiterTime',    t2:''},
-    {countKey:'managerCount',  namesKey:'manager',        key:'manager',    t1:'chefTime',      t2:''},
+    {countKey:'mashgiachCount',namesKey:'mashgiachNames', key:'mashgiach',  t1:'mashgiachTime', t2:''},
+    {countKey:'managerCount',  namesKey:'manager',        key:'manager',    t1:'managerTime',   t2:''},
   ];
   depts.forEach(d=>{
     const cEl = document.getElementById(`se-${id}-${d.countKey}`);
@@ -8350,16 +8350,30 @@ async function saveClReminder(eid, idx){
   const unitEl = document.getElementById('cl-remind-unit-'+eid+'-'+idx);
   const amount = Math.max(1, parseInt(amtEl?.value,10) || 1);
   const unit = unitEl?.value || 'days';
-  item.reminder = { amount, unit };
+  // Merge rather than replace, so if this reminder already ran once (and has
+  // taskIds from that sync), changing the amount/unit doesn't wipe that record
+  // out before _clSyncReminder gets a chance to clean up the old tasks.
+  item.reminder = Object.assign({}, item.reminder, { amount, unit });
   _saveChecklist(eid, checklists[eid]);
   await _clSyncReminder(eid, idx);
   _clRerender(eid);
 }
 function clearClReminder(eid, idx){
   const item = checklists[eid]?.[idx]; if(!item) return;
+  _clDeleteReminderTasks(item.reminder);
   item.reminder = null;
   _saveChecklist(eid, checklists[eid]);
   _clRerender(eid);
+}
+// Deletes whatever My Day tasks a previous sync of this reminder created —
+// called both when a reminder is cleared and right before a changed reminder
+// creates its replacement tasks, so neither case leaves a stale or duplicate
+// task sitting in someone's My Day list.
+async function _clDeleteReminderTasks(reminder){
+  if(!reminder || !Array.isArray(reminder.taskIds) || !reminder.taskIds.length) return;
+  for(const id of reminder.taskIds){
+    try{ await myDayCol.doc(id).delete(); }catch(e){}
+  }
 }
 // Writes a My Day reminder (email + WhatsApp, per the person's own saved
 // preferences) for each assignee that has a real login. Client / Party
@@ -8370,6 +8384,10 @@ async function _clSyncReminder(eid, idx){
   try{
     const e = events.find(x=>x.id===eid); if(!e) return;
     const item = checklists[eid]?.[idx]; if(!item || !item.reminder) return;
+    // Changing an existing reminder (a different amount/unit) re-syncs from
+    // scratch — remove whatever the previous setting created first, so this
+    // doesn't just pile a second, duplicate task on top of the old one.
+    await _clDeleteReminderTasks(item.reminder);
     const base = getEventIsoDate(e); if(!base) { showToast('No event day set — reminder not scheduled'); return; }
     const days = _clUnitDays(item.reminder.amount, item.reminder.unit);
     const due = new Date(base.getTime()); due.setDate(due.getDate()-days);
@@ -8385,9 +8403,14 @@ async function _clSyncReminder(eid, idx){
     owners = [...new Set(owners)];
     if(!owners.length){ showToast('Reminder saved \u2014 but no one on the list has a login to remind (Client/Party planner/Other have none unless a salesperson is set)'); return; }
     const text = 'Checklist: '+item.text+' \u2014 '+(fullEventNum(e)||e.job||'')+' '+(e.name||'');
+    const newTaskIds = [];
     for(const owner of owners){
-      await myDayCol.add({ owner, type:'todo', text, dueAtTs, dueDateLabel, status:'pending', createdAt:Date.now(), reminderMethods:['email','whatsapp'] });
+      const ref = await myDayCol.add({ owner, type:'todo', text, dueAtTs, dueDateLabel, status:'pending', createdAt:Date.now(), reminderMethods:['email','whatsapp'] });
+      newTaskIds.push(ref.id);
     }
+    // Remember what was just created so a future change or clear can find it.
+    item.reminder.taskIds = newTaskIds;
+    _saveChecklist(eid, checklists[eid]);
     showToast('Reminder set for '+dueDateLabel);
   }catch(err){ console.error('checklist reminder sync failed:', err); showToast('Could not schedule the reminder'); }
 }
@@ -9427,8 +9450,8 @@ function generateScheduleHTML(eventsToShow){
     {label:'Bartenders',countKey:'bartenders',namesKey:'bartenderNames',t1:'bartenderTime',t2:'bartenderTime2'},
     {label:'Chefs',countKey:'chefs',namesKey:'chefNames',t1:'chefTime',t2:'chefTime2'},
     {label:'Porters',countKey:'porters',namesKey:'porterNames',t1:'porterTime',t2:'porterTime2'},
-    {label:'Mashgiach',countKey:'mashgiach',namesKey:'mashgiachNames',t1:'waiterTime',t2:''},
-    {label:'Manager',countKey:'manager',namesKey:'manager',t1:'chefTime',t2:''},
+    {label:'Mashgiach',countKey:'mashgiach',namesKey:'mashgiachNames',t1:'mashgiachTime',t2:''},
+    {label:'Manager',countKey:'manager',namesKey:'manager',t1:'managerTime',t2:''},
   ];
   const now=new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   let rows='';

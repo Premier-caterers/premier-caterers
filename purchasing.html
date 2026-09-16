@@ -3185,10 +3185,11 @@ function reorderFromHistory(id){
   const o=orders.find(x=>x.id===id); if(!o) return;
   if(Object.keys(orderCart).length && !confirm('This will add to your current cart. Continue?')) return;
   const groups=ourProducts();
+  const skipped=[];
   (o.lines||[]).forEach(L=>{
     // try to match the product by key (productKey saved on the line)
     const key = L.productKey || groups.find(g=>normName(g.name)===normName(L.productName))?.key;
-    if(!key) return;
+    if(!key){ skipped.push(L.productName||'(unnamed item)'); return; }
     orderCart[key]=orderCart[key]||{};
     orderCart[key].qty = (orderCart[key].qty||0)+L.qty;
     // Try to keep the same vendor item if it still exists
@@ -3197,7 +3198,11 @@ function reorderFromHistory(id){
       if(stillThere){ orderCart[key].vendorItemId=L.pick.id; const g=groups.find(g=>g.key===key); const cheap=g?cheapestItem(g):null; orderCart[key].manual = !(cheap && cheap.id===L.pick.id); }
     }
   });
-  toast('Copied to cart');
+  if(skipped.length){
+    alert('Copied to cart, but '+skipped.length+' item'+(skipped.length===1?"":'s')+' from this order no longer match a current product and were skipped:\n\n'+skipped.join('\n')+'\n\nYou\'ll need to add '+(skipped.length===1?'it':'them')+' manually if still needed.');
+  } else {
+    toast('Copied to cart');
+  }
   showView('orders');
 }
 
