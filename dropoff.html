@@ -538,6 +538,7 @@ async function submitOrder(){
     }
     await bridgeNewInquiry(order, currentOrderId);
     await sendOrderPlacedEmail(order, currentOrderId);
+    await sendClientConfirmationEmail(order, currentOrderId);
     renderConfirmation(order);
     showView('confirm');
     cart = {}; itemNotes = {}; noteOpen = {};
@@ -568,14 +569,52 @@ async function getRelayUrl(){
 async function sendOrderPlacedEmail(order, orderId){
   const relay = await getRelayUrl();
   if(!relay) return;
+
+  const rows = order.lines.map(l=>
+    '<tr>'+
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;font-family:monospace;color:#555">'+l.qty+'</td>'+
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee">'+esc(l.itemName)+
+        (l.note ? '<div style="font-size:11px;color:#7A2E3D;margin-top:2px">&#9998; '+esc(l.note)+'</div>' : '')+
+      '</td>'+
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee;color:#666;font-size:12px">'+esc(l.sizeLabel)+'</td>'+
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:right;font-family:monospace">$'+money(l.price*l.qty)+'</td>'+
+    '</tr>'
+  ).join('');
+
+  const infoRow = (label,val)=> val ? ('<tr><td style="padding:5px 12px 5px 0;color:#666;white-space:nowrap;vertical-align:top">'+label+'</td><td style="padding:5px 0;font-weight:500;color:#222">'+esc(val)+'</td></tr>') : '';
+
+  const htmlBody = '<div style="font-family:Arial,sans-serif;max-width:600px">'
+    + '<div style="background:#7A2E3D;padding:16px 20px;border-radius:6px 6px 0 0">'
+    + '<h2 style="color:#fff;margin:0;font-size:18px">New Drop-Off Order</h2></div>'
+    + '<div style="background:#fff;border:1px solid #ddd;padding:20px;border-radius:0 0 6px 6px">'
+    + '<table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:16px">'
+    + infoRow('Client', order.contactName)
+    + infoRow('Email', order.contactEmail)
+    + infoRow('Phone', order.contactPhone)
+    + infoRow('Delivery', (order.deliveryDate||'')+' '+(order.deliveryTime||''))
+    + infoRow('Location', (order.locationName||'')+(order.address ? (', '+order.address) : ''))
+    + infoRow('Notes', order.notes)
+    + '</table>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:13px">'
+    + '<tr style="background:#f7f7f7"><th style="padding:7px 10px;text-align:center;font-size:11px;color:#888">QTY</th>'
+    + '<th style="padding:7px 10px;text-align:left;font-size:11px;color:#888">ITEM</th>'
+    + '<th style="padding:7px 10px;text-align:left;font-size:11px;color:#888">SIZE</th>'
+    + '<th style="padding:7px 10px;text-align:right;font-size:11px;color:#888">TOTAL</th></tr>'
+    + rows
+    + '</table>'
+    + '<div style="text-align:right;margin-top:12px;font-size:16px;font-weight:bold;color:#7A2E3D">Total: $'+money(order.total)+'</div>'
+    + '<p style="margin:20px 0 0;font-size:11px;color:#999">Order id: '+esc(orderId)+' &middot; Automated notification from the Drop-Off Ordering app.</p>'
+    + '</div></div>';
+
   const itemSummary = order.lines.map(l=> l.qty+'x '+l.itemName+' ('+l.sizeLabel+')'+(l.note?' — note: '+l.note:'')).join('\n');
-  const body = 'A new drop-off order was placed.\n\n'+
+  const plainBody = 'A new drop-off order was placed.\n\n'+
     'Client: '+order.contactName+' ('+order.contactEmail+', '+order.contactPhone+')\n'+
     'Delivery: '+order.deliveryDate+' '+order.deliveryTime+' — '+order.locationName+', '+order.address+'\n\n'+
     'Items:\n'+itemSummary+
     (order.notes ? ('\n\nNotes: '+order.notes) : '')+
     '\n\nTotal: $'+money(order.total)+
     '\n\nOrder id: '+orderId;
+
   // gmailSend is a POST action expecting a JSON body (confirmed against the
   // actual MenuAutomation.gs doPost handler) — not a GET query string.
   try{
@@ -585,10 +624,71 @@ async function sendOrderPlacedEmail(order, orderId){
         action: 'gmailSend',
         to: 'events@thepremiercaterer.com',
         subject: 'New drop-off order — '+(order.clientName||order.contactName),
-        body: body
+        body: plainBody,
+        htmlBody: htmlBody
       })
     });
   }catch(e){ console.warn('order-placed email failed', e); }
+}
+
+// Sends the client their own "we got your order" confirmation, separate
+// from the staff notification above — friendlier tone, no internal-only
+// framing, same relay and same htmlBody pattern.
+async function sendClientConfirmationEmail(order, orderId){
+  const relay = await getRelayUrl();
+  if(!relay || !order.contactEmail) return;
+
+  const rows = order.lines.map(l=>
+    '<tr>'+
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;font-family:monospace;color:#555">'+l.qty+'</td>'+
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee">'+esc(l.itemName)+
+        (l.note ? '<div style="font-size:11px;color:#7A2E3D;margin-top:2px">&#9998; '+esc(l.note)+'</div>' : '')+
+      '</td>'+
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee;color:#666;font-size:12px">'+esc(l.sizeLabel)+'</td>'+
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:right;font-family:monospace">$'+money(l.price*l.qty)+'</td>'+
+    '</tr>'
+  ).join('');
+
+  const htmlBody = '<div style="font-family:Arial,sans-serif;max-width:600px">'
+    + '<div style="background:#7A2E3D;padding:16px 20px;border-radius:6px 6px 0 0">'
+    + '<h2 style="color:#fff;margin:0;font-size:18px">Thanks — we\'ve got your order</h2></div>'
+    + '<div style="background:#fff;border:1px solid #ddd;padding:20px;border-radius:0 0 6px 6px">'
+    + '<p style="font-size:14px;color:#333;margin:0 0 16px">Hi '+esc((order.contactName||'').split(' ')[0]||'')+', thanks for your order — here\'s a copy for your records. We\'ll reach out if we have any questions.</p>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px">'
+    + '<tr style="background:#f7f7f7"><th style="padding:7px 10px;text-align:center;font-size:11px;color:#888">QTY</th>'
+    + '<th style="padding:7px 10px;text-align:left;font-size:11px;color:#888">ITEM</th>'
+    + '<th style="padding:7px 10px;text-align:left;font-size:11px;color:#888">SIZE</th>'
+    + '<th style="padding:7px 10px;text-align:right;font-size:11px;color:#888">TOTAL</th></tr>'
+    + rows
+    + '</table>'
+    + '<div style="text-align:right;margin-top:8px;font-size:16px;font-weight:bold;color:#7A2E3D">Total: $'+money(order.total)+'</div>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:18px;border-top:1px solid #eee;padding-top:10px">'
+    + (order.deliveryDate ? '<tr><td style="padding:5px 12px 5px 0;color:#666;white-space:nowrap">Delivery</td><td style="padding:5px 0;font-weight:500;color:#222">'+esc(order.deliveryDate)+' '+esc(order.deliveryTime||'')+'</td></tr>' : '')
+    + (order.locationName || order.address ? '<tr><td style="padding:5px 12px 5px 0;color:#666;white-space:nowrap;vertical-align:top">Location</td><td style="padding:5px 0;font-weight:500;color:#222">'+esc(order.locationName||'')+(order.address?(', '+esc(order.address)):'')+'</td></tr>' : '')
+    + '</table>'
+    + '<p style="margin:20px 0 0;font-size:11px;color:#999">Questions about this order? Just reply to this email, or call us directly.</p>'
+    + '</div></div>';
+
+  const itemSummary = order.lines.map(l=> l.qty+'x '+l.itemName+' ('+l.sizeLabel+')'+(l.note?' — note: '+l.note:'')).join('\n');
+  const plainBody = 'Thanks — we\'ve got your order.\n\n'+
+    'Items:\n'+itemSummary+
+    '\n\nTotal: $'+money(order.total)+
+    (order.deliveryDate ? ('\n\nDelivery: '+order.deliveryDate+' '+(order.deliveryTime||'')) : '')+
+    (order.locationName||order.address ? ('\nLocation: '+(order.locationName||'')+(order.address?(', '+order.address):'')) : '')+
+    '\n\nQuestions? Just reply to this email.';
+
+  try{
+    await fetch(relay, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'gmailSend',
+        to: order.contactEmail,
+        subject: 'Your order with Premier Caterers',
+        body: plainBody,
+        htmlBody: htmlBody
+      })
+    });
+  }catch(e){ console.warn('client confirmation email failed', e); }
 }
 // Companion "order started but not finished" email is handled by a
 // time-driven Apps Script trigger (checks for drafts idle 20+ minutes
@@ -605,10 +705,17 @@ async function lookupMyOrders(){
   if(!email){ listEl.innerHTML = '<div class="empty">Enter the email you ordered with.</div>'; return; }
   listEl.innerHTML = '<div class="empty">Looking…</div>';
   try{
-    const snap = await ordersCol.where('clientEmail','==',email).where('status','==','submitted').orderBy('submittedAt','desc').limit(20).get();
+    // Two equality filters alone don't need a custom Firestore index, but
+    // adding orderBy on a third field does — so the sort happens here in
+    // JS after fetching instead, avoiding a dependency on an index that
+    // isn't set up.
+    const snap = await ordersCol.where('clientEmail','==',email).where('status','==','submitted').get();
     if(snap.empty){ listEl.innerHTML = '<div class="empty">No past orders found for that email.</div>'; return; }
+    const docs = [];
+    snap.forEach(doc=> docs.push(doc));
+    docs.sort((a,b)=> (b.data().submittedAt||0) - (a.data().submittedAt||0));
     let html = '';
-    snap.forEach(doc=>{
+    docs.slice(0,20).forEach(doc=>{
       const o = doc.data();
       const dateLabel = o.deliveryDate ? o.deliveryDate : '';
       html += `<div class="section">
@@ -771,17 +878,64 @@ function renderStaffOrders(){
 // we don't attempt automatic matching (deliberately, per how Kenny works
 // day to day). Adds the order's items onto that event's invoice as new
 // line items and removes the standalone inquiry this order had created.
+//
+// Job numbers (like "#14") reset every week, so the same number exists in
+// many different weeks over a year — matching on the number alone could
+// silently grab the wrong week's event. Since the order already carries its
+// own delivery date, that's used to find the SAME week's #14 specifically.
+// If that still turns up more than one candidate (e.g. the delivery date
+// doesn't land where expected), every match is listed with its own date so
+// staff pick the right one deliberately instead of it being guessed.
+function weekEndingSunday(dateStr){
+  const parts = String(dateStr||'').split('-').map(Number);
+  if(parts.length!==3 || !parts[0]) return null;
+  const dt = new Date(Date.UTC(parts[0], parts[1]-1, parts[2]));
+  const day = dt.getUTCDay(); // 0 = Sunday
+  dt.setUTCDate(dt.getUTCDate() + (day===0 ? 0 : (7-day)));
+  return dt.getUTCFullYear()+'-'+String(dt.getUTCMonth()+1).padStart(2,'0')+'-'+String(dt.getUTCDate()).padStart(2,'0');
+}
 async function promptLinkOrder(orderId){
   const jobNum = prompt('Enter the job number of the existing event this order belongs to (e.g. 14 or #14):');
   if(!jobNum) return;
   const clean = jobNum.replace('#','').trim();
+  const jobVal = '#'+clean;
   try{
-    const snap = await db.collection('events').where('job','==','#'+clean).get();
-    if(snap.empty){ alert('No event found with job #'+clean+'. Double check the number.'); return; }
-    const eventDoc = snap.docs[0];
-    const eventId = eventDoc.id;
     const orderDoc = await ordersCol.doc(orderId).get();
     const order = orderDoc.data();
+    const targetWeek = weekEndingSunday(order.deliveryDate);
+
+    let candidates = [];
+    if(targetWeek){
+      const preciseSnap = await db.collection('events').where('job','==',jobVal).where('weekOf','==',targetWeek).get();
+      preciseSnap.forEach(d=> candidates.push(d));
+    }
+    if(!candidates.length){
+      // Fall back to every event with this job number, across all weeks —
+      // this only runs when the delivery-date match found nothing, so it's
+      // the safety net, not the normal path.
+      const broadSnap = await db.collection('events').where('job','==',jobVal).get();
+      broadSnap.forEach(d=> candidates.push(d));
+    }
+    if(!candidates.length){ alert('No event found with job '+jobVal+'. Double check the number.'); return; }
+
+    let eventDoc;
+    if(candidates.length===1){
+      eventDoc = candidates[0];
+    } else {
+      // More than one #14 exists across different weeks and the delivery
+      // date didn't pin down a single one — list them all so this is a
+      // deliberate pick, not a guess.
+      const lines = candidates.map((d,i)=>{
+        const ev = d.data();
+        return (i+1)+') '+jobVal+' — '+(ev.eventDate||ev.weekOf||'no date')+' — '+(ev.name||ev.eventName||'(no name)');
+      });
+      const pick = prompt('Found '+candidates.length+' events with job '+jobVal+' — which one? Type the number:\n\n'+lines.join('\n'));
+      const idx = parseInt(pick,10)-1;
+      if(!(idx>=0 && idx<candidates.length)){ alert('Cancelled — no valid selection made.'); return; }
+      eventDoc = candidates[idx];
+    }
+
+    const eventId = eventDoc.id;
     const invRef = db.collection('invoices').doc(eventId);
     const invDoc = await invRef.get();
     const newLines = order.lines.map(l=>({
@@ -798,7 +952,7 @@ async function promptLinkOrder(orderId){
       await db.collection('inquiries').doc(order.linkedInquiryId).delete().catch(()=>{});
     }
     await ordersCol.doc(orderId).set({linkedEventId:eventId, linkedInquiryId:null}, {merge:true});
-    showToast('Linked to #'+clean+' — items added to that invoice');
+    showToast('Linked to '+jobVal+' — items added to that invoice');
   }catch(e){ console.error(e); alert('Something went wrong linking this order.'); }
 }
 
