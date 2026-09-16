@@ -4692,7 +4692,7 @@ function renderEstimateBlock(inq, role){
   const tots = calcInvoiceTotals(est);
   const inp='background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:4px 6px;font-size:13px;color:var(--text);font-family:inherit';
   const rows = est.lines.map((l,i)=>`
-    <div style="display:grid;grid-template-columns:18px 1fr 52px 78px 96px 86px;gap:6px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border)">
+    <div style="display:grid;grid-template-columns:18px 1fr 52px 78px 96px 146px;gap:6px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border)">
       <span class="drag-handle" title="Drag to reorder" style="cursor:grab;color:var(--text3);font-size:15px;touch-action:none"><i class="ti ti-grip-vertical"></i></span>
       <input value="${(l.description||'').replace(/"/g,'&quot;')}" oninput="updateEstimateLine('${inq.id}',${i},'description',this.value)" placeholder="Description" style="${inp};width:100%">
       <input type="number" value="${l.qty||0}" min="0" step="1" oninput="updateEstimateLine('${inq.id}',${i},'qty',this.value)" style="${inp};width:100%;text-align:right">
@@ -4706,7 +4706,7 @@ function renderEstimateBlock(inq, role){
       </span>
     </div>`).join('');
   return `<div id="estBlock-${inq.id}"><div class="detail-block" style="margin-top:1rem">${header}
-    <div style="display:grid;grid-template-columns:18px 1fr 52px 78px 96px 86px;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);padding-bottom:4px">
+    <div style="display:grid;grid-template-columns:18px 1fr 52px 78px 96px 146px;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);padding-bottom:4px">
       <span></span><span>Description</span><span style="text-align:right">Qty</span><span style="text-align:right">Unit $</span><span style="text-align:right">Amount</span><span></span>
     </div>
     <div id="estLinesBody-${inq.id}">${rows}</div>
