@@ -144,7 +144,7 @@ a{color:var(--maroon);text-decoration:none}
   <!-- ============ ORDER BUILDER ============ -->
   <div class="view active" id="view-order">
     <div class="searchbar">
-      <div class="search"><i class="ti ti-search"></i><input type="text" id="searchInput" placeholder="Search the menu..." oninput="onSearchInput(this.value)"></div>
+      <div class="search"><i class="ti ti-search"></i><input type="text" id="menuFilterQ" name="menuFilterQ_dropoff" placeholder="Search the menu..." autocomplete="off" spellcheck="false" oninput="onSearchInput(this.value)"></div>
       <div class="chips" id="catChips"></div>
     </div>
     <div class="grid" id="itemGrid"></div>
@@ -288,7 +288,7 @@ let catalog = [];          // [{id,name,categories:[],type,sizes:[{label,price}]
 let catLoaded = false;
 
 let searchQuery = '';
-let activeCats = [];       // multi-select category filter
+let activeCat = null;      // single-select category filter — clicking a new one replaces the old
 // cart: keyed "itemId::sizeIdx" -> qty
 let cart = {};
 let itemNotes = {};        // keyed itemId -> note text
@@ -340,14 +340,13 @@ function allCategories(){
 }
 function onSearchInput(v){ searchQuery = v; renderItemGrid(); }
 function toggleCat(cat){
-  const i = activeCats.indexOf(cat);
-  if(i>=0) activeCats.splice(i,1); else activeCats.push(cat);
+  activeCat = (activeCat === cat) ? null : cat;
   renderItemGrid();
 }
 function renderCatChips(){
   const cats = allCategories();
   document.getElementById('catChips').innerHTML = cats.map(c=>
-    `<button class="chip ${activeCats.includes(c)?'on':''}" onclick="toggleCat('${esc(c).replace(/'/g,"\\'")}')">${esc(c)}</button>`
+    `<button class="chip ${activeCat===c?'on':''}" onclick="toggleCat('${esc(c).replace(/'/g,"\\'")}')">${esc(c)}</button>`
   ).join('');
 }
 function filteredItems(){
@@ -355,7 +354,7 @@ function filteredItems(){
   return catalog.filter(it=>{
     if(it.active===false) return false;
     const matchesQ = !q || (it.name||'').toLowerCase().includes(q);
-    const matchesCat = !activeCats.length || (it.categories||[]).some(c=>activeCats.includes(c));
+    const matchesCat = !activeCat || (it.categories||[]).includes(activeCat);
     return matchesQ && matchesCat;
   });
 }
