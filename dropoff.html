@@ -226,6 +226,7 @@ a{color:var(--maroon);text-decoration:none}
       <div class="section-title" style="margin-bottom:0">Drop-off menu &amp; pricing</div>
       <button class="btn btn-pri btn-sm" onclick="toggleAddItemPanel()" id="addItemBtn">+ Add item</button>
       <button class="btn btn-ghost btn-sm" onclick="importStarterMenu()" id="importMenuBtn" style="margin-left:8px">Import starter menu</button>
+      <button class="btn btn-ghost btn-sm" onclick="importStarterMenu2()" id="importMenuBtn2" style="margin-left:8px">Import rest of menu (part 2)</button>
     </div>
     <div class="section" id="addItemPanel" style="display:none"></div>
     <div style="overflow-x:auto"><table class="tbl" id="catalogTbl"></table></div>
@@ -948,6 +949,141 @@ async function importStarterMenu(){
     showToast('Imported '+STARTER_MENU.length+' items');
   }catch(e){ console.error(e); alert('Import failed — see console for details.'); }
   btn.disabled = false; btn.textContent = 'Import starter menu';
+}
+
+// Second batch — everything from the sheet past row 100 (Fish continued,
+// Hot Items, Hot sides, Hot mains, Meat platters, Kiddush/Challah,
+// Desserts, Optional items, Rentals). Skips two items already covered by
+// the first batch (Whole poached salmon, Challah rolls dozen) and
+// consolidates genuine same-item/different-size rows into one entry each:
+// Melange vegetables, Cholent, Kugel (+ its muffin size), Seasonal fruit
+// platters, Fresh baked cookies, Brownies and blondies.
+const STARTER_MENU_2 = [
+  {name:'Breaded fish fingers', type:'P', cats:['Fish'], sizes:[{label:'Large platter / full pan', price:110}]},
+  {name:'Baked Ziti', type:'D', cats:['Hot dairy'], sizes:[{label:'Full pan', price:90}]},
+  {name:'Old Fashioned Mac & Cheese', type:'D', cats:['Hot dairy'], sizes:[{label:'Full pan', price:90}]},
+  {name:'Fettuccini alfredo', type:'D', cats:['Hot dairy'], sizes:[{label:'Full pan', price:90}]},
+  {name:'Tuna casserole', type:'D', cats:['Hot dairy'], sizes:[{label:'Full pan', price:90}]},
+  {name:'Penne alla vodka', type:'D', cats:['Hot dairy'], sizes:[{label:'Full pan', price:90}]},
+  {name:'Lasagna Rollatini', type:'D', cats:['Hot dairy'], sizes:[{label:'Full pan', price:100}]},
+  {name:'Eggplant Rollatini', type:'D', cats:['Hot dairy'], sizes:[{label:'Full pan', price:100}]},
+  {name:'Assorted 3" quiches', type:'D', cats:['Hot dairy'], sizes:[{label:'Each', price:3.5}]},
+  {name:'Quiche 10"', type:'D', cats:['Hot dairy'], sizes:[{label:'Each', price:15}]},
+  {name:'Breaded mozzarella sticks', type:'D', cats:['Hot dairy'], sizes:[{label:'Full pan', price:100}]},
+  {name:'French toast with syrup', type:'P', cats:['Hot sides'], sizes:[{label:'Full pan', price:55}]},
+  {name:'Pancakes with syrup', type:'P', cats:['Hot sides'], sizes:[{label:'Full pan', price:50}]},
+  {name:'Waffles with syrup', type:'P', cats:['Hot sides'], sizes:[{label:'Full pan', price:50}]},
+  {name:'Hash browns', type:'P', cats:['Hot sides'], sizes:[{label:'Full pan', price:55}]},
+  {name:'Garlic knots', type:'P', cats:['Hot sides'], sizes:[{label:'Full pan', price:50}]},
+  {name:'Borekos', type:'P', cats:['Hot sides'], sizes:[{label:'Full pan', price:65}]},
+  {name:'Miniature egg rolls, duck sauce', type:'P', cats:['Hot sides'], sizes:[{label:'Full pan', price:10}]},
+  {name:'Miniature potato puffs', type:'P', cats:['Hot sides'], sizes:[{label:'Full pan', price:55}]},
+  {name:'Melange vegetables', type:'P', cats:['Hot sides'], sizes:[{label:'9x13', price:45},{label:'Full pan', price:55}]},
+  {name:'Roasted red potatoes', type:'P', cats:['Hot sides'], sizes:[{label:'Full pan', price:50}]},
+  {name:'Basmati rice', type:'P', cats:['Hot sides'], sizes:[{label:'Full pan', price:45}]},
+  {name:'Fried rice', type:'P', cats:['Hot sides'], sizes:[{label:'Full pan', price:45}]},
+  {name:'French beans', type:'P', cats:['Hot sides'], sizes:[{label:'Full pan', price:65}]},
+  {name:'Israeli couscous', type:'P', cats:['Hot sides'], sizes:[{label:'Full pan', price:45}]},
+  {name:'Basmati rice with dried cranberries and almonds', type:'P', cats:['Hot sides'], sizes:[{label:'Full pan', price:45}]},
+  {name:'Pasta', type:'P', cats:['Hot sides'], sizes:[{label:'Full pan', price:45}]},
+  {name:'Roasted baby red potatoes', type:'P', cats:['Hot sides'], sizes:[{label:'9x13', price:35}]},
+  {name:'French Fries', type:'P', cats:['Hot sides'], sizes:[{label:'9x13', price:25}]},
+  {name:'Dilled rice', type:'P', cats:['Hot sides'], sizes:[{label:'9x13', price:25}]},
+  {name:'Roasted winter root vegetables', type:'P', cats:['Hot sides'], sizes:[{label:'9x13', price:45}]},
+  {name:'Toasted orzo', type:'P', cats:['Hot sides'], sizes:[{label:'9x13', price:35}]},
+  {name:'Quinoa (hot side)', type:'P', cats:['Hot sides'], sizes:[{label:'9x13', price:35}]},
+  {name:'Farro grain', type:'P', cats:['Hot sides'], sizes:[{label:'9x13', price:35}]},
+  {name:'Cholent', type:'M', cats:['Hot mains'], sizes:[{label:'9x13 (half pan)', price:60},{label:'Full pan', price:110}]},
+  {name:'Kishke', type:'M', cats:['Hot mains'], sizes:[{label:'9x13 (half pan)', price:35}]},
+  {name:'Kugel (potato, sweet noodle, yerushalmi, salt & pepper, shalom bayis)', type:'P', cats:['Hot mains'], sizes:[{label:'9x13 (half pan)', price:35},{label:'Full pan', price:60},{label:'Muffin, each', price:2.5}]},
+  {name:'Mini meatballs', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:145}]},
+  {name:'BBQ beef', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:180}]},
+  {name:'Mini hot dogs (no breading)', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:125}]},
+  {name:'Mini franks in blankets', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:105}]},
+  {name:'Mini stuffed cabbage', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:155}]},
+  {name:'Sliced pastrami (hot)', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:190}]},
+  {name:'Marsala chicken', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:160}]},
+  {name:'Chicken poppers', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:130}]},
+  {name:'Grilled chicken cutlets, choice of marinade (hot)', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:130}]},
+  {name:'Stuffed boneless dark chicken capons', type:'M', cats:['Hot mains'], sizes:[{label:'Each', price:13}]},
+  {name:'Stuffed french cut chicken breasts', type:'M', cats:['Hot mains'], sizes:[{label:'Each', price:12}]},
+  {name:'Lo mein, chicken or beef', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:95}]},
+  {name:'Asian beef or chicken with vegetables', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:125}]},
+  {name:'General tso chicken', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:135}]},
+  {name:'Any other Asian items', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:110}]},
+  {name:'Hot dogs and buns', type:'M', cats:['Hot mains'], sizes:[{label:'Each', price:4}]},
+  {name:'Sliders and buns (2 oz)', type:'M', cats:['Hot mains'], sizes:[{label:'Each', price:4}]},
+  {name:'Sliders and buns (4 oz)', type:'M', cats:['Hot mains'], sizes:[{label:'Each', price:7.5}]},
+  {name:'Mini beef or dark meat kebobs', type:'M', cats:['Hot mains'], sizes:[{label:'Each', price:4}]},
+  {name:'Sliced brisket', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:235}]},
+  {name:'Pulled brisket', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:235}]},
+  {name:'Sliced london broil (hot)', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:195}]},
+  {name:'Middle eastern kibbeh, lachmagine, cigars', type:'M', cats:['Hot mains'], sizes:[{label:'Each piece', price:2.5}]},
+  {name:'Sesame chicken', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:135}]},
+  {name:'Shawarma chicken', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:155}]},
+  {name:'Miniature beef or chicken dumplings', type:'M', cats:['Hot mains'], sizes:[{label:'Full pan', price:110}]},
+  {name:'Deli platters (turkey, pastrami, corned beef, rye, condiments)', type:'M', cats:['Meat platters'], sizes:[{label:'Large platter', price:125}]},
+  {name:'Chicken nuggets or fingers (plain, pretzel, coconut, cap\'n crunch, pepper)', type:'M', cats:['Meat platters'], sizes:[{label:'Large platter', price:130}]},
+  {name:'Grilled chicken cutlets (spice, mango, or cranberry)', type:'M', cats:['Meat platters'], sizes:[{label:'Large platter', price:130}]},
+  {name:'Stuffed chicken roulades', type:'M', cats:['Meat platters'], sizes:[{label:'Large platter', price:145}]},
+  {name:'Sliced london broil (platter)', type:'M', cats:['Meat platters'], sizes:[{label:'Large platter', price:170}]},
+  {name:'Chopped liver / crackers', type:'M', cats:['Meat platters'], sizes:[{label:'Medium platter', price:65}]},
+  {name:'Lachmagine / kibbe / moroccan cigars', type:'M', cats:['Meat platters'], sizes:[{label:'Large platter', price:135}]},
+  {name:'Herring', type:'P', cats:['Kiddush'], sizes:[{label:'16 oz container', price:25}]},
+  {name:'Crackers', type:'P', cats:['Kiddush'], sizes:[{label:'Bowl', price:6}]},
+  {name:'Gefilte fish with carrots and horseradish', type:'P', cats:['Kiddush'], sizes:[{label:'Small platter', price:50}]},
+  {name:'XL challah rolls', type:'P', cats:['Kiddush'], sizes:[{label:'Each', price:2}]},
+  {name:'Regular size whole challah', type:'P', cats:['Kiddush'], sizes:[{label:'Each', price:5}]},
+  {name:'Extra large ceremonial challah', type:'P', cats:['Kiddush'], sizes:[{label:'Each', price:35}]},
+  {name:'Grape juice', type:'P', cats:['Kiddush'], sizes:[{label:'Each', price:4}]},
+  {name:'Seasonal fruit platters', type:'P', cats:['Desserts'], sizes:[{label:'Small platter', price:45},{label:'Large platter', price:80}]},
+  {name:'Chopped fruit', type:'P', cats:['Desserts'], sizes:[{label:'Per bowl', price:38}]},
+  {name:'10" Cheesecake (plain or assorted flavors)', type:'D', cats:['Desserts'], sizes:[{label:'Each', price:60}]},
+  {name:'Assorted miniature fancy pastries', type:'P', cats:['Desserts'], sizes:[{label:'Small platter (3 dz)', price:60}]},
+  {name:'Assorted mini muffins', type:'P', cats:['Desserts'], sizes:[{label:'Small platter', price:45}]},
+  {name:'Fresh baked cookies (choc chip, oatmeal raisin, double choc)', type:'P', cats:['Desserts'], sizes:[{label:'Small platter', price:25},{label:'Large platter', price:45}]},
+  {name:'Brownies and blondies', type:'P', cats:['Desserts'], sizes:[{label:'Small platter', price:30},{label:'Large platter', price:55}]},
+  {name:'Individual glass mason jars, assorted cake and mousse', type:'P', cats:['Desserts'], sizes:[{label:'Each', price:5}]},
+  {name:'Rice crispy logs, assorted flavors', type:'P', cats:['Desserts'], sizes:[{label:'Each', price:60}]},
+  {name:'Rice crispy squares, assorted flavors', type:'P', cats:['Desserts'], sizes:[{label:'Large platter', price:55}]},
+  {name:'Custom logo / name cookies (3 dz min)', type:'P', cats:['Desserts'], sizes:[{label:'Dozen', price:45}]},
+  {name:'Rugelach', type:'P', cats:['Desserts'], sizes:[{label:'Bowl', price:40}]},
+  {name:'Sliced loaf cakes, assorted flavors', type:'P', cats:['Desserts'], sizes:[{label:'Large platter', price:50}]},
+  {name:'Apple crisp', type:'P', cats:['Desserts'], sizes:[{label:'Full insert', price:55}]},
+  {name:'Cinnamon buns', type:'P', cats:['Desserts'], sizes:[{label:'Large platter / full insert', price:55}]},
+  {name:'Waiters (up to 5 hours)', type:'P', cats:['Optional items'], sizes:[{label:'Each', price:215}]},
+  {name:'Waiters (additional hours)', type:'P', cats:['Optional items'], sizes:[{label:'Each hour', price:35}]},
+  {name:'High quality plasticware (plates, cutlery, cold drink cups)', type:'P', cats:['Optional items'], sizes:[{label:'Per person', price:3}]},
+  {name:'Soda (coke, diet coke, seltzer, sprite, orange, ginger ale)', type:'P', cats:['Optional items'], sizes:[{label:'Per bottle', price:4}]},
+  {name:'Bottled spring water', type:'P', cats:['Optional items'], sizes:[{label:'Per bottle', price:3}]},
+  {name:'Juice (OJ, apple, cranberry, ruby grapefruit, tomato)', type:'P', cats:['Optional items'], sizes:[{label:'Per bottle', price:5}]},
+  {name:'Coffee station (3 urns, coffee, tea, milk, sugar, cups/lids)', type:'P', cats:['Optional items'], sizes:[{label:'Setup', price:110}]},
+  {name:'Wire racks, water pans and sterno', type:'P', cats:['Optional items'], sizes:[{label:'Per set', price:9}]},
+  {name:'Serving pieces', type:'P', cats:['Optional items'], sizes:[{label:'Each', price:1}]},
+  {name:'Linen tablecloth rental', type:'P', cats:['Rentals'], sizes:[{label:'Each', price:19}]},
+  {name:'Linen napkins', type:'P', cats:['Rentals'], sizes:[{label:'Each', price:1}]},
+  {name:'Chair covers (white, black, or ivory)', type:'P', cats:['Rentals'], sizes:[{label:'Each', price:1.5}]},
+  {name:'Table rentals (price varies by type)', type:'P', cats:['Rentals'], sizes:[{label:'Each', price:15}]},
+  {name:'Chair rentals (price varies by type)', type:'P', cats:['Rentals'], sizes:[{label:'Each', price:3.5}]},
+  {name:'Coffee urns', type:'P', cats:['Rentals'], sizes:[{label:'Each', price:25}]},
+  {name:'Refrigerator rental (price varies by type)', type:'P', cats:['Rentals'], sizes:[{label:'Each', price:150}]},
+  {name:'Shabbos warmer rental (price varies by type)', type:'M', cats:['Rentals'], sizes:[{label:'Each', price:100}]},
+  {name:'Trailer walk-in fridge (plugs into standard outlet)', type:'P', cats:['Rentals'], sizes:[{label:'2.5 days', price:950}]},
+];
+async function importStarterMenu2(){
+  if(!confirm('Import '+STARTER_MENU_2.length+' more items (Hot dairy, Hot sides, Hot mains, Meat platters, Kiddush, Desserts, Optional items, Rentals)? You can edit, add to, or delete any of them afterward.')) return;
+  const btn = document.getElementById('importMenuBtn2');
+  btn.disabled = true; btn.textContent = 'Importing…';
+  try{
+    const batch = db.batch();
+    STARTER_MENU_2.forEach(it=>{
+      const ref = catalogCol.doc();
+      batch.set(ref, {name:it.name, type:it.type, categories:it.cats, sizes:it.sizes, active:true, createdAt:Date.now()});
+    });
+    await batch.commit();
+    showToast('Imported '+STARTER_MENU_2.length+' items');
+  }catch(e){ console.error(e); alert('Import failed — see console for details.'); }
+  btn.disabled = false; btn.textContent = 'Import rest of menu (part 2)';
 }
 
 async function saveNewItem(){
