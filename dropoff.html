@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Premier Caterers — Order Drop-Off Catering</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#FFFFFF;--bg2:#FCFAF6;--bg3:#F7F3EC;
+  --text:#2B2420;--text2:#6B6058;--text3:#9A8E84;
+  --border:#EAE2D6;--border2:#DDD3C4;
+  --maroon:#8B1A1A;--maroon-deep:#6E1414;--maroon-tint:#F3E4E2;
+  --brass:#B0894B;--brass-deep:#8C6B36;--brass-tint:#F6EEDF;
+  --green:#2E7D5B;--green-bg:#E4F1EA;--green-text:#216B47;
+  --red:#B3261E;--red-bg:#FBEAEA;
+  --radius:9px;--radius-lg:14px;
+  --shadow:0 1px 2px rgba(43,36,32,.04),0 4px 14px rgba(43,36,32,.06);
+}
+html,body{width:100%}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg3);color:var(--text);font-size:14px;line-height:1.5;padding-bottom:2px}
+.serif{font-family:'Fraunces',Georgia,serif}
+.mono{font-family:'IBM Plex Mono',monospace}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:14px}
+a{color:var(--maroon);text-decoration:none}
+::placeholder{color:var(--text3)}
+
+.topbar{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:14px 20px}
+.topbar-row{display:flex;align-items:center;justify-content:space-between;gap:16px;max-width:1160px;margin:0 auto}
+.brand{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:20px;color:var(--maroon)}
+.brand small{display:block;font-family:'Inter',sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
+.tb-right{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text2)}
+.tb-link{background:none;border:1px solid var(--border);border-radius:8px;padding:7px 13px;font-size:12.5px;color:var(--text2)}
+.tb-link:hover{border-color:var(--border2)}
+
+.wrap{max-width:1160px;margin:0 auto;padding:22px 20px 100px}
+.view{display:none}
+.view.active{display:block}
+
+/* search + filter bar */
+.searchbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+.search{flex:1;min-width:220px;max-width:380px;position:relative}
+.search input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border);border-radius:10px;background:var(--bg)}
+.search input:focus{outline:2px solid var(--maroon);outline-offset:1px}
+.search i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:16px}
+.chips{display:flex;gap:7px;flex-wrap:wrap}
+.chip{padding:7px 14px;border-radius:18px;font-size:12.5px;font-weight:600;border:1px solid var(--border);background:var(--bg);color:var(--text2)}
+.chip.on{background:var(--maroon);border-color:var(--maroon);color:#fff}
+
+/* item grid */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;display:flex;flex-direction:column;gap:8px}
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.card-name{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:15.5px;line-height:1.3}
+.badge{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;font-family:'IBM Plex Mono',monospace;flex-shrink:0}
+.badge.P{background:var(--bg3);color:var(--text2)}
+.badge.D{background:var(--green-bg);color:var(--green-text)}
+.badge.M{background:var(--red-bg);color:var(--red)}
+.size-row{display:flex;align-items:center;justify-content:space-between;padding:5px 2px}
+.size-label{font-size:12.5px;color:var(--text)}
+.size-label small{color:var(--text3)}
+.stepper{display:flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:8px;padding:3px 5px}
+.stepper.on{border-color:var(--maroon)}
+.stepper button{width:21px;height:21px;border:none;background:none;font-size:14px;color:var(--text2);font-family:'IBM Plex Mono',monospace}
+.stepper .n{font-family:'IBM Plex Mono',monospace;font-size:12.5px;min-width:13px;text-align:center}
+.note-toggle{align-self:flex-start;background:none;border:none;color:var(--text3);font-size:11.5px;text-decoration:underline;padding:0}
+.note-box{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical}
+
+/* cart bar */
+.cartbar{position:sticky;bottom:0;z-index:30;background:var(--text);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;margin-top:18px;border-radius:var(--radius-lg)}
+.cartbar .count{font-size:13px;color:#D8D2CB}
+.cartbar-right{display:flex;align-items:center;gap:16px}
+.cartbar .total{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600}
+.btn{border:none;border-radius:9px;padding:10px 18px;font-size:13.5px;font-weight:600;cursor:pointer}
+.btn-pri{background:var(--maroon);color:#fff}
+.btn-pri:hover{background:var(--maroon-deep)}
+.btn-pri:disabled{opacity:.5;cursor:default}
+.btn-ghost{background:none;border:1px solid var(--border2);color:var(--text2)}
+.btn-sm{padding:7px 12px;font-size:12.5px}
+
+/* forms */
+.field{margin-bottom:0}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px}
+.field input,.field select,.field textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:9px;background:var(--bg)}
+.field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--maroon);outline-offset:1px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.section{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:16px}
+.section-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:14px}
+.recap-line{display:flex;justify-content:space-between;font-size:13.5px;padding:6px 0;border-bottom:1px solid var(--bg3)}
+.recap-note{font-size:11.5px;color:var(--maroon);margin-top:2px}
+.recap-total{display:flex;justify-content:space-between;padding-top:10px;font-weight:600;font-size:14.5px}
+
+/* misc */
+.empty{color:var(--text3);text-align:center;padding:40px 20px}
+.center-note{text-align:center;color:var(--text2);font-size:13px;margin:18px 0}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 18px;border-radius:9px;font-size:13px;z-index:999;display:none}
+
+/* staff table */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:10.5px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.03em;padding:8px 10px;border-bottom:1px solid var(--border)}
+.tbl td{padding:11px 10px;border-bottom:1px solid var(--bg3);font-size:13px;vertical-align:top}
+.tag{font-size:10.5px;padding:2px 8px;border-radius:11px;background:var(--bg3);color:var(--text2);margin-right:3px;display:inline-block;margin-bottom:2px}
+.pill-status{font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:11px;text-transform:uppercase;letter-spacing:.02em}
+.pill-status.draft{background:var(--brass-tint);color:var(--brass-deep)}
+.pill-status.submitted{background:var(--green-bg);color:var(--green-text)}
+.pill-status.linked{background:var(--maroon-tint);color:var(--maroon-deep)}
+
+/* login overlay (staff only) */
+#loginOverlay{position:fixed;inset:0;z-index:9999;background:var(--maroon);display:none;align-items:center;justify-content:center;padding:24px}
+.lg-box{background:#fff;border-radius:16px;padding:32px;max-width:340px;width:100%;text-align:center}
+.lg-title{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:19px;margin-bottom:6px}
+.lg-sub{font-size:13px;color:var(--text2);margin-bottom:18px}
+.lg-input{width:100%;padding:11px 13px;border:1px solid var(--border);border-radius:9px;margin-bottom:10px}
+.lg-go{width:100%;background:var(--maroon);color:#fff;border:none;border-radius:9px;padding:11px;font-weight:600;font-size:14px;margin-bottom:10px}
+.lg-err{color:var(--red);font-size:12px;min-height:16px;margin-bottom:6px}
+.lg-back{background:none;border:none;color:var(--text3);font-size:12.5px}
+
+@media (max-width:640px){
+  .grid2{grid-template-columns:1fr}
+  .grid{grid-template-columns:1fr}
+  .cartbar{border-radius:0;margin-left:-20px;margin-right:-20px;margin-top:20px;width:calc(100% + 40px)}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-row">
+    <div class="brand">Premier Caterers<small>Order drop-off catering</small></div>
+    <div class="tb-right" id="tbRight"></div>
+  </div>
+</div>
+
+<div class="wrap" id="appWrap">
+
+  <!-- ============ ORDER BUILDER ============ -->
+  <div class="view active" id="view-order">
+    <div class="searchbar">
+      <div class="search"><i class="ti ti-search"></i><input type="text" id="searchInput" placeholder="Search the menu..." oninput="onSearchInput(this.value)"></div>
+      <div class="chips" id="catChips"></div>
+    </div>
+    <div class="grid" id="itemGrid"></div>
+    <div class="empty" id="itemEmpty" style="display:none">No items match. Try a different search or category.</div>
+    <div class="cartbar" id="cartBar" style="display:none">
+      <div class="count" id="cartCount">Your order is empty</div>
+      <div class="cartbar-right">
+        <div class="total mono" id="cartTotal">$0.00</div>
+        <button class="btn btn-pri" onclick="goCheckout()">Continue to delivery details</button>
+      </div>
+    </div>
+    <div class="center-note">Ordered from us before? <a href="#" onclick="showView('myorders');return false">Look up a past order</a></div>
+  </div>
+
+  <!-- ============ CHECKOUT / DELIVERY DETAILS ============ -->
+  <div class="view" id="view-checkout">
+    <div style="margin-bottom:16px"><a href="#" onclick="showView('order');return false"><i class="ti ti-arrow-left"></i> Back to menu</a></div>
+    <div class="section-title" style="margin-bottom:2px">Your order</div>
+    <div class="section" id="checkoutRecap"></div>
+    <div class="section">
+      <div class="section-title">Delivery</div>
+      <div class="grid2" style="margin-bottom:14px">
+        <div class="field"><label for="coName">Name / occasion</label><input id="coName" type="text" placeholder="e.g. Skolnik Bar Mitzvah kiddush"></div>
+        <div class="field"><label for="coLoc">Location name</label><input id="coLoc" type="text" placeholder="e.g. Congregation Beth Sholom"></div>
+        <div class="field"><label for="coDate">Delivery date</label><input id="coDate" type="date"></div>
+        <div class="field"><label for="coTime">Delivery time</label><input id="coTime" type="time"></div>
+      </div>
+      <div class="field"><label for="coAddr">Address</label><input id="coAddr" type="text" placeholder="Street, city, state, zip"></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Contact</div>
+      <div class="grid2" style="margin-bottom:14px">
+        <div class="field"><label for="coCName">Contact name</label><input id="coCName" type="text" placeholder="Full name"></div>
+        <div class="field"><label for="coCPhone">Cell number</label><input id="coCPhone" type="tel" placeholder="(201) 555-0100"></div>
+      </div>
+      <div class="field"><label for="coCEmail">Email</label><input id="coCEmail" type="email" placeholder="name@email.com" oninput="onCheckoutEmailInput()"></div>
+    </div>
+    <div class="section">
+      <div class="field"><label for="coNotes">Notes for the kitchen (optional)</label><textarea id="coNotes" rows="3" placeholder="Allergies, gate codes, anything we should know..."></textarea></div>
+    </div>
+    <div class="lg-err" id="checkoutErr"></div>
+    <button class="btn btn-pri" style="width:100%;padding:14px" id="placeOrderBtn" onclick="submitOrder()">Place order</button>
+  </div>
+
+  <!-- ============ CONFIRMATION ============ -->
+  <div class="view" id="view-confirm">
+    <div class="section" style="text-align:center;padding:40px 24px">
+      <div style="font-size:38px;margin-bottom:10px">✓</div>
+      <div class="serif" style="font-size:22px;font-weight:600;margin-bottom:8px">Order received</div>
+      <div style="color:var(--text2);font-size:13.5px;max-width:420px;margin:0 auto 20px">Thank you — we've got your order and will be in touch if we have any questions. A copy is below for your records.</div>
+      <button class="btn btn-ghost" onclick="showView('order')">Start a new order</button>
+    </div>
+    <div class="section" id="confirmRecap"></div>
+  </div>
+
+  <!-- ============ MY ORDERS (client lookup) ============ -->
+  <div class="view" id="view-myorders">
+    <div style="margin-bottom:16px"><a href="#" onclick="showView('order');return false"><i class="ti ti-arrow-left"></i> Back to menu</a></div>
+    <div class="section-title" style="margin-bottom:2px">Look up your past orders</div>
+    <div class="section">
+      <div class="field" style="margin-bottom:10px"><label for="lookupEmail">Email address you ordered with</label><input id="lookupEmail" type="email" placeholder="name@email.com"></div>
+      <button class="btn btn-pri" onclick="lookupMyOrders()">Find my orders</button>
+    </div>
+    <div id="myOrdersList"></div>
+  </div>
+
+  <!-- ============ STAFF: ORDERS INBOX ============ -->
+  <div class="view" id="view-staffOrders">
+    <div class="section-title" style="margin-bottom:2px">All orders</div>
+    <div class="searchbar" style="margin-bottom:12px">
+      <div class="search"><i class="ti ti-search"></i><input type="text" id="staffOrderSearch" placeholder="Search by client name or email..." oninput="renderStaffOrders()"></div>
+    </div>
+    <div style="overflow-x:auto"><table class="tbl" id="staffOrdersTbl"></table></div>
+  </div>
+
+  <!-- ============ STAFF: CATALOG MANAGEMENT ============ -->
+  <div class="view" id="view-staffCatalog">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="section-title" style="margin-bottom:0">Drop-off menu &amp; pricing</div>
+      <button class="btn btn-pri btn-sm" onclick="toggleAddItemPanel()" id="addItemBtn">+ Add item</button>
+    </div>
+    <div class="section" id="addItemPanel" style="display:none"></div>
+    <div style="overflow-x:auto"><table class="tbl" id="catalogTbl"></table></div>
+  </div>
+
+</div>
+
+<div id="loginOverlay">
+  <div class="lg-box" id="loginBox">
+    <div class="lg-title">Staff sign in</div>
+    <div class="lg-sub">Sign in to manage the menu or view all orders</div>
+    <input id="lgEmail" class="lg-input" type="email" placeholder="Email" onkeydown="if(event.key==='Enter')document.getElementById('lgPw').focus()">
+    <input id="lgPw" class="lg-input" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')staffLoginSubmit()">
+    <div class="lg-err" id="lgErr"></div>
+    <button class="lg-go" onclick="staffLoginSubmit()">Sign in</button>
+    <button class="lg-back" onclick="closeStaffLogin()">&larr; back to ordering</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================================
+   FIREBASE INIT — same project as the main app and Purchasing. This app
+   writes to shared collections (inquiries, invoices, settings) so the
+   main app picks up new orders automatically — no main-app code needed.
+   ===================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
+  authDomain: "premier-caterers-internal-app.firebaseapp.com",
+  projectId: "premier-caterers-internal-app",
+  storageBucket: "premier-caterers-internal-app.firebasestorage.app",
+  messagingSenderId: "471701398759",
+  appId: "1:471701398759:web:559a7bee3b645ce545ee42"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const catalogCol = db.collection('dropOffCatalog');
+const ordersCol  = db.collection('dropOffOrders');
+
+// Staff accounts — same real Firebase Auth logins as the main app.
+const PC_EMAILS = {
+  owner:   'kenny@thepremiercaterer.com',
+  shelley: 'shelley@thepremiercaterer.com',
+  josh:    'joshg@thepremiercaterer.com',
+  kitchen: 'kitchen@thepremiercaterer.com'
+};
+function pcUserForEmail(email){
+  email = (email||'').toLowerCase();
+  for(const k in PC_EMAILS){ if(PC_EMAILS[k].toLowerCase() === email) return k; }
+  return null;
+}
+function prettyStaffName(u){ return u==='owner' ? 'Kenny' : (u ? u.charAt(0).toUpperCase()+u.slice(1) : ''); }
+
+let isStaff = false;
+let staffUser = null;
+let currentView = 'order';
+let catalog = [];          // [{id,name,categories:[],type,sizes:[{label,price}],active}]
+let catLoaded = false;
+
+let searchQuery = '';
+let activeCats = [];       // multi-select category filter
+// cart: keyed "itemId::sizeIdx" -> qty
+let cart = {};
+let itemNotes = {};        // keyed itemId -> note text
+let noteOpen = {};         // keyed itemId -> bool
+
+let currentOrderId = null; // the Firestore doc id of the in-progress draft
+let draftSaveTimer = null;
+let draftStarted = false;  // has the draft been written at least once
+
+/* ---------- small utilities ---------- */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._h);
+  t._h = setTimeout(()=>{ t.style.display='none'; }, 2600);
+}
+function showView(v){
+  document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+  const el = document.getElementById('view-'+v);
+  if(el) el.classList.add('active');
+  currentView = v;
+  window.scrollTo(0,0);
+  if(v==='order') renderItemGrid();
+  if(v==='checkout') renderCheckoutRecap();
+  if(v==='staffOrders') renderStaffOrders();
+  if(v==='staffCatalog') renderCatalogTable();
+  updateTopbar();
+}
+function money(n){ return (parseFloat(n)||0).toFixed(2); }
+
+/* =====================================================================
+   CATALOG — replaces the old drop-off Google Sheet. Loaded live so a
+   staff edit in Catalog management shows up immediately for anyone
+   currently browsing the menu.
+   ===================================================================== */
+catalogCol.orderBy('name').onSnapshot(snap=>{
+  catalog = [];
+  snap.forEach(doc=> catalog.push(Object.assign({id:doc.id}, doc.data())) );
+  catLoaded = true;
+  if(currentView==='order') renderItemGrid();
+  if(currentView==='staffCatalog') renderCatalogTable();
+}, err=>{ console.error('catalog load error', err); });
+
+function allCategories(){
+  const set = new Set();
+  catalog.forEach(it=> (it.categories||[]).forEach(c=>set.add(c)) );
+  return Array.from(set).sort();
+}
+function onSearchInput(v){ searchQuery = v; renderItemGrid(); }
+function toggleCat(cat){
+  const i = activeCats.indexOf(cat);
+  if(i>=0) activeCats.splice(i,1); else activeCats.push(cat);
+  renderItemGrid();
+}
+function renderCatChips(){
+  const cats = allCategories();
+  document.getElementById('catChips').innerHTML = cats.map(c=>
+    `<button class="chip ${activeCats.includes(c)?'on':''}" onclick="toggleCat('${esc(c).replace(/'/g,"\\'")}')">${esc(c)}</button>`
+  ).join('');
+}
+function filteredItems(){
+  const q = searchQuery.trim().toLowerCase();
+  return catalog.filter(it=>{
+    if(it.active===false) return false;
+    const matchesQ = !q || (it.name||'').toLowerCase().includes(q);
+    const matchesCat = !activeCats.length || (it.categories||[]).some(c=>activeCats.includes(c));
+    return matchesQ && matchesCat;
+  });
+}
+function cartKey(itemId, sizeIdx){ return itemId+'::'+sizeIdx; }
+function renderItemGrid(){
+  renderCatChips();
+  const items = filteredItems();
+  const grid = document.getElementById('itemGrid');
+  document.getElementById('itemEmpty').style.display = items.length ? 'none' : '';
+  if(!catLoaded){ grid.innerHTML = '<div class="empty">Loading menu…</div>'; updateCartBar(); return; }
+  grid.innerHTML = items.map(it=>{
+    const sizes = (it.sizes||[]).map((sz,idx)=>{
+      const key = cartKey(it.id, idx);
+      const qty = cart[key]||0;
+      return `<div class="size-row">
+        <div class="size-label">${esc(sz.label)} <small>&middot; $${money(sz.price)}</small></div>
+        <div class="stepper ${qty>0?'on':''}">
+          <button onclick="stepQty('${it.id}',${idx},-1)" aria-label="Decrease">&minus;</button>
+          <div class="n">${qty}</div>
+          <button onclick="stepQty('${it.id}',${idx},1)" aria-label="Increase">+</button>
+        </div>
+      </div>`;
+    }).join('');
+    const hasNote = noteOpen[it.id];
+    const noteHtml = hasNote
+      ? `<textarea class="note-box" rows="2" placeholder="e.g. no onions, extra sauce on the side..." oninput="setItemNote('${it.id}',this.value)">${esc(itemNotes[it.id]||'')}</textarea>`
+      : `<button class="note-toggle" onclick="openNote('${it.id}')">+ Add a note about this item</button>`;
+    return `<div class="card">
+      <div class="card-top">
+        <div class="card-name">${esc(it.name)}</div>
+        <div class="badge ${it.type}" title="${it.type==='M'?'Meat':it.type==='D'?'Dairy':'Parve'}">${it.type}</div>
+      </div>
+      <div>${sizes}</div>
+      ${noteHtml}
+    </div>`;
+  }).join('');
+  updateCartBar();
+}
+function stepQty(itemId, sizeIdx, delta){
+  const key = cartKey(itemId, sizeIdx);
+  const next = Math.max(0, (cart[key]||0) + delta);
+  if(next===0) delete cart[key]; else cart[key] = next;
+  renderItemGrid();
+  scheduleDraftSave();
+}
+function openNote(itemId){ noteOpen[itemId] = true; renderItemGrid(); }
+function setItemNote(itemId, val){ itemNotes[itemId] = val; scheduleDraftSave(); }
+
+function cartLines(){
+  const lines = [];
+  Object.keys(cart).forEach(key=>{
+    const [itemId, sizeIdxStr] = key.split('::');
+    const qty = cart[key]; if(!qty) return;
+    const item = catalog.find(x=>x.id===itemId); if(!item) return;
+    const sz = item.sizes[parseInt(sizeIdxStr,10)]; if(!sz) return;
+    lines.push({ itemId, itemName:item.name, sizeLabel:sz.label, price:sz.price, qty, note:itemNotes[itemId]||'' });
+  });
+  return lines;
+}
+function cartTotal(){ return cartLines().reduce((s,l)=> s + l.price*l.qty, 0); }
+function cartCount(){ return cartLines().reduce((s,l)=> s + l.qty, 0); }
+function updateCartBar(){
+  const bar = document.getElementById('cartBar');
+  const n = cartCount();
+  bar.style.display = n>0 ? 'flex' : 'none';
+  document.getElementById('cartCount').textContent = n===0 ? 'Your order is empty' : (n+' item'+(n===1?'':'s')+' in your order');
+  document.getElementById('cartTotal').textContent = '$'+money(cartTotal());
+}
+
+function goCheckout(){
+  if(!cartCount()){ return; }
+  showView('checkout');
+}
+function recapHtml(lines, total){
+  if(!lines.length) return '<div class="empty">No items.</div>';
+  let html = lines.map(l=>{
+    const noteHtml = l.note ? `<div class="recap-note">&#9998; ${esc(l.note)}</div>` : '';
+    return `<div class="recap-line-wrap">
+      <div class="recap-line"><div>${l.qty}&times; ${esc(l.itemName)} <span style="color:var(--text3)">(${esc(l.sizeLabel)})</span></div><div class="mono">$${money(l.price*l.qty)}</div></div>
+      ${noteHtml}
+    </div>`;
+  }).join('');
+  html += `<div class="recap-total"><div>Total</div><div class="mono">$${money(total)}</div></div>`;
+  return html;
+}
+function renderCheckoutRecap(){
+  document.getElementById('checkoutRecap').innerHTML = recapHtml(cartLines(), cartTotal());
+}
+
+/* =====================================================================
+   DRAFT AUTOSAVE — as soon as someone adds their first item, we save a
+   draft order to Firestore. A separate Apps Script time-trigger checks
+   for drafts that go idle without being submitted and emails staff so
+   nothing gets missed — see the companion .gs addition.
+   ===================================================================== */
+function scheduleDraftSave(){
+  clearTimeout(draftSaveTimer);
+  draftSaveTimer = setTimeout(saveDraftNow, 1200);
+}
+async function saveDraftNow(){
+  const lines = cartLines();
+  if(!lines.length) return; // nothing worth saving yet
+  const payload = {
+    status: 'draft',
+    lines, total: cartTotal(),
+    clientEmail: (document.getElementById('coCEmail')||{}).value || '',
+    clientName: (document.getElementById('coCName')||{}).value || (document.getElementById('coName')||{}).value || '',
+    updatedAt: Date.now()
+  };
+  // startNotified only needs setting once, on the very first save that
+  // creates the draft — Firestore's set() throws on a literal `undefined`
+  // value (unlike null, it isn't silently dropped), so it must be left
+  // out of the payload entirely on every later autosave, not set to
+  // undefined.
+  if(!draftStarted) payload.startNotified = false;
+  try{
+    if(currentOrderId){
+      await ordersCol.doc(currentOrderId).set(payload, {merge:true});
+    } else {
+      payload.createdAt = Date.now();
+      const ref = await ordersCol.add(payload);
+      currentOrderId = ref.id;
+    }
+    draftStarted = true;
+  }catch(e){ console.error('draft save failed', e); }
+}
+function onCheckoutEmailInput(){ scheduleDraftSave(); }
+
+/* =====================================================================
+   SUBMIT — finalizes the order, then bridges to the main app: if staff
+   haven't linked this order to an existing event, it lands as a brand
+   new inquiry (stage: 'new') in the same Pipeline the website form
+   feeds. Staff link it to an existing event manually afterward when
+   that's what it turns out to be.
+   ===================================================================== */
+function validateCheckout(){
+  const req = ['coName','coDate','coCName','coCPhone','coCEmail'];
+  for(const id of req){
+    const el = document.getElementById(id);
+    if(!el.value || !el.value.trim()) return 'Please fill in '+el.previousElementSibling.textContent.toLowerCase()+'.';
+  }
+  return '';
+}
+async function submitOrder(){
+  const err = validateCheckout();
+  const errEl = document.getElementById('checkoutErr');
+  if(err){ errEl.textContent = err; return; }
+  errEl.textContent = '';
+  const btn = document.getElementById('placeOrderBtn');
+  btn.disabled = true; btn.textContent = 'Placing order…';
+
+  const lines = cartLines();
+  const total = cartTotal();
+  const order = {
+    status: 'submitted',
+    lines, total,
+    clientName: document.getElementById('coName').value.trim(),
+    locationName: document.getElementById('coLoc').value.trim(),
+    deliveryDate: document.getElementById('coDate').value,
+    deliveryTime: document.getElementById('coTime').value,
+    address: document.getElementById('coAddr').value.trim(),
+    contactName: document.getElementById('coCName').value.trim(),
+    contactPhone: document.getElementById('coCPhone').value.trim(),
+    contactEmail: document.getElementById('coCEmail').value.trim(),
+    clientEmail: document.getElementById('coCEmail').value.trim(),
+    notes: document.getElementById('coNotes').value.trim(),
+    placedBy: isStaff ? ('staff:'+staffUser) : 'client',
+    submittedAt: Date.now(),
+    updatedAt: Date.now()
+  };
+
+  try{
+    if(currentOrderId){
+      await ordersCol.doc(currentOrderId).set(order, {merge:true});
+    } else {
+      order.createdAt = Date.now();
+      const ref = await ordersCol.add(order);
+      currentOrderId = ref.id;
+    }
+    await bridgeNewInquiry(order, currentOrderId);
+    await sendOrderPlacedEmail(order, currentOrderId);
+    renderConfirmation(order);
+    showView('confirm');
+    cart = {}; itemNotes = {}; noteOpen = {};
+    currentOrderId = null; draftStarted = false;
+  }catch(e){
+    console.error('submit failed', e);
+    errEl.textContent = 'Something went wrong placing the order — please try again, or call us directly.';
+  }
+  btn.disabled = false; btn.textContent = 'Place order';
+}
+function renderConfirmation(order){
+  document.getElementById('confirmRecap').innerHTML = recapHtml(order.lines, order.total);
+}
+
+// Sends the "order placed" email to staff. Reuses the SAME Apps Script
+// relay URL the main app already has configured (stored in Firestore at
+// settings/app, field scriptUrl) — nothing new for Kenny to set up.
+let _relayUrlCache = null;
+async function getRelayUrl(){
+  if(_relayUrlCache) return _relayUrlCache;
+  try{
+    const doc = await db.collection('settings').doc('app').get();
+    const url = doc.exists ? (doc.data().scriptUrl||'') : '';
+    _relayUrlCache = url;
+    return url;
+  }catch(e){ return ''; }
+}
+async function sendOrderPlacedEmail(order, orderId){
+  const relay = await getRelayUrl();
+  if(!relay) return;
+  const itemSummary = order.lines.map(l=> l.qty+'x '+l.itemName+' ('+l.sizeLabel+')'+(l.note?' — note: '+l.note:'')).join('\n');
+  const body = 'A new drop-off order was placed.\n\n'+
+    'Client: '+order.contactName+' ('+order.contactEmail+', '+order.contactPhone+')\n'+
+    'Delivery: '+order.deliveryDate+' '+order.deliveryTime+' — '+order.locationName+', '+order.address+'\n\n'+
+    'Items:\n'+itemSummary+
+    (order.notes ? ('\n\nNotes: '+order.notes) : '')+
+    '\n\nTotal: $'+money(order.total)+
+    '\n\nOrder id: '+orderId;
+  // gmailSend is a POST action expecting a JSON body (confirmed against the
+  // actual MenuAutomation.gs doPost handler) — not a GET query string.
+  try{
+    await fetch(relay, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'gmailSend',
+        to: 'events@thepremiercaterer.com',
+        subject: 'New drop-off order — '+(order.clientName||order.contactName),
+        body: body
+      })
+    });
+  }catch(e){ console.warn('order-placed email failed', e); }
+}
+// Companion "order started but not finished" email is handled by a
+// time-driven Apps Script trigger (checks for drafts idle 20+ minutes
+// with startNotified:false) — see the .gs addition delivered alongside
+// this file. This app only needs to write the draft, which it already does.
+
+/* =====================================================================
+   MY ORDERS — clients look up their own past orders by email, staff can
+   also search across everyone from the Orders inbox.
+   ===================================================================== */
+async function lookupMyOrders(){
+  const email = (document.getElementById('lookupEmail').value||'').trim().toLowerCase();
+  const listEl = document.getElementById('myOrdersList');
+  if(!email){ listEl.innerHTML = '<div class="empty">Enter the email you ordered with.</div>'; return; }
+  listEl.innerHTML = '<div class="empty">Looking…</div>';
+  try{
+    const snap = await ordersCol.where('clientEmail','==',email).where('status','==','submitted').orderBy('submittedAt','desc').limit(20).get();
+    if(snap.empty){ listEl.innerHTML = '<div class="empty">No past orders found for that email.</div>'; return; }
+    let html = '';
+    snap.forEach(doc=>{
+      const o = doc.data();
+      const dateLabel = o.deliveryDate ? o.deliveryDate : '';
+      html += `<div class="section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div><b>${esc(o.clientName||'Order')}</b> <span style="color:var(--text3);font-size:12px">${esc(dateLabel)}</span></div>
+          <button class="btn btn-ghost btn-sm" onclick="reorderFrom('${doc.id}')">Order this again</button>
+        </div>
+        ${recapHtml(o.lines||[], o.total||0)}
+      </div>`;
+    });
+    listEl.innerHTML = html;
+  }catch(e){ console.error(e); listEl.innerHTML = '<div class="empty">Something went wrong looking that up.</div>'; }
+}
+async function reorderFrom(orderId){
+  try{
+    const doc = await ordersCol.doc(orderId).get();
+    if(!doc.exists) return;
+    const o = doc.data();
+    cart = {}; itemNotes = {}; noteOpen = {};
+    (o.lines||[]).forEach(l=>{
+      const item = catalog.find(x=> x.name===l.itemName);
+      if(!item) return;
+      const sizeIdx = (item.sizes||[]).findIndex(s=> s.label===l.sizeLabel);
+      if(sizeIdx<0) return;
+      cart[cartKey(item.id, sizeIdx)] = l.qty;
+      if(l.note) itemNotes[item.id] = l.note;
+    });
+    showView('order');
+    showToast('Items added — review quantities before checking out');
+  }catch(e){ console.error(e); }
+}
+
+// Writes a new inquiry into the SAME Firestore collection the main app's
+// Pipeline reads (matching the shape the website intake form + manual
+// "Add event" both use) — this is the entire bridge, no main-app code
+// involved at all. Only runs when staff haven't already linked this
+// order to a known event.
+async function bridgeNewInquiry(order, orderId){
+  if(order.linkedEventId) return; // already linked by staff — see linkOrderToEvent
+  const nameParts = (order.contactName||'').split(' ');
+  const firstName = nameParts.shift()||'';
+  const lastName = nameParts.join(' ')||'';
+  const itemSummary = order.lines.map(l=> l.qty+'x '+l.itemName+' ('+l.sizeLabel+')'+(l.note?' — '+l.note:'')).join('\n');
+  const inq = {
+    id: Date.now()+'',
+    firstName, lastName,
+    organization: '',
+    eventName: order.clientName || 'Drop-off order',
+    eventType: 'Drop off catering',
+    eventDate: order.deliveryDate || '',
+    phone: order.contactPhone || '',
+    email: order.contactEmail || '',
+    venueName: order.locationName || '',
+    venueLocation: order.address || '',
+    guestCount: '',
+    comments: 'DROP-OFF ORDER (placed through the drop-off app)\n\n'+itemSummary+
+      (order.notes ? ('\n\nClient notes: '+order.notes) : '')+
+      '\n\nOrder total: $'+money(order.total),
+    source: 'dropoff-app',
+    stage: 'new',
+    salesperson: '',
+    dropOffOrderId: orderId,
+    submittedAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+  };
+  try{
+    await db.collection('inquiries').doc(inq.id).set(inq);
+    await ordersCol.doc(orderId).set({linkedInquiryId: inq.id}, {merge:true});
+  }catch(e){ console.error('bridge to inquiry failed', e); }
+}
+
+/* =====================================================================
+   STAFF AUTH — real Firebase Authentication, same accounts as the main
+   app. Nothing here uses the weaker homemade login Purchasing had.
+   ===================================================================== */
+function updateTopbar(){
+  const el = document.getElementById('tbRight');
+  if(isStaff){
+    el.innerHTML = `<span>${esc(prettyStaffName(staffUser))}</span>
+      <button class="tb-link" onclick="showView('staffOrders')">All orders</button>
+      <button class="tb-link" onclick="showView('staffCatalog')">Menu &amp; pricing</button>
+      <button class="tb-link" onclick="showView('order')">Ordering view</button>
+      <button class="tb-link" onclick="staffLogout()">Log out</button>`;
+  } else {
+    el.innerHTML = `<button class="tb-link" onclick="openStaffLogin()"><i class="ti ti-lock"></i> Staff</button>`;
+  }
+}
+function openStaffLogin(){ document.getElementById('loginOverlay').style.display = 'flex'; document.getElementById('lgErr').textContent=''; }
+function closeStaffLogin(){ document.getElementById('loginOverlay').style.display = 'none'; }
+async function staffLoginSubmit(){
+  const email = (document.getElementById('lgEmail').value||'').trim();
+  const pw = document.getElementById('lgPw').value||'';
+  const err = document.getElementById('lgErr'); err.textContent='';
+  try{ await firebase.auth().signInWithEmailAndPassword(email, pw); }
+  catch(e){
+    const c = e && e.code;
+    if(c==='auth/wrong-password'||c==='auth/invalid-credential'||c==='auth/invalid-login-credentials') err.textContent='Incorrect password.';
+    else if(c==='auth/user-not-found') err.textContent='No account set up for this email.';
+    else err.textContent = 'Sign-in error: '+((e&&e.message)||'unknown');
+  }
+}
+function staffLogout(){
+  firebase.auth().signOut();
+  isStaff = false; staffUser = null;
+  showView('order');
+}
+firebase.auth().onAuthStateChanged(user=>{
+  const u = user ? pcUserForEmail(user.email) : null;
+  if(user && u){
+    isStaff = true; staffUser = u;
+    closeStaffLogin();
+    updateTopbar();
+  } else if(user){
+    firebase.auth().signOut();
+    document.getElementById('lgErr').textContent = 'That account is not set up for this app.';
+  } else {
+    isStaff = false; staffUser = null;
+    updateTopbar();
+  }
+});
+
+/* =====================================================================
+   STAFF: ORDERS INBOX — every order, searchable, with a manual
+   "link to an existing event" action for the cases that turn out to
+   already be a booked event rather than a fresh inquiry.
+   ===================================================================== */
+let allStaffOrders = [];
+ordersCol.orderBy('createdAt','desc').limit(200).onSnapshot(snap=>{
+  allStaffOrders = [];
+  snap.forEach(doc=> allStaffOrders.push(Object.assign({id:doc.id}, doc.data())) );
+  if(currentView==='staffOrders') renderStaffOrders();
+}, err=> console.error('orders load error', err));
+
+function renderStaffOrders(){
+  const q = (document.getElementById('staffOrderSearch').value||'').trim().toLowerCase();
+  const rows = allStaffOrders.filter(o=>{
+    if(!q) return true;
+    return (o.clientName||'').toLowerCase().includes(q) || (o.contactEmail||o.clientEmail||'').toLowerCase().includes(q);
+  });
+  const tbl = document.getElementById('staffOrdersTbl');
+  if(!rows.length){ tbl.innerHTML = '<tr><td class="empty">No orders yet.</td></tr>'; return; }
+  let html = '<tr><th>Client</th><th>Delivery</th><th>Items</th><th>Total</th><th>Status</th><th></th></tr>';
+  rows.forEach(o=>{
+    const itemCount = (o.lines||[]).reduce((s,l)=>s+l.qty,0);
+    const statusClass = o.linkedEventId ? 'linked' : (o.status||'draft');
+    const statusLabel = o.linkedEventId ? 'Linked to event' : (o.status==='submitted' ? 'Submitted' : 'Draft — in progress');
+    const linkBtn = (o.status==='submitted' && !o.linkedEventId)
+      ? `<button class="btn btn-ghost btn-sm" onclick="promptLinkOrder('${o.id}')">Link to event</button>` : '';
+    html += `<tr>
+      <td><b>${esc(o.clientName||o.contactName||'—')}</b><br><span style="color:var(--text3);font-size:11.5px">${esc(o.contactEmail||o.clientEmail||'')}</span></td>
+      <td>${esc(o.deliveryDate||'')} ${esc(o.deliveryTime||'')}<br><span style="color:var(--text3);font-size:11.5px">${esc(o.locationName||'')}</span></td>
+      <td>${itemCount} item${itemCount===1?'':'s'}</td>
+      <td class="mono">$${money(o.total||0)}</td>
+      <td><span class="pill-status ${statusClass}">${statusLabel}</span></td>
+      <td>${linkBtn}</td>
+    </tr>`;
+  });
+  tbl.innerHTML = html;
+}
+// Staff manually confirm this order belongs to an already-booked event —
+// we don't attempt automatic matching (deliberately, per how Kenny works
+// day to day). Adds the order's items onto that event's invoice as new
+// line items and removes the standalone inquiry this order had created.
+async function promptLinkOrder(orderId){
+  const jobNum = prompt('Enter the job number of the existing event this order belongs to (e.g. 14 or #14):');
+  if(!jobNum) return;
+  const clean = jobNum.replace('#','').trim();
+  try{
+    const snap = await db.collection('events').where('job','==','#'+clean).get();
+    if(snap.empty){ alert('No event found with job #'+clean+'. Double check the number.'); return; }
+    const eventDoc = snap.docs[0];
+    const eventId = eventDoc.id;
+    const orderDoc = await ordersCol.doc(orderId).get();
+    const order = orderDoc.data();
+    const invRef = db.collection('invoices').doc(eventId);
+    const invDoc = await invRef.get();
+    const newLines = order.lines.map(l=>({
+      description: l.itemName+' ('+l.sizeLabel+')'+(l.note?' — '+l.note:''),
+      qty: l.qty, price: l.price
+    }));
+    if(invDoc.exists){
+      const existing = invDoc.data().lines||[];
+      await invRef.set({lines: existing.concat(newLines)}, {merge:true});
+    } else {
+      await invRef.set({lines:newLines, status:'estimate', deposit:0}, {merge:true});
+    }
+    if(order.linkedInquiryId){
+      await db.collection('inquiries').doc(order.linkedInquiryId).delete().catch(()=>{});
+    }
+    await ordersCol.doc(orderId).set({linkedEventId:eventId, linkedInquiryId:null}, {merge:true});
+    showToast('Linked to #'+clean+' — items added to that invoice');
+  }catch(e){ console.error(e); alert('Something went wrong linking this order.'); }
+}
+
+/* =====================================================================
+   STAFF: CATALOG MANAGEMENT — replaces the old Google Sheet as the
+   source of truth for the drop-off menu.
+   ===================================================================== */
+let addItemSizes = [{label:'',price:''}];
+function toggleAddItemPanel(){
+  const p = document.getElementById('addItemPanel');
+  const open = p.style.display !== 'none';
+  if(open){ p.style.display = 'none'; document.getElementById('addItemBtn').textContent='+ Add item'; return; }
+  addItemSizes = [{label:'',price:''}];
+  renderAddItemPanel();
+  p.style.display = '';
+  document.getElementById('addItemBtn').textContent = 'Close';
+}
+function renderAddItemPanel(){
+  const cats = allCategories();
+  const p = document.getElementById('addItemPanel');
+  p.innerHTML = `
+    <div class="grid2" style="margin-bottom:14px">
+      <div class="field"><label for="niName">Item name</label><input id="niName" type="text" placeholder="e.g. Farro grain salad"></div>
+      <div class="field"><label for="niType">Meat / Dairy / Parve</label>
+        <select id="niType"><option value="P">Parve</option><option value="D">Dairy</option><option value="M">Meat</option></select>
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:14px">
+      <label>Categories (comma-separated — new ones are created automatically)</label>
+      <input id="niCats" type="text" placeholder="e.g. Salads, Party favorites" value="${cats.length?'':''}">
+    </div>
+    <div class="field" style="margin-bottom:10px"><label>Sizes &amp; prices</label></div>
+    <div id="niSizes" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px"></div>
+    <button class="btn btn-ghost btn-sm" onclick="addSizeRow()" style="margin-bottom:16px">+ Add another size</button><br>
+    <button class="btn btn-pri btn-sm" onclick="saveNewItem()">Save item</button>
+    <button class="btn btn-ghost btn-sm" onclick="toggleAddItemPanel()">Cancel</button>
+  `;
+  renderSizeRows();
+}
+function renderSizeRows(){
+  document.getElementById('niSizes').innerHTML = addItemSizes.map((row,idx)=>`
+    <div style="display:flex;gap:10px;align-items:center">
+      <input type="text" placeholder="e.g. Large bowl" value="${esc(row.label)}" style="max-width:220px;padding:8px 10px;border:1px solid var(--border);border-radius:8px" oninput="addItemSizes[${idx}].label=this.value">
+      <div style="display:flex;align-items:center;gap:4px"><span style="color:var(--text2)">$</span><input type="text" placeholder="0" value="${esc(row.price)}" style="max-width:90px;padding:8px 10px;border:1px solid var(--border);border-radius:8px" oninput="addItemSizes[${idx}].price=this.value"></div>
+      ${addItemSizes.length>1?`<button onclick="removeSizeRow(${idx})" style="width:28px;height:28px;border:1px solid var(--border);background:var(--bg);border-radius:7px;color:var(--text3)">&times;</button>`:''}
+    </div>
+  `).join('');
+}
+function addSizeRow(){ addItemSizes.push({label:'',price:''}); renderSizeRows(); }
+function removeSizeRow(idx){ addItemSizes.splice(idx,1); renderSizeRows(); }
+async function saveNewItem(){
+  const name = document.getElementById('niName').value.trim();
+  const type = document.getElementById('niType').value;
+  const cats = document.getElementById('niCats').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const sizes = addItemSizes.filter(s=>s.label.trim() && parseFloat(s.price)>0).map(s=>({label:s.label.trim(), price:parseFloat(s.price)}));
+  if(!name){ alert('Enter an item name.'); return; }
+  if(!sizes.length){ alert('Add at least one size with a price.'); return; }
+  try{
+    await catalogCol.add({name, type, categories:cats, sizes, active:true, createdAt:Date.now()});
+    toggleAddItemPanel();
+    showToast('Item added');
+  }catch(e){ console.error(e); alert('Could not save that item.'); }
+}
+function renderCatalogTable(){
+  const tbl = document.getElementById('catalogTbl');
+  if(!catalog.length){ tbl.innerHTML = '<tr><td class="empty">No items yet — add your first one above.</td></tr>'; return; }
+  let html = '<tr><th>Item</th><th>Categories</th><th>Type</th><th>Sizes &amp; prices</th><th></th></tr>';
+  catalog.forEach(it=>{
+    const catsHtml = (it.categories||[]).map(c=>`<span class="tag">${esc(c)}</span>`).join('');
+    const sizesHtml = (it.sizes||[]).map(s=> esc(s.label)+' $'+money(s.price)).join(' &middot; ');
+    html += `<tr>
+      <td><b>${esc(it.name)}</b></td>
+      <td>${catsHtml}</td>
+      <td><span class="badge ${it.type}">${it.type}</span></td>
+      <td class="mono" style="font-size:12px">${sizesHtml}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="deleteItem('${it.id}')">Remove</button></td>
+    </tr>`;
+  });
+  tbl.innerHTML = html;
+}
+async function deleteItem(id){
+  if(!confirm('Remove this item from the drop-off menu?')) return;
+  try{ await catalogCol.doc(id).delete(); showToast('Item removed'); }
+  catch(e){ console.error(e); }
+}
+
+/* =====================================================================
+   BOOT
+   ===================================================================== */
+updateTopbar();
+renderItemGrid();
+</script>
+</body>
+</html>
