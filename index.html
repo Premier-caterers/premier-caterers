@@ -4420,6 +4420,10 @@ function _estStaffGuess(inq){
   const g = parseInt(String(inq.guestCount||'').replace(/[^0-9]/g,'')) || 0;
   return { g, waiters: g?Math.max(1,Math.round(g/25)):0, chefs: g?Math.max(1,Math.round(g/75)):0 };
 }
+// Default notes text for a brand-new estimate/invoice — just a starting
+// value in the (fully editable) notes field, so it can be edited or deleted
+// per-document like anything else typed there.
+const DEFAULT_DOC_NOTES = 'Staff gratuities are not included in the above pricing.';
 function getDefaultEstimate(inq){
   const {g, waiters, chefs} = _estStaffGuess(inq);
   return {
@@ -4431,7 +4435,7 @@ function getDefaultEstimate(inq){
       {id:'mash', category:'Staffing', description:'Mashgiach / Hashgacha', qty:1, unit:'event', price:0},
       {id:'delivery', category:'Logistics', description:'Delivery & setup', qty:1, unit:'event', price:0},
     ],
-    taxExempt:false, logisticsRate:LOGISTICS_RATE, deposit:0, notes:'',
+    taxExempt:false, logisticsRate:LOGISTICS_RATE, deposit:0, notes:DEFAULT_DOC_NOTES,
     createdAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
   };
 }
@@ -4688,12 +4692,12 @@ function renderEstimateBlock(inq, role){
   const tots = calcInvoiceTotals(est);
   const inp='background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:4px 6px;font-size:13px;color:var(--text);font-family:inherit';
   const rows = est.lines.map((l,i)=>`
-    <div style="display:grid;grid-template-columns:18px 1fr 52px 78px 70px 86px;gap:6px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border)">
+    <div style="display:grid;grid-template-columns:18px 1fr 52px 78px 96px 86px;gap:6px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border)">
       <span class="drag-handle" title="Drag to reorder" style="cursor:grab;color:var(--text3);font-size:15px;touch-action:none"><i class="ti ti-grip-vertical"></i></span>
       <input value="${(l.description||'').replace(/"/g,'&quot;')}" oninput="updateEstimateLine('${inq.id}',${i},'description',this.value)" placeholder="Description" style="${inp};width:100%">
       <input type="number" value="${l.qty||0}" min="0" step="1" oninput="updateEstimateLine('${inq.id}',${i},'qty',this.value)" style="${inp};width:100%;text-align:right">
       <input type="number" value="${l.price||0}" min="0" step="0.01" oninput="updateEstimateLine('${inq.id}',${i},'price',this.value)" style="${inp};width:100%;text-align:right">
-      <span data-amt="${i}" style="font-size:13px;text-align:right;color:var(--text2)">$${((parseFloat(l.qty||0))*(parseFloat(l.price||0))).toFixed(2)}</span>
+      <span data-amt="${i}" style="font-size:13px;text-align:right;color:var(--text2);white-space:nowrap;overflow:hidden">$${((parseFloat(l.qty||0))*(parseFloat(l.price||0))).toFixed(2)}</span>
       <span style="display:flex;gap:1px;justify-content:flex-end">
         <button onclick="moveEstimateLine('${inq.id}',${i},-1)" title="Move up" class="btn btn--ghost btn--sm" ${i===0?'disabled':''}><i class="ti ti-arrow-up"></i></button>
         <button onclick="moveEstimateLine('${inq.id}',${i},1)" title="Move down" class="btn btn--ghost btn--sm" ${i===est.lines.length-1?'disabled':''}><i class="ti ti-arrow-down"></i></button>
@@ -4702,7 +4706,7 @@ function renderEstimateBlock(inq, role){
       </span>
     </div>`).join('');
   return `<div id="estBlock-${inq.id}"><div class="detail-block" style="margin-top:1rem">${header}
-    <div style="display:grid;grid-template-columns:18px 1fr 52px 78px 70px 86px;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);padding-bottom:4px">
+    <div style="display:grid;grid-template-columns:18px 1fr 52px 78px 96px 86px;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);padding-bottom:4px">
       <span></span><span>Description</span><span style="text-align:right">Qty</span><span style="text-align:right">Unit $</span><span style="text-align:right">Amount</span><span></span>
     </div>
     <div id="estLinesBody-${inq.id}">${rows}</div>
@@ -4760,7 +4764,10 @@ async function convertEstimateToInvoice(id){  const inq=_findInq(id); if(!inq) r
   base.taxExempt = inq.estimate.taxExempt;
   base.logisticsRate = inq.estimate.logisticsRate;
   base.deposit = base.deposit || inq.estimate.deposit || 0;
-  base.notes = inq.estimate.notes || base.notes || '';
+  // Copy the estimate's notes exactly as they stand — including if Kenny
+  // deliberately cleared them. Falling back to a default here would silently
+  // undo that deletion every time an estimate gets converted.
+  base.notes = (inq.estimate.notes !== undefined && inq.estimate.notes !== null) ? inq.estimate.notes : (base.notes || '');
   base.status = 'invoice';
   base.invoiceDate = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   base.eventId = evId;
@@ -4796,7 +4803,11 @@ async function convertEstimateToInvoiceNow(eid){
   if(typeof est.taxExempt !== 'undefined') inv.taxExempt = est.taxExempt;
   if(typeof est.logisticsRate !== 'undefined') inv.logisticsRate = est.logisticsRate;
   if(typeof est.deposit !== 'undefined' && !inv.deposit) inv.deposit = est.deposit;
-  if(est.notes && !inv.notes) inv.notes = est.notes;
+  // Copy the estimate's notes exactly as they stand on conversion — including
+  // if they were deliberately cleared — rather than only filling in when the
+  // invoice's own notes happen to be empty (which, now that new invoices start
+  // with a default note, would almost never be true).
+  if(est.notes !== undefined && est.notes !== null) inv.notes = est.notes;
   await _saveInvoice(eid, inv);
   try{ logActivity(inqId, 'invoice', 'Converted estimate to invoice (manual)', {invoiceId: eid}); }catch(_){}
   showToast('Estimate copied into invoice \u2713 \u2014 review before sending', 4000);
@@ -9444,7 +9455,7 @@ function getDefaultInvoice(e){
       {id:'delivery', category:'Logistics', description:'Delivery fee', qty:1, unit:'event', price:0},
     ],
     deposit: 0,
-    notes: '',
+    notes: DEFAULT_DOC_NOTES,
     createdAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
   };
 }
