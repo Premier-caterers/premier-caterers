@@ -4233,10 +4233,10 @@ function clientUploadsBlock(ev){
 function drawerDocuments(inq, role, ev){
   const id=inq.id;
   const docs = [
-    _docBtn('Menu(s)','ti-file-text',false,`openInqMenuQuick('${id}')`),
+    _docBtn('Client menu','ti-file-text',false,`openInqMenuQuick('${id}')`),
     role.canViewInvoices?_docBtn('Estimate / Invoice','ti-file-invoice',false,`viewClientQuote('${id}')`):'',
     _docBtn('Equipment list','ti-tool', !ev, ev?`_navReturnCapture('${ev.id}');showView('equipment')`:''),
-    _docBtn('Grocery list','ti-shopping-cart', !ev, ev?`window.open('${ev.catererCopyDoc || ev.catererCopyPdf || 'https://drive.google.com/drive/u/0/folders/16u6TIcojWDWqQj6pvG6z_3pg1262Wabh'}','_blank')`:''),
+    _docBtn('Caterer menu / grocery','ti-shopping-cart', !ev, ev?`window.open('${ev.catererCopyDoc || ev.catererCopyPdf || 'https://drive.google.com/drive/u/0/folders/16u6TIcojWDWqQj6pvG6z_3pg1262Wabh'}','_blank')`:''),
     _docBtn('Weekly cover sheet','ti-layout-rows', !ev, ev?`goToEventCoverSheet('${ev.weekOf||''}')`:''),
     _docBtn('Venue sheet','ti-building', !ev, ev?(ev.venueLink?`window.open('${ev.venueLink}','_blank')`:`attachDoc('${ev.id}','venueLink')`):''),
     _docBtn('Final checklist','ti-checklist', !ev, ev?`goChecklist('${ev.id}')`:''),
