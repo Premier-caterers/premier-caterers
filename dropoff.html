@@ -225,6 +225,7 @@ a{color:var(--maroon);text-decoration:none}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div class="section-title" style="margin-bottom:0">Drop-off menu &amp; pricing</div>
       <button class="btn btn-pri btn-sm" onclick="toggleAddItemPanel()" id="addItemBtn">+ Add item</button>
+      <button class="btn btn-ghost btn-sm" onclick="importStarterMenu()" id="importMenuBtn" style="margin-left:8px">Import starter menu</button>
     </div>
     <div class="section" id="addItemPanel" style="display:none"></div>
     <div style="overflow-x:auto"><table class="tbl" id="catalogTbl"></table></div>
@@ -846,6 +847,109 @@ function renderSizeRows(){
 }
 function addSizeRow(){ addItemSizes.push({label:'',price:''}); renderSizeRows(); }
 function removeSizeRow(idx){ addItemSizes.splice(idx,1); renderSizeRows(); }
+
+// One-time starter import from the old drop-off Google Sheet, so the menu
+// isn't empty on day one. Everything here is fully editable/deletable from
+// this same screen afterward — this is a starting point, not a fixed list.
+// Covers every item from the sheet's "Salads" through "Fish" sections; the
+// sheet may continue further (couldn't confirm past row 100) — worth a
+// quick check against the original after this runs.
+const STARTER_MENU = [
+  {name:'Crudité and dip', type:'P', cats:['Salads'], sizes:[{label:'Large platter', price:80}]},
+  {name:'Caesar salad', type:'P', cats:['Salads'], sizes:[{label:'Large bowl', price:55}]},
+  {name:'California salad', type:'P', cats:['Salads'], sizes:[{label:'Large bowl', price:75}]},
+  {name:'Spinach salad', type:'P', cats:['Salads'], sizes:[{label:'Large bowl', price:75}]},
+  {name:'Greek salad with fresh feta cheese', type:'D', cats:['Salads'], sizes:[{label:'Large bowl', price:75}]},
+  {name:'Tomato, basil and mozzarella', type:'D', cats:['Salads'], sizes:[{label:'Large platter', price:80}]},
+  {name:'Kale & arugula w/ roasted butternut squash, pomegranate seeds, candied nuts & a pom dressing', type:'P', cats:['Salads'], sizes:[{label:'Large bowl', price:75}]},
+  {name:'Baby kale, quinoa and avocado salad', type:'P', cats:['Salads'], sizes:[{label:'Large bowl', price:75}]},
+  {name:'Mesclun greens with roasted red peppers and portobello mushrooms', type:'P', cats:['Salads'], sizes:[{label:'Large bowl', price:75}]},
+  {name:'Blood orange salad with leafy lettuces, pomegranate seeds and blood red oranges', type:'P', cats:['Salads'], sizes:[{label:'Large bowl', price:75}]},
+  {name:'Grilled vegetables', type:'P', cats:['Salads'], sizes:[{label:'Large platter', price:85}]},
+  {name:'Tuna nicoise salad', type:'P', cats:['Salads'], sizes:[{label:'Large bowl', price:95}]},
+  {name:'Waldorf salad', type:'P', cats:['Salads'], sizes:[{label:'Large bowl', price:85}]},
+  {name:'Middle eastern sectional platter', type:'P', cats:['Salads'], sizes:[{label:'Large platter', price:90}]},
+  {name:'Cranberry and slivered almond infused quinoa', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Grilled corn and black bean salad, diced red onion, mild vinaigrette', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Tomato, baby corn, hearts of palm salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Shell pasta with sautéed spinach & onions', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Papaya, mango & avocado salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Oriental noodles, scallions, water chestnuts, sesame teriyaki dressing', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Israeli salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Marinated baby corn salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Cucumber and dill salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Red cabbage health salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Julienned jicama and fresh citrus', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Shell pasta with spinach and garlic', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Roasted butternut squash salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Marinated long carrots', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Grilled white asparagus', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Pesto pasta', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Roasted beet salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Shaved celery, asparagus, carrots with an asian flare', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Broccoli cashew salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Black bean and couscous salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Quinoa tabouli, chopped cucumbers, peppers and parsley', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Sun dried tortellini with pesto', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Farro grain salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Oriental quinua', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Fresh beets salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Crunchy rainbow cabbage salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Couscous', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Roasted butternut squash and sweet potato salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Tabouli inspired quinoa salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Creamy cole slaw', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Potato salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Tri-colored potato salad', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Pickles and olives', type:'P', cats:['Salads'], sizes:[{label:'Small bowl', price:45}]},
+  {name:'Bagels', type:'P', cats:['Brunch'], sizes:[{label:'Dozen', price:23}]},
+  {name:'Challah rolls', type:'P', cats:['Brunch'], sizes:[{label:'Dozen', price:13}]},
+  {name:'Croissants', type:'P', cats:['Brunch'], sizes:[{label:'Dozen', price:33}]},
+  {name:'Plain and flavored cream cheese', type:'D', cats:['Brunch'], sizes:[{label:'Small platter', price:55}]},
+  {name:'Lox, whitefish filet and whitefish salad', type:'P', cats:['Brunch'], sizes:[{label:'Large platter', price:160}]},
+  {name:'Tuna fish', type:'P', cats:['Brunch'], sizes:[{label:'Small platter', price:55}]},
+  {name:'Egg salad', type:'P', cats:['Brunch'], sizes:[{label:'Small platter', price:50}]},
+  {name:'Sliced tomatoes, cucumbers and red onions', type:'P', cats:['Brunch'], sizes:[{label:'Small platter', price:35}]},
+  {name:'Sliced and chunked fancy assorted cheeses', type:'D', cats:['Brunch'], sizes:[{label:'Small platter', price:75}]},
+  {name:'Parve soup', type:'P', cats:['Soup'], sizes:[{label:'Quart', price:12}]},
+  {name:'Chicken soup', type:'M', cats:['Soup'], sizes:[{label:'Quart', price:13}]},
+  {name:'Matzo balls', type:'M', cats:['Soup'], sizes:[{label:'Each', price:2}]},
+  {name:'Tuna wrap (lettuce, tomato, onion, flour tortilla)', type:'P', cats:['Wraps'], sizes:[{label:'Per wrap, min 3', price:11}]},
+  {name:'Grilled vegetable wrap (hummus, sun-dried tomato wrap)', type:'P', cats:['Wraps'], sizes:[{label:'Per wrap, min 3', price:11}]},
+  {name:'Falafel wrap (falafel, Israeli salad, hummus, techina)', type:'P', cats:['Wraps'], sizes:[{label:'Per wrap, min 3', price:11}]},
+  {name:'Fresh mozzarella, tomato, pesto wrap', type:'D', cats:['Wraps'], sizes:[{label:'Per wrap, min 3', price:13}]},
+  {name:'London broil wrap w/ wasabi mayo', type:'M', cats:['Wraps'], sizes:[{label:'Per wrap, min 3', price:15}]},
+  {name:'Grilled chicken breast wrap w/ honey mustard dressing', type:'M', cats:['Wraps'], sizes:[{label:'Per wrap, min 3', price:14}]},
+  {name:'Pargiot chicken wrap with pesto mayo', type:'M', cats:['Wraps'], sizes:[{label:'Per wrap, min 3', price:14}]},
+  {name:'Sushi platter (2 platter min)', type:'P', cats:['Fish'], sizes:[{label:'Approx 10 rolls, platter', price:90}]},
+  {name:'Honey mustard grilled salmon', type:'P', cats:['Fish'], sizes:[{label:'Large platter / full pan', price:130}]},
+  {name:'Teriyaki marinated grilled salmon', type:'P', cats:['Fish'], sizes:[{label:'Large platter / full pan', price:130}]},
+  {name:'Sriracha marinated grilled salmon', type:'P', cats:['Fish'], sizes:[{label:'Large platter / full pan', price:130}]},
+  {name:'Horseradish encrusted salmon', type:'P', cats:['Fish'], sizes:[{label:'Large platter / full pan', price:130}]},
+  {name:'Lemon pepper spiced grilled salmon', type:'P', cats:['Fish'], sizes:[{label:'Large platter / full pan', price:130}]},
+  {name:'Poached salmon filets', type:'P', cats:['Fish'], sizes:[{label:'Large platter / full pan', price:130}]},
+  {name:'Whole poached salmon', type:'P', cats:['Fish'], sizes:[{label:'Whole salmon', price:200}]},
+];
+async function importStarterMenu(){
+  if(catalog.length){
+    if(!confirm('The menu already has '+catalog.length+' item(s). Import the starter list anyway? (This adds to what\'s there — it won\'t remove or duplicate-check against existing items.)')) return;
+  } else {
+    if(!confirm('Import '+STARTER_MENU.length+' items from the old drop-off sheet (Salads, Brunch, Soup, Wraps, Fish)? You can edit, add to, or delete any of them afterward.')) return;
+  }
+  const btn = document.getElementById('importMenuBtn');
+  btn.disabled = true; btn.textContent = 'Importing…';
+  try{
+    const batch = db.batch();
+    STARTER_MENU.forEach(it=>{
+      const ref = catalogCol.doc();
+      batch.set(ref, {name:it.name, type:it.type, categories:it.cats, sizes:it.sizes, active:true, createdAt:Date.now()});
+    });
+    await batch.commit();
+    showToast('Imported '+STARTER_MENU.length+' items');
+  }catch(e){ console.error(e); alert('Import failed — see console for details.'); }
+  btn.disabled = false; btn.textContent = 'Import starter menu';
+}
+
 async function saveNewItem(){
   const name = document.getElementById('niName').value.trim();
   const type = document.getElementById('niType').value;
