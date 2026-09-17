@@ -184,7 +184,10 @@ a{color:var(--maroon);text-decoration:none}
         <div class="field"><label for="coCName">Contact name</label><input id="coCName" type="text" placeholder="Full name"></div>
         <div class="field"><label for="coCPhone">Cell number</label><input id="coCPhone" type="tel" placeholder="(201) 555-0100"></div>
       </div>
-      <div class="field"><label for="coCEmail">Email</label><input id="coCEmail" type="email" placeholder="name@email.com" oninput="onCheckoutEmailInput()"></div>
+      <div class="field"><label>Email</label>
+        <div id="coEmailsList" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="coAddEmailField()" style="margin-top:8px">+ Add another email</button>
     </div>
     <div class="section">
       <div class="section-title">Payment</div>
@@ -196,9 +199,17 @@ a{color:var(--maroon);text-decoration:none}
       <div id="ccFeeNote" style="display:none;margin-top:10px;font-size:12.5px;color:var(--text2)">A 3.4% credit card processing fee will be added to your total.</div>
     </div>
     <div class="section">
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px">
         <input type="checkbox" id="coTaxExempt" onchange="renderCheckoutRecap()" style="width:16px;height:16px"> Tax exempt
       </label>
+      <button class="btn btn-ghost btn-sm" onclick="coToggleDiscountPanel()" id="coDiscountToggle" type="button">Have a discount code?</button>
+      <div id="coDiscountPanel" style="display:none;margin-top:12px">
+        <div class="field" style="margin-bottom:8px"><label for="coDiscountCode">Discount code</label><input id="coDiscountCode" type="text" placeholder="Enter code" oninput="onDiscountCodeInput()"></div>
+        <div id="coDiscountCodeMsg" style="font-size:12px;margin-bottom:8px"></div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text2);cursor:pointer">
+          <input type="checkbox" id="coNoCodeApproved" style="width:15px;height:15px"> I don't have a code, but a discount was approved by the caterer — please apply it
+        </label>
+      </div>
     </div>
     <div class="section">
       <div class="field"><label for="coNotes">Notes for the kitchen (optional)</label><textarea id="coNotes" rows="3" placeholder="Allergies, gate codes, anything we should know..."></textarea></div>
@@ -269,7 +280,16 @@ a{color:var(--maroon);text-decoration:none}
       <div class="section-title">Pricing</div>
       <div class="grid2" style="margin-bottom:14px">
         <div class="field"><label for="eoDeliveryFee">Delivery fee ($)</label><input id="eoDeliveryFee" type="number" step="0.01" min="0" oninput="renderEditOrderTotals()"></div>
-        <div class="field"><label for="eoDiscount">Discount ($)</label><input id="eoDiscount" type="number" step="0.01" min="0" oninput="renderEditOrderTotals()"></div>
+        <div class="field">
+          <label for="eoDiscount">Discount</label>
+          <div style="display:flex;gap:8px">
+            <input id="eoDiscount" type="number" step="0.01" min="0" oninput="renderEditOrderTotals()" style="flex:1">
+            <select id="eoDiscountType" onchange="renderEditOrderTotals()" style="width:70px;padding:9px 6px;border:1px solid var(--border);border-radius:9px">
+              <option value="dollar">$</option>
+              <option value="percent">%</option>
+            </select>
+          </div>
+        </div>
       </div>
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px">
         <input type="checkbox" id="eoTaxExempt" onchange="renderEditOrderTotals()" style="width:16px;height:16px"> Tax exempt
@@ -299,6 +319,31 @@ a{color:var(--maroon);text-decoration:none}
     </div>
     <div class="section" id="addItemPanel" style="display:none"></div>
     <div style="overflow-x:auto"><table class="tbl" id="catalogTbl"></table></div>
+  </div>
+
+  <!-- ============ STAFF: DISCOUNT CODES ============ -->
+  <div class="view" id="view-discountCodes">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="section-title" style="margin-bottom:0">Discount codes</div>
+      <button class="btn btn-pri btn-sm" onclick="toggleAddCodePanel()" id="addCodeBtn">+ Add code</button>
+    </div>
+    <div class="section" id="addCodePanel" style="display:none">
+      <div class="grid2" style="margin-bottom:14px">
+        <div class="field"><label for="dcCode">Code</label><input id="dcCode" type="text" placeholder="e.g. SPRING10" style="text-transform:uppercase"></div>
+        <div class="field"><label for="dcValue">Value</label>
+          <div style="display:flex;gap:8px">
+            <input id="dcValue" type="number" step="0.01" min="0" style="flex:1">
+            <select id="dcType" style="width:70px;padding:9px 6px;border:1px solid var(--border);border-radius:9px">
+              <option value="dollar">$</option>
+              <option value="percent">%</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-pri btn-sm" onclick="saveDiscountCode()">Save code</button>
+      <button class="btn btn-ghost btn-sm" onclick="toggleAddCodePanel()">Cancel</button>
+    </div>
+    <div style="overflow-x:auto"><table class="tbl" id="discountCodesTbl"></table></div>
   </div>
 
 </div>
@@ -385,9 +430,10 @@ function showView(v){
   currentView = v;
   window.scrollTo(0,0);
   if(v==='order') renderItemGrid();
-  if(v==='checkout'){ renderPaymentChoices(); renderCheckoutRecap(); }
+  if(v==='checkout'){ renderPaymentChoices(); coRenderEmailsList(); renderCheckoutRecap(); }
   if(v==='staffOrders') renderStaffOrders();
   if(v==='staffCatalog') renderCatalogTable();
+  if(v==='discountCodes') renderDiscountCodesTable();
   updateTopbar();
 }
 function money(n){ return (parseFloat(n)||0).toFixed(2); }
@@ -517,6 +563,48 @@ const PAYMENT_METHODS = [
   {id:'masterbill', label:'Add to events master bill'}
 ];
 let paymentType = 'cash';
+let coEmails = [''];  // multiple contact emails at checkout
+let coDiscountAmount = 0;
+let coDiscountCodeValid = null; // true/false/null (null = not checked yet)
+const discountCodesCol = db.collection('discountCodes');
+
+function coRenderEmailsList(){
+  document.getElementById('coEmailsList').innerHTML = coEmails.map((val,idx)=>`
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="email" value="${esc(val)}" placeholder="name@email.com" oninput="coUpdateEmail(${idx},this.value)" style="flex:1;padding:9px 11px;border:1px solid var(--border);border-radius:9px">
+      ${coEmails.length>1?`<button onclick="coRemoveEmailField(${idx})" type="button" style="width:32px;height:32px;border:1px solid var(--border);background:var(--bg);border-radius:7px;color:var(--text3)">&times;</button>`:''}
+    </div>
+  `).join('');
+}
+function coAddEmailField(){ coEmails.push(''); coRenderEmailsList(); }
+function coUpdateEmail(idx,val){ coEmails[idx]=val; scheduleDraftSave(); }
+function coRemoveEmailField(idx){ coEmails.splice(idx,1); coRenderEmailsList(); }
+
+function coToggleDiscountPanel(){
+  const p = document.getElementById('coDiscountPanel');
+  p.style.display = p.style.display==='none' ? '' : 'none';
+}
+async function onDiscountCodeInput(){
+  const code = document.getElementById('coDiscountCode').value.trim();
+  const msgEl = document.getElementById('coDiscountCodeMsg');
+  if(!code){ coDiscountAmount = 0; coDiscountCodeValid = null; msgEl.textContent=''; renderCheckoutRecap(); return; }
+  msgEl.textContent = 'Checking code…'; msgEl.style.color = 'var(--text3)';
+  try{
+    const snap = await discountCodesCol.where('code','==',code.toUpperCase()).where('active','==',true).get();
+    if(snap.empty){
+      coDiscountAmount = 0; coDiscountCodeValid = false;
+      msgEl.textContent = 'Code not recognized.'; msgEl.style.color = 'var(--red)';
+    } else {
+      const dc = snap.docs[0].data();
+      const subtotalNow = cartLines().reduce((s,l)=> s + l.price*l.qty, 0);
+      coDiscountAmount = resolveDiscountAmount(dc.value, dc.type, subtotalNow);
+      coDiscountCodeValid = true;
+      msgEl.textContent = 'Code applied — '+(dc.type==='percent'?(dc.value+'% off'):('$'+money(dc.value)+' off'));
+      msgEl.style.color = 'var(--green-text)';
+    }
+  }catch(e){ console.error(e); msgEl.textContent='Could not check that code right now.'; msgEl.style.color='var(--red)'; }
+  renderCheckoutRecap();
+}
 
 function goCheckout(){
   if(!cartCount()){ return; }
@@ -575,7 +663,7 @@ function orderDisplayNumber(order){ return order.subLabel || 'Unlinked'; }
 // in the Premier Caterers apps). Returns the jsPDF doc object — callers
 // either .save() it for a browser download or pull its base64 data for
 // an email attachment.
-function generateOrderPdf(order, orderId){
+function generateOrderPdf(order, orderId, hidePricing){
   const doc = new jspdf.jsPDF();
   const pageW = doc.internal.pageSize.getWidth();
   let y = 18;
@@ -595,7 +683,7 @@ function generateOrderPdf(order, orderId){
   doc.setFont(undefined,'normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
   const infoLine = (label,val)=>{ if(!val) return; doc.setFont(undefined,'bold'); doc.text(label+':',14,y); doc.setFont(undefined,'normal'); doc.text(String(val),45,y); y+=6; };
   infoLine('Client', order.contactName);
-  infoLine('Email', order.contactEmail);
+  if(!hidePricing) infoLine('Email', order.contactEmail);
   infoLine('Phone', order.contactPhone);
   infoLine('Delivery', (order.deliveryDate||'')+' '+(order.deliveryTime||''));
   infoLine('Location', (order.locationName||'')+(order.address?(', '+order.address):''));
@@ -604,7 +692,8 @@ function generateOrderPdf(order, orderId){
   doc.setDrawColor(200,200,200); doc.line(14,y,pageW-14,y); y += 8;
 
   doc.setFont(undefined,'bold'); doc.setFontSize(10); doc.setTextColor(0,0,0);
-  doc.text('QTY',14,y); doc.text('ITEM',30,y); doc.text('SIZE',120,y); doc.text('TOTAL',pageW-14,y,{align:'right'});
+  doc.text('QTY',14,y); doc.text('ITEM',30,y); doc.text('SIZE',120,y);
+  if(!hidePricing) doc.text('TOTAL',pageW-14,y,{align:'right'});
   y += 5; doc.line(14,y,pageW-14,y); y += 6;
   doc.setFont(undefined,'normal');
   (order.lines||[]).forEach(l=>{
@@ -613,28 +702,30 @@ function generateOrderPdf(order, orderId){
     const nameLines = doc.splitTextToSize(l.itemName, 85);
     doc.text(nameLines,30,y);
     doc.text(l.sizeLabel||'',120,y);
-    doc.text('$'+money(l.price*l.qty), pageW-14, y, {align:'right'});
+    if(!hidePricing) doc.text('$'+money(l.price*l.qty), pageW-14, y, {align:'right'});
     y += 5*nameLines.length;
     if(l.note){ doc.setTextColor(122,46,61); doc.setFontSize(8); doc.text('Note: '+l.note,30,y); doc.setFontSize(10); doc.setTextColor(0,0,0); y+=5; }
     y += 2;
   });
   y += 4; doc.line(14,y,pageW-14,y); y += 8;
 
-  const totRow = (label,val,bold)=>{
-    if(bold) doc.setFont(undefined,'bold'); else doc.setFont(undefined,'normal');
-    doc.text(label, pageW-70, y);
-    doc.text(val, pageW-14, y, {align:'right'});
-    y += 6;
-  };
-  if(order.subtotal!=null) totRow('Subtotal', '$'+money(order.subtotal));
-  if(order.deliveryFee) totRow('Delivery fee', '$'+money(order.deliveryFee));
-  if(order.subtotal!=null) totRow('Sales tax', order.taxExempt ? 'Exempt' : ('$'+money(order.taxAmount)));
-  if(order.ccFeeAmount) totRow('Credit card fee', '$'+money(order.ccFeeAmount));
-  if(order.discount) totRow('Discount', '-$'+money(order.discount));
-  totRow('TOTAL', '$'+money(order.total), true);
+  if(!hidePricing){
+    const totRow = (label,val,bold)=>{
+      if(bold) doc.setFont(undefined,'bold'); else doc.setFont(undefined,'normal');
+      doc.text(label, pageW-70, y);
+      doc.text(val, pageW-14, y, {align:'right'});
+      y += 6;
+    };
+    if(order.subtotal!=null) totRow('Subtotal', '$'+money(order.subtotal));
+    if(order.deliveryFee) totRow('Delivery fee', '$'+money(order.deliveryFee));
+    if(order.subtotal!=null) totRow('Sales tax', order.taxExempt ? 'Exempt' : ('$'+money(order.taxAmount)));
+    if(order.ccFeeAmount) totRow('Credit card fee', '$'+money(order.ccFeeAmount));
+    if(order.discount) totRow('Discount', '-$'+money(order.discount));
+    totRow('TOTAL', '$'+money(order.total), true);
+  }
 
   const payLabel = (PAYMENT_METHODS.find(p=>p.id===order.paymentType)||{}).label;
-  if(payLabel){ y+=2; doc.setFont(undefined,'normal'); doc.setFontSize(9); doc.text('Payment: '+payLabel, 14, y); y+=6; }
+  if(!hidePricing && payLabel){ y+=2; doc.setFont(undefined,'normal'); doc.setFontSize(9); doc.text('Payment: '+payLabel, 14, y); y+=6; }
   if(order.notes){ doc.setFontSize(9); const noteLines = doc.splitTextToSize('Notes: '+order.notes, pageW-28); doc.text(noteLines,14,y); y += 5*noteLines.length; }
 
   doc.setFontSize(8); doc.setTextColor(150,150,150);
@@ -645,23 +736,32 @@ function generateOrderPdf(order, orderId){
 function downloadOrderPdf(order, orderId){
   generateOrderPdf(order, orderId).save('Order-'+orderDisplayNumber(order).replace(/[^\w-]/g,'')+'.pdf');
 }
-function orderPdfBase64(order, orderId){
-  const uri = generateOrderPdf(order, orderId).output('datauristring');
+function orderPdfBase64(order, orderId, hidePricing){
+  const uri = generateOrderPdf(order, orderId, hidePricing).output('datauristring');
   return uri.split(',')[1];
 }
 
 // Delivery fee always starts at $0 for a new order — it's something staff
 // may add after reviewing the order (see the Edit order screen), not
 // something the client sets themselves.
-function computeOrderTotals(lines, taxExempt, payType, deliveryFee){
+// Converts a discount entered as either a flat dollar amount or a percent
+// into an actual dollar figure, based on the order's subtotal — used by
+// both the staff Edit screen and the client-facing discount code.
+function resolveDiscountAmount(discountValue, discountType, subtotal){
+  const v = parseFloat(discountValue)||0;
+  if(v<=0) return 0;
+  return discountType==='percent' ? subtotal*(v/100) : v;
+}
+function computeOrderTotals(lines, taxExempt, payType, deliveryFee, discountAmount){
   deliveryFee = deliveryFee || 0;
+  discountAmount = discountAmount || 0;
   const subtotal = lines.reduce((s,l)=> s + l.price*l.qty, 0);
   const taxable = subtotal + deliveryFee;
   const taxAmount = taxExempt ? 0 : taxable*TAX_RATE;
   const preFeeTotal = subtotal + deliveryFee + taxAmount;
   const ccFeeAmount = payType==='credit' ? preFeeTotal*CC_FEE_RATE : 0;
-  const grandTotal = preFeeTotal + ccFeeAmount;
-  return {subtotal, deliveryFee, taxAmount, ccFeeAmount, grandTotal};
+  const grandTotal = Math.max(0, preFeeTotal + ccFeeAmount - discountAmount);
+  return {subtotal, deliveryFee, taxAmount, ccFeeAmount, discountAmount, grandTotal};
 }
 function renderPaymentChoices(){
   document.getElementById('paymentChoices').innerHTML = PAYMENT_METHODS.map(pm=>
@@ -684,7 +784,7 @@ function updatePaymentVisibility(){
 function renderCheckoutRecap(){
   const lines = cartLines();
   const taxExempt = !!(document.getElementById('coTaxExempt')||{}).checked;
-  const t = computeOrderTotals(lines, taxExempt, paymentType, 0);
+  const t = computeOrderTotals(lines, taxExempt, paymentType, 0, coDiscountAmount);
   let html = lines.map(l=>{
     const noteHtml = l.note ? `<div class="recap-note">&#9998; ${esc(l.note)}</div>` : '';
     return `<div class="recap-line-wrap">
@@ -702,6 +802,9 @@ function renderCheckoutRecap(){
     : `<div class="recap-line"><div>Sales tax (${(TAX_RATE*100).toFixed(3)}%)</div><div class="mono">$${money(t.taxAmount)}</div></div>`;
   if(paymentType==='credit'){
     html += `<div class="recap-line"><div>Credit card fee (${(CC_FEE_RATE*100).toFixed(1)}%)</div><div class="mono">$${money(t.ccFeeAmount)}</div></div>`;
+  }
+  if(coDiscountAmount>0){
+    html += `<div class="recap-line"><div>Discount</div><div class="mono">&minus;$${money(coDiscountAmount)}</div></div>`;
   }
   html += `<div class="recap-total"><div>Total</div><div class="mono">$${money(t.grandTotal)}</div></div>`;
   document.getElementById('checkoutRecap').innerHTML = html;
@@ -723,7 +826,7 @@ async function saveDraftNow(){
   const payload = {
     status: 'draft',
     lines, total: cartTotal(),
-    clientEmail: (document.getElementById('coCEmail')||{}).value || '',
+    clientEmail: (coEmails[0]||'').trim(),
     clientName: (document.getElementById('coCName')||{}).value || (document.getElementById('coName')||{}).value || '',
     updatedAt: Date.now()
   };
@@ -744,7 +847,6 @@ async function saveDraftNow(){
     draftStarted = true;
   }catch(e){ console.error('draft save failed', e); }
 }
-function onCheckoutEmailInput(){ scheduleDraftSave(); }
 
 /* =====================================================================
    SUBMIT — finalizes the order, then bridges to the main app: if staff
@@ -754,11 +856,12 @@ function onCheckoutEmailInput(){ scheduleDraftSave(); }
    that's what it turns out to be.
    ===================================================================== */
 function validateCheckout(){
-  const req = ['coName','coDate','coCName','coCPhone','coCEmail'];
+  const req = ['coName','coDate','coCName','coCPhone'];
   for(const id of req){
     const el = document.getElementById(id);
     if(!el.value || !el.value.trim()) return 'Please fill in '+el.previousElementSibling.textContent.toLowerCase()+'.';
   }
+  if(!coEmails.some(e=>e && e.trim())) return 'Please fill in at least one email.';
   return '';
 }
 async function submitOrder(){
@@ -771,7 +874,11 @@ async function submitOrder(){
 
   const lines = cartLines();
   const taxExempt = !!document.getElementById('coTaxExempt').checked;
-  const t = computeOrderTotals(lines, taxExempt, paymentType, 0);
+  const t = computeOrderTotals(lines, taxExempt, paymentType, 0, coDiscountAmount);
+  const emailList = coEmails.map(e=>(e||'').trim()).filter(Boolean);
+  const primaryEmail = emailList[0]||'';
+  const noCodeApproved = !!(document.getElementById('coNoCodeApproved')||{}).checked;
+  const discountCode = (document.getElementById('coDiscountCode')||{}).value.trim();
   const order = {
     status: 'submitted',
     lines,
@@ -781,7 +888,10 @@ async function submitOrder(){
     taxAmount: t.taxAmount,
     paymentType: paymentType,
     ccFeeAmount: t.ccFeeAmount,
-    discount: 0,
+    discount: coDiscountAmount,
+    discountCode: discountCode || null,
+    discountCodeValid: coDiscountCodeValid,
+    discountNoCodeApprovedFlag: noCodeApproved,
     total: t.grandTotal,
     clientName: document.getElementById('coName').value.trim(),
     locationName: document.getElementById('coLoc').value.trim(),
@@ -790,8 +900,9 @@ async function submitOrder(){
     address: document.getElementById('coAddr').value.trim(),
     contactName: document.getElementById('coCName').value.trim(),
     contactPhone: document.getElementById('coCPhone').value.trim(),
-    contactEmail: document.getElementById('coCEmail').value.trim(),
-    clientEmail: document.getElementById('coCEmail').value.trim(),
+    contactEmail: primaryEmail,
+    contactEmails: emailList,
+    clientEmail: primaryEmail,
     notes: document.getElementById('coNotes').value.trim(),
     placedBy: isStaff ? ('staff:'+staffUser) : 'client',
     submittedAt: Date.now(),
@@ -812,6 +923,7 @@ async function submitOrder(){
     renderConfirmation(order);
     showView('confirm');
     cart = {}; itemNotes = {}; noteOpen = {};
+    coEmails = ['']; coDiscountAmount = 0; coDiscountCodeValid = null;
     currentOrderId = null; draftStarted = false;
   }catch(e){
     console.error('submit failed', e);
@@ -946,8 +1058,9 @@ async function sendOrderPlacedEmail(order, orderId){
 
   // Printer gets a PDF attachment instead of the HTML email — a real PDF
   // prints cleanly, unlike an HTML email body sent through a print gateway.
+  // No pricing on this copy — it's for the kitchen, not billing.
   try{
-    const pdfBase64 = orderPdfBase64(order, orderId);
+    const pdfBase64 = orderPdfBase64(order, orderId, true);
     await fetch(relay, {
       method: 'POST',
       body: JSON.stringify({
@@ -1013,11 +1126,12 @@ async function sendClientConfirmationEmail(order, orderId){
     '\n\nQuestions? Just reply to this email.';
 
   try{
+    const toList = (order.contactEmails && order.contactEmails.length) ? order.contactEmails.join(',') : order.contactEmail;
     await fetch(relay, {
       method: 'POST',
       body: JSON.stringify({
         action: 'gmailSend',
-        to: order.contactEmail,
+        to: toList,
         subject: 'Your order with Premier Caterers',
         body: plainBody,
         htmlBody: htmlBody
@@ -1132,6 +1246,7 @@ function updateTopbar(){
     el.innerHTML = `<span>${esc(prettyStaffName(staffUser))}</span>
       <button class="tb-link" onclick="showView('staffOrders')">All orders</button>
       <button class="tb-link" onclick="showView('staffCatalog')">Menu &amp; pricing</button>
+      <button class="tb-link" onclick="showView('discountCodes')">Discount codes</button>
       <button class="tb-link" onclick="showView('order')">Ordering view</button>
       <button class="tb-link" onclick="staffLogout()">Log out</button>`;
   } else {
@@ -1201,6 +1316,8 @@ function renderStaffOrders(){
       ? `<button class="btn btn-ghost btn-sm" onclick="promptLinkOrder('${o.id}')">Link to event</button>` : '';
     const editBtn = o.status==='submitted'
       ? `<button class="btn btn-ghost btn-sm" onclick="openEditOrder('${o.id}')" style="margin-left:6px">Edit</button>` : '';
+    const resendBtn = o.status==='submitted'
+      ? `<button class="btn btn-ghost btn-sm" onclick="resendOrderEmails('${o.id}')" style="margin-left:6px">Resend</button>` : '';
     const deleteBtn = `<button class="btn btn-ghost btn-sm" onclick="deleteOrder('${o.id}')" style="margin-left:6px;color:var(--red)">Delete</button>`;
     html += `<tr>
       <td><b>${esc(o.clientName||o.contactName||'—')}</b><br><span style="color:var(--text3);font-size:11.5px">${esc(o.contactEmail||o.clientEmail||'')}</span></td>
@@ -1208,7 +1325,7 @@ function renderStaffOrders(){
       <td>${itemCount} item${itemCount===1?'':'s'}</td>
       <td class="mono">$${money(o.total||0)}</td>
       <td><span class="pill-status ${statusClass}">${statusLabel}</span></td>
-      <td>${linkBtn}${editBtn}${deleteBtn}</td>
+      <td>${linkBtn}${editBtn}${resendBtn}${deleteBtn}</td>
     </tr>`;
   });
   tbl.innerHTML = html;
@@ -1285,24 +1402,35 @@ async function promptLinkOrder(orderId){
     }
 
     const eventId = eventDoc.id;
-    const baseNumber = eventDoc.data().eventNumber || ('#'+clean);
+    // The full eventNumber is "26-1122-04" — the main app displays job
+    // numbers as just the last segment ("04"), so that's what shows here
+    // too rather than the full date-prefixed string.
+    const fullEventNumber = eventDoc.data().eventNumber || clean;
+    const shortNumber = fullEventNumber.split('-').pop();
 
     // Multiple drop-off orders can belong to the same job (e.g. three
     // separate deliveries for one event) — each gets its own letter suffix
-    // (4a, 4b, 4c...) so they're distinguishable, without creating extra
+    // (04a, 04b, 04c...) so they're distinguishable, without creating extra
     // event records in the main app. The count is of OTHER orders already
     // linked to this same event, so the first one linked becomes "a", the
     // next "b", and so on in the order they were linked.
     const siblingSnap = await ordersCol.where('linkedEventId','==',eventId).get();
     const letter = String.fromCharCode(97 + siblingSnap.size); // 97 = 'a'
-    const subLabel = baseNumber + letter;
+    const subLabel = shortNumber + letter;
 
     const invRef = db.collection('invoices').doc(eventId);
     const invDoc = await invRef.get();
-    const newLines = order.lines.map(l=>({
-      description: '['+subLabel+'] '+l.itemName+' ('+l.sizeLabel+')'+(l.note?' — '+l.note:''),
-      qty: l.qty, price: l.price
-    }));
+    // Only ONE line goes onto the master invoice — the itemized breakdown
+    // stays on the drop-off order itself (linked below), not duplicated
+    // line-by-line onto the invoice. No tax here: the master invoice
+    // calculates its own tax on the whole bill, so including this order's
+    // own tax would double it.
+    const preTaxAmount = (order.subtotal||0) + (order.deliveryFee||0) - (order.discount||0);
+    const orderLink = APP_URL+'?order='+encodeURIComponent(orderId);
+    const newLines = [{
+      description: 'Drop off '+subLabel+' — full order & menu attached below: '+orderLink,
+      qty: 1, price: Math.max(0, preTaxAmount)
+    }];
     if(invDoc.exists){
       const existing = invDoc.data().lines||[];
       await invRef.set({lines: existing.concat(newLines)}, {merge:true});
@@ -1313,7 +1441,7 @@ async function promptLinkOrder(orderId){
       await db.collection('inquiries').doc(order.linkedInquiryId).delete().catch(()=>{});
     }
     await ordersCol.doc(orderId).set({linkedEventId:eventId, linkedInquiryId:null, subLabel:subLabel}, {merge:true});
-    showToast('Linked to '+subLabel+' — items added to that invoice');
+    showToast('Linked to '+subLabel+' — added as one line on that invoice');
   }catch(e){ console.error(e); alert('Something went wrong linking this order.'); }
 }
 
@@ -1329,6 +1457,20 @@ async function deleteOrder(orderId){
     }
     showToast('Order deleted');
   }catch(e){ console.error(e); alert('Could not delete that order.'); }
+}
+// Re-sends both the staff notification (events@, Barry, and the printer
+// PDF) and the client confirmation (to everyone on the order) for an
+// already-placed order — same emails as when it was first submitted.
+async function resendOrderEmails(orderId){
+  if(!confirm('Resend this order\'s emails to the client and to events@/Barry/the printer?')) return;
+  try{
+    const doc = await ordersCol.doc(orderId).get();
+    if(!doc.exists){ alert('Could not find that order.'); return; }
+    const order = doc.data();
+    await sendOrderPlacedEmail(order, orderId);
+    await sendClientConfirmationEmail(order, orderId);
+    showToast('Emails resent');
+  }catch(e){ console.error(e); alert('Could not resend those emails.'); }
 }
 
 /* =====================================================================
@@ -1373,7 +1515,8 @@ async function openEditOrder(orderId){
     document.getElementById('eoAddr').value = o.address||'';
     document.getElementById('eoNotes').value = o.notes||'';
     document.getElementById('eoDeliveryFee').value = o.deliveryFee||0;
-    document.getElementById('eoDiscount').value = o.discount||0;
+    document.getElementById('eoDiscount').value = (o.discountValue!=null ? o.discountValue : (o.discount||0));
+    document.getElementById('eoDiscountType').value = o.discountType || 'dollar';
     document.getElementById('eoTaxExempt').checked = !!o.taxExempt;
 
     document.getElementById('eoPaymentType').innerHTML = PAYMENT_METHODS.map(pm=>
@@ -1447,16 +1590,18 @@ function renderEditOrderTotals(){
   const taxExempt = document.getElementById('eoTaxExempt').checked;
   const payType = document.getElementById('eoPaymentType').value;
   const deliveryFee = parseFloat(document.getElementById('eoDeliveryFee').value)||0;
-  const discount = parseFloat(document.getElementById('eoDiscount').value)||0;
-  const t = computeOrderTotals(eoLines, taxExempt, payType, deliveryFee);
-  const grandTotal = Math.max(0, t.grandTotal - discount);
+  const discountType = document.getElementById('eoDiscountType').value;
+  const discountRaw = document.getElementById('eoDiscount').value;
+  const subtotalNow = eoLines.reduce((s,l)=> s + l.price*l.qty, 0);
+  const discountAmount = resolveDiscountAmount(discountRaw, discountType, subtotalNow);
+  const t = computeOrderTotals(eoLines, taxExempt, payType, deliveryFee, discountAmount);
   document.getElementById('eoTotalsBox').innerHTML = `
     <div class="recap-line"><div>Subtotal</div><div class="mono">$${money(t.subtotal)}</div></div>
     <div class="recap-line"><div>Delivery fee</div><div class="mono">$${money(t.deliveryFee)}</div></div>
     <div class="recap-line"><div>Sales tax</div><div class="mono">${taxExempt?'Exempt':'$'+money(t.taxAmount)}</div></div>
     ${t.ccFeeAmount?`<div class="recap-line"><div>Credit card fee</div><div class="mono">$${money(t.ccFeeAmount)}</div></div>`:''}
-    ${discount?`<div class="recap-line"><div>Discount</div><div class="mono">&minus;$${money(discount)}</div></div>`:''}
-    <div class="recap-total"><div>Total</div><div class="mono">$${money(grandTotal)}</div></div>
+    ${discountAmount?`<div class="recap-line"><div>Discount</div><div class="mono">&minus;$${money(discountAmount)}</div></div>`:''}
+    <div class="recap-total"><div>Total</div><div class="mono">$${money(t.grandTotal)}</div></div>
   `;
 }
 async function saveEditedOrder(){
@@ -1465,9 +1610,11 @@ async function saveEditedOrder(){
   const taxExempt = document.getElementById('eoTaxExempt').checked;
   const payType = document.getElementById('eoPaymentType').value;
   const deliveryFee = parseFloat(document.getElementById('eoDeliveryFee').value)||0;
-  const discount = parseFloat(document.getElementById('eoDiscount').value)||0;
-  const t = computeOrderTotals(eoLines, taxExempt, payType, deliveryFee);
-  const grandTotal = Math.max(0, t.grandTotal - discount);
+  const discountType = document.getElementById('eoDiscountType').value;
+  const discountRaw = parseFloat(document.getElementById('eoDiscount').value)||0;
+  const subtotalNow = eoLines.reduce((s,l)=> s + l.price*l.qty, 0);
+  const discountAmount = resolveDiscountAmount(discountRaw, discountType, subtotalNow);
+  const t = computeOrderTotals(eoLines, taxExempt, payType, deliveryFee, discountAmount);
   const updated = {
     lines: eoLines,
     subtotal: t.subtotal,
@@ -1476,8 +1623,10 @@ async function saveEditedOrder(){
     taxAmount: t.taxAmount,
     paymentType: payType,
     ccFeeAmount: t.ccFeeAmount,
-    discount: discount,
-    total: grandTotal,
+    discountType: discountType,
+    discountValue: discountRaw,
+    discount: discountAmount,
+    total: t.grandTotal,
     clientName: document.getElementById('eoName').value.trim(),
     locationName: document.getElementById('eoLoc').value.trim(),
     deliveryDate: document.getElementById('eoDate').value,
@@ -1816,6 +1965,64 @@ function renderCatalogTable(){
 async function deleteItem(id){
   if(!confirm('Remove this item from the drop-off menu?')) return;
   try{ await catalogCol.doc(id).delete(); showToast('Item removed'); }
+  catch(e){ console.error(e); }
+}
+
+/* =====================================================================
+   STAFF: DISCOUNT CODES — codes a client can enter at checkout for an
+   automatic discount, or reference when a discount was approved by phone.
+   ===================================================================== */
+function toggleAddCodePanel(){
+  const p = document.getElementById('addCodePanel');
+  const open = p.style.display !== 'none';
+  p.style.display = open ? 'none' : '';
+  document.getElementById('addCodeBtn').textContent = open ? '+ Add code' : 'Close';
+  if(!open){ document.getElementById('dcCode').value=''; document.getElementById('dcValue').value=''; document.getElementById('dcType').value='dollar'; }
+}
+async function saveDiscountCode(){
+  const code = document.getElementById('dcCode').value.trim().toUpperCase();
+  const value = parseFloat(document.getElementById('dcValue').value)||0;
+  const type = document.getElementById('dcType').value;
+  if(!code){ alert('Enter a code.'); return; }
+  if(value<=0){ alert('Enter a value greater than 0.'); return; }
+  try{
+    await discountCodesCol.add({code, value, type, active:true, createdAt:Date.now()});
+    toggleAddCodePanel();
+    showToast('Discount code added');
+    renderDiscountCodesTable();
+  }catch(e){ console.error(e); alert('Could not save that code.'); }
+}
+let allDiscountCodes = [];
+async function renderDiscountCodesTable(){
+  const tbl = document.getElementById('discountCodesTbl');
+  tbl.innerHTML = '<tr><td class="empty">Loading…</td></tr>';
+  try{
+    const snap = await discountCodesCol.orderBy('createdAt','desc').get();
+    allDiscountCodes = [];
+    snap.forEach(doc=> allDiscountCodes.push(Object.assign({id:doc.id}, doc.data())) );
+    if(!allDiscountCodes.length){ tbl.innerHTML = '<tr><td class="empty">No discount codes yet.</td></tr>'; return; }
+    let html = '<tr><th>Code</th><th>Value</th><th>Status</th><th></th></tr>';
+    allDiscountCodes.forEach(c=>{
+      html += `<tr>
+        <td class="mono"><b>${esc(c.code)}</b></td>
+        <td>${c.type==='percent' ? (c.value+'%') : ('$'+money(c.value))} off</td>
+        <td><span class="pill-status ${c.active?'submitted':'draft'}">${c.active?'Active':'Disabled'}</span></td>
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick="toggleDiscountCodeActive('${c.id}',${!c.active})">${c.active?'Disable':'Enable'}</button>
+          <button class="btn btn-ghost btn-sm" onclick="deleteDiscountCode('${c.id}')" style="margin-left:6px;color:var(--red)">Delete</button>
+        </td>
+      </tr>`;
+    });
+    tbl.innerHTML = html;
+  }catch(e){ console.error(e); tbl.innerHTML = '<tr><td class="empty">Could not load discount codes.</td></tr>'; }
+}
+async function toggleDiscountCodeActive(id, makeActive){
+  try{ await discountCodesCol.doc(id).set({active:makeActive}, {merge:true}); renderDiscountCodesTable(); }
+  catch(e){ console.error(e); }
+}
+async function deleteDiscountCode(id){
+  if(!confirm('Delete this discount code?')) return;
+  try{ await discountCodesCol.doc(id).delete(); showToast('Code deleted'); renderDiscountCodesTable(); }
   catch(e){ console.error(e); }
 }
 
