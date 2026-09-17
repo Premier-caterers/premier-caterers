@@ -39,8 +39,12 @@ a{color:var(--maroon);text-decoration:none}
 .brand{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:20px;color:var(--maroon)}
 .brand small{display:block;font-family:'Inter',sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
 .tb-right{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text2)}
-.tb-link{background:none;border:1px solid var(--border);border-radius:8px;padding:7px 13px;font-size:12.5px;color:var(--text2)}
+.tb-link{background:none;border:1px solid var(--border);border-radius:8px;padding:7px 13px;font-size:12.5px;color:var(--text2);min-height:36px}
 .tb-link:hover{border-color:var(--border2)}
+.tb-hamburger{display:none;background:none;border:1px solid var(--border);border-radius:8px;width:40px;height:40px;font-size:18px;color:var(--text2)}
+.tb-mobile-menu{display:none;flex-direction:column;gap:8px;position:absolute;top:100%;right:20px;left:20px;background:var(--bg);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:12px;margin-top:8px}
+.tb-mobile-menu.open{display:flex}
+.tb-mobile-menu .tb-link{width:100%;text-align:left}
 
 .wrap{max-width:1160px;margin:0 auto;padding:22px 20px 100px}
 .view{display:none}
@@ -49,11 +53,11 @@ a{color:var(--maroon);text-decoration:none}
 /* search + filter bar */
 .searchbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
 .search{flex:1;min-width:220px;max-width:380px;position:relative}
-.search input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border);border-radius:10px;background:var(--bg)}
+.search input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border);border-radius:10px;background:var(--bg);min-height:40px}
 .search input:focus{outline:2px solid var(--maroon);outline-offset:1px}
 .search i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:16px}
 .chips{display:flex;gap:7px;flex-wrap:wrap}
-.chip{padding:7px 14px;border-radius:18px;font-size:12.5px;font-weight:600;border:1px solid var(--border);background:var(--bg);color:var(--text2)}
+.chip{padding:8px 14px;border-radius:18px;font-size:12.5px;font-weight:600;border:1px solid var(--border);background:var(--bg);color:var(--text2);min-height:36px}
 .chip.on{background:var(--maroon);border-color:var(--maroon);color:#fff}
 
 /* item grid */
@@ -71,29 +75,30 @@ a{color:var(--maroon);text-decoration:none}
 .size-row{display:flex;align-items:center;justify-content:space-between;padding:5px 2px}
 .size-label{font-size:12.5px;color:var(--text)}
 .size-label small{color:var(--text3)}
-.stepper{display:flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:8px;padding:3px 5px}
+.stepper{display:flex;align-items:center;gap:4px;border:1px solid var(--border);border-radius:9px;padding:2px}
 .stepper.on{border-color:var(--maroon)}
-.stepper button{width:21px;height:21px;border:none;background:none;font-size:14px;color:var(--text2);font-family:'IBM Plex Mono',monospace}
-.stepper .n{font-family:'IBM Plex Mono',monospace;font-size:12.5px;min-width:13px;text-align:center}
-.note-toggle{align-self:flex-start;background:none;border:none;color:var(--text3);font-size:11.5px;text-decoration:underline;padding:0}
-.note-box{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical}
+.stepper button{width:32px;height:32px;border:none;background:none;font-size:16px;color:var(--text2);font-family:'IBM Plex Mono',monospace}
+.stepper .n{font-family:'IBM Plex Mono',monospace;font-size:13px;min-width:20px;text-align:center}
+.note-toggle{align-self:flex-start;background:none;border:none;color:var(--text3);font-size:11.5px;text-decoration:underline;padding:6px 0;min-height:32px}
+.note-box{width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;resize:vertical}
 
 /* cart bar */
 .cartbar{position:sticky;bottom:0;z-index:30;background:var(--text);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;margin-top:18px;border-radius:var(--radius-lg)}
 .cartbar .count{font-size:13px;color:#D8D2CB}
 .cartbar-right{display:flex;align-items:center;gap:16px}
 .cartbar .total{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600}
-.btn{border:none;border-radius:9px;padding:10px 18px;font-size:13.5px;font-weight:600;cursor:pointer}
+.btn{border:none;border-radius:9px;padding:10px 18px;font-size:13.5px;font-weight:600;cursor:pointer;min-height:42px}
 .btn-pri{background:var(--maroon);color:#fff}
 .btn-pri:hover{background:var(--maroon-deep)}
 .btn-pri:disabled{opacity:.5;cursor:default}
 .btn-ghost{background:none;border:1px solid var(--border2);color:var(--text2)}
-.btn-sm{padding:7px 12px;font-size:12.5px}
+.btn-sm{padding:8px 12px;font-size:12.5px;min-height:36px}
 
 /* forms */
 .field{margin-bottom:0}
 .field label{display:block;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px}
-.field input,.field select,.field textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:9px;background:var(--bg)}
+.field input,.field select,.field textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:9px;background:var(--bg);min-height:40px}
+.field textarea{min-height:70px}
 .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--maroon);outline-offset:1px}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .section{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:16px}
@@ -105,7 +110,7 @@ a{color:var(--maroon);text-decoration:none}
 /* misc */
 .empty{color:var(--text3);text-align:center;padding:40px 20px}
 .center-note{text-align:center;color:var(--text2);font-size:13px;margin:18px 0}
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 18px;border-radius:9px;font-size:13px;z-index:999;display:none}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 18px;border-radius:9px;font-size:13px;z-index:999;display:none;max-width:90vw;text-align:center}
 
 /* staff table */
 .tbl{width:100%;border-collapse:collapse}
@@ -122,15 +127,23 @@ a{color:var(--maroon);text-decoration:none}
 .lg-box{background:#fff;border-radius:16px;padding:32px;max-width:340px;width:100%;text-align:center}
 .lg-title{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:19px;margin-bottom:6px}
 .lg-sub{font-size:13px;color:var(--text2);margin-bottom:18px}
-.lg-input{width:100%;padding:11px 13px;border:1px solid var(--border);border-radius:9px;margin-bottom:10px}
-.lg-go{width:100%;background:var(--maroon);color:#fff;border:none;border-radius:9px;padding:11px;font-weight:600;font-size:14px;margin-bottom:10px}
+.lg-input{width:100%;padding:11px 13px;border:1px solid var(--border);border-radius:9px;margin-bottom:10px;min-height:44px}
+.lg-go{width:100%;background:var(--maroon);color:#fff;border:none;border-radius:9px;padding:11px;font-weight:600;font-size:14px;margin-bottom:10px;min-height:44px}
 .lg-err{color:var(--red);font-size:12px;min-height:16px;margin-bottom:6px}
-.lg-back{background:none;border:none;color:var(--text3);font-size:12.5px}
+.lg-back{background:none;border:none;color:var(--text3);font-size:12.5px;min-height:32px}
 
 @media (max-width:640px){
   .grid2{grid-template-columns:1fr}
   .grid{grid-template-columns:1fr}
-  .cartbar{border-radius:0;margin-left:-20px;margin-right:-20px;margin-top:20px;width:calc(100% + 40px)}
+  .cartbar{border-radius:0;margin-left:-20px;margin-right:-20px;margin-top:20px;width:calc(100% + 40px);flex-wrap:wrap;gap:10px}
+  .cartbar-right{width:100%;justify-content:space-between}
+  .tb-right > .tb-link, .tb-right > span{display:none}
+  .tb-hamburger{display:flex;align-items:center;justify-content:center}
+  .wrap{padding:18px 14px 100px}
+  .section{padding:16px}
+  .btn[style*="width:100%"]{font-size:15px}
+  .tbl{font-size:12px}
+  .tbl th, .tbl td{padding:8px 6px}
 }
 </style>
 </head>
@@ -140,7 +153,9 @@ a{color:var(--maroon);text-decoration:none}
   <div class="topbar-row">
     <div class="brand">Premier Caterers<small>Order drop-off catering</small></div>
     <div class="tb-right" id="tbRight"></div>
+    <button class="tb-hamburger" id="tbHamburger" onclick="toggleMobileMenu()" aria-label="Menu">&#9776;</button>
   </div>
+  <div class="tb-mobile-menu" id="tbMobileMenu"></div>
 </div>
 
 <div class="wrap" id="appWrap">
@@ -202,6 +217,13 @@ a{color:var(--maroon);text-decoration:none}
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px">
         <input type="checkbox" id="coTaxExempt" onchange="renderCheckoutRecap()" style="width:16px;height:16px"> Tax exempt
       </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px">
+        <input type="checkbox" id="coPartOfEvent" style="width:16px;height:16px"> Is this part of an event you're already booked with us for?
+      </label>
+      <div id="coStaffLinkArea" style="display:none;margin-bottom:12px">
+        <button class="btn btn-ghost btn-sm" onclick="coLinkToEventNow()" type="button" id="coStaffLinkBtn">Link to current event</button>
+        <div id="coStaffLinkStatus" style="font-size:12px;margin-top:6px;color:var(--text3)"></div>
+      </div>
       <button class="btn btn-ghost btn-sm" onclick="coToggleDiscountPanel()" id="coDiscountToggle" type="button">Have a discount code?</button>
       <div id="coDiscountPanel" style="display:none;margin-top:12px">
         <div class="field" style="margin-bottom:8px"><label for="coDiscountCode">Discount code</label><input id="coDiscountCode" type="text" placeholder="Enter code" oninput="onDiscountCodeInput()"></div>
@@ -429,8 +451,12 @@ function showView(v){
   if(el) el.classList.add('active');
   currentView = v;
   window.scrollTo(0,0);
+  closeMobileMenu();
   if(v==='order') renderItemGrid();
-  if(v==='checkout'){ renderPaymentChoices(); coRenderEmailsList(); renderCheckoutRecap(); }
+  if(v==='checkout'){
+    renderPaymentChoices(); coRenderEmailsList(); renderCheckoutRecap();
+    document.getElementById('coStaffLinkArea').style.display = isStaff ? '' : 'none';
+  }
   if(v==='staffOrders') renderStaffOrders();
   if(v==='staffCatalog') renderCatalogTable();
   if(v==='discountCodes') renderDiscountCodesTable();
@@ -566,6 +592,18 @@ let paymentType = 'cash';
 let coEmails = [''];  // multiple contact emails at checkout
 let coDiscountAmount = 0;
 let coDiscountCodeValid = null; // true/false/null (null = not checked yet)
+let coStagedEvent = null; // set when staff pre-link an order to an event during checkout, before it's saved
+
+async function coLinkToEventNow(){
+  const deliveryDate = document.getElementById('coDate').value;
+  if(!deliveryDate){ alert('Enter the delivery date first, so the right week can be searched.'); return; }
+  const jobNum = prompt('Enter the job number of the event this order belongs to (e.g. 14 or #14):');
+  if(!jobNum) return;
+  const found = await findEventByJobNumber(jobNum, deliveryDate);
+  if(!found) return;
+  coStagedEvent = found;
+  document.getElementById('coStaffLinkStatus').innerHTML = `<span style="color:var(--green-text);font-weight:600">&check; Will link to event ${esc(found.shortNumber)} on submit</span>`;
+}
 const discountCodesCol = db.collection('discountCodes');
 
 function coRenderEmailsList(){
@@ -879,8 +917,14 @@ async function submitOrder(){
   const primaryEmail = emailList[0]||'';
   const noCodeApproved = !!(document.getElementById('coNoCodeApproved')||{}).checked;
   const discountCode = (document.getElementById('coDiscountCode')||{}).value.trim();
+  const partOfExistingEventFlag = !!document.getElementById('coPartOfEvent').checked;
+  // Staff-placed orders don't need review — the caterer entered it
+  // directly. Client-placed orders wait for staff to approve them.
+  const approved = isStaff;
   const order = {
     status: 'submitted',
+    approved: approved,
+    partOfExistingEventFlag: partOfExistingEventFlag,
     lines,
     subtotal: t.subtotal,
     deliveryFee: t.deliveryFee,
@@ -917,13 +961,25 @@ async function submitOrder(){
       const ref = await ordersCol.add(order);
       currentOrderId = ref.id;
     }
-    await bridgeNewInquiry(order, currentOrderId);
+    if(coStagedEvent){
+      // Staff picked the event right at checkout — link it immediately
+      // instead of leaving it to create a standalone inquiry first.
+      const subLabel = await applyEventLink(currentOrderId, order, coStagedEvent);
+      order.linkedEventId = coStagedEvent.eventId;
+      order.subLabel = subLabel;
+    } else if(!partOfExistingEventFlag){
+      // Only bridge to a new inquiry when nothing suggests this belongs to
+      // something that already exists — a client flagging "this is part of
+      // an event" skips creating a phantom new lead; staff will link it
+      // manually once they know which event it is.
+      await bridgeNewInquiry(order, currentOrderId);
+    }
     await sendOrderPlacedEmail(order, currentOrderId);
     await sendClientConfirmationEmail(order, currentOrderId);
     renderConfirmation(order);
     showView('confirm');
     cart = {}; itemNotes = {}; noteOpen = {};
-    coEmails = ['']; coDiscountAmount = 0; coDiscountCodeValid = null;
+    coEmails = ['']; coDiscountAmount = 0; coDiscountCodeValid = null; coStagedEvent = null;
     currentOrderId = null; draftStarted = false;
   }catch(e){
     console.error('submit failed', e);
@@ -978,6 +1034,12 @@ const APP_URL = 'https://premier-caterers.github.io/premier-caterers/dropoff.htm
 function orderNumberBannerHtml(order){
   return '<div style="background:#FFE066;color:#1D1F21;text-align:center;padding:12px;font-size:20px;font-weight:bold;border-radius:6px;margin-bottom:16px">Order: '+esc(orderDisplayNumber(order))+'</div>';
 }
+// Only client-placed orders need review — staff-placed ones are
+// auto-approved since the caterer entered them directly.
+function pendingApprovalNoticeHtml(order){
+  if(order.approved) return '';
+  return '<div style="background:#FBF1DC;color:#A3760C;text-align:center;padding:10px;font-size:13px;font-weight:600;border-radius:6px;margin-bottom:16px">Pending caterer approval</div>';
+}
 function orderLinksHtml(orderId){
   const viewUrl = APP_URL+'?order='+encodeURIComponent(orderId);
   const pdfUrl = APP_URL+'?order='+encodeURIComponent(orderId)+'&pdf=1';
@@ -1009,6 +1071,7 @@ async function sendOrderPlacedEmail(order, orderId){
     + '<h2 style="color:#fff;margin:0;font-size:18px">New Drop-Off Order</h2></div>'
     + '<div style="background:#fff;border:1px solid #ddd;padding:20px;border-radius:0 0 6px 6px">'
     + orderNumberBannerHtml(order)
+    + pendingApprovalNoticeHtml(order)
     + '<table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:16px">'
     + infoRow('Client', order.contactName)
     + infoRow('Email', order.contactEmail)
@@ -1077,6 +1140,29 @@ async function sendOrderPlacedEmail(order, orderId){
 // Sends the client their own "we got your order" confirmation, separate
 // from the staff notification above — friendlier tone, no internal-only
 // framing, same relay and same htmlBody pattern.
+// Sent once staff approve a client-placed order — closes the loop after
+// the initial "pending approval" notice, so the client isn't left
+// wondering whether it went through.
+async function sendApprovalConfirmationEmail(order, orderId){
+  const relay = await getRelayUrl();
+  if(!relay) return;
+  const toList = (order.contactEmails && order.contactEmails.length) ? order.contactEmails.join(',') : order.contactEmail;
+  if(!toList) return;
+  const htmlBody = '<div style="font-family:Arial,sans-serif;max-width:600px">'
+    + '<div style="background:#7A2E3D;padding:16px 20px;border-radius:6px 6px 0 0">'
+    + '<h2 style="color:#fff;margin:0;font-size:18px">Your order is confirmed</h2></div>'
+    + '<div style="background:#fff;border:1px solid #ddd;padding:20px;border-radius:0 0 6px 6px">'
+    + orderNumberBannerHtml(order)
+    + '<p style="font-size:14px;color:#333;margin:0 0 16px">Good news — we\'ve reviewed and confirmed your order. Nothing else needed on your end.</p>'
+    + orderLinksHtml(orderId)
+    + '</div></div>';
+  const plainBody = 'Good news — we\'ve reviewed and confirmed your order '+orderDisplayNumber(order)+'.\n\nView it: '+APP_URL+'?order='+encodeURIComponent(orderId);
+  try{
+    await fetch(relay, { method:'POST', body: JSON.stringify({
+      action:'gmailSend', to: toList, subject:'Your order is confirmed', body: plainBody, htmlBody: htmlBody
+    })});
+  }catch(e){ console.warn('approval confirmation email failed', e); }
+}
 async function sendClientConfirmationEmail(order, orderId){
   const relay = await getRelayUrl();
   if(!relay || !order.contactEmail) return;
@@ -1097,7 +1183,8 @@ async function sendClientConfirmationEmail(order, orderId){
     + '<h2 style="color:#fff;margin:0;font-size:18px">Thanks — we\'ve got your order</h2></div>'
     + '<div style="background:#fff;border:1px solid #ddd;padding:20px;border-radius:0 0 6px 6px">'
     + orderNumberBannerHtml(order)
-    + '<p style="font-size:14px;color:#333;margin:0 0 16px">Hi '+esc((order.contactName||'').split(' ')[0]||'')+', thanks for your order — here\'s a copy for your records. We\'ll reach out if we have any questions.</p>'
+    + pendingApprovalNoticeHtml(order)
+    + '<p style="font-size:14px;color:#333;margin:0 0 16px">Hi '+esc((order.contactName||'').split(' ')[0]||'')+', thanks for your order — here\'s a copy for your records. '+(order.approved ? 'We\'ll reach out if we have any questions.' : 'We\'ll confirm once we\'ve reviewed it, and reach out if we have any questions.')+'</p>'
     + '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px">'
     + '<tr style="background:#f7f7f7"><th style="padding:7px 10px;text-align:center;font-size:11px;color:#888">QTY</th>'
     + '<th style="padding:7px 10px;text-align:left;font-size:11px;color:#888">ITEM</th>'
@@ -1242,18 +1329,26 @@ async function bridgeNewInquiry(order, orderId){
    ===================================================================== */
 function updateTopbar(){
   const el = document.getElementById('tbRight');
+  const mobileEl = document.getElementById('tbMobileMenu');
   if(isStaff){
-    el.innerHTML = `<span>${esc(prettyStaffName(staffUser))}</span>
-      <button class="tb-link" onclick="showView('staffOrders')">All orders</button>
-      <button class="tb-link" onclick="showView('staffCatalog')">Menu &amp; pricing</button>
-      <button class="tb-link" onclick="showView('discountCodes')">Discount codes</button>
-      <button class="tb-link" onclick="showView('order')">Ordering view</button>
-      <button class="tb-link" onclick="staffLogout()">Log out</button>`;
+    const nameHtml = `<span>${esc(prettyStaffName(staffUser))}</span>`;
+    const links = [
+      ['staffOrders','All orders'],
+      ['staffCatalog','Menu &amp; pricing'],
+      ['discountCodes','Discount codes'],
+      ['order','Ordering view']
+    ];
+    const linkBtns = links.map(([v,label])=>`<button class="tb-link" onclick="showView('${v}')">${label}</button>`).join('\n      ');
+    el.innerHTML = nameHtml+'\n      '+linkBtns+'\n      <button class="tb-link" onclick="staffLogout()">Log out</button>';
+    mobileEl.innerHTML = nameHtml+'\n      '+linkBtns+'\n      <button class="tb-link" onclick="staffLogout()">Log out</button>';
   } else {
     el.innerHTML = `<button class="tb-link" onclick="openStaffLogin()"><i class="ti ti-lock"></i> Staff</button>`;
+    mobileEl.innerHTML = `<button class="tb-link" onclick="openStaffLogin()"><i class="ti ti-lock"></i> Staff</button>`;
   }
 }
-function openStaffLogin(){ document.getElementById('loginOverlay').style.display = 'flex'; document.getElementById('lgErr').textContent=''; }
+function toggleMobileMenu(){ document.getElementById('tbMobileMenu').classList.toggle('open'); }
+function closeMobileMenu(){ document.getElementById('tbMobileMenu').classList.remove('open'); }
+function openStaffLogin(){ closeMobileMenu(); document.getElementById('loginOverlay').style.display = 'flex'; document.getElementById('lgErr').textContent=''; }
 function closeStaffLogin(){ document.getElementById('loginOverlay').style.display = 'none'; }
 async function staffLoginSubmit(){
   const email = (document.getElementById('lgEmail').value||'').trim();
@@ -1310,10 +1405,16 @@ function renderStaffOrders(){
   let html = '<tr><th>Client</th><th>Delivery</th><th>Items</th><th>Total</th><th>Status</th><th></th></tr>';
   rows.forEach(o=>{
     const itemCount = (o.lines||[]).reduce((s,l)=>s+l.qty,0);
-    const statusClass = o.linkedEventId ? 'linked' : (o.status||'draft');
-    const statusLabel = o.linkedEventId ? ('Linked — '+(o.subLabel||'')) : (o.status==='submitted' ? 'Submitted' : 'Draft — in progress');
+    const pendingApproval = o.status==='submitted' && !o.approved;
+    const statusClass = o.linkedEventId ? 'linked' : (pendingApproval ? 'draft' : (o.status||'draft'));
+    let statusLabel = o.linkedEventId ? ('Linked — '+(o.subLabel||'')) : (o.status==='submitted' ? 'Submitted' : 'Draft — in progress');
+    if(pendingApproval) statusLabel = 'Pending approval';
+    const flagNote = (o.partOfExistingEventFlag && !o.linkedEventId)
+      ? `<div style="font-size:11px;color:var(--maroon);margin-top:2px">&#9873; Client flagged: part of an event</div>` : '';
+    const approveBtn = pendingApproval
+      ? `<button class="btn btn-pri btn-sm" onclick="approveOrder('${o.id}')">Approve</button>` : '';
     const linkBtn = (o.status==='submitted' && !o.linkedEventId)
-      ? `<button class="btn btn-ghost btn-sm" onclick="promptLinkOrder('${o.id}')">Link to event</button>` : '';
+      ? `<button class="btn btn-ghost btn-sm" onclick="promptLinkOrder('${o.id}')" style="margin-left:6px">Link to event</button>` : '';
     const editBtn = o.status==='submitted'
       ? `<button class="btn btn-ghost btn-sm" onclick="openEditOrder('${o.id}')" style="margin-left:6px">Edit</button>` : '';
     const resendBtn = o.status==='submitted'
@@ -1324,11 +1425,21 @@ function renderStaffOrders(){
       <td>${esc(o.deliveryDate||'')} ${esc(o.deliveryTime||'')}<br><span style="color:var(--text3);font-size:11.5px">${esc(o.locationName||'')}</span></td>
       <td>${itemCount} item${itemCount===1?'':'s'}</td>
       <td class="mono">$${money(o.total||0)}</td>
-      <td><span class="pill-status ${statusClass}">${statusLabel}</span></td>
-      <td>${linkBtn}${editBtn}${resendBtn}${deleteBtn}</td>
+      <td><span class="pill-status ${statusClass}">${statusLabel}</span>${flagNote}</td>
+      <td>${approveBtn}${linkBtn}${editBtn}${resendBtn}${deleteBtn}</td>
     </tr>`;
   });
   tbl.innerHTML = html;
+}
+async function approveOrder(orderId){
+  try{
+    const doc = await ordersCol.doc(orderId).get();
+    if(!doc.exists) return;
+    await ordersCol.doc(orderId).set({approved:true}, {merge:true});
+    const order = Object.assign({}, doc.data(), {approved:true});
+    await sendApprovalConfirmationEmail(order, orderId);
+    showToast('Order approved — client notified');
+  }catch(e){ console.error(e); alert('Could not approve that order.'); }
 }
 // Staff manually confirm this order belongs to an already-booked event —
 // we don't attempt automatic matching (deliberately, per how Kenny works
@@ -1354,93 +1465,111 @@ function weekEndingSunday(dateStr){
   dt.setUTCDate(dt.getUTCDate() + (day===0 ? 0 : (7-day)));
   return {yy:String(dt.getUTCFullYear()).slice(-2), mm:String(dt.getUTCMonth()+1).padStart(2,'0'), dd:String(dt.getUTCDate()).padStart(2,'0')};
 }
+// Shared lookup — finds the event matching a job number, using a delivery
+// date to narrow to the right week first (see weekEndingSunday above).
+// Used both for linking an order after the fact (promptLinkOrder) and for
+// staff linking one at checkout, before the order even exists yet.
+// Returns {eventDoc, eventId, shortNumber} or null if cancelled/not found.
+async function findEventByJobNumber(jobNum, deliveryDate){
+  const clean = jobNum.replace('#','').trim();
+  const paddedSeq = clean.padStart(2,'0');
+  const wk = weekEndingSunday(deliveryDate);
+
+  let candidates = [];
+  let exactEventNumber = null;
+  if(wk){
+    exactEventNumber = wk.yy+'-'+wk.mm+wk.dd+'-'+paddedSeq;
+    const preciseSnap = await db.collection('events').where('eventNumber','==',exactEventNumber).get();
+    preciseSnap.forEach(d=> candidates.push(d));
+  }
+  if(!candidates.length){
+    // Fall back to every event whose number ends in this same sequence,
+    // across all weeks — this only runs when the delivery-date match
+    // found nothing, so it's the safety net, not the normal path.
+    const broadSnap = await db.collection('events').get();
+    const suffixRe = new RegExp('-'+paddedSeq+'[a-z]?$', 'i');
+    broadSnap.forEach(d=>{ if(suffixRe.test(d.data().eventNumber||'')) candidates.push(d); });
+  }
+  if(!candidates.length){
+    alert('No event found with job #'+clean+(exactEventNumber?(' (looked for event number '+exactEventNumber+')'):'')+'. Double check the number.');
+    return null;
+  }
+
+  let eventDoc;
+  if(candidates.length===1){
+    eventDoc = candidates[0];
+  } else {
+    // More than one event ends in this sequence number across different
+    // weeks and the delivery date didn't pin down a single one — list
+    // them all so this is a deliberate pick, not a guess.
+    const lines = candidates.map((d,i)=>{
+      const ev = d.data();
+      return (i+1)+') '+(ev.eventNumber||'#'+clean)+' — '+(ev.eventDate||'no date')+' — '+(ev.name||ev.eventName||'(no name)');
+    });
+    const pick = prompt('Found '+candidates.length+' events matching #'+clean+' — which one? Type the number:\n\n'+lines.join('\n'));
+    const idx = parseInt(pick,10)-1;
+    if(!(idx>=0 && idx<candidates.length)){ alert('Cancelled — no valid selection made.'); return null; }
+    eventDoc = candidates[idx];
+  }
+
+  const eventId = eventDoc.id;
+  // The full eventNumber is "26-1122-04" — the main app displays job
+  // numbers as just the last segment ("04"), so that's what shows here
+  // too rather than the full date-prefixed string.
+  const fullEventNumber = eventDoc.data().eventNumber || clean;
+  const shortNumber = fullEventNumber.split('-').pop();
+  return {eventDoc, eventId, shortNumber};
+}
+// Shared apply step — assigns the next letter suffix (04a, 04b...), writes
+// the single summary line onto the invoice, and updates the order record.
+// Used both right after order creation (staff linked it at checkout) and
+// for an order that already existed (promptLinkOrder).
+async function applyEventLink(orderId, order, found){
+  const {eventId, shortNumber} = found;
+  // Multiple drop-off orders can belong to the same job (e.g. three
+  // separate deliveries for one event) — each gets its own letter suffix
+  // (04a, 04b, 04c...) so they're distinguishable, without creating extra
+  // event records in the main app. The count is of OTHER orders already
+  // linked to this same event, so the first one linked becomes "a", the
+  // next "b", and so on in the order they were linked.
+  const siblingSnap = await ordersCol.where('linkedEventId','==',eventId).get();
+  const letter = String.fromCharCode(97 + siblingSnap.size); // 97 = 'a'
+  const subLabel = shortNumber + letter;
+
+  const invRef = db.collection('invoices').doc(eventId);
+  const invDoc = await invRef.get();
+  // Only ONE line goes onto the master invoice — the itemized breakdown
+  // stays on the drop-off order itself (linked below), not duplicated
+  // line-by-line onto the invoice. No tax here: the master invoice
+  // calculates its own tax on the whole bill, so including this order's
+  // own tax would double it.
+  const preTaxAmount = (order.subtotal||0) + (order.deliveryFee||0) - (order.discount||0);
+  const orderLink = APP_URL+'?order='+encodeURIComponent(orderId);
+  const newLines = [{
+    description: 'Drop off '+subLabel+' — full order & menu attached below: '+orderLink,
+    qty: 1, price: Math.max(0, preTaxAmount)
+  }];
+  if(invDoc.exists){
+    const existing = invDoc.data().lines||[];
+    await invRef.set({lines: existing.concat(newLines)}, {merge:true});
+  } else {
+    await invRef.set({lines:newLines, status:'estimate', deposit:0}, {merge:true});
+  }
+  if(order.linkedInquiryId){
+    await db.collection('inquiries').doc(order.linkedInquiryId).delete().catch(()=>{});
+  }
+  await ordersCol.doc(orderId).set({linkedEventId:eventId, linkedInquiryId:null, subLabel:subLabel}, {merge:true});
+  return subLabel;
+}
 async function promptLinkOrder(orderId){
   const jobNum = prompt('Enter the job number of the existing event this order belongs to (e.g. 14 or #14):');
   if(!jobNum) return;
-  const clean = jobNum.replace('#','').trim();
-  const paddedSeq = clean.padStart(2,'0');
   try{
     const orderDoc = await ordersCol.doc(orderId).get();
     const order = orderDoc.data();
-    const wk = weekEndingSunday(order.deliveryDate);
-
-    let candidates = [];
-    let exactEventNumber = null;
-    if(wk){
-      exactEventNumber = wk.yy+'-'+wk.mm+wk.dd+'-'+paddedSeq;
-      const preciseSnap = await db.collection('events').where('eventNumber','==',exactEventNumber).get();
-      preciseSnap.forEach(d=> candidates.push(d));
-    }
-    if(!candidates.length){
-      // Fall back to every event whose number ends in this same sequence,
-      // across all weeks — this only runs when the delivery-date match
-      // found nothing, so it's the safety net, not the normal path.
-      const broadSnap = await db.collection('events').get();
-      const suffixRe = new RegExp('-'+paddedSeq+'[a-z]?$', 'i');
-      broadSnap.forEach(d=>{ if(suffixRe.test(d.data().eventNumber||'')) candidates.push(d); });
-    }
-    if(!candidates.length){
-      alert('No event found with job #'+clean+(exactEventNumber?(' (looked for event number '+exactEventNumber+')'):'')+'. Double check the number.');
-      return;
-    }
-
-    let eventDoc;
-    if(candidates.length===1){
-      eventDoc = candidates[0];
-    } else {
-      // More than one event ends in this sequence number across different
-      // weeks and the delivery date didn't pin down a single one — list
-      // them all so this is a deliberate pick, not a guess.
-      const lines = candidates.map((d,i)=>{
-        const ev = d.data();
-        return (i+1)+') '+(ev.eventNumber||'#'+clean)+' — '+(ev.eventDate||'no date')+' — '+(ev.name||ev.eventName||'(no name)');
-      });
-      const pick = prompt('Found '+candidates.length+' events matching #'+clean+' — which one? Type the number:\n\n'+lines.join('\n'));
-      const idx = parseInt(pick,10)-1;
-      if(!(idx>=0 && idx<candidates.length)){ alert('Cancelled — no valid selection made.'); return; }
-      eventDoc = candidates[idx];
-    }
-
-    const eventId = eventDoc.id;
-    // The full eventNumber is "26-1122-04" — the main app displays job
-    // numbers as just the last segment ("04"), so that's what shows here
-    // too rather than the full date-prefixed string.
-    const fullEventNumber = eventDoc.data().eventNumber || clean;
-    const shortNumber = fullEventNumber.split('-').pop();
-
-    // Multiple drop-off orders can belong to the same job (e.g. three
-    // separate deliveries for one event) — each gets its own letter suffix
-    // (04a, 04b, 04c...) so they're distinguishable, without creating extra
-    // event records in the main app. The count is of OTHER orders already
-    // linked to this same event, so the first one linked becomes "a", the
-    // next "b", and so on in the order they were linked.
-    const siblingSnap = await ordersCol.where('linkedEventId','==',eventId).get();
-    const letter = String.fromCharCode(97 + siblingSnap.size); // 97 = 'a'
-    const subLabel = shortNumber + letter;
-
-    const invRef = db.collection('invoices').doc(eventId);
-    const invDoc = await invRef.get();
-    // Only ONE line goes onto the master invoice — the itemized breakdown
-    // stays on the drop-off order itself (linked below), not duplicated
-    // line-by-line onto the invoice. No tax here: the master invoice
-    // calculates its own tax on the whole bill, so including this order's
-    // own tax would double it.
-    const preTaxAmount = (order.subtotal||0) + (order.deliveryFee||0) - (order.discount||0);
-    const orderLink = APP_URL+'?order='+encodeURIComponent(orderId);
-    const newLines = [{
-      description: 'Drop off '+subLabel+' — full order & menu attached below: '+orderLink,
-      qty: 1, price: Math.max(0, preTaxAmount)
-    }];
-    if(invDoc.exists){
-      const existing = invDoc.data().lines||[];
-      await invRef.set({lines: existing.concat(newLines)}, {merge:true});
-    } else {
-      await invRef.set({lines:newLines, status:'estimate', deposit:0}, {merge:true});
-    }
-    if(order.linkedInquiryId){
-      await db.collection('inquiries').doc(order.linkedInquiryId).delete().catch(()=>{});
-    }
-    await ordersCol.doc(orderId).set({linkedEventId:eventId, linkedInquiryId:null, subLabel:subLabel}, {merge:true});
+    const found = await findEventByJobNumber(jobNum, order.deliveryDate);
+    if(!found) return;
+    const subLabel = await applyEventLink(orderId, order, found);
     showToast('Linked to '+subLabel+' — added as one line on that invoice');
   }catch(e){ console.error(e); alert('Something went wrong linking this order.'); }
 }
