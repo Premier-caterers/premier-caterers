@@ -368,6 +368,38 @@ a{color:var(--maroon);text-decoration:none}
     <div style="overflow-x:auto"><table class="tbl" id="discountCodesTbl"></table></div>
   </div>
 
+  <!-- ============ STAFF: DELIVERY DAYS ============ -->
+  <div class="view" id="view-deliveryDays">
+    <div class="section-title" style="margin-bottom:12px">Delivery days</div>
+    <div class="center-note" style="margin:0 0 16px;text-align:left">Approved orders, grouped by delivery date — for planning the kitchen and the van.</div>
+    <div id="deliveryDaysList"></div>
+  </div>
+
+  <!-- ============ STAFF: CLIENTS ============ -->
+  <div class="view" id="view-clients">
+    <div class="section-title" style="margin-bottom:12px">Drop-off clients</div>
+    <div class="searchbar" style="margin-bottom:12px">
+      <div class="search"><i class="ti ti-search"></i><input type="text" id="clientsSearch" placeholder="Search by name or email..." oninput="renderClientsTable()"></div>
+    </div>
+    <div style="overflow-x:auto"><table class="tbl" id="clientsTbl"></table></div>
+  </div>
+
+  <!-- ============ STAFF: REPORTS ============ -->
+  <div class="view" id="view-reports">
+    <div class="section-title" style="margin-bottom:12px">Reports</div>
+    <div class="chips" style="margin-bottom:16px">
+      <button class="chip" onclick="setReportWindow('week')" id="rw-week">This week</button>
+      <button class="chip" onclick="setReportWindow('month')" id="rw-month">This month</button>
+      <button class="chip" onclick="setReportWindow('year')" id="rw-year">This year</button>
+      <button class="chip" onclick="setReportWindow('custom')" id="rw-custom">Custom range</button>
+    </div>
+    <div id="reportsCustomRange" style="display:none;margin-bottom:16px" class="grid2">
+      <div class="field"><label for="repFrom">From</label><input id="repFrom" type="date" onchange="loadReport()"></div>
+      <div class="field"><label for="repTo">To</label><input id="repTo" type="date" onchange="loadReport()"></div>
+    </div>
+    <div id="reportsResults"></div>
+  </div>
+
 </div>
 
 <div id="loginOverlay">
@@ -460,6 +492,9 @@ function showView(v){
   if(v==='staffOrders') renderStaffOrders();
   if(v==='staffCatalog') renderCatalogTable();
   if(v==='discountCodes') renderDiscountCodesTable();
+  if(v==='deliveryDays') renderDeliveryDays();
+  if(v==='clients') renderClientsTable();
+  if(v==='reports') loadReport();
   updateTopbar();
 }
 function money(n){ return (parseFloat(n)||0).toFixed(2); }
@@ -1334,6 +1369,9 @@ function updateTopbar(){
     const nameHtml = `<span>${esc(prettyStaffName(staffUser))}</span>`;
     const links = [
       ['staffOrders','All orders'],
+      ['deliveryDays','Delivery days'],
+      ['clients','Clients'],
+      ['reports','Reports'],
       ['staffCatalog','Menu &amp; pricing'],
       ['discountCodes','Discount codes'],
       ['order','Ordering view']
@@ -2153,6 +2191,147 @@ async function deleteDiscountCode(id){
   if(!confirm('Delete this discount code?')) return;
   try{ await discountCodesCol.doc(id).delete(); showToast('Code deleted'); renderDiscountCodesTable(); }
   catch(e){ console.error(e); }
+}
+
+/* =====================================================================
+   STAFF: DELIVERY DAYS — approved orders grouped by delivery date, for
+   planning the kitchen and the van. Uses the same live-loaded recent
+   orders as All Orders (most recent 200) — plenty for upcoming planning.
+   ===================================================================== */
+function renderDeliveryDays(){
+  const el = document.getElementById('deliveryDaysList');
+  const relevant = allStaffOrders.filter(o=> o.status==='submitted' && o.approved && o.deliveryDate);
+  if(!relevant.length){ el.innerHTML = '<div class="empty">No approved orders with a delivery date yet.</div>'; return; }
+  const groups = {};
+  relevant.forEach(o=>{ (groups[o.deliveryDate] = groups[o.deliveryDate]||[]).push(o); });
+  const dates = Object.keys(groups).sort();
+  el.innerHTML = dates.map(date=>{
+    const orders = groups[date].sort((a,b)=> (a.deliveryTime||'').localeCompare(b.deliveryTime||''));
+    const dayTotal = orders.reduce((s,o)=> s+(o.total||0), 0);
+    const rows = orders.map(o=>{
+      const itemCount = (o.lines||[]).reduce((s,l)=>s+l.qty,0);
+      const linkNote = o.linkedEventId ? (' — linked to '+esc(o.subLabel||'')) : ' — standalone';
+      return `<div class="recap-line"><div>${esc(o.deliveryTime||'')} &nbsp; ${esc(o.clientName||o.contactName||'')}${linkNote}</div><div class="mono">${itemCount} items</div></div>`;
+    }).join('');
+    return `<div class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="card-name" style="font-size:16px">${esc(date)}</div>
+        <div class="mono" style="color:var(--text3)">$${money(dayTotal)} total</div>
+      </div>
+      ${rows}
+    </div>`;
+  }).join('');
+}
+
+/* =====================================================================
+   STAFF: CLIENTS — one row per drop-off client, aggregated from the same
+   recent orders list, showing whether their orders were standalone or
+   part of a fully catered event.
+   ===================================================================== */
+function renderClientsTable(){
+  const q = (document.getElementById('clientsSearch').value||'').trim().toLowerCase();
+  const submitted = allStaffOrders.filter(o=>o.status==='submitted');
+  const byEmail = {};
+  submitted.forEach(o=>{
+    const email = (o.clientEmail||o.contactEmail||'').toLowerCase();
+    if(!email) return;
+    if(!byEmail[email]) byEmail[email] = {email, name:'', orders:[], _lastAt:0};
+    byEmail[email].orders.push(o);
+    if((o.submittedAt||0) >= byEmail[email]._lastAt){ byEmail[email].name = o.clientName||o.contactName||byEmail[email].name; byEmail[email]._lastAt = o.submittedAt||0; }
+  });
+  let clients = Object.values(byEmail);
+  if(q) clients = clients.filter(c=> c.name.toLowerCase().includes(q) || c.email.includes(q));
+  clients.sort((a,b)=> b.orders.length - a.orders.length);
+  const tbl = document.getElementById('clientsTbl');
+  if(!clients.length){ tbl.innerHTML = '<tr><td class="empty">No clients yet.</td></tr>'; return; }
+  let html = '<tr><th>Client</th><th>Orders</th><th>Total spend</th><th>Last order</th><th>Type</th></tr>';
+  clients.forEach(c=>{
+    const totalSpend = c.orders.reduce((s,o)=>s+(o.total||0),0);
+    const lastDate = c._lastAt ? new Date(c._lastAt).toLocaleDateString() : '—';
+    const linkedCount = c.orders.filter(o=>o.linkedEventId).length;
+    let typeLabel = 'Standalone';
+    if(linkedCount && linkedCount===c.orders.length) typeLabel='Linked';
+    else if(linkedCount>0) typeLabel='Mixed';
+    html += `<tr>
+      <td><b>${esc(c.name||'—')}</b><br><span style="color:var(--text3);font-size:11.5px">${esc(c.email)}</span></td>
+      <td>${c.orders.length}</td>
+      <td class="mono">$${money(totalSpend)}</td>
+      <td>${esc(lastDate)}</td>
+      <td><span class="tag">${typeLabel}</span></td>
+    </tr>`;
+  });
+  tbl.innerHTML = html;
+}
+
+/* =====================================================================
+   STAFF: REPORTS — revenue, order count, average order, and top items
+   over a chosen window. Fetches with a single equality filter and does
+   the date-range filtering in JS rather than a compound Firestore query,
+   so it doesn't depend on a composite index existing (the same class of
+   bug the My Orders lookup hit earlier — avoided here from the start).
+   ===================================================================== */
+let currentReportWindow = 'week';
+function setReportWindow(w){
+  currentReportWindow = w;
+  ['week','month','year','custom'].forEach(k=>{ const el=document.getElementById('rw-'+k); if(el) el.classList.toggle('on', k===w); });
+  document.getElementById('reportsCustomRange').style.display = w==='custom' ? '' : 'none';
+  loadReport();
+}
+function reportDateRange(){
+  const now = new Date();
+  const fmt = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  let from, to;
+  if(currentReportWindow==='week'){
+    from = new Date(now); from.setDate(now.getDate() - now.getDay());
+    to = now;
+  } else if(currentReportWindow==='month'){
+    from = new Date(now.getFullYear(), now.getMonth(), 1);
+    to = now;
+  } else if(currentReportWindow==='year'){
+    from = new Date(now.getFullYear(), 0, 1);
+    to = now;
+  } else {
+    const fromVal = (document.getElementById('repFrom')||{}).value;
+    const toVal = (document.getElementById('repTo')||{}).value;
+    if(!fromVal || !toVal) return null;
+    return {from: fromVal, to: toVal};
+  }
+  return {from: fmt(from), to: fmt(to)};
+}
+async function loadReport(){
+  setReportChipHighlight();
+  const range = reportDateRange();
+  const el = document.getElementById('reportsResults');
+  if(!range){ el.innerHTML = '<div class="empty">Pick a date range.</div>'; return; }
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try{
+    const snap = await ordersCol.where('status','==','submitted').get();
+    const orders = [];
+    snap.forEach(d=>{
+      const o = d.data();
+      if(o.deliveryDate && o.deliveryDate>=range.from && o.deliveryDate<=range.to) orders.push(o);
+    });
+    const revenue = orders.reduce((s,o)=>s+(o.total||0),0);
+    const count = orders.length;
+    const avg = count ? revenue/count : 0;
+    const itemCounts = {};
+    orders.forEach(o=> (o.lines||[]).forEach(l=>{ itemCounts[l.itemName] = (itemCounts[l.itemName]||0) + l.qty; }));
+    const topItems = Object.entries(itemCounts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    el.innerHTML = `
+      <div class="grid2" style="margin-bottom:16px">
+        <div class="section"><div class="section-title">Revenue</div><div class="mono" style="font-size:22px;font-weight:600">$${money(revenue)}</div></div>
+        <div class="section"><div class="section-title">Orders</div><div class="mono" style="font-size:22px;font-weight:600">${count}</div></div>
+      </div>
+      <div class="section" style="margin-bottom:16px"><div class="section-title">Average order</div><div class="mono" style="font-size:22px;font-weight:600">$${money(avg)}</div></div>
+      <div class="section">
+        <div class="section-title">Top items</div>
+        ${topItems.length ? topItems.map(([name,qty])=>`<div class="recap-line"><div>${esc(name)}</div><div class="mono">${qty}</div></div>`).join('') : '<div class="empty">No items in this range.</div>'}
+      </div>
+    `;
+  }catch(e){ console.error(e); el.innerHTML = '<div class="empty">Could not load report — see console.</div>'; }
+}
+function setReportChipHighlight(){
+  ['week','month','year','custom'].forEach(k=>{ const el=document.getElementById('rw-'+k); if(el) el.classList.toggle('on', k===currentReportWindow); });
 }
 
 /* =====================================================================
