@@ -11,6 +11,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -208,6 +209,7 @@ a{color:var(--maroon);text-decoration:none}
 
   <!-- ============ CONFIRMATION ============ -->
   <div class="view" id="view-confirm">
+    <div id="confirmNumberBanner"></div>
     <div class="section" style="text-align:center;padding:40px 24px">
       <div style="font-size:38px;margin-bottom:10px">✓</div>
       <div class="serif" style="font-size:22px;font-weight:600;margin-bottom:8px">Order received</div>
@@ -239,7 +241,8 @@ a{color:var(--maroon);text-decoration:none}
 
   <!-- ============ STAFF: EDIT ORDER ============ -->
   <div class="view" id="view-editOrder">
-    <div style="margin-bottom:16px"><a href="#" onclick="showView('staffOrders');return false"><i class="ti ti-arrow-left"></i> Back to all orders</a></div>
+    <div id="eoBackLink" style="margin-bottom:16px"></div>
+    <div id="eoNumberBanner"></div>
     <div id="editOrderLinkedNote"></div>
     <div class="section">
       <div class="section-title">Client &amp; delivery info</div>
@@ -262,7 +265,7 @@ a{color:var(--maroon);text-decoration:none}
         <button class="btn btn-ghost btn-sm" onclick="eoAddItem()">+ Add item</button>
       </div>
     </div>
-    <div class="section">
+    <div class="section" id="eoPricingSection">
       <div class="section-title">Pricing</div>
       <div class="grid2" style="margin-bottom:14px">
         <div class="field"><label for="eoDeliveryFee">Delivery fee ($)</label><input id="eoDeliveryFee" type="number" step="0.01" min="0" oninput="renderEditOrderTotals()"></div>
@@ -276,6 +279,9 @@ a{color:var(--maroon);text-decoration:none}
       </div>
     </div>
     <div class="section" id="eoTotalsBox"></div>
+    <div class="section">
+      <button class="btn btn-ghost btn-sm" onclick="downloadOrderPdf(eoCurrentOrder, eoOrderId)">Download PDF</button>
+    </div>
     <div class="section">
       <div class="field"><label for="eoNotes">Notes</label><textarea id="eoNotes" rows="3"></textarea></div>
     </div>
@@ -397,6 +403,7 @@ catalogCol.orderBy('name').onSnapshot(snap=>{
   catLoaded = true;
   if(currentView==='order') renderItemGrid();
   if(currentView==='staffCatalog') renderCatalogTable();
+  if(currentView==='editOrder' && document.getElementById('eoAddItemSelect')) eoPopulateAddItemSelect();
 }, err=>{ console.error('catalog load error', err); });
 
 function allCategories(){
@@ -556,6 +563,93 @@ function orderRecapHtml(order){
   html += `<div class="recap-total"><div>Total</div><div class="mono">$${money(order.total)}</div></div>`;
   return html;
 }
+// The number highlighted at the top of every order view/email/PDF. Orders
+// start as "Unlinked" (no job assigned yet) and only get a real number
+// once staff link them to an event — at which point that number is shown
+// everywhere going forward, including on the live view-order page even
+// though the original emails sent before linking still show "Unlinked"
+// (an email can't be edited after it's sent).
+function orderDisplayNumber(order){ return order.subLabel || 'Unlinked'; }
+
+// Builds a one-page PDF of the order using jsPDF (already used elsewhere
+// in the Premier Caterers apps). Returns the jsPDF doc object — callers
+// either .save() it for a browser download or pull its base64 data for
+// an email attachment.
+function generateOrderPdf(order, orderId){
+  const doc = new jspdf.jsPDF();
+  const pageW = doc.internal.pageSize.getWidth();
+  let y = 18;
+
+  doc.setFontSize(16); doc.setFont(undefined,'bold');
+  doc.text('Premier Caterers — Drop-Off Order', 14, y);
+  y += 10;
+
+  // Highlighted order number
+  const numLabel = orderDisplayNumber(order);
+  doc.setFillColor(255,224,102);
+  doc.rect(14, y, pageW-28, 12, 'F');
+  doc.setFontSize(14); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+  doc.text('Order: '+numLabel, pageW/2, y+8, {align:'center'});
+  y += 20;
+
+  doc.setFont(undefined,'normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+  const infoLine = (label,val)=>{ if(!val) return; doc.setFont(undefined,'bold'); doc.text(label+':',14,y); doc.setFont(undefined,'normal'); doc.text(String(val),45,y); y+=6; };
+  infoLine('Client', order.contactName);
+  infoLine('Email', order.contactEmail);
+  infoLine('Phone', order.contactPhone);
+  infoLine('Delivery', (order.deliveryDate||'')+' '+(order.deliveryTime||''));
+  infoLine('Location', (order.locationName||'')+(order.address?(', '+order.address):''));
+  y += 4;
+
+  doc.setDrawColor(200,200,200); doc.line(14,y,pageW-14,y); y += 8;
+
+  doc.setFont(undefined,'bold'); doc.setFontSize(10); doc.setTextColor(0,0,0);
+  doc.text('QTY',14,y); doc.text('ITEM',30,y); doc.text('SIZE',120,y); doc.text('TOTAL',pageW-14,y,{align:'right'});
+  y += 5; doc.line(14,y,pageW-14,y); y += 6;
+  doc.setFont(undefined,'normal');
+  (order.lines||[]).forEach(l=>{
+    if(y>270){ doc.addPage(); y=20; }
+    doc.text(String(l.qty),14,y);
+    const nameLines = doc.splitTextToSize(l.itemName, 85);
+    doc.text(nameLines,30,y);
+    doc.text(l.sizeLabel||'',120,y);
+    doc.text('$'+money(l.price*l.qty), pageW-14, y, {align:'right'});
+    y += 5*nameLines.length;
+    if(l.note){ doc.setTextColor(122,46,61); doc.setFontSize(8); doc.text('Note: '+l.note,30,y); doc.setFontSize(10); doc.setTextColor(0,0,0); y+=5; }
+    y += 2;
+  });
+  y += 4; doc.line(14,y,pageW-14,y); y += 8;
+
+  const totRow = (label,val,bold)=>{
+    if(bold) doc.setFont(undefined,'bold'); else doc.setFont(undefined,'normal');
+    doc.text(label, pageW-70, y);
+    doc.text(val, pageW-14, y, {align:'right'});
+    y += 6;
+  };
+  if(order.subtotal!=null) totRow('Subtotal', '$'+money(order.subtotal));
+  if(order.deliveryFee) totRow('Delivery fee', '$'+money(order.deliveryFee));
+  if(order.subtotal!=null) totRow('Sales tax', order.taxExempt ? 'Exempt' : ('$'+money(order.taxAmount)));
+  if(order.ccFeeAmount) totRow('Credit card fee', '$'+money(order.ccFeeAmount));
+  if(order.discount) totRow('Discount', '-$'+money(order.discount));
+  totRow('TOTAL', '$'+money(order.total), true);
+
+  const payLabel = (PAYMENT_METHODS.find(p=>p.id===order.paymentType)||{}).label;
+  if(payLabel){ y+=2; doc.setFont(undefined,'normal'); doc.setFontSize(9); doc.text('Payment: '+payLabel, 14, y); y+=6; }
+  if(order.notes){ doc.setFontSize(9); const noteLines = doc.splitTextToSize('Notes: '+order.notes, pageW-28); doc.text(noteLines,14,y); y += 5*noteLines.length; }
+
+  doc.setFontSize(8); doc.setTextColor(150,150,150);
+  doc.text('Order id: '+orderId, 14, 290);
+
+  return doc;
+}
+function downloadOrderPdf(order, orderId){
+  generateOrderPdf(order, orderId).save('Order-'+orderDisplayNumber(order).replace(/[^\w-]/g,'')+'.pdf');
+}
+function orderPdfBase64(order, orderId){
+  const uri = generateOrderPdf(order, orderId).output('datauristring');
+  return uri.split(',')[1];
+}
+
 // Delivery fee always starts at $0 for a new order — it's something staff
 // may add after reviewing the order (see the Edit order screen), not
 // something the client sets themselves.
@@ -726,6 +820,8 @@ async function submitOrder(){
   btn.disabled = false; btn.textContent = 'Place order';
 }
 function renderConfirmation(order){
+  document.getElementById('confirmNumberBanner').innerHTML =
+    `<div style="background:#FFE066;color:var(--text);text-align:center;padding:12px;font-size:20px;font-weight:bold;border-radius:9px;margin-bottom:16px">Order: ${esc(orderDisplayNumber(order))}</div>`;
   document.getElementById('confirmRecap').innerHTML = orderRecapHtml(order);
 }
 
@@ -760,6 +856,25 @@ function emailBreakdownHtml(order){
   html += '</table>';
   return html;
 }
+const APP_URL = 'https://premier-caterers.github.io/premier-caterers/dropoff.html';
+
+// Shared "big yellow number" banner + view/PDF links, used at the top and
+// bottom of every order email and the in-app order view. The order's
+// number is "Unlinked" until staff link it to a job — after that, this
+// shows the real number wherever it's rendered fresh (the app view), even
+// though an already-sent email keeps showing whatever it said at send time.
+function orderNumberBannerHtml(order){
+  return '<div style="background:#FFE066;color:#1D1F21;text-align:center;padding:12px;font-size:20px;font-weight:bold;border-radius:6px;margin-bottom:16px">Order: '+esc(orderDisplayNumber(order))+'</div>';
+}
+function orderLinksHtml(orderId){
+  const viewUrl = APP_URL+'?order='+encodeURIComponent(orderId);
+  const pdfUrl = APP_URL+'?order='+encodeURIComponent(orderId)+'&pdf=1';
+  return '<div style="margin-top:18px;text-align:center">'
+    + '<a href="'+viewUrl+'" style="display:inline-block;background:#7A2E3D;color:#fff;padding:9px 16px;border-radius:7px;text-decoration:none;font-size:13px;margin:0 4px">View / edit this order</a>'
+    + '<a href="'+pdfUrl+'" style="display:inline-block;background:#fff;color:#7A2E3D;border:1px solid #7A2E3D;padding:9px 16px;border-radius:7px;text-decoration:none;font-size:13px;margin:0 4px">Download PDF</a>'
+    + '</div>';
+}
+
 async function sendOrderPlacedEmail(order, orderId){
   const relay = await getRelayUrl();
   if(!relay) return;
@@ -781,6 +896,7 @@ async function sendOrderPlacedEmail(order, orderId){
     + '<div style="background:#7A2E3D;padding:16px 20px;border-radius:6px 6px 0 0">'
     + '<h2 style="color:#fff;margin:0;font-size:18px">New Drop-Off Order</h2></div>'
     + '<div style="background:#fff;border:1px solid #ddd;padding:20px;border-radius:0 0 6px 6px">'
+    + orderNumberBannerHtml(order)
     + '<table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:16px">'
     + infoRow('Client', order.contactName)
     + infoRow('Email', order.contactEmail)
@@ -798,16 +914,19 @@ async function sendOrderPlacedEmail(order, orderId){
     + '</table>'
     + emailBreakdownHtml(order)
     + '<div style="text-align:right;margin-top:12px;font-size:16px;font-weight:bold;color:#7A2E3D">Total: $'+money(order.total)+'</div>'
+    + orderLinksHtml(orderId)
     + '<p style="margin:20px 0 0;font-size:11px;color:#999">Order id: '+esc(orderId)+' &middot; Automated notification from the Drop-Off Ordering app.</p>'
     + '</div></div>';
 
   const itemSummary = order.lines.map(l=> l.qty+'x '+l.itemName+' ('+l.sizeLabel+')'+(l.note?' — note: '+l.note:'')).join('\n');
   const plainBody = 'A new drop-off order was placed.\n\n'+
+    'Order: '+orderDisplayNumber(order)+'\n\n'+
     'Client: '+order.contactName+' ('+order.contactEmail+', '+order.contactPhone+')\n'+
     'Delivery: '+order.deliveryDate+' '+order.deliveryTime+' — '+order.locationName+', '+order.address+'\n\n'+
     'Items:\n'+itemSummary+
     (order.notes ? ('\n\nNotes: '+order.notes) : '')+
     '\n\nTotal: $'+money(order.total)+
+    '\n\nView or edit: '+APP_URL+'?order='+encodeURIComponent(orderId)+
     '\n\nOrder id: '+orderId;
 
   // gmailSend is a POST action expecting a JSON body (confirmed against the
@@ -817,13 +936,29 @@ async function sendOrderPlacedEmail(order, orderId){
       method: 'POST',
       body: JSON.stringify({
         action: 'gmailSend',
-        to: 'events@thepremiercaterer.com,barry.h.nash@gmail.com,47515733707@print.brother.com',
+        to: 'events@thepremiercaterer.com,barry.h.nash@gmail.com',
         subject: 'New drop-off order — '+(order.clientName||order.contactName),
         body: plainBody,
         htmlBody: htmlBody
       })
     });
   }catch(e){ console.warn('order-placed email failed', e); }
+
+  // Printer gets a PDF attachment instead of the HTML email — a real PDF
+  // prints cleanly, unlike an HTML email body sent through a print gateway.
+  try{
+    const pdfBase64 = orderPdfBase64(order, orderId);
+    await fetch(relay, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'gmailSend',
+        to: '47515733707@print.brother.com',
+        subject: 'Order '+orderDisplayNumber(order),
+        body: 'Drop-off order attached.',
+        attachments: [{base64: pdfBase64, mimeType:'application/pdf', filename:'Order-'+orderDisplayNumber(order).replace(/[^\w-]/g,'')+'.pdf'}]
+      })
+    });
+  }catch(e){ console.warn('printer PDF email failed', e); }
 }
 
 // Sends the client their own "we got your order" confirmation, separate
@@ -848,6 +983,7 @@ async function sendClientConfirmationEmail(order, orderId){
     + '<div style="background:#7A2E3D;padding:16px 20px;border-radius:6px 6px 0 0">'
     + '<h2 style="color:#fff;margin:0;font-size:18px">Thanks — we\'ve got your order</h2></div>'
     + '<div style="background:#fff;border:1px solid #ddd;padding:20px;border-radius:0 0 6px 6px">'
+    + orderNumberBannerHtml(order)
     + '<p style="font-size:14px;color:#333;margin:0 0 16px">Hi '+esc((order.contactName||'').split(' ')[0]||'')+', thanks for your order — here\'s a copy for your records. We\'ll reach out if we have any questions.</p>'
     + '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px">'
     + '<tr style="background:#f7f7f7"><th style="padding:7px 10px;text-align:center;font-size:11px;color:#888">QTY</th>'
@@ -862,15 +998,18 @@ async function sendClientConfirmationEmail(order, orderId){
     + (order.deliveryDate ? '<tr><td style="padding:5px 12px 5px 0;color:#666;white-space:nowrap">Delivery</td><td style="padding:5px 0;font-weight:500;color:#222">'+esc(order.deliveryDate)+' '+esc(order.deliveryTime||'')+'</td></tr>' : '')
     + (order.locationName || order.address ? '<tr><td style="padding:5px 12px 5px 0;color:#666;white-space:nowrap;vertical-align:top">Location</td><td style="padding:5px 0;font-weight:500;color:#222">'+esc(order.locationName||'')+(order.address?(', '+esc(order.address)):'')+'</td></tr>' : '')
     + '</table>'
+    + orderLinksHtml(orderId)
     + '<p style="margin:20px 0 0;font-size:11px;color:#999">Questions about this order? Just reply to this email, or call us directly.</p>'
     + '</div></div>';
 
   const itemSummary = order.lines.map(l=> l.qty+'x '+l.itemName+' ('+l.sizeLabel+')'+(l.note?' — note: '+l.note:'')).join('\n');
   const plainBody = 'Thanks — we\'ve got your order.\n\n'+
+    'Order: '+orderDisplayNumber(order)+'\n\n'+
     'Items:\n'+itemSummary+
     '\n\nTotal: $'+money(order.total)+
     (order.deliveryDate ? ('\n\nDelivery: '+order.deliveryDate+' '+(order.deliveryTime||'')) : '')+
     (order.locationName||order.address ? ('\nLocation: '+(order.locationName||'')+(order.address?(', '+order.address):'')) : '')+
+    '\n\nView or edit your order: '+APP_URL+'?order='+encodeURIComponent(orderId)+
     '\n\nQuestions? Just reply to this email.';
 
   try{
@@ -1057,18 +1196,19 @@ function renderStaffOrders(){
   rows.forEach(o=>{
     const itemCount = (o.lines||[]).reduce((s,l)=>s+l.qty,0);
     const statusClass = o.linkedEventId ? 'linked' : (o.status||'draft');
-    const statusLabel = o.linkedEventId ? 'Linked to event' : (o.status==='submitted' ? 'Submitted' : 'Draft — in progress');
+    const statusLabel = o.linkedEventId ? ('Linked — '+(o.subLabel||'')) : (o.status==='submitted' ? 'Submitted' : 'Draft — in progress');
     const linkBtn = (o.status==='submitted' && !o.linkedEventId)
       ? `<button class="btn btn-ghost btn-sm" onclick="promptLinkOrder('${o.id}')">Link to event</button>` : '';
     const editBtn = o.status==='submitted'
       ? `<button class="btn btn-ghost btn-sm" onclick="openEditOrder('${o.id}')" style="margin-left:6px">Edit</button>` : '';
+    const deleteBtn = `<button class="btn btn-ghost btn-sm" onclick="deleteOrder('${o.id}')" style="margin-left:6px;color:var(--red)">Delete</button>`;
     html += `<tr>
       <td><b>${esc(o.clientName||o.contactName||'—')}</b><br><span style="color:var(--text3);font-size:11.5px">${esc(o.contactEmail||o.clientEmail||'')}</span></td>
       <td>${esc(o.deliveryDate||'')} ${esc(o.deliveryTime||'')}<br><span style="color:var(--text3);font-size:11.5px">${esc(o.locationName||'')}</span></td>
       <td>${itemCount} item${itemCount===1?'':'s'}</td>
       <td class="mono">$${money(o.total||0)}</td>
       <td><span class="pill-status ${statusClass}">${statusLabel}</span></td>
-      <td>${linkBtn}${editBtn}</td>
+      <td>${linkBtn}${editBtn}${deleteBtn}</td>
     </tr>`;
   });
   tbl.innerHTML = html;
@@ -1145,11 +1285,22 @@ async function promptLinkOrder(orderId){
     }
 
     const eventId = eventDoc.id;
-    const linkedNumber = eventDoc.data().eventNumber || ('#'+clean);
+    const baseNumber = eventDoc.data().eventNumber || ('#'+clean);
+
+    // Multiple drop-off orders can belong to the same job (e.g. three
+    // separate deliveries for one event) — each gets its own letter suffix
+    // (4a, 4b, 4c...) so they're distinguishable, without creating extra
+    // event records in the main app. The count is of OTHER orders already
+    // linked to this same event, so the first one linked becomes "a", the
+    // next "b", and so on in the order they were linked.
+    const siblingSnap = await ordersCol.where('linkedEventId','==',eventId).get();
+    const letter = String.fromCharCode(97 + siblingSnap.size); // 97 = 'a'
+    const subLabel = baseNumber + letter;
+
     const invRef = db.collection('invoices').doc(eventId);
     const invDoc = await invRef.get();
     const newLines = order.lines.map(l=>({
-      description: l.itemName+' ('+l.sizeLabel+')'+(l.note?' — '+l.note:''),
+      description: '['+subLabel+'] '+l.itemName+' ('+l.sizeLabel+')'+(l.note?' — '+l.note:''),
       qty: l.qty, price: l.price
     }));
     if(invDoc.exists){
@@ -1161,9 +1312,23 @@ async function promptLinkOrder(orderId){
     if(order.linkedInquiryId){
       await db.collection('inquiries').doc(order.linkedInquiryId).delete().catch(()=>{});
     }
-    await ordersCol.doc(orderId).set({linkedEventId:eventId, linkedInquiryId:null}, {merge:true});
-    showToast('Linked to '+linkedNumber+' — items added to that invoice');
+    await ordersCol.doc(orderId).set({linkedEventId:eventId, linkedInquiryId:null, subLabel:subLabel}, {merge:true});
+    showToast('Linked to '+subLabel+' — items added to that invoice');
   }catch(e){ console.error(e); alert('Something went wrong linking this order.'); }
+}
+
+async function deleteOrder(orderId){
+  const order = allStaffOrders.find(o=>o.id===orderId);
+  let msg = 'Delete this order permanently?';
+  if(order && order.linkedEventId) msg += ' Note: it\'s already linked to an event — this only removes the order record itself, the items already copied onto that invoice will stay there unless you remove them separately.';
+  if(!confirm(msg)) return;
+  try{
+    await ordersCol.doc(orderId).delete();
+    if(order && order.linkedInquiryId){
+      await db.collection('inquiries').doc(order.linkedInquiryId).delete().catch(()=>{});
+    }
+    showToast('Order deleted');
+  }catch(e){ console.error(e); alert('Could not delete that order.'); }
 }
 
 /* =====================================================================
@@ -1177,6 +1342,7 @@ async function promptLinkOrder(orderId){
    ===================================================================== */
 let eoOrderId = null;
 let eoLines = [];
+let eoCurrentOrder = null;
 
 async function openEditOrder(orderId){
   try{
@@ -1184,7 +1350,18 @@ async function openEditOrder(orderId){
     if(!doc.exists){ alert('Could not find that order.'); return; }
     const o = doc.data();
     eoOrderId = orderId;
+    eoCurrentOrder = o;
     eoLines = (o.lines||[]).map(l=>Object.assign({}, l)); // work on a copy
+
+    document.getElementById('eoNumberBanner').innerHTML =
+      `<div style="background:#FFE066;color:var(--text);text-align:center;padding:12px;font-size:20px;font-weight:bold;border-radius:9px;margin-bottom:16px">Order: ${esc(orderDisplayNumber(o))}</div>`;
+    document.getElementById('eoBackLink').innerHTML = isStaff
+      ? `<a href="#" onclick="showView('staffOrders');return false"><i class="ti ti-arrow-left"></i> Back to all orders</a>`
+      : `<a href="#" onclick="showView('order');return false"><i class="ti ti-arrow-left"></i> Back to menu</a>`;
+    // Pricing controls (delivery fee, discount, tax exemption, payment type)
+    // stay staff-only even on the public view-via-link page — a client
+    // shouldn't be able to remove their own tax or add themselves a discount.
+    document.getElementById('eoPricingSection').style.display = isStaff ? '' : 'none';
 
     document.getElementById('eoName').value = o.clientName||'';
     document.getElementById('eoLoc').value = o.locationName||'';
@@ -1202,7 +1379,7 @@ async function openEditOrder(orderId){
     document.getElementById('eoPaymentType').innerHTML = PAYMENT_METHODS.map(pm=>
       `<option value="${pm.id}" ${o.paymentType===pm.id?'selected':''}>${esc(pm.label)}</option>`).join('');
 
-    document.getElementById('editOrderLinkedNote').innerHTML = o.linkedEventId
+    document.getElementById('editOrderLinkedNote').innerHTML = (o.linkedEventId && isStaff)
       ? `<div class="section" style="background:var(--brass-tint);border-color:var(--brass)"><b>Heads up:</b> this order is already linked to an event's invoice. Changes saved here update the order record, but won't automatically update that invoice — adjust it separately in the main app if needed.</div>`
       : '';
 
@@ -1315,8 +1492,9 @@ async function saveEditedOrder(){
   };
   try{
     await ordersCol.doc(eoOrderId).set(updated, {merge:true});
+    eoCurrentOrder = Object.assign({}, eoCurrentOrder, updated);
     showToast('Order updated');
-    showView('staffOrders');
+    if(isStaff) showView('staffOrders');
   }catch(e){ console.error(e); errEl.textContent = 'Something went wrong saving — please try again.'; }
 }
 
@@ -1646,6 +1824,19 @@ async function deleteItem(id){
    ===================================================================== */
 updateTopbar();
 renderItemGrid();
+
+// A link from an order email (?order=<id>, optionally &pdf=1) opens that
+// order directly — works whether or not staff are logged in, so a client
+// can view/adjust their own order from the confirmation or the email
+// without needing an account.
+(function(){
+  const params = new URLSearchParams(location.search);
+  const linkedOrderId = params.get('order');
+  if(!linkedOrderId) return;
+  openEditOrder(linkedOrderId).then(()=>{
+    if(params.get('pdf')==='1' && eoCurrentOrder) downloadOrderPdf(eoCurrentOrder, linkedOrderId);
+  });
+})();
 </script>
 </body>
 </html>
