@@ -91,6 +91,7 @@
     <button class="nav-item" id="nav-clients" onclick="showView('clients')"><i class="ti ti-address-book"></i>Clients</button>
     <button class="nav-item" id="nav-invoices" onclick="showView('invoices')"><i class="ti ti-file-invoice"></i>Quotes / Invoices</button>
     <button class="nav-item" id="nav-email" onclick="showView('email')"><i class="ti ti-mail"></i>Email<span class="nav-badge" id="emailBadge" style="display:none">0</span></button>
+    <button class="nav-item" id="nav-dropoffs" onclick="showView('dropoffs')"><i class="ti ti-truck-delivery"></i>Drop-offs</button>
     <a class="nav-item" href="https://premier-caterers.github.io/premier-caterers/premier_caterers_form.html" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-clipboard-text"></i>Link to inquiry form<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
     <div class="sidebar-label" id="grpKitchen">Kitchen &amp; ops</div>
     <button class="nav-item" id="nav-purchasing" onclick="window.open('https://premier-caterers.github.io/premier-caterers/purchasing.html','_blank')"><i class="ti ti-building-store"></i>Purchasing<i class="ti ti-external-link" style="font-size:11px;margin-left:4px;opacity:.6"></i></button>
@@ -2250,7 +2251,7 @@ const roles = {
 };
 
 /* ===================== LOGIN / ACCESS CONTROL (added) ===================== */
-const ALL_SECTIONS = ['home','myday','pipeline','clients','events','coversheet','schedule','checklists','changes','invoices','reports','grocery','equipment','venues','roadmap','followups','email','trash','settings'];
+const ALL_SECTIONS = ['home','myday','pipeline','clients','events','coversheet','schedule','checklists','changes','invoices','reports','grocery','equipment','venues','roadmap','followups','email','trash','settings','dropoffs'];
 const access = {
   admin:   ALL_SECTIONS.slice(),
   kenny:   ALL_SECTIONS.slice(),
@@ -2377,7 +2378,7 @@ function updateUserBar(){
 // the sections under it, so nobody gets a label with nothing beneath it.
 const NAV_GROUPS = {
   grpWeek:    ['events','coversheet','schedule','checklists','changes'],
-  grpSales:   ['pipeline','clients','invoices','email'],
+  grpSales:   ['pipeline','clients','invoices','email','dropoffs'],
   grpKitchen: ['purchasing','equipment','venues'],
   grpOffice:  ['myday','reports','roadmap'],
   setupLabel: ['settings','trash']
@@ -2571,6 +2572,7 @@ function render(){
            currentView==='followups' ? renderFollowups() :
            currentView==='trash'     ? renderTrash()     :
            currentView==='email'     ? '<div id="emailPlaceholder"></div>' :
+           currentView==='dropoffs'  ? renderDropoffs()  :
            currentView==='settings'  ? renderSettings()  : '';
   } catch(err) {
     html = '<div style="padding:2rem;color:red;font-size:13px;font-family:monospace"><strong>Error in '+currentView+':</strong><br>'+err.message+'</div>';
@@ -12985,6 +12987,40 @@ function renderRoadmap(){
       </div>
     </div>`;
   });
+  return h;
+}
+
+// Simple links panel — the drop-off ordering app is a separate module
+// (dropoff.html), kept deliberately independent from this app so it
+// doesn't add to an already-large codebase. This just gives quick access
+// to it from here without needing a second bookmark; nothing about
+// drop-off orders is duplicated into this app's own data.
+function renderDropoffs(){
+  const base = 'https://premier-caterers.github.io/premier-caterers/dropoff.html';
+  const links = [
+    {icon:'ti-shopping-cart',      label:'Place an order',   sub:'The ordering screen itself',                  view:''},
+    {icon:'ti-list-details',       label:'All orders',       sub:'Approve, link, edit, resend, delete',         view:'staffOrders'},
+    {icon:'ti-truck-delivery',     label:'Delivery days',    sub:'Approved orders grouped by delivery date',    view:'deliveryDays'},
+    {icon:'ti-address-book',       label:'Clients',          sub:'Order history, spend, standalone vs. linked', view:'clients'},
+    {icon:'ti-mail-forward',       label:'Campaigns',        sub:'Email past clients, with opt-out handling',   view:'campaigns'},
+    {icon:'ti-chart-bar',          label:'Reports',          sub:'Revenue, order volume, top items',            view:'reports'},
+    {icon:'ti-tools-kitchen-2',    label:'Menu & pricing',   sub:'What\'s available to order, and at what price', view:'staffCatalog'},
+    {icon:'ti-ticket',             label:'Discount codes',   sub:'Create and manage client discount codes',     view:'discountCodes'}
+  ];
+  let h = `<div class="section-header">
+    <div><div class="eyebrow">Sales</div><div class="section-title">Drop-offs</div></div>
+  </div>
+  <div style="font-size:13px;color:var(--text3);margin:-6px 0 16px">The drop-off ordering app is its own separate tool — these open it directly, each in a new tab. You'll need to sign in there separately (same accounts as here) for anything beyond placing an order.</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">`;
+  links.forEach(l=>{
+    const url = l.view ? (base+'?view='+l.view) : base;
+    h += `<a href="${url}" target="_blank" style="display:block;background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:16px;text-decoration:none;color:var(--text)">
+      <i class="ti ${l.icon}" style="font-size:20px;color:var(--maroon);margin-bottom:8px;display:block"></i>
+      <div style="font-size:14px;font-weight:600;margin-bottom:3px">${l.label} <i class="ti ti-external-link" style="font-size:11px;opacity:.5"></i></div>
+      <div style="font-size:12px;color:var(--text3)">${l.sub}</div>
+    </a>`;
+  });
+  h += `</div>`;
   return h;
 }
 
