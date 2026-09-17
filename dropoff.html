@@ -384,6 +384,38 @@ a{color:var(--maroon);text-decoration:none}
     <div style="overflow-x:auto"><table class="tbl" id="clientsTbl"></table></div>
   </div>
 
+  <!-- ============ STAFF: CAMPAIGNS ============ -->
+  <div class="view" id="view-campaigns">
+    <div class="section-title" style="margin-bottom:12px">Email campaigns</div>
+    <div class="section">
+      <div class="section-title">Who gets this</div>
+      <div class="chips" style="margin-bottom:12px">
+        <button class="chip on" id="cf-standalone" onclick="toggleCampaignFilter('standalone')">Standalone</button>
+        <button class="chip on" id="cf-linked" onclick="toggleCampaignFilter('linked')">Linked</button>
+        <button class="chip on" id="cf-mixed" onclick="toggleCampaignFilter('mixed')">Mixed</button>
+      </div>
+      <div class="field" style="max-width:280px;margin-bottom:12px">
+        <label for="cfNoOrderDays">Only clients with no order in the last (days) — optional</label>
+        <input id="cfNoOrderDays" type="number" min="0" placeholder="e.g. 90" oninput="renderCampaignClientList()">
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button class="btn btn-ghost btn-sm" onclick="campaignSelectAll(true)">Select all filtered</button>
+        <button class="btn btn-ghost btn-sm" onclick="campaignSelectAll(false)">Clear selection</button>
+        <div style="margin-left:auto;align-self:center;font-size:12.5px;color:var(--text2)" id="campaignSelectedCount"></div>
+      </div>
+      <div style="overflow-x:auto;max-height:320px;overflow-y:auto"><table class="tbl" id="campaignClientTbl"></table></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Message</div>
+      <div class="field" style="margin-bottom:12px"><label for="campSubject">Subject</label><input id="campSubject" type="text" placeholder="e.g. We miss you — 10% off your next drop-off"></div>
+      <div class="field"><label for="campBody">Message</label><textarea id="campBody" rows="6" placeholder="Write your message here. An unsubscribe link is added automatically at the bottom."></textarea></div>
+    </div>
+    <div class="lg-err" id="campErr"></div>
+    <button class="btn btn-pri" style="width:100%;padding:14px;margin-bottom:24px" onclick="sendCampaign()" id="sendCampaignBtn">Send campaign</button>
+    <div class="section-title" style="margin-bottom:12px">Sent history</div>
+    <div style="overflow-x:auto"><table class="tbl" id="campaignHistoryTbl"></table></div>
+  </div>
+
   <!-- ============ STAFF: REPORTS ============ -->
   <div class="view" id="view-reports">
     <div class="section-title" style="margin-bottom:12px">Reports</div>
@@ -477,7 +509,19 @@ function showToast(msg){
   clearTimeout(t._h);
   t._h = setTimeout(()=>{ t.style.display='none'; }, 2600);
 }
+// These views are staff-only — previously only the nav buttons hid them,
+// but showView() itself had no check, so anyone who guessed or was given
+// a direct link could open them without logging in. editOrder is
+// deliberately NOT on this list — a client reaching their own order via
+// the emailed link is supposed to work without an account.
+const STAFF_ONLY_VIEWS = ['staffOrders','staffCatalog','discountCodes','deliveryDays','clients','reports','campaigns'];
+let pendingStaffView = null;
 function showView(v){
+  if(STAFF_ONLY_VIEWS.includes(v) && !isStaff){
+    pendingStaffView = v;
+    openStaffLogin();
+    return;
+  }
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   const el = document.getElementById('view-'+v);
   if(el) el.classList.add('active');
@@ -495,6 +539,7 @@ function showView(v){
   if(v==='deliveryDays') renderDeliveryDays();
   if(v==='clients') renderClientsTable();
   if(v==='reports') loadReport();
+  if(v==='campaigns'){ renderCampaignClientList(); renderCampaignHistory(); }
   updateTopbar();
 }
 function money(n){ return (parseFloat(n)||0).toFixed(2); }
@@ -1011,6 +1056,7 @@ async function submitOrder(){
     }
     await sendOrderPlacedEmail(order, currentOrderId);
     await sendClientConfirmationEmail(order, currentOrderId);
+    await sendOrderConfirmationSms(order, currentOrderId);
     renderConfirmation(order);
     showView('confirm');
     cart = {}; itemNotes = {}; noteOpen = {};
@@ -1040,6 +1086,22 @@ async function getRelayUrl(){
     _relayUrlCache = url;
     return url;
   }catch(e){ return ''; }
+}
+// Sends a text via the same Allo relay the main app already uses
+// (action=smsSend, a GET call — different from gmailSend, which is POST).
+async function sendSms(to, body){
+  const relay = await getRelayUrl();
+  if(!relay || !to) return;
+  const params = new URLSearchParams({action:'smsSend', to: to, body: body});
+  try{ await fetch(relay+'?'+params.toString()); }
+  catch(e){ console.warn('SMS send failed', e); }
+}
+// Short text confirmation alongside the email one, only when a phone
+// number was actually given.
+async function sendOrderConfirmationSms(order, orderId){
+  if(!order.contactPhone) return;
+  const msg = 'Premier Caterers: got your order '+orderDisplayNumber(order)+', total $'+money(order.total)+'. View: '+APP_URL+'?order='+encodeURIComponent(orderId);
+  await sendSms(order.contactPhone, msg);
 }
 // Shared price-breakdown rows for both emails below, so tax/delivery/fee
 // show consistently everywhere an order total appears, not just a flat number.
@@ -1371,6 +1433,7 @@ function updateTopbar(){
       ['staffOrders','All orders'],
       ['deliveryDays','Delivery days'],
       ['clients','Clients'],
+      ['campaigns','Campaigns'],
       ['reports','Reports'],
       ['staffCatalog','Menu &amp; pricing'],
       ['discountCodes','Discount codes'],
@@ -1411,6 +1474,7 @@ firebase.auth().onAuthStateChanged(user=>{
     isStaff = true; staffUser = u;
     closeStaffLogin();
     updateTopbar();
+    if(pendingStaffView){ const v = pendingStaffView; pendingStaffView = null; showView(v); }
   } else if(user){
     firebase.auth().signOut();
     document.getElementById('lgErr').textContent = 'That account is not set up for this app.';
@@ -1629,13 +1693,14 @@ async function deleteOrder(orderId){
 // PDF) and the client confirmation (to everyone on the order) for an
 // already-placed order — same emails as when it was first submitted.
 async function resendOrderEmails(orderId){
-  if(!confirm('Resend this order\'s emails to the client and to events@/Barry/the printer?')) return;
+  if(!confirm('Resend this order\'s emails (and text, if a phone was given) to the client and to events@/Barry/the printer?')) return;
   try{
     const doc = await ordersCol.doc(orderId).get();
     if(!doc.exists){ alert('Could not find that order.'); return; }
     const order = doc.data();
     await sendOrderPlacedEmail(order, orderId);
     await sendClientConfirmationEmail(order, orderId);
+    await sendOrderConfirmationSms(order, orderId);
     showToast('Emails resent');
   }catch(e){ console.error(e); alert('Could not resend those emails.'); }
 }
@@ -2168,11 +2233,12 @@ async function renderDiscountCodesTable(){
     allDiscountCodes = [];
     snap.forEach(doc=> allDiscountCodes.push(Object.assign({id:doc.id}, doc.data())) );
     if(!allDiscountCodes.length){ tbl.innerHTML = '<tr><td class="empty">No discount codes yet.</td></tr>'; return; }
-    let html = '<tr><th>Code</th><th>Value</th><th>Status</th><th></th></tr>';
+    let html = '<tr><th>Code</th><th>Value</th><th>For</th><th>Status</th><th></th></tr>';
     allDiscountCodes.forEach(c=>{
       html += `<tr>
         <td class="mono"><b>${esc(c.code)}</b></td>
         <td>${c.type==='percent' ? (c.value+'%') : ('$'+money(c.value))} off</td>
+        <td>${c.forClient ? '<span class="tag">Referral — '+esc(c.forClient)+'</span>' : '<span style="color:var(--text3)">Any client</span>'}</td>
         <td><span class="pill-status ${c.active?'submitted':'draft'}">${c.active?'Active':'Disabled'}</span></td>
         <td>
           <button class="btn btn-ghost btn-sm" onclick="toggleDiscountCodeActive('${c.id}',${!c.active})">${c.active?'Disable':'Enable'}</button>
@@ -2228,8 +2294,10 @@ function renderDeliveryDays(){
    recent orders list, showing whether their orders were standalone or
    part of a fully catered event.
    ===================================================================== */
-function renderClientsTable(){
-  const q = (document.getElementById('clientsSearch').value||'').trim().toLowerCase();
+// Shared aggregation — one row per client from the loaded orders, with
+// their type (standalone/linked/mixed) computed once. Used by both the
+// Clients screen and Campaigns targeting, so the two never disagree.
+function aggregateClients(){
   const submitted = allStaffOrders.filter(o=>o.status==='submitted');
   const byEmail = {};
   submitted.forEach(o=>{
@@ -2239,28 +2307,183 @@ function renderClientsTable(){
     byEmail[email].orders.push(o);
     if((o.submittedAt||0) >= byEmail[email]._lastAt){ byEmail[email].name = o.clientName||o.contactName||byEmail[email].name; byEmail[email]._lastAt = o.submittedAt||0; }
   });
-  let clients = Object.values(byEmail);
+  const clients = Object.values(byEmail);
+  clients.forEach(c=>{
+    const linkedCount = c.orders.filter(o=>o.linkedEventId).length;
+    c.typeLabel = (linkedCount && linkedCount===c.orders.length) ? 'Linked' : (linkedCount>0 ? 'Mixed' : 'Standalone');
+    c.totalSpend = c.orders.reduce((s,o)=>s+(o.total||0),0);
+  });
+  return clients;
+}
+function renderClientsTable(){
+  const q = (document.getElementById('clientsSearch').value||'').trim().toLowerCase();
+  let clients = aggregateClients();
   if(q) clients = clients.filter(c=> c.name.toLowerCase().includes(q) || c.email.includes(q));
   clients.sort((a,b)=> b.orders.length - a.orders.length);
   const tbl = document.getElementById('clientsTbl');
   if(!clients.length){ tbl.innerHTML = '<tr><td class="empty">No clients yet.</td></tr>'; return; }
-  let html = '<tr><th>Client</th><th>Orders</th><th>Total spend</th><th>Last order</th><th>Type</th></tr>';
+  let html = '<tr><th>Client</th><th>Orders</th><th>Total spend</th><th>Last order</th><th>Type</th><th></th></tr>';
   clients.forEach(c=>{
-    const totalSpend = c.orders.reduce((s,o)=>s+(o.total||0),0);
     const lastDate = c._lastAt ? new Date(c._lastAt).toLocaleDateString() : '—';
-    const linkedCount = c.orders.filter(o=>o.linkedEventId).length;
-    let typeLabel = 'Standalone';
-    if(linkedCount && linkedCount===c.orders.length) typeLabel='Linked';
-    else if(linkedCount>0) typeLabel='Mixed';
     html += `<tr>
       <td><b>${esc(c.name||'—')}</b><br><span style="color:var(--text3);font-size:11.5px">${esc(c.email)}</span></td>
       <td>${c.orders.length}</td>
-      <td class="mono">$${money(totalSpend)}</td>
+      <td class="mono">$${money(c.totalSpend)}</td>
       <td>${esc(lastDate)}</td>
-      <td><span class="tag">${typeLabel}</span></td>
+      <td><span class="tag">${c.typeLabel}</span></td>
+      <td><button class="btn btn-ghost btn-sm" onclick="generateReferralCode('${esc(c.email).replace(/'/g,"\\'")}','${esc(c.name).replace(/'/g,"\\'")}')">Give code</button></td>
     </tr>`;
   });
   tbl.innerHTML = html;
+}
+// Generates a personal discount code for one client — reuses the same
+// discountCodes collection as regular codes, just tagged with who it's
+// for so it shows up distinctly and can be tracked as a referral.
+async function generateReferralCode(email, name){
+  const valueStr = prompt('Discount amount for '+ (name||email) +'\'s code (just the number — you\'ll pick $ or % next):', '10');
+  if(!valueStr) return;
+  const value = parseFloat(valueStr);
+  if(!(value>0)){ alert('Enter a number greater than 0.'); return; }
+  const isPercent = confirm('Click OK for a PERCENT discount, or Cancel for a flat DOLLAR discount.');
+  const type = isPercent ? 'percent' : 'dollar';
+  const namePart = (name||'').split(' ')[0].toUpperCase().replace(/[^A-Z]/g,'') || 'FRIEND';
+  const code = namePart + Math.floor(1000+Math.random()*9000);
+  try{
+    await discountCodesCol.add({code, value, type, active:true, forClient:email, createdAt:Date.now()});
+    prompt('Code created — give this to the client:', code);
+  }catch(e){ console.error(e); alert('Could not create that code.'); }
+}
+
+/* =====================================================================
+   STAFF: CAMPAIGNS — targeted email to past drop-off clients, with a
+   real opt-out (not just a nice-to-have — sending marketing email with
+   no unsubscribe option is a compliance problem, not only bad practice)
+   and a sent-history log so the same list doesn't get double-emailed.
+   ===================================================================== */
+const campaignOptOutsCol = db.collection('campaignOptOuts');
+const campaignLogCol = db.collection('campaignLog');
+let campaignFilters = {standalone:true, linked:true, mixed:true};
+let campaignSelected = new Set();
+
+function toggleCampaignFilter(key){
+  campaignFilters[key] = !campaignFilters[key];
+  document.getElementById('cf-'+key).classList.toggle('on', campaignFilters[key]);
+  renderCampaignClientList();
+}
+function campaignFilteredClients(){
+  const days = parseInt(document.getElementById('cfNoOrderDays').value,10);
+  const cutoff = (!isNaN(days) && days>=0) ? (Date.now() - days*86400000) : null;
+  return aggregateClients().filter(c=>{
+    const typeKey = c.typeLabel.toLowerCase();
+    if(!campaignFilters[typeKey]) return false;
+    if(cutoff!=null && c._lastAt > cutoff) return false; // ordered too recently — excluded when a "no order in X days" threshold is set
+    return true;
+  });
+}
+function renderCampaignClientList(){
+  const clients = campaignFilteredClients();
+  clients.sort((a,b)=> b._lastAt - a._lastAt);
+  const tbl = document.getElementById('campaignClientTbl');
+  if(!clients.length){ tbl.innerHTML = '<tr><td class="empty">No clients match these filters.</td></tr>'; document.getElementById('campaignSelectedCount').textContent=''; return; }
+  let html = '<tr><th></th><th>Client</th><th>Type</th><th>Last order</th></tr>';
+  clients.forEach(c=>{
+    const lastDate = c._lastAt ? new Date(c._lastAt).toLocaleDateString() : '—';
+    const checked = campaignSelected.has(c.email) ? 'checked' : '';
+    html += `<tr>
+      <td><input type="checkbox" ${checked} onchange="toggleCampaignClientSelect('${esc(c.email).replace(/'/g,"\\'")}')" style="width:16px;height:16px"></td>
+      <td><b>${esc(c.name||'—')}</b><br><span style="color:var(--text3);font-size:11.5px">${esc(c.email)}</span></td>
+      <td><span class="tag">${c.typeLabel}</span></td>
+      <td>${esc(lastDate)}</td>
+    </tr>`;
+  });
+  tbl.innerHTML = html;
+  updateCampaignSelectedCount();
+}
+function toggleCampaignClientSelect(email){
+  if(campaignSelected.has(email)) campaignSelected.delete(email); else campaignSelected.add(email);
+  updateCampaignSelectedCount();
+}
+function campaignSelectAll(select){
+  const clients = campaignFilteredClients();
+  if(select) clients.forEach(c=> campaignSelected.add(c.email));
+  else clients.forEach(c=> campaignSelected.delete(c.email));
+  renderCampaignClientList();
+}
+function updateCampaignSelectedCount(){
+  document.getElementById('campaignSelectedCount').textContent = campaignSelected.size+' selected';
+}
+async function sendCampaign(){
+  const errEl = document.getElementById('campErr'); errEl.textContent='';
+  const subject = document.getElementById('campSubject').value.trim();
+  const body = document.getElementById('campBody').value.trim();
+  if(!subject || !body){ errEl.textContent = 'Enter a subject and a message.'; return; }
+  if(!campaignSelected.size){ errEl.textContent = 'Select at least one client.'; return; }
+  if(!confirm('Send this to '+campaignSelected.size+' client(s)?')) return;
+
+  const btn = document.getElementById('sendCampaignBtn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  const relay = await getRelayUrl();
+  if(!relay){ errEl.textContent = 'Could not reach the email relay.'; btn.disabled=false; btn.textContent='Send campaign'; return; }
+
+  try{
+    // Opted-out emails are skipped even if selected — checked fresh each
+    // send rather than cached, so a recent unsubscribe is always honored.
+    const optOutSnap = await campaignOptOutsCol.get();
+    const optedOut = new Set();
+    optOutSnap.forEach(d=> optedOut.add(d.id));
+
+    const clients = aggregateClients();
+    const targets = clients.filter(c=> campaignSelected.has(c.email) && !optedOut.has(c.email));
+
+    let sent = 0;
+    for(const c of targets){
+      const unsubUrl = APP_URL+'?unsubscribe='+encodeURIComponent(c.email);
+      const htmlBody = '<div style="font-family:Arial,sans-serif;max-width:600px">'
+        + '<div style="background:#7A2E3D;padding:16px 20px;border-radius:6px 6px 0 0">'
+        + '<h2 style="color:#fff;margin:0;font-size:18px">Premier Caterers</h2></div>'
+        + '<div style="background:#fff;border:1px solid #ddd;padding:20px;border-radius:0 0 6px 6px">'
+        + '<div style="font-size:14px;color:#333;white-space:pre-wrap">'+esc(body)+'</div>'
+        + '<p style="margin-top:24px;font-size:11px;color:#999">Don\'t want emails like this? <a href="'+unsubUrl+'" style="color:#999">Unsubscribe</a></p>'
+        + '</div></div>';
+      const plainBody = body+'\n\nUnsubscribe: '+unsubUrl;
+      try{
+        await fetch(relay, { method:'POST', body: JSON.stringify({
+          action:'gmailSend', to: c.email, subject: subject, body: plainBody, htmlBody: htmlBody
+        })});
+        sent++;
+      }catch(e){ console.warn('campaign send failed for', c.email, e); }
+    }
+
+    await campaignLogCol.add({
+      subject, body, recipientCount: sent, skippedOptOuts: targets.length - sent + (campaignSelected.size - targets.length),
+      filterDescription: Object.keys(campaignFilters).filter(k=>campaignFilters[k]).join(', '),
+      sentAt: Date.now()
+    });
+    showToast('Campaign sent to '+sent+' client(s)');
+    document.getElementById('campSubject').value=''; document.getElementById('campBody').value='';
+    campaignSelected.clear();
+    renderCampaignClientList();
+    renderCampaignHistory();
+  }catch(e){ console.error(e); errEl.textContent = 'Something went wrong sending — see console.'; }
+  btn.disabled = false; btn.textContent = 'Send campaign';
+}
+async function renderCampaignHistory(){
+  const tbl = document.getElementById('campaignHistoryTbl');
+  tbl.innerHTML = '<tr><td class="empty">Loading…</td></tr>';
+  try{
+    const snap = await campaignLogCol.orderBy('sentAt','desc').limit(30).get();
+    if(snap.empty){ tbl.innerHTML = '<tr><td class="empty">No campaigns sent yet.</td></tr>'; return; }
+    let html = '<tr><th>Subject</th><th>Sent to</th><th>Date</th></tr>';
+    snap.forEach(d=>{
+      const c = d.data();
+      html += `<tr>
+        <td><b>${esc(c.subject||'')}</b></td>
+        <td>${c.recipientCount||0} client(s)</td>
+        <td>${c.sentAt ? new Date(c.sentAt).toLocaleDateString() : '—'}</td>
+      </tr>`;
+    });
+    tbl.innerHTML = html;
+  }catch(e){ console.error(e); tbl.innerHTML = '<tr><td class="empty">Could not load campaign history.</td></tr>'; }
 }
 
 /* =====================================================================
@@ -2340,12 +2563,44 @@ function setReportChipHighlight(){
 updateTopbar();
 renderItemGrid();
 
+// An unsubscribe link from a campaign email (?unsubscribe=<email>) records
+// the opt-out and shows a plain confirmation instead of the normal app —
+// checked before the order-view link below, and returns early so nothing
+// else on the page tries to render.
+(function(){
+  const params = new URLSearchParams(location.search);
+  const unsubEmail = params.get('unsubscribe');
+  if(!unsubEmail) return;
+  const email = unsubEmail.trim().toLowerCase();
+  campaignOptOutsCol.doc(email).set({email, unsubscribedAt: Date.now()}, {merge:true})
+    .then(()=>{
+      document.getElementById('appWrap').innerHTML = `<div class="section" style="text-align:center;padding:40px 24px">
+        <div class="serif" style="font-size:20px;font-weight:600;margin-bottom:8px">You're unsubscribed</div>
+        <div style="color:var(--text2);font-size:13.5px">${esc(email)} won't receive promotional emails from us going forward. Order confirmations and important updates about orders you place will still be sent.</div>
+      </div>`;
+    })
+    .catch(()=>{
+      document.getElementById('appWrap').innerHTML = `<div class="section" style="text-align:center;padding:40px 24px">Something went wrong — please contact us directly to unsubscribe.</div>`;
+    });
+})();
+
+// A direct link to a specific screen (?view=staffOrders etc.) — used by
+// the main app's Drop-offs links panel, so a click lands right on the
+// screen intended instead of the default order-builder page. Staff-only
+// views still go through the same login gate as normal navigation.
+(function(){
+  const params = new URLSearchParams(location.search);
+  const view = params.get('view');
+  if(view && !params.get('order') && !params.get('unsubscribe')) showView(view);
+})();
+
 // A link from an order email (?order=<id>, optionally &pdf=1) opens that
 // order directly — works whether or not staff are logged in, so a client
 // can view/adjust their own order from the confirmation or the email
 // without needing an account.
 (function(){
   const params = new URLSearchParams(location.search);
+  if(params.get('unsubscribe')) return; // handled above — don't also try to open an order view
   const linkedOrderId = params.get('order');
   if(!linkedOrderId) return;
   openEditOrder(linkedOrderId).then(()=>{
