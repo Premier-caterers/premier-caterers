@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=22">
+<link rel="stylesheet" href="styles.css?v=23">
 </head>
 <body>
 
@@ -378,6 +378,17 @@ function _unansweredHubBanner(inq){
 // one (Kenny/Shelley need to see it); sent is quieter; skipped is a warning
 // tone. Each uses a distinct icon + border pattern so colorblind users can
 // distinguish states without relying on hue.
+// "Followed up on Sep 15, 3:42 PM" line for pipeline cards sitting in the
+// Followed Up #1 / #2 columns — shows exactly when that follow-up went out.
+function _followupStageMeta(inq){
+  if(!inq) return '';
+  const ts = inq.stage==='followup_1' ? inq.followup1SentAt : inq.stage==='followup_2' ? inq.followup2SentAt : null;
+  if(!ts) return '';
+  const d = new Date(parseInt(ts,10));
+  const label = 'Followed up on '+d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+', '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  const color = inq.stage==='followup_1' ? 'var(--teal-text)' : 'var(--purple-text)';
+  return `<span style="color:${color};font-weight:600"><i class="ti ti-phone-outgoing" style="font-size:11px"></i>${label}</span>`;
+}
 function _followupBadge(inq){
   if(!inq) return '';
   const pending = pendingFollowupFor(inq.id);
@@ -1176,10 +1187,12 @@ window.updateEventStatus = updateEventStatus;
 // "Mark menu sent / Move to new / Book event / Mark lost / Revive" buttons
 // with one dropdown that calls the same underlying functions.
 const plStatusOptions = [
-  {key:'new',       label:'New inquiry', bg:'var(--bg2)',       fg:'var(--text2)'},
-  {key:'menu_sent', label:'Menu sent',   bg:'var(--brass-tint)',fg:'var(--brass-deep)'},
-  {key:'booked',    label:'Booked',      bg:'var(--green-bg)',  fg:'var(--green-text)'},
-  {key:'lost',      label:'Lost',        bg:'var(--coral-bg)',  fg:'var(--coral-text)'},
+  {key:'new',        label:'New inquiry',     bg:'var(--bg2)',       fg:'var(--text2)'},
+  {key:'menu_sent',  label:'Menu sent',       bg:'var(--brass-tint)',fg:'var(--brass-deep)'},
+  {key:'followup_1', label:'Followed up #1',  bg:'var(--teal-bg)',   fg:'var(--teal-text)'},
+  {key:'followup_2', label:'Followed up #2',  bg:'var(--purple-bg)', fg:'var(--purple-text)'},
+  {key:'booked',     label:'Booked',          bg:'var(--green-bg)',  fg:'var(--green-text)'},
+  {key:'lost',       label:'Lost',            bg:'var(--coral-bg)',  fg:'var(--coral-text)'},
 ];
 function changeInquiryStage(id, newStage){
   const inq = inquiries.find(x=>x.id===id); if(!inq) return;
@@ -3964,6 +3977,8 @@ function renderPipeline(){
   const stages = [
     {key:'new',       label:'New Inquiry',     icon:'ti-mail',          cls:'stage-new',      pcls:'pcol-new'},
     {key:'menu_sent', label:'Menu Sent',       icon:'ti-file-text',     cls:'stage-menu_sent',pcls:'pcol-menu'},
+    {key:'followup_1',label:'Followed Up #1',  icon:'ti-phone-outgoing',cls:'stage-followup_1',pcls:'pcol-followup1'},
+    {key:'followup_2',label:'Followed Up #2',  icon:'ti-phone-check',   cls:'stage-followup_2',pcls:'pcol-followup2'},
     {key:'booked',    label:'Booked',          icon:'ti-circle-check',  cls:'stage-booked',   pcls:'pcol-booked'},
     {key:'month_out', label:'One Month Out',   icon:'ti-calendar-event',cls:'stage-booked',   pcls:'pcol-booked'},
     {key:'two_weeks', label:'2 Weeks Out',     icon:'ti-calendar-event',cls:'stage-booked',   pcls:'pcol-booked'},
@@ -4071,6 +4086,7 @@ function renderPipeline(){
             <div class="pl-compact-meta">
               ${inq.eventType ? `<span><i class="ti ti-tag" style="font-size:11px"></i>${inq.eventType}</span>` : ''}
               ${(inq.eventDate || inq.eventTBD) ? `<span><i class="ti ti-calendar" style="font-size:11px"></i>${_dateNoteLabel(inq, formatDateWithDay)}</span>` : ''}
+              ${_followupStageMeta(inq)}
             </div>
           </div>`;
         }
@@ -4089,6 +4105,7 @@ function renderPipeline(){
           ${inq.phone ? `<span><i class="ti ti-phone" style="font-size:11px"></i>${inq.phone}</span>` : ''}
           ${inq.email ? `<span><i class="ti ti-mail" style="font-size:11px"></i>${inq.email}</span>` : ''}
         </div>
+        ${_followupStageMeta(inq) ? `<div class="inq-meta" style="margin-top:-2px">${_followupStageMeta(inq)}</div>` : ''}
         ${plCardFoot(inq)}
         ${cardDocIcons(inq, role)}
         ${role.canEdit ? `<div class="inq-actions">
@@ -4358,7 +4375,7 @@ function _hubChip(txt){
 function renderInqDetail(inq, role){
   const rows = (label,val) => val ? `<div class="drow"><span class="dkey">${label}</span><span class="dval">${val}</span></div>` : '';
   const fact = (k,v) => v ? `<div class="hub-fact"><div class="k">${k}</div><div class="v">${v}</div></div>` : '';
-  const stageName = {new:'New Inquiry', menu_sent:'Menu Sent', booked:'Booked'}[inq.stage]||inq.stage;
+  const stageName = {new:'New Inquiry', menu_sent:'Menu Sent', followup_1:'Followed Up #1', followup_2:'Followed Up #2', booked:'Booked'}[inq.stage]||inq.stage;
   const name = clientPrimary(inq) || `${inq.firstName||''} ${inq.lastName||''}`.trim();
   const contact = clientContact(inq);
   const ev = _eventForInq(inq);
@@ -5685,6 +5702,11 @@ function moveInquiry(id, stage){
   const prevStage = inq.stage;
   inq.stage=stage;
   if(prevStage!==stage) logActivity(inq.id,'stage',_actStageLabel(prevStage)+' \u2192 '+_actStageLabel(stage),{prevStage:prevStage,stage:stage});
+  // Record when each follow-up actually happened, so the pipeline card can
+  // show "Followed up on <date>" rather than just the stage name. Set once,
+  // even if the card is moved here again later.
+  if(stage==='followup_1' && !inq.followup1SentAt) inq.followup1SentAt = Date.now();
+  if(stage==='followup_2' && !inq.followup2SentAt) inq.followup2SentAt = Date.now();
   _saveInquiry(inq);
   // Google Calendar sync (runs through Apps Script as your account)
   if(stage==='menu_sent' && prevStage!=='booked'){ gcalMenuSent(inq); }
@@ -5716,7 +5738,7 @@ const _actKnownInq = new Set();
 let _actEmailsCache = {};   // inquiryId -> array of pulled-email entries
 
 function _actStageLabel(s){
-  return ({new:'New Inquiry', menu_sent:'Menu Sent', booked:'Booked', lost:'Lost / Declined'})[s] || (s||'\u2014');
+  return ({new:'New Inquiry', menu_sent:'Menu Sent', followup_1:'Followed Up #1', followup_2:'Followed Up #2', booked:'Booked', lost:'Lost / Declined'})[s] || (s||'\u2014');
 }
 function _actUserName(){
   const map = { owner:'Kenny', kenny:'Kenny', shelley:'Shelley', josh:'Josh', kitchen:'Kitchen', barry:'Barry', mashgiach:'Barry' };
@@ -7326,7 +7348,7 @@ function openEditInquiryModal(id){
   const typeOpts = ['','Aufruf','Bar Mitzvah','Bat Mitzvah','Wedding','Kiddush','Bris','Sheva Brachos','Vort','Shloshim','Breakfast','Brunch','Corporate','Drop off catering','Other'];
   const cuisineOpts = ['','Meat','Dairy','Both','Not sure yet'];
   const shabbosOpts = ['No','Yes','Both'];
-  const stageOpts = [['new','New'],['menu_sent','Menu sent'],['booked','Booked'],['lost','Lost / Declined']];
+  const stageOpts = [['new','New'],['menu_sent','Menu sent'],['followup_1','Followed up #1'],['followup_2','Followed up #2'],['booked','Booked'],['lost','Lost / Declined']];
   const sel = (opts, cur) => opts.map(o=>{
     const v = Array.isArray(o)?o[0]:o, lbl = Array.isArray(o)?o[1]:(o||'—');
     return `<option value="${esc(v)}" ${String(cur||'')===String(v)?'selected':''}>${lbl}</option>`;
