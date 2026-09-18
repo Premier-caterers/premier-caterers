@@ -14119,10 +14119,14 @@ function clientEmailForEvent(eid){
 
 // Build an invoice-snapshot-shaped object from an inquiry's ESTIMATE (pre-booking,
 // before an event/invoice exists). Mirrors aggregateInvoiceForPortal's output shape.
-function aggregateEstimateForPortal(inq){
-  const est = inq && inq.estimate;
+// slot defaults to 'primary'. Does NOT auto-create an estimate (mirrors the old
+// behavior of reading inq.estimate directly) so viewing a never-built option
+// doesn't silently create one.
+function aggregateEstimateForPortal(inq, slot){
+  slot = slot || 'primary';
+  const est = (slot==='primary') ? (inq && inq.estimate) : (inq && inq.estimateExtra && inq.estimateExtra[slot]);
   if(!est || !Array.isArray(est.lines)){
-    return { number:'', subtotal:0, logistics:0, tax:0, total:0, paid:0, docType:'quote', depositAmount:0, items:[], printHtml:'' };
+    return { number:'', subtotal:0, logistics:0, tax:0, total:0, paid:0, docType:'quote', depositAmount:0, items:[], printHtml:'', slot:slot, label:'' };
   }
   const t = calcInvoiceTotals(est);
   const items = (est.lines||[]).filter(l=>l.description).map(l=>({
@@ -14136,8 +14140,18 @@ function aggregateEstimateForPortal(inq){
     docType: isInvoice ? 'invoice' : 'quote',
     depositAmount: parseFloat(est.deposit||0),
     items: items,
-    printHtml: ''
+    printHtml: '',
+    slot: slot,
+    label: (typeof estimateOptionLabel==='function') ? estimateOptionLabel(inq, slot) : ''
   };
+}
+// Full list of estimate options for the portal picker. Empty when there's
+// only one option, so single-estimate clients (the common case) see nothing new.
+function estimateOptionsForPortal(inq){
+  if(!inq || !inq.estimate || !Array.isArray(inq.estimate.lines) || !inq.estimate.lines.length) return [];
+  const slots = (typeof estimateSlotsForInq==='function') ? estimateSlotsForInq(inq) : ['primary'];
+  if(slots.length<=1) return [];
+  return slots.map(k=>aggregateEstimateForPortal(inq,k));
 }
 
 function _portalFieldsFromInquiry(inq){
@@ -14216,8 +14230,14 @@ async function _onContractSigned(cid, contractDoc){
   const existingInv = invoices[evId];
   if(existingInv && (existingInv.status==='invoice' || existingInv.status==='paid')) return;
   try{
-    if(typeof ensureEstimate==='function') ensureEstimate(inq);
-    if(!inq.estimate || !Array.isArray(inq.estimate.lines) || !inq.estimate.lines.length) return;
+    // Which option did the client pick in the portal? Falls back to the
+    // primary estimate when there's only one option or none was recorded
+    // (covers single-estimate inquiries and any portal from before this existed).
+    const pid = inq.portalId || _findPortalIdForInquiry(inqId);
+    const portalRec = pid ? clientPortals[pid] : null;
+    const selSlot = (portalRec && portalRec.selectedEstimateSlot) || 'primary';
+    const est = (typeof getEstimateSlot==='function') ? getEstimateSlot(inq, selSlot) : (ensureEstimate(inq), inq.estimate);
+    if(!est || !Array.isArray(est.lines) || !est.lines.length) return;
     // Book the inquiry + create the event if needed (no confirm — automatic).
     if(inq.stage!=='booked'){
       inq.stage='booked';
@@ -14228,18 +14248,17 @@ async function _onContractSigned(cid, contractDoc){
     const e = events.find(x=>x.id===evId);
     if(!e) return;
     const base = invoices[evId] || getDefaultInvoice(e);
-    base.lines = JSON.parse(JSON.stringify(inq.estimate.lines));
-    base.taxExempt = inq.estimate.taxExempt;
-    base.logisticsRate = inq.estimate.logisticsRate;
-    base.deposit = base.deposit || inq.estimate.deposit || 0;
-    base.notes = inq.estimate.notes || base.notes || '';
+    base.lines = JSON.parse(JSON.stringify(est.lines));
+    base.taxExempt = est.taxExempt;
+    base.logisticsRate = est.logisticsRate;
+    base.deposit = base.deposit || est.deposit || 0;
+    base.notes = est.notes || base.notes || '';
     base.status = 'invoice';
     base.invoiceDate = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
     base.eventId = evId;
     invoices[evId] = base;
     await _saveInvoice(evId, base);
     // Flip the portal to 'booked' and refresh its snapshot so the pay tab appears.
-    const pid = inq.portalId || _findPortalIdForInquiry(inqId);
     if(pid && clientPortalsCol){
       try{
         const inv = aggregateInvoiceForPortal(evId);
@@ -14283,7 +14302,8 @@ async function createInquiryPortal(inqId, opts){
   const token = _genPortalToken();
   const portalId = 'p_inq_' + inqId + '_' + Date.now().toString(36);
   const f = _portalFieldsFromInquiry(inq);
-  const est = aggregateEstimateForPortal(inq);
+  const est = aggregateEstimateForPortal(inq, 'primary');
+  const estimateOptions = estimateOptionsForPortal(inq);
   const doc = {
     inquiryId: inqId,
     eventId: 'inq_'+inqId,
@@ -14297,6 +14317,8 @@ async function createInquiryPortal(inqId, opts){
     stage: 'prospect',
     catererDocuments: await _buildInquiryCatererDocs(inq),
     invoiceSnapshot: est,
+    estimateOptions: estimateOptions,
+    selectedEstimateSlot: 'primary',
     depositAmount: est.depositAmount || 0,
     depositPaid: false,
     notifyPhones: (opts.notifyPhones||[]),
@@ -14339,8 +14361,12 @@ async function syncProspectPortal(inqId, opts){
     if(!portalId || !clientPortalsCol) return; // no portal yet — nothing to keep in sync
     const existing = clientPortals[portalId];
     if(existing && existing.stage==='booked') return; // invoice listener owns it now
+    // Keep whatever option the client already picked in the portal — don't let
+    // an edit-driven sync silently snap their view back to the primary option.
+    const selSlot = (existing && existing.selectedEstimateSlot) || 'primary';
     const f = _portalFieldsFromInquiry(inq);
-    const est = aggregateEstimateForPortal(inq);
+    const est = aggregateEstimateForPortal(inq, selSlot);
+    const estimateOptions = estimateOptionsForPortal(inq);
     const patch = {
       jobNumber: f.jobNumber,
       eventName: f.eventName,
@@ -14348,6 +14374,8 @@ async function syncProspectPortal(inqId, opts){
       eventDate: f.eventDate,
       venue: f.venue,
       invoiceSnapshot: est,
+      estimateOptions: estimateOptions,
+      selectedEstimateSlot: selSlot,
       depositAmount: est.depositAmount || 0,
       catererDocuments: await _buildInquiryCatererDocs(inq)
     };

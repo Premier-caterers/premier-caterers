@@ -492,8 +492,27 @@ function renderInvoice(){
       + (tax>0 ? '<div class="tot-row"><span>Tax</span><span>'+money(tax)+'</span></div>' : '');
   }
 
+  // When there's more than one estimate option, show a picker above the
+  // breakdown. Buttons use the same labels entered in the app (e.g. "Silver",
+  // "Gold"). Picking one swaps the whole breakdown below and is saved, so it's
+  // still selected if the client leaves and comes back.
+  const estOptions = Array.isArray(portalDoc.estimateOptions) ? portalDoc.estimateOptions : [];
+  const selSlot = portalDoc.selectedEstimateSlot || 'primary';
+  let optionsHtml = '';
+  if(_isProspect() && estOptions.length>1){
+    optionsHtml = '<div class="pay-box" style="margin-bottom:18px">'
+      + '<div class="pay-box-title">Choose an option</div>'
+      + '<div class="pay-options">'
+        + estOptions.map(function(o){
+            return '<button type="button" class="pay-opt'+(o.slot===selSlot?' selected':'')+'" data-est-slot="'+esc(o.slot)+'">'+esc(o.label||o.slot)+'<span class="pay-opt-amt">'+money(o.total)+'</span></button>';
+          }).join('')
+      + '</div>'
+    + '</div>';
+  }
+
   el.innerHTML =
-    '<div class="inv-doc">'
+    optionsHtml
+    + '<div class="inv-doc">'
       + '<div class="inv-doc-head">'
         + '<div><div class="inv-doctype">'+(isInvoice?'Invoice':'Estimate')+'</div>'
           + '<div class="inv-meta-line">'+esc(inv.number||'')+(portalDoc.eventDate?(' · '+esc(fmtDate(portalDoc.eventDate))):'')+'</div></div>'
@@ -512,8 +531,23 @@ function renderInvoice(){
         : (buildPaymentSchedule(grand, deposit, balance) + payHtml + buildPaymentInstructions()));
 
   if(!_isProspect()) wirePayOptions(balance);
+  el.querySelectorAll('[data-est-slot]').forEach(function(btn){
+    btn.addEventListener('click', function(){ selectEstimateOption(btn.dataset.estSlot); });
+  });
   const dlBtn = document.getElementById('dlInvoiceBtn');
-  if(dlBtn) dlBtn.addEventListener('click', downloadInvoicePdf);
+  if(dlBtn) dlBtn.addEventListener('click', function(){ downloadInvoicePdf(); });
+}
+
+// Client picked a different estimate option. Swap the active breakdown and
+// persist the choice so it survives a refresh, and so the app knows which
+// option to turn into the real invoice once the contract is signed.
+function selectEstimateOption(slot){
+  const opt = (portalDoc.estimateOptions||[]).find(function(o){ return o.slot===slot; });
+  if(!opt) return;
+  portalDoc.invoiceSnapshot = opt;
+  portalDoc.selectedEstimateSlot = slot;
+  renderInvoice();
+  db.collection('clientPortals').doc(pid).set({ selectedEstimateSlot: slot, invoiceSnapshot: opt }, { merge:true }).catch(function(){});
 }
 
 // Chosen payment amount + which option, so the Stripe relay (Part 2) can use it.
@@ -631,12 +665,12 @@ function wirePayOptions(balance){
   payBtn.addEventListener('click', startCheckout);
 }
 
-function downloadInvoicePdf(){
-  const inv = portalDoc.invoiceSnapshot || {};
+function downloadInvoicePdf(invArg){
+  const inv = invArg || portalDoc.invoiceSnapshot || {};
   // If the app has pushed a ready-made invoice HTML document, use it verbatim
   // (this is the exact same document the caterer sees/prints). Otherwise build
   // a clean one from the snapshot fields.
-  const html = inv.printHtml || buildPortalInvoiceHtml();
+  const html = inv.printHtml || buildPortalInvoiceHtml(inv);
   const w = window.open('','_blank');
   if(!w){ alert('Please allow pop-ups to download your invoice.'); return; }
   w.document.write(html);
@@ -645,8 +679,8 @@ function downloadInvoicePdf(){
   setTimeout(function(){ try{ w.print(); }catch(e){} }, 400);
 }
 
-function buildPortalInvoiceHtml(){
-  const inv = portalDoc.invoiceSnapshot || {};
+function buildPortalInvoiceHtml(invArg){
+  const inv = invArg || portalDoc.invoiceSnapshot || {};
   const items = inv.items || [];
   const isInvoice = (inv.docType||'invoice')!=='quote';
   const subtotal = parseFloat(inv.subtotal||0), logistics = parseFloat(inv.logistics||0), tax = parseFloat(inv.tax||0);
@@ -1150,11 +1184,18 @@ function renderDocuments(){
   }
 
   let html = '<div class="doc-group-title">From Premier Caterers</div>';
-  const invRow = '<li class="doc-item"><span class="doc-ic">🧾</span><a href="#" id="docInvoiceLink">Invoice (PDF)</a><span class="doc-meta">generated</span></li>';
+  const estOptions = Array.isArray(portalDoc.estimateOptions) ? portalDoc.estimateOptions : [];
+  const optionRows = (_isProspect() && estOptions.length>1)
+    ? estOptions.map(function(o,i){
+        return '<li class="doc-item"><span class="doc-ic">🧾</span><a href="#" data-est-dl="'+i+'">Estimate — '+esc(o.label||o.slot)+' (PDF)</a></li>';
+      }).join('')
+    : '';
+  const invRow = optionRows ? '' : '<li class="doc-item"><span class="doc-ic">🧾</span><a href="#" id="docInvoiceLink">Invoice (PDF)</a><span class="doc-meta">generated</span></li>';
   html += '<ul class="doc-list">'
     + catererEntries.map(function(e){
         return '<li class="doc-item"><span class="doc-ic">'+e.ic+'</span><a href="'+esc(e.url)+'" target="_blank" rel="noopener">'+esc(e.label)+'</a></li>';
       }).join('')
+    + optionRows
     + invRow
     + '</ul>';
 
@@ -1181,6 +1222,13 @@ function renderDocuments(){
 
   const invLink = document.getElementById('docInvoiceLink');
   if(invLink) invLink.addEventListener('click', function(ev){ ev.preventDefault(); downloadInvoicePdf(); });
+  el.querySelectorAll('[data-est-dl]').forEach(function(a){
+    a.addEventListener('click', function(ev){
+      ev.preventDefault();
+      const opt = estOptions[parseInt(a.dataset.estDl,10)];
+      if(opt) downloadInvoicePdf(opt);
+    });
+  });
 
   const vInput = document.getElementById('vendorDocInput');
   if(vInput) vInput.addEventListener('change', function(){
