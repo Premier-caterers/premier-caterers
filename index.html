@@ -4484,6 +4484,73 @@ function getDefaultEstimate(inq){
   };
 }
 function ensureEstimate(inq){ if(!inq.estimate || !Array.isArray(inq.estimate.lines)) inq.estimate = getDefaultEstimate(inq); return inq.estimate; }
+
+// ── MULTIPLE ESTIMATE OPTIONS PER INQUIRY (safe additive layer, mirrors the invoice slot system) ──
+// The primary option stays at inq.estimate — unchanged, zero risk to existing data.
+// Extra options live in inq.estimateExtra = {b:{...}, c:{...}, ...}. Default tab labels
+// are "Estimate 1", "Estimate 2"... by position; a custom label (est.label) overrides that.
+let _estActiveSlot = {}; // inqId -> 'primary' | 'b' | 'c' ...
+function estimateSlotsForInq(inq){
+  const keys = ['primary'];
+  if(inq.estimateExtra) Object.keys(inq.estimateExtra).sort().forEach(k=>{ if(inq.estimateExtra[k]) keys.push(k); });
+  return keys;
+}
+function getEstimateSlot(inq, slot){
+  if(!slot || slot==='primary') return ensureEstimate(inq);
+  if(!inq.estimateExtra) inq.estimateExtra = {};
+  if(!inq.estimateExtra[slot]) inq.estimateExtra[slot] = getDefaultEstimate(inq);
+  return inq.estimateExtra[slot];
+}
+function activeEstimateSlot(id){ return _estActiveSlot[id] || 'primary'; }
+function estimateOptionLabel(inq, slot){
+  const est = (slot==='primary') ? inq.estimate : (inq.estimateExtra && inq.estimateExtra[slot]);
+  if(est && est.label) return est.label;
+  const idx = estimateSlotsForInq(inq).indexOf(slot);
+  return 'Estimate '+(idx>=0 ? idx+1 : 1);
+}
+function nextExtraEstimateSlotKey(inq){
+  const used = new Set(Object.keys(inq.estimateExtra||{}));
+  let i=1, letter;
+  do{ letter=String.fromCharCode(97+i); i++; }while(used.has(letter));
+  return letter;
+}
+function addEstimateOption(id){
+  const inq=_findInq(id); if(!inq) return;
+  ensureEstimate(inq);
+  if(!inq.estimateExtra) inq.estimateExtra={};
+  const key = nextExtraEstimateSlotKey(inq);
+  inq.estimateExtra[key] = getDefaultEstimate(inq);
+  _estActiveSlot[id] = key;
+  _estimateOpenId = id;
+  _saveInquiryDebounced(inq);
+  rerenderEstimateBlock(id);
+}
+function switchEstimateTab(id, slot){
+  const inq=_findInq(id); if(!inq) return;
+  _estActiveSlot[id] = slot;
+  _estimateOpenId = id;
+  rerenderEstimateBlock(id);
+}
+function renameEstimateOption(id, slot){
+  const inq=_findInq(id); if(!inq) return;
+  const est=getEstimateSlot(inq, slot); if(!est) return;
+  const cur = est.label || estimateOptionLabel(inq, slot);
+  const name = prompt('Label for this estimate option:', cur);
+  if(name===null) return;
+  est.label = name.trim();
+  _saveInquiryDebounced(inq);
+  rerenderEstimateBlock(id);
+}
+function deleteEstimateOption(id, slot){
+  if(!slot || slot==='primary'){ alert('The first estimate option can\'t be deleted here.'); return; }
+  const inq=_findInq(id); if(!inq || !inq.estimateExtra || !inq.estimateExtra[slot]) return;
+  if(!confirm('Delete this estimate option? This cannot be undone.')) return;
+  delete inq.estimateExtra[slot];
+  if(_estActiveSlot[id]===slot) _estActiveSlot[id]='primary';
+  _saveInquiryDebounced(inq);
+  rerenderEstimateBlock(id);
+}
+
 let _estimateOpenId = null;
 function toggleEstimate(id){
   const inq = inquiries.find(x=>x.id===id); if(!inq) return;
@@ -4672,8 +4739,9 @@ let _estimateDirtyUntil = 0;     // while > now, skip snapshot-driven drawer reb
 let _estSaveTimer = null;
 function _saveInquiryDebounced(inq){ _estimateDirtyUntil = Date.now()+2000; clearTimeout(_estSaveTimer); _estSaveTimer = setTimeout(()=>{ _saveInquiry(inq); }, 450); }
 function refreshEstimateMath(id){
-  const inq=_findInq(id); if(!inq||!inq.estimate) return;
-  const est=inq.estimate; const t=calcInvoiceTotals(est); const dep=parseFloat(est.deposit||0);
+  const inq=_findInq(id); if(!inq) return;
+  const est=getEstimateSlot(inq, activeEstimateSlot(id)); if(!est) return;
+  const t=calcInvoiceTotals(est); const dep=parseFloat(est.deposit||0);
   const body=document.getElementById('estLinesBody-'+id);
   if(body){ est.lines.forEach((l,i)=>{ const a=body.querySelector('[data-amt="'+i+'"]'); if(a) a.textContent='$'+((parseFloat(l.qty||0))*(parseFloat(l.price||0))).toFixed(2); }); }
   const set=(pre,val)=>{ const e=document.getElementById(pre+'-'+id); if(e) e.textContent='$'+val.toFixed(2); };
@@ -4694,27 +4762,33 @@ function rerenderEstimateBlock(id){
   if(_estimateOpenId===id){ requestAnimationFrame(()=>{ try{ initLineSortable('estLinesBody-'+id, (from,to)=>reorderEstimateLine(id, from, to)); }catch(e){} }); }
 }
 function updateEstimateLine(id, idx, field, val){
-  const inq=_findInq(id); if(!inq||!inq.estimate) return;
-  const l=inq.estimate.lines[idx]; if(!l) return;
+  const inq=_findInq(id); if(!inq) return;
+  const est=getEstimateSlot(inq, activeEstimateSlot(id)); if(!est) return;
+  const l=est.lines[idx]; if(!l) return;
   if(field==='qty'||field==='price'){ l[field]=parseFloat(val)||0; refreshEstimateMath(id); _saveInquiryDebounced(inq); }
   else { l[field]=val; _saveInquiryDebounced(inq); }
 }
-function addEstimateLine(id){ const inq=_findInq(id); if(!inq) return; ensureEstimate(inq); inq.estimate.lines.push({id:'l'+Date.now(),category:'Other',description:'',qty:1,unit:'item',price:0}); _saveInquiryDebounced(inq); rerenderEstimateBlock(id); }
-function removeEstimateLine(id, idx){ const inq=_findInq(id); if(!inq||!inq.estimate) return; inq.estimate.lines.splice(idx,1); _saveInquiryDebounced(inq); rerenderEstimateBlock(id); }
+function addEstimateLine(id){ const inq=_findInq(id); if(!inq) return; const est=getEstimateSlot(inq, activeEstimateSlot(id)); est.lines.push({id:'l'+Date.now(),category:'Other',description:'',qty:1,unit:'item',price:0}); _saveInquiryDebounced(inq); rerenderEstimateBlock(id); }
+function removeEstimateLine(id, idx){ const inq=_findInq(id); if(!inq) return; const est=getEstimateSlot(inq, activeEstimateSlot(id)); if(!est) return; est.lines.splice(idx,1); _saveInquiryDebounced(inq); rerenderEstimateBlock(id); }
 function duplicateEstimateLine(id, idx){
-  const inq=_findInq(id); if(!inq||!inq.estimate||!Array.isArray(inq.estimate.lines)||!inq.estimate.lines[idx]) return;
-  inq.estimate.lines.push(Object.assign({}, inq.estimate.lines[idx]));  // copy added after the last line
+  const inq=_findInq(id); if(!inq) return;
+  const est=getEstimateSlot(inq, activeEstimateSlot(id));
+  if(!est||!Array.isArray(est.lines)||!est.lines[idx]) return;
+  est.lines.push(Object.assign({}, est.lines[idx]));  // copy added after the last line
   _saveInquiryDebounced(inq); rerenderEstimateBlock(id);
 }
-function toggleEstimateTaxExempt(id){ const inq=_findInq(id); if(!inq||!inq.estimate) return; inq.estimate.taxExempt=!inq.estimate.taxExempt; _saveInquiryDebounced(inq); rerenderEstimateBlock(id); }
-function updateEstimateLogistics(id,val){ const inq=_findInq(id); if(!inq||!inq.estimate) return; inq.estimate.logisticsRate=(parseFloat(val)||0)/100; refreshEstimateMath(id); _saveInquiryDebounced(inq); }
-function updateEstimateNotes(id,val){ const inq=_findInq(id); if(!inq||!inq.estimate) return; inq.estimate.notes=val; _saveInquiryDebounced(inq); }
+function toggleEstimateTaxExempt(id){ const inq=_findInq(id); if(!inq) return; const est=getEstimateSlot(inq, activeEstimateSlot(id)); if(!est) return; est.taxExempt=!est.taxExempt; _saveInquiryDebounced(inq); rerenderEstimateBlock(id); }
+function updateEstimateLogistics(id,val){ const inq=_findInq(id); if(!inq) return; const est=getEstimateSlot(inq, activeEstimateSlot(id)); if(!est) return; est.logisticsRate=(parseFloat(val)||0)/100; refreshEstimateMath(id); _saveInquiryDebounced(inq); }
+function updateEstimateNotes(id,val){ const inq=_findInq(id); if(!inq) return; const est=getEstimateSlot(inq, activeEstimateSlot(id)); if(!est) return; est.notes=val; _saveInquiryDebounced(inq); }
 
 function renderEstimateBlock(inq, role){
   if(!role || !role.canViewInvoices) return '';
   const open = _estimateOpenId === inq.id;
-  const est = inq.estimate;
-  const has = est && Array.isArray(est.lines) && est.lines.length;
+  const primaryEst = inq.estimate;
+  const has = primaryEst && Array.isArray(primaryEst.lines) && primaryEst.lines.length;
+  const slots = estimateSlotsForInq(inq);
+  const multi = has && slots.length>1;
+  const active = activeEstimateSlot(inq.id);
   const bookedInvoiceExists = !!invoices['inq_'+inq.id];
   const header = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       <div class="detail-block-title" style="margin:0">Cost estimate</div>
@@ -4729,10 +4803,27 @@ function renderEstimateBlock(inq, role){
       const t=calcInvoiceTotals(liveInvoice);
       const statusLabel = liveInvoice.status==='paid' ? 'Paid' : liveInvoice.status==='invoice' ? 'Invoiced' : 'Quote';
       summary = `<div style="font-size:13px;color:var(--text2)">${statusLabel} total: <strong style="color:var(--text)">$${t.grand.toFixed(2)}</strong> · ${(liveInvoice.lines||[]).length} line item${(liveInvoice.lines||[]).length===1?'':'s'}</div>`;
-    } else if(has){ const t=calcInvoiceTotals(est); summary = `<div style="font-size:13px;color:var(--text2)">Estimated total: <strong style="color:var(--text)">$${t.grand.toFixed(2)}</strong> · ${est.lines.length} line item${est.lines.length===1?'':'s'}</div>`; }
+    } else if(multi){
+      summary = `<div style="display:flex;flex-direction:column;gap:2px">` + slots.map(k=>{
+        const e = getEstimateSlot(inq,k); const t=calcInvoiceTotals(e);
+        return `<div style="font-size:13px;color:var(--text2)">${estimateOptionLabel(inq,k)}: <strong style="color:var(--text)">$${t.grand.toFixed(2)}</strong> · ${(e.lines||[]).length} line item${(e.lines||[]).length===1?'':'s'}</div>`;
+      }).join('') + `</div>`;
+    } else if(has){ const t=calcInvoiceTotals(primaryEst); summary = `<div style="font-size:13px;color:var(--text2)">Estimated total: <strong style="color:var(--text)">$${t.grand.toFixed(2)}</strong> · ${primaryEst.lines.length} line item${primaryEst.lines.length===1?'':'s'}</div>`; }
     else { summary = `<div style="font-size:12px;color:var(--text3)">No estimate yet — build one to email with the menu and later convert to an invoice.</div>`; }
     return `<div id="estBlock-${inq.id}"><div class="detail-block" style="margin-top:1rem">${header}${summary}</div></div>`;
   }
+  const est = has ? getEstimateSlot(inq, active) : ensureEstimate(inq);
+  const tabsHtml = has ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">` +
+    slots.map(k=>{
+      const isActive = k===active;
+      return `<span class="filter-btn${isActive?' active':''}" style="display:inline-flex;align-items:center;gap:6px;cursor:default">
+        <span onclick="switchEstimateTab('${inq.id}','${k}')" style="cursor:pointer">${estimateOptionLabel(inq,k)}</span>
+        <i class="ti ti-pencil" title="Rename" onclick="renameEstimateOption('${inq.id}','${k}')" style="font-size:11px;opacity:.55;cursor:pointer"></i>
+        ${k!=='primary'?`<i class="ti ti-x" title="Delete this option" onclick="deleteEstimateOption('${inq.id}','${k}')" style="font-size:12px;opacity:.55;cursor:pointer"></i>`:''}
+      </span>`;
+    }).join('') +
+    `<span onclick="addEstimateOption('${inq.id}')" class="filter-btn" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;border-style:dashed"><i class="ti ti-plus" style="font-size:11px"></i>Add option</span>
+    </div>` : '';
   const tots = calcInvoiceTotals(est);
   const inp='background:var(--bg2);border:0.5px solid var(--border2);border-radius:4px;padding:4px 6px;font-size:13px;color:var(--text);font-family:inherit';
   const rows = est.lines.map((l,i)=>`
@@ -4749,7 +4840,7 @@ function renderEstimateBlock(inq, role){
         <button onclick="removeEstimateLine('${inq.id}',${i})" title="Remove" class="btn btn--ghost btn--sm"><i class="ti ti-x"></i></button>
       </span>
     </div>`).join('');
-  return `<div id="estBlock-${inq.id}"><div class="detail-block" style="margin-top:1rem">${header}
+  return `<div id="estBlock-${inq.id}"><div class="detail-block" style="margin-top:1rem">${header}${tabsHtml}
     <div style="display:grid;grid-template-columns:18px 1fr 52px 78px 96px 146px;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);padding-bottom:4px">
       <span></span><span>Description</span><span style="text-align:right">Qty</span><span style="text-align:right">Unit $</span><span style="text-align:right">Amount</span><span></span>
     </div>
@@ -4793,7 +4884,8 @@ function viewClientQuote(id){
 }
 
 async function convertEstimateToInvoice(id){  const inq=_findInq(id); if(!inq) return;
-  ensureEstimate(inq);
+  const slot = activeEstimateSlot(id);
+  const est = getEstimateSlot(inq, slot);
   const evId='inq_'+inq.id;
   let e=events.find(x=>x.id===evId);
   if(!e){
@@ -4804,20 +4896,22 @@ async function convertEstimateToInvoice(id){  const inq=_findInq(id); if(!inq) r
   }
   if(!e){ alert('Could not create the event — make sure the client has an event date set.'); return; }
   const base = invoices[evId] || getDefaultInvoice(e);
-  base.lines = JSON.parse(JSON.stringify(inq.estimate.lines));
-  base.taxExempt = inq.estimate.taxExempt;
-  base.logisticsRate = inq.estimate.logisticsRate;
-  base.deposit = base.deposit || inq.estimate.deposit || 0;
+  base.lines = JSON.parse(JSON.stringify(est.lines));
+  base.taxExempt = est.taxExempt;
+  base.logisticsRate = est.logisticsRate;
+  base.deposit = base.deposit || est.deposit || 0;
   // Copy the estimate's notes exactly as they stand — including if Kenny
   // deliberately cleared them. Falling back to a default here would silently
   // undo that deletion every time an estimate gets converted.
-  base.notes = (inq.estimate.notes !== undefined && inq.estimate.notes !== null) ? inq.estimate.notes : (base.notes || '');
+  base.notes = (est.notes !== undefined && est.notes !== null) ? est.notes : (base.notes || '');
   base.status = 'invoice';
   base.invoiceDate = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   base.eventId = evId;
   invoices[evId] = base;
   await _saveInvoice(evId, base);
-  showToast('Estimate converted to invoice ✓');
+  const optLabel = estimateOptionLabel(inq, slot);
+  try{ logActivity(inq.id, 'invoice', 'Converted '+optLabel+' to invoice', {invoiceId: evId}); }catch(_){}
+  showToast((slot==='primary' ? 'Estimate' : optLabel)+' converted to invoice ✓');
   showView('invoices');
   setTimeout(()=>{ try{ openInvoice(evId); }catch(e){} }, 350);
 }
@@ -4982,34 +5076,38 @@ function downloadHtmlAsPdf(html, filenameBase){
     }catch(e){}
   }
 }
-function estimateFileName(inq){
+function estimateFileName(inq, optLabel){
   const name = (inq.organization||'').trim() || ((inq.firstName||'')+' '+(inq.lastName||'')).trim() || inq.lastName || 'Client';
   let dateBit=''; if(inq.eventDate){ const p=String(inq.eventDate).split('-'); if(p.length===3) dateBit=' ('+parseInt(p[1],10)+'-'+parseInt(p[2],10)+'-'+p[0].slice(-2)+')'; }
   const typ = inq.eventType ? (' '+inq.eventType) : '';
-  return (name+typ+dateBit+' - ESTIMATE').replace(/[\/\\:*?"<>|]/g,'-').replace(/\s+/g,' ').trim();
+  const optBit = optLabel ? (' - '+optLabel) : '';
+  return (name+typ+dateBit+optBit+' - ESTIMATE').replace(/[\/\\:*?"<>|]/g,'-').replace(/\s+/g,' ').trim();
 }
 async function downloadEstimatePdf(inqId){
   const inq=_findInq(inqId); if(!inq) return;
-  ensureEstimate(inq);
-  if(!(inq.estimate && Array.isArray(inq.estimate.lines) && inq.estimate.lines.length)){ alert('Build the estimate first — add at least one line item.'); return; }
+  const slot = activeEstimateSlot(inqId);
+  const est = getEstimateSlot(inq, slot);
+  if(!(est && Array.isArray(est.lines) && est.lines.length)){ alert('Build the estimate first — add at least one line item.'); return; }
   try{
     if(typeof showToast==='function') showToast('Building estimate PDF…');
-    const b64 = await buildEstimatePdfBase64(inq);
+    const b64 = await buildEstimatePdfBase64(inq, est);
     const bin = atob(b64); const bytes = new Uint8Array(bin.length);
     for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
     const blob = new Blob([bytes], {type:'application/pdf'});
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href=url; a.download=estimateFileName(inq)+'.pdf';
+    const slots = estimateSlotsForInq(inq);
+    const fnameLabel = slots.length>1 ? estimateOptionLabel(inq, slot) : '';
+    const a = document.createElement('a'); a.href=url; a.download=estimateFileName(inq, fnameLabel)+'.pdf';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(url), 4000);
   }catch(e){ alert('Could not generate the estimate PDF: '+(e&&e.message||e)); }
 }
 window.downloadEstimatePdf = downloadEstimatePdf;
-async function buildEstimatePdfBase64(inq){
+async function buildEstimatePdfBase64(inq, estArg){
   await ensureJsPdf();
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({unit:'pt', format:'letter'});
-  const est = inq.estimate; const tots = calcInvoiceTotals(est);
+  const est = estArg || inq.estimate; const tots = calcInvoiceTotals(est);
   const clientName = ((inq.firstName||'')+' '+(inq.lastName||'')).trim();
   const right = 555;
   doc.setFontSize(20); doc.setFont(undefined,'bold'); doc.text('Premier Caterers', 40, 52);
@@ -10570,13 +10668,15 @@ function reorderInvoiceLine(eid, from, to){
   renderInvoiceDetail();
 }
 function reorderEstimateLine(id, from, to){
-  const inq = _findInq(id); if(!inq || !inq.estimate) return;
-  const [m] = inq.estimate.lines.splice(from,1); inq.estimate.lines.splice(to,0,m);
+  const inq = _findInq(id); if(!inq) return;
+  const est=getEstimateSlot(inq, activeEstimateSlot(id)); if(!est) return;
+  const [m] = est.lines.splice(from,1); est.lines.splice(to,0,m);
   _saveInquiryDebounced(inq); rerenderEstimateBlock(id);
 }
 function moveEstimateLine(id, idx, dir){
-  const inq = _findInq(id); if(!inq || !inq.estimate) return;
-  const arr = inq.estimate.lines; const ni = idx+dir;
+  const inq = _findInq(id); if(!inq) return;
+  const est=getEstimateSlot(inq, activeEstimateSlot(id)); if(!est) return;
+  const arr = est.lines; const ni = idx+dir;
   if(ni<0 || ni>=arr.length) return;
   const t = arr[idx]; arr[idx] = arr[ni]; arr[ni] = t;
   _saveInquiryDebounced(inq); rerenderEstimateBlock(id);
