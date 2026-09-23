@@ -222,6 +222,9 @@ a{color:var(--maroon);text-decoration:none}
         <input type="checkbox" id="coPartOfEvent" style="width:16px;height:16px"> Is this part of an event you're already booked with us for?
       </label>
       <div id="coStaffLinkArea" style="display:none;margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin-bottom:10px;cursor:pointer">
+          <input type="checkbox" id="coNoNotify" style="width:16px;height:16px"> Don't send the client a confirmation email or text <span style="color:var(--text3)">(staff only)</span>
+        </label>
         <button class="btn btn-ghost btn-sm" onclick="coLinkToEventNow()" type="button" id="coStaffLinkBtn">Link to current event</button>
         <div id="coStaffLinkStatus" style="font-size:12px;margin-top:6px;color:var(--text3)"></div>
       </div>
@@ -999,6 +1002,11 @@ async function submitOrder(){
   const noCodeApproved = !!(document.getElementById('coNoCodeApproved')||{}).checked;
   const discountCode = (document.getElementById('coDiscountCode')||{}).value.trim();
   const partOfExistingEventFlag = !!document.getElementById('coPartOfEvent').checked;
+  // Staff can choose not to notify the client (e.g. placing a regular's
+  // weekly order for them). The checkbox only shows to logged-in staff,
+  // and is ignored for anyone else so a client can never switch off their
+  // own confirmation.
+  const noNotify = isStaff && !!(document.getElementById('coNoNotify')||{}).checked;
   // Staff-placed orders don't need review — the caterer entered it
   // directly. Client-placed orders wait for staff to approve them.
   const approved = isStaff;
@@ -1030,6 +1038,7 @@ async function submitOrder(){
     clientEmail: primaryEmail,
     notes: document.getElementById('coNotes').value.trim(),
     placedBy: isStaff ? ('staff:'+staffUser) : 'client',
+    clientNotified: !noNotify,
     submittedAt: Date.now(),
     updatedAt: Date.now()
   };
@@ -1056,13 +1065,17 @@ async function submitOrder(){
       await bridgeNewInquiry(order, currentOrderId);
     }
     await sendOrderPlacedEmail(order, currentOrderId);
-    await sendClientConfirmationEmail(order, currentOrderId);
-    await sendOrderConfirmationSms(order, currentOrderId);
+    if(!noNotify){
+      await sendClientConfirmationEmail(order, currentOrderId);
+      await sendOrderConfirmationSms(order, currentOrderId);
+    }
     renderConfirmation(order);
+    if(noNotify) showToast('Order placed — client was NOT notified');
     showView('confirm');
     cart = {}; itemNotes = {}; noteOpen = {};
     coEmails = ['']; coDiscountAmount = 0; coDiscountCodeValid = null; coStagedEvent = null;
     currentOrderId = null; draftStarted = false;
+    const nn = document.getElementById('coNoNotify'); if(nn) nn.checked = false;
   }catch(e){
     console.error('submit failed', e);
     errEl.textContent = 'Something went wrong placing the order — please try again, or call us directly.';

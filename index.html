@@ -92,6 +92,7 @@
     <button class="nav-item" id="nav-invoices" onclick="showView('invoices')"><i class="ti ti-file-invoice"></i>Quotes / Invoices</button>
     <button class="nav-item" id="nav-email" onclick="showView('email')"><i class="ti ti-mail"></i>Email<span class="nav-badge" id="emailBadge" style="display:none">0</span></button>
     <button class="nav-item" id="nav-dropoffs" onclick="showView('dropoffs')"><i class="ti ti-truck-delivery"></i>Drop-offs</button>
+    <button class="nav-item" id="nav-regulars" onclick="showView('regulars')"><i class="ti ti-repeat"></i>Regulars</button>
     <a class="nav-item" href="https://premier-caterers.github.io/premier-caterers/premier_caterers_form.html" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-clipboard-text"></i>Link to inquiry form<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
     <div class="sidebar-label" id="grpKitchen">Kitchen &amp; ops</div>
     <button class="nav-item" id="nav-purchasing" onclick="window.open('https://premier-caterers.github.io/premier-caterers/purchasing.html','_blank')"><i class="ti ti-building-store"></i>Purchasing<i class="ti ti-external-link" style="font-size:11px;margin-left:4px;opacity:.6"></i></button>
@@ -279,7 +280,7 @@ const firebaseConfig = {
 let storage;
 let db, eventsCol, changesCol, inquiriesCol, checklistCol, equipCol, invoicesCol, venuesCol, trashCol, clientPortalsCol;
 let _inqLoadedOnce=false;
-let groceryStationsCol, groceryListsCol, roadmapCol;
+let groceryStationsCol, groceryListsCol, roadmapCol, regularsCol, dropOffOrdersCol;
 let contractsCol; let contracts={};
 let myDayCol; let myDayItems = []; // [{id, owner, type:'todo'|'schedule'|'followup', text, time, method, status:'pending'|'done', createdAt, doneAt}]
 let followupSuggestionsCol; let mySuggestions = []; // AI-suggested follow-ups awaiting this user's review
@@ -1154,6 +1155,8 @@ function startSharedSettings(){
 }
 
 let roadmap = []; // roadmap / feature backlog
+let regulars = [];      // weekly drop-off regulars
+let dropOffOrders = []; // submitted orders from the drop-off app (dropoff.html)
 
 // Toast
 let _toastTimer;
@@ -1439,6 +1442,10 @@ function startFirebaseListeners(){
   activityCol.onSnapshot( snap=>{ activityLog=snap.docs.map(d=>d.data()); if(_actOpenInqId) renderActivityLogBody(); });
   roadmapCol = db.collection('roadmap');
   roadmapCol.onSnapshot( snap=>{ roadmap=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='roadmap') render(); });
+  regularsCol = db.collection('regulars');
+  regularsCol.onSnapshot( snap=>{ regulars=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='regulars'||currentView==='events') render(); }, err=>console.error('regulars listener', err));
+  dropOffOrdersCol = db.collection('dropOffOrders');
+  dropOffOrdersCol.where('status','==','submitted').onSnapshot( snap=>{ dropOffOrders=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='regulars'||currentView==='events') render(); }, err=>console.error('dropOffOrders listener', err));
   contractsCol = db.collection('contracts');
   contractsCol.onSnapshot( snap=>{
     const prevContracts = contracts || {};
@@ -2264,7 +2271,7 @@ const roles = {
 };
 
 /* ===================== LOGIN / ACCESS CONTROL (added) ===================== */
-const ALL_SECTIONS = ['home','myday','pipeline','clients','events','coversheet','schedule','checklists','changes','invoices','reports','grocery','equipment','venues','roadmap','followups','email','trash','settings','dropoffs'];
+const ALL_SECTIONS = ['home','myday','pipeline','clients','events','coversheet','schedule','checklists','changes','invoices','reports','grocery','equipment','venues','roadmap','followups','email','trash','settings','dropoffs','regulars'];
 const access = {
   admin:   ALL_SECTIONS.slice(),
   kenny:   ALL_SECTIONS.slice(),
@@ -2272,7 +2279,7 @@ const access = {
   josh:    ALL_SECTIONS.filter(s=>!['reports','trash','settings'].includes(s)),
   // My Day is a personal, per-user space — kitchen is a shared login used by
   // multiple people, so it doesn't get one.
-  kitchen: ALL_SECTIONS.filter(s=>!['reports','trash','settings','email','invoices','myday','followups'].includes(s)),
+  kitchen: ALL_SECTIONS.filter(s=>!['reports','trash','settings','email','invoices','myday','followups','regulars'].includes(s)),
 };
 // SHA-256 hash of the Settings unlock password. Deliberately no plaintext
 // comment here — the previous version had one, and since this file has been
@@ -2391,7 +2398,7 @@ function updateUserBar(){
 // the sections under it, so nobody gets a label with nothing beneath it.
 const NAV_GROUPS = {
   grpWeek:    ['events','coversheet','schedule','checklists','changes'],
-  grpSales:   ['pipeline','clients','invoices','email','dropoffs'],
+  grpSales:   ['pipeline','clients','invoices','email','dropoffs','regulars'],
   grpKitchen: ['purchasing','equipment','venues'],
   grpOffice:  ['myday','reports','roadmap'],
   setupLabel: ['settings','trash']
@@ -2586,6 +2593,7 @@ function render(){
            currentView==='trash'     ? renderTrash()     :
            currentView==='email'     ? '<div id="emailPlaceholder"></div>' :
            currentView==='dropoffs'  ? renderDropoffs()  :
+           currentView==='regulars'  ? renderRegulars()  :
            currentView==='settings'  ? renderSettings()  : '';
   } catch(err) {
     html = '<div style="padding:2rem;color:red;font-size:13px;font-family:monospace"><strong>Error in '+currentView+':</strong><br>'+err.message+'</div>';
@@ -3345,6 +3353,7 @@ function renderEvents(){
       <div class="section-title">Events — ${weekLabel}</div>
       ${role.canEdit ? `<button class="add-btn" onclick="openModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add event</button>` : ''}
     </div>
+    ${regularsReminderHtml()}
     <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:2.5rem;text-align:center;color:var(--text2)">
       <i class="ti ti-calendar-off" style="font-size:32px;margin-bottom:1rem;display:block;color:var(--text3)"></i>
       <div style="font-size:15px;font-weight:500;margin-bottom:.5rem">No events for ${weekLabel}</div>
@@ -3367,6 +3376,7 @@ function renderEvents(){
     const _msg = _n + " unacknowledged change order" + (_n>1?"s":"") + " — see Changes log";
     return `<div class="banner amber" style="margin-bottom:1rem"><i class="ti ti-alert-triangle" style="font-size:16px;color:var(--amber-text);flex-shrink:0;margin-top:1px"></i><div style="font-size:13px;color:var(--amber-text)"><strong>${_msg}</strong></div></div>`;
     })()}
+  ${regularsReminderHtml()}
     <div class="wk-head">
       <div class="wk-head__bar">
         <div>
@@ -13145,6 +13155,259 @@ function renderDropoffs(){
   h += `</div>`;
   return h;
 }
+
+
+// ── WEEKLY REGULARS ──
+// Drop-off clients who order every week (or almost). Each regular is a
+// small record in the 'regulars' collection: name, the email(s) they order
+// with, their usual delivery day, and which weeks they're skipping.
+// "Ordered this week" is worked out live from BOTH places an order can
+// live: the drop-off app (dropOffOrders) and the main app (inquiries).
+// A drop-off order that was bridged into an inquiry matches in both —
+// that's fine, the status only needs to know "is there at least one".
+// "Start this week's order" opens the drop-off app with a past order
+// already in the cart (dropoff.html?reorder=<id>&date=<YYYY-MM-DD>).
+const REG_DROPOFF_URL = 'https://premier-caterers.github.io/premier-caterers/dropoff.html';
+const REG_DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+const REG_DAY_LABEL = {monday:'Monday',tuesday:'Tuesday',wednesday:'Wednesday',thursday:'Thursday',friday:'Friday',saturday:'Saturday',sunday:'Sunday'};
+
+function _regEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function _regIso(d){ return d.toISOString().split('T')[0]; }
+function _regWeek(offset){
+  const end = getWeekEndDate(offset);                       // Sunday (UTC)
+  const start = new Date(end.getTime() - 6*86400000);       // Monday
+  return { start:_regIso(start), end:_regIso(end), we:_regIso(end), startDate:start };
+}
+function _regShort(iso){
+  if(!iso) return '';
+  const d = new Date(iso+'T12:00:00Z');
+  return d.toLocaleDateString('en-US',{weekday:'short', month:'numeric', day:'numeric', timeZone:'UTC'});
+}
+function _regEmails(reg){ return (reg.emails||[]).map(e=>String(e||'').trim().toLowerCase()).filter(Boolean); }
+function _regOrderEmails(o){
+  const list = [o.clientEmail, o.contactEmail].concat(Array.isArray(o.contactEmails)?o.contactEmails:[]);
+  return list.map(e=>String(e||'').trim().toLowerCase()).filter(Boolean);
+}
+function _regMatches(reg, emails){ const mine=_regEmails(reg); return emails.some(e=>mine.includes(e)); }
+function _regDropOrders(reg){
+  return (dropOffOrders||[]).filter(o=>_regMatches(reg,_regOrderEmails(o)))
+    .sort((a,b)=> String(b.deliveryDate||'').localeCompare(String(a.deliveryDate||'')) || (b.submittedAt||0)-(a.submittedAt||0));
+}
+function _regUsualDate(reg, wk){
+  const idx = REG_DAYS.indexOf(reg.usualDay);
+  if(idx<0) return '';
+  return _regIso(new Date(wk.startDate.getTime() + idx*86400000));
+}
+// Returns {status:'ordered'|'waiting'|'skip', where, orderId}
+function _regStatus(reg, wk){
+  if(reg.skips && reg.skips[wk.we]) return {status:'skip'};
+  const inWeek = d => d && d>=wk.start && d<=wk.end;
+  const drop = _regDropOrders(reg).find(o=>inWeek(o.deliveryDate));
+  if(drop) return {status:'ordered', where:'Drop-off app', orderId:drop.id, date:drop.deliveryDate};
+  const inq = (inquiries||[]).find(i=> i && i.stage!=='lost' && inWeek(i.eventDate) && _regMatches(reg,[String(i.email||'').toLowerCase()]));
+  if(inq) return {status:'ordered', where:'Pipeline', date:inq.eventDate};
+  return {status:'waiting'};
+}
+function _regPill(st){
+  if(st.status==='ordered') return `<span class="reg-pill reg-pill--ok"><i class="ti ti-circle-check"></i>Ordered</span>`;
+  if(st.status==='skip')    return `<span class="reg-pill reg-pill--skip"><i class="ti ti-circle-off"></i>Skipping</span>`;
+  return `<span class="reg-pill reg-pill--wait"><i class="ti ti-clock"></i>Not ordered yet</span>`;
+}
+const REG_CSS = `<style>
+.reg-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.reg-pill i{font-size:14px}
+.reg-pill--ok{background:var(--green-bg);color:var(--green-text);border:1.5px solid var(--green-text)}
+.reg-pill--wait{background:var(--amber-bg);color:var(--amber-text);border:2px dashed var(--amber-solid)}
+.reg-pill--skip{background:var(--neutral-bg);color:var(--neutral-text);border:2px dotted var(--neutral-solid);text-decoration:line-through}
+.reg-stat{background:var(--bg);border-radius:var(--radius-lg);padding:14px 18px;display:flex;align-items:center;gap:12px}
+.reg-stat i{font-size:26px}.reg-stat b{font-size:22px;display:block;line-height:1.1}.reg-stat span{font-size:12.5px;color:var(--text2)}
+.reg-row{display:grid;grid-template-columns:1.4fr 1fr 1.4fr 1.2fr 1.9fr;gap:12px;padding:14px 18px;align-items:center;border-bottom:1px solid var(--border);font-size:13.5px}
+.reg-head{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);padding:10px 18px}
+.reg-sub{font-size:12px;color:var(--text2)}
+.reg-remind{background:var(--amber-bg);border:2px dashed var(--amber-solid);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:1rem}
+.reg-remind-row{display:flex;align-items:center;gap:10px;background:var(--bg);border-radius:10px;padding:8px 12px;margin-top:8px;font-size:13.5px;flex-wrap:wrap}
+@media(max-width:800px){.reg-row{grid-template-columns:1fr 1fr}.reg-head{display:none}}
+</style>`;
+
+function renderRegulars(){
+  const role = roles[currentRole]||{};
+  const wk = _regWeek(currentWeekOffset);
+  const list = (regulars||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+  const rows = list.map(r=>({r, st:_regStatus(r,wk)}));
+  const n = k => rows.filter(x=>x.st.status===k).length;
+  const weekLabel = (document.getElementById('wePillText')||document.getElementById('wePill'))?.textContent || ('W/E '+wk.we);
+  let h = REG_CSS + `<div class="section-header">
+    <div><div class="eyebrow">Sales</div><div class="section-title">Regulars</div>
+      <div style="font-size:13px;color:var(--text2);margin-top:2px">Weekly drop-off clients · ${_regEsc(weekLabel)}</div></div>
+    ${role.canEdit?`<button class="btn" onclick="openRegularModal()"><i class="ti ti-plus"></i> Add a regular</button>`:''}
+  </div>`;
+  if(!list.length){
+    return h + `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:2.5rem;text-align:center;color:var(--text2)">
+      <i class="ti ti-repeat" style="font-size:32px;display:block;margin-bottom:10px;color:var(--text3)"></i>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px">No regulars yet</div>
+      <div style="font-size:13px">Add the clients who order a drop-off every week.</div></div>`;
+  }
+  h += `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px">
+    <div class="reg-stat" style="border:1.5px solid var(--green-border)"><i class="ti ti-circle-check" style="color:var(--green-text)"></i><div><b style="color:var(--green-text)">${n('ordered')}</b><span>Ordered</span></div></div>
+    <div class="reg-stat" style="background:var(--amber-bg);border:2px dashed var(--amber-solid)"><i class="ti ti-clock" style="color:var(--amber-text)"></i><div><b style="color:var(--amber-text)">${n('waiting')}</b><span>Not ordered yet</span></div></div>
+    <div class="reg-stat" style="border:2px dotted var(--neutral-solid)"><i class="ti ti-circle-off" style="color:var(--neutral-text)"></i><div><b style="color:var(--neutral-text)">${n('skip')}</b><span>Skipping this week</span></div></div>
+  </div>
+  <div style="background:var(--bg);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);overflow:hidden">
+    <div class="reg-row reg-head"><div>Client</div><div>Usual day</div><div>Last drop-off order</div><div>This week</div><div style="text-align:right">Action</div></div>`;
+  rows.forEach(({r,st})=>{
+    const last = _regDropOrders(r)[0];
+    const lastTxt = last ? `${_regShort(last.deliveryDate)}<div class="reg-sub">${(last.lines||[]).length} items</div>` : `<span class="reg-sub">None in the drop-off app yet</span>`;
+    let actions = '';
+    if(st.status==='waiting'){
+      actions = `<button class="btn btn--ghost" onclick="regToggleSkip('${r.id}')">Skip week</button>
+        <button class="btn btn--pri" onclick="openRegStart('${r.id}')"><i class="ti ti-copy"></i> Start this week's order</button>`;
+    } else if(st.status==='skip'){
+      actions = `<button class="btn btn--ghost" onclick="regToggleSkip('${r.id}')">Undo skip</button>`;
+    } else if(st.orderId){
+      actions = `<a class="btn btn--ghost" href="${REG_DROPOFF_URL}?order=${encodeURIComponent(st.orderId)}" target="_blank" rel="noopener">View order <i class="ti ti-external-link" style="font-size:12px"></i></a>`;
+    } else {
+      actions = `<span class="reg-sub">In Pipeline</span>`;
+    }
+    if(role.canEdit) actions += `<button class="icon-btn" title="Edit regular" aria-label="Edit ${_regEsc(r.name)}" onclick="openRegularModal('${r.id}')"><i class="ti ti-edit"></i></button>`;
+    h += `<div class="reg-row">
+      <div><div style="font-weight:600">${_regEsc(r.name)}</div><div class="reg-sub">${_regEsc(_regEmails(r).join(', '))}</div></div>
+      <div>${_regEsc(REG_DAY_LABEL[r.usualDay]||'—')}</div>
+      <div>${lastTxt}</div>
+      <div>${_regPill(st)}${st.status==='ordered'&&st.date?`<div class="reg-sub" style="margin-top:3px">${_regShort(st.date)} · ${st.where}</div>`:''}</div>
+      <div style="display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap;align-items:center">${actions}</div>
+    </div>`;
+  });
+  h += `</div>`;
+  return h;
+}
+
+// Reminder box for This Week — only for the current or a future week.
+function regularsReminderHtml(){
+  if(!(access[currentRole]||[]).includes('regulars')) return '';
+  const wk = _regWeek(currentWeekOffset);
+  const t = new Date(); const today = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+  if(wk.end < today) return '';
+  const waiting = (regulars||[]).filter(r=>_regStatus(r,wk).status==='waiting');
+  if(!waiting.length) return '';
+  let h = REG_CSS + `<div class="reg-remind"><div style="display:flex;align-items:center;gap:8px;font-weight:700;color:var(--amber-text);font-size:14px">
+    <i class="ti ti-clock" style="font-size:18px"></i>${waiting.length} regular${waiting.length>1?'s haven\u2019t':' hasn\u2019t'} ordered yet</div>`;
+  waiting.forEach(r=>{
+    const last = _regDropOrders(r)[0];
+    h += `<div class="reg-remind-row"><strong style="min-width:110px">${_regEsc(r.name)}</strong>
+      <span style="flex:1;color:var(--text2)">Usually ${_regEsc(REG_DAY_LABEL[r.usualDay]||'—')}${last?(' · last order '+_regShort(last.deliveryDate)):''}</span>
+      <button class="btn btn--ghost" onclick="regToggleSkip('${r.id}')">Skip week</button>
+      <button class="btn btn--pri" onclick="openRegStart('${r.id}')">Start order</button></div>`;
+  });
+  return h + `</div>`;
+}
+
+async function regToggleSkip(id){
+  const r = (regulars||[]).find(x=>x.id===id); if(!r) return;
+  const we = _regWeek(currentWeekOffset).we;
+  const skips = Object.assign({}, r.skips||{});
+  if(skips[we]) delete skips[we]; else skips[we] = true;
+  try{ await regularsCol.doc(id).update({skips}); showToast(skips[we]?'Skipping this week':'Skip undone'); }
+  catch(e){ console.error(e); alert('Could not save — please try again.'); }
+}
+
+// ── Start this week's order: pick which past order to copy, then open the drop-off app ──
+function openRegStart(id){
+  const r = (regulars||[]).find(x=>x.id===id); if(!r) return;
+  const wk = _regWeek(currentWeekOffset);
+  const past = _regDropOrders(r).slice(0,3);
+  document.getElementById('regStartModal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'regStartModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1002;display:flex;align-items:center;justify-content:center;padding:1.5rem';
+  const opts = past.map((o,i)=>`<label style="display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--border2);border-radius:var(--radius);margin-bottom:8px;cursor:pointer;font-size:13.5px">
+      <input type="radio" name="regSrc" value="${_regEsc(o.id)}" ${i===0?'checked':''} style="width:17px;height:17px;accent-color:var(--maroon)">
+      <span><strong>${i===0?'Last order':(i===1?'2 orders ago':'3 orders ago')}</strong> · ${_regShort(o.deliveryDate)} · ${(o.lines||[]).length} items</span></label>`).join('');
+  m.innerHTML = `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.6rem;width:100%;max-width:500px;box-shadow:var(--shadow-overlay);max-height:90vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">Start this week's order — ${_regEsc(r.name)}</div>
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px">Opens the drop-off app with the order in the cart. Change what's different, then place it.</div>
+    <div class="modal-row"><label for="regStartDate">Delivery date</label><input type="date" id="regStartDate" value="${_regUsualDate(r,wk)}"></div>
+    <div style="font-size:12px;font-weight:600;color:var(--text2);margin:4px 0 8px">Start from</div>
+    ${opts}
+    <label style="display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px dashed var(--text3);border-radius:var(--radius);margin-bottom:8px;cursor:pointer;font-size:13.5px">
+      <input type="radio" name="regSrc" value="" ${past.length?'':'checked'} style="width:17px;height:17px;accent-color:var(--maroon)">
+      <span>Blank order${past.length?'':' — no drop-off app orders to copy yet'}</span></label>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="btn btn--ghost" onclick="document.getElementById('regStartModal').remove()">Cancel</button>
+      <button class="btn btn--pri" onclick="regOpenDropoff()"><i class="ti ti-external-link"></i> Open in drop-off app</button>
+    </div></div>`;
+  document.body.appendChild(m);
+}
+function regOpenDropoff(){
+  const src = (document.querySelector('input[name="regSrc"]:checked')||{}).value || '';
+  const date = (document.getElementById('regStartDate')||{}).value || '';
+  let url = REG_DROPOFF_URL;
+  if(src) url += '?reorder='+encodeURIComponent(src)+(date?('&date='+encodeURIComponent(date)):'');
+  window.open(url, '_blank', 'noopener');
+  document.getElementById('regStartModal')?.remove();
+}
+
+// ── Add / edit a regular ──
+function openRegularModal(id){
+  const r = id ? (regulars||[]).find(x=>x.id===id) : null;
+  // Drop-off app clients, one per email, newest name wins — for quick pick.
+  const byEmail = {};
+  (dropOffOrders||[]).slice().sort((a,b)=>(a.submittedAt||0)-(b.submittedAt||0)).forEach(o=>{
+    const e = _regOrderEmails(o)[0]; if(e) byEmail[e] = o.clientName||o.contactName||e;
+  });
+  const pick = Object.keys(byEmail).sort((a,b)=>byEmail[a].localeCompare(byEmail[b]))
+    .map(e=>`<option value="${_regEsc(e)}" data-name="${_regEsc(byEmail[e])}">${_regEsc(byEmail[e])} — ${_regEsc(e)}</option>`).join('');
+  document.getElementById('regEditModal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'regEditModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1002;display:flex;align-items:center;justify-content:center;padding:1.5rem';
+  m.innerHTML = `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.6rem;width:100%;max-width:480px;box-shadow:var(--shadow-overlay);max-height:90vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:700;margin-bottom:14px">${r?'Edit regular':'Add a regular'}</div>
+    ${!r && pick ? `<div class="modal-row"><label for="regPick">Pick from drop-off app clients (optional)</label>
+      <select id="regPick" onchange="regPickFill(this)"><option value="">— choose —</option>${pick}</select></div>` : ''}
+    <div class="modal-row"><label for="regName">Client name</label><input id="regName" value="${_regEsc(r?r.name:'')}" placeholder="e.g. CBY"></div>
+    <div class="modal-row"><label for="regEmails">Email(s) they order with — separate with commas</label><input id="regEmails" value="${_regEsc(r?_regEmails(r).join(', '):'')}" placeholder="office@example.org"></div>
+    <div class="modal-row"><label for="regDay">Usual delivery day</label><select id="regDay">
+      ${REG_DAYS.map(d=>`<option value="${d}" ${(r?r.usualDay:'friday')===d?'selected':''}>${REG_DAY_LABEL[d]}</option>`).join('')}</select></div>
+    <div id="regErr" style="color:var(--red-text);font-size:12.5px;min-height:16px"></div>
+    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:10px">
+      <div>${r?`<button class="btn btn--ghost" style="color:var(--red-text)" onclick="deleteRegular('${r.id}')"><i class="ti ti-trash"></i> Remove</button>`:''}</div>
+      <div style="display:flex;gap:8px"><button class="btn btn--ghost" onclick="document.getElementById('regEditModal').remove()">Cancel</button>
+      <button class="btn btn--pri" onclick="saveRegular('${r?r.id:''}')">Save</button></div>
+    </div></div>`;
+  document.body.appendChild(m);
+}
+function regPickFill(sel){
+  const opt = sel.options[sel.selectedIndex]; if(!opt || !opt.value) return;
+  document.getElementById('regName').value = opt.getAttribute('data-name')||'';
+  document.getElementById('regEmails').value = opt.value;
+}
+async function saveRegular(id){
+  const name = document.getElementById('regName').value.trim();
+  const emails = document.getElementById('regEmails').value.split(/[,;\s]+/).map(e=>e.trim().toLowerCase()).filter(Boolean);
+  const usualDay = document.getElementById('regDay').value;
+  const err = document.getElementById('regErr');
+  if(!name){ err.textContent = 'Please enter a name.'; return; }
+  if(!emails.length){ err.textContent = 'Please enter at least one email — it\u2019s how orders get matched.'; return; }
+  if(emails.some(e=>!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e))){ err.textContent = 'One of the emails doesn\u2019t look right.'; return; }
+  try{
+    if(id){ await regularsCol.doc(id).update({name, emails, usualDay}); }
+    else {
+      const newId = 'reg_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+      await regularsCol.doc(newId).set({id:newId, name, emails, usualDay, skips:{}, createdAt:Date.now(), createdBy:authUser||''});
+    }
+    document.getElementById('regEditModal')?.remove();
+    showToast('Saved');
+  }catch(e){ console.error(e); err.textContent = 'Could not save — please try again.'; }
+}
+async function deleteRegular(id){
+  const r = (regulars||[]).find(x=>x.id===id); if(!r) return;
+  if(!confirm('Remove '+r.name+' from Regulars? Their past orders are not affected.')) return;
+  try{ await regularsCol.doc(id).delete(); document.getElementById('regEditModal')?.remove(); showToast('Removed'); }
+  catch(e){ console.error(e); alert('Could not remove — please try again.'); }
+}
+window.renderRegulars = renderRegulars; window.regToggleSkip = regToggleSkip; window.openRegStart = openRegStart;
+window.regOpenDropoff = regOpenDropoff; window.openRegularModal = openRegularModal; window.regPickFill = regPickFill;
+window.saveRegular = saveRegular; window.deleteRegular = deleteRegular;
 
 function roadmapCard(r,b,canEdit,isDone){
   const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
