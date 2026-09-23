@@ -1521,12 +1521,31 @@ async function reorderFrom(orderId, opts){
       if(l.note) itemNotes[item.id] = l.note;
     });
     if(opts.fillDetails) reorderFillDetails(o, opts.date);
-    reorderShowNotice(o, missing, !!opts.fillDetails);
+    if(opts.resumeDraft){
+      // Pick up the SAME draft rather than copying it: autosave and
+      // checkout both write to this order id from here on, so no second
+      // order is created and the draft row turns into the real order.
+      currentOrderId = orderId;
+      draftStarted = true;
+      const nm = document.getElementById('coName'); if(nm && !nm.value) nm.value = o.clientName||'';
+      if(o.clientEmail) coEmails = [o.clientEmail];
+    }
+    reorderShowNotice(o, missing, !!opts.fillDetails, !!opts.resumeDraft);
     hasChosenCategory = true; // reordering is itself an intentional action — don't hide the items they just added behind the empty-state prompt
     showView('order');
     updateCartBar();
     showToast(missing.length ? 'Items added — some are no longer on the menu, see the note at the top' : 'Items added — review quantities before checking out');
   }catch(e){ console.error(e); showToast('Something went wrong loading that order.'); }
+}
+// Staff "Continue" on a draft row — waits for the menu to finish loading
+// (items are matched against it), then reopens that draft in the cart.
+function continueDraftOrder(orderId){
+  let tries = 0;
+  (function go(){
+    if(catLoaded) return reorderFrom(orderId, {resumeDraft:true});
+    if(++tries > 40){ showToast('The menu is taking a while to load — please refresh the page.'); return; }
+    setTimeout(go, 250);
+  })();
 }
 function reorderFillDetails(o, date){
   const set = (id, v)=>{ const el = document.getElementById(id); if(el && v!=null) el.value = v; };
@@ -1542,13 +1561,16 @@ function reorderFillDetails(o, date){
   const emails = (Array.isArray(o.contactEmails) && o.contactEmails.length) ? o.contactEmails.slice() : [o.contactEmail||o.clientEmail||''];
   coEmails = emails.length ? emails : [''];
 }
-function reorderShowNotice(o, missing, filled){
+function reorderShowNotice(o, missing, filled, resumed){
   const el = document.getElementById('reorderNotice'); if(!el) return;
   const from = o.deliveryDate ? (' from '+esc(o.deliveryDate)) : '';
   let h = `<div class="section" style="background:var(--brass-tint);border:2px dashed var(--brass);margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
-      <div><b><i class="ti ti-copy"></i> Copied ${esc(o.clientName||'past order')}${from}.</b>
-      <div style="font-size:13px;margin-top:4px">Change what's different this week, then continue.${filled?' Delivery details are filled in too — check the date and time.':''}</div></div>
+      <div>${resumed
+        ? `<b><i class="ti ti-player-play"></i> Continuing ${esc(o.clientName||'an unfinished')} order.</b>
+      <div style="font-size:13px;margin-top:4px">These are the items saved so far. Adjust anything, then check out — this finishes the same order, it doesn't create a new one.</div>`
+        : `<b><i class="ti ti-copy"></i> Copied ${esc(o.clientName||'past order')}${from}.</b>
+      <div style="font-size:13px;margin-top:4px">Change what's different this week, then continue.${filled?' Delivery details are filled in too — check the date and time.':''}</div>`}</div>
       <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('reorderNotice').style.display='none'" aria-label="Close this note">&times;</button>
     </div>`;
   if(missing.length){
@@ -1697,6 +1719,11 @@ function renderStaffOrders(){
       ? `<button class="btn btn-ghost btn-sm" onclick="promptLinkOrder('${o.id}')" style="margin-left:6px">Link to event</button>` : '';
     const editBtn = o.status==='submitted'
       ? `<button class="btn btn-ghost btn-sm" onclick="openEditOrder('${o.id}')" style="margin-left:6px">Edit</button>` : '';
+    // Drafts (someone started an order but never checked out) get a
+    // Continue button that reopens that SAME order in the cart — finishing
+    // checkout then submits this draft rather than creating a second order.
+    const continueBtn = (o.status||'draft')==='draft'
+      ? `<button class="btn btn-pri btn-sm" onclick="continueDraftOrder('${o.id}')">Continue</button>` : '';
     const resendBtn = o.status==='submitted'
       ? `<button class="btn btn-ghost btn-sm" onclick="resendOrderEmails('${o.id}')" style="margin-left:6px">Resend</button>` : '';
     const deleteBtn = `<button class="btn btn-ghost btn-sm" onclick="deleteOrder('${o.id}')" style="margin-left:6px;color:var(--red)">Delete</button>`;
@@ -1706,7 +1733,7 @@ function renderStaffOrders(){
       <td>${itemCount} item${itemCount===1?'':'s'}</td>
       <td class="mono">$${money(o.total||0)}</td>
       <td><span class="pill-status ${statusClass}">${statusLabel}</span>${flagNote}</td>
-      <td>${approveBtn}${linkBtn}${editBtn}${resendBtn}${deleteBtn}</td>
+      <td>${continueBtn}${approveBtn}${linkBtn}${editBtn}${resendBtn}${deleteBtn}</td>
     </tr>`;
   });
   tbl.innerHTML = html;
