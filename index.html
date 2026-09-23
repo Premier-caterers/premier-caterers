@@ -2267,6 +2267,7 @@ const roles = {
   kenny:   {canEdit:true, showStaff:true, showLinks:true, canViewInvoices:true,  canViewReports:true},
   shelley: {canEdit:true, showStaff:true, showLinks:true, canViewInvoices:true, canViewReports:true},
   josh:    {canEdit:false, showStaff:true, showLinks:false, canViewInvoices:true, canViewReports:false},
+  barry:   {canEdit:false, showStaff:true, showLinks:false, canViewInvoices:true, canViewReports:false}, // same as Josh
   kitchen: {canEdit:false, showStaff:false, showLinks:false, canViewInvoices:false, canViewReports:false},
 };
 
@@ -2277,6 +2278,7 @@ const access = {
   kenny:   ALL_SECTIONS.slice(),
   shelley: ALL_SECTIONS.filter(s=>!['reports','trash'].includes(s)),
   josh:    ALL_SECTIONS.filter(s=>!['reports','trash','settings'].includes(s)),
+  barry:   ALL_SECTIONS.filter(s=>!['reports','trash','settings'].includes(s)), // same as Josh
   // My Day is a personal, per-user space — kitchen is a shared login used by
   // multiple people, so it doesn't get one.
   kitchen: ALL_SECTIONS.filter(s=>!['reports','trash','settings','email','invoices','myday','followups','regulars'].includes(s)),
@@ -2288,7 +2290,7 @@ const access = {
 // requires computing a fresh SHA-256 hash of the new password (not typing
 // the password directly), so the plaintext never sits in the file again.
 const OWNER_HASH   = 'b7bf192de33d190cf5b324da9947e5402e0467684060c18eeee73671f95cdd1c';
-let authUser = null;            // 'owner' | 'shelley' | 'josh' | 'kitchen'
+let authUser = null;            // 'owner' | 'shelley' | 'josh' | 'barry' | 'kitchen'
 let settingsUnlocked = false;
 
 async function pcHash(s){
@@ -2302,6 +2304,7 @@ const PC_EMAILS = {
   owner:   'kenny@thepremiercaterer.com',
   shelley: 'shelley@thepremiercaterer.com',
   josh:    'joshg@thepremiercaterer.com',
+  barry:   'barry.h.nash@gmail.com',
   kitchen: 'kitchen@thepremiercaterer.com'
 };
 function pcEmailFor(u){ return PC_EMAILS[u] || ''; }
@@ -2329,7 +2332,7 @@ function clientContact(o){
 
 // Friendly name of whoever is logged in (used to stamp who initiated a change)
 function initiatorName(){
-  const map = { owner:'Kenny', kenny:'Kenny', shelley:'Shelley', josh:'Josh', kitchen:'Kitchen', admin:'Admin' };
+  const map = { owner:'Kenny', kenny:'Kenny', shelley:'Shelley', josh:'Josh', barry:'Barry', kitchen:'Kitchen', admin:'Admin' };
   return map[authUser] || (authUser ? authUser.charAt(0).toUpperCase()+authUser.slice(1) : 'Unknown');
 }
 
@@ -2343,6 +2346,7 @@ function showLogin(){
        <button class="lg-user" onclick="loginPick('owner')">Kenny / Admin</button>
        <button class="lg-user" onclick="loginPick('shelley')">Shelley</button>
        <button class="lg-user" onclick="loginPick('josh')">Josh</button>
+       <button class="lg-user" onclick="loginPick('barry')">Barry</button>
        <button class="lg-user" onclick="loginPick('kitchen')">Kitchen</button>
      </div>`;
   updateUserBar();
@@ -7556,7 +7560,7 @@ function openEditInquiryModal(id){
 
 // ── Client email modal — open compose, pre-fill subject, attach files, send via existing relay, log it ──
 function _signatureHtmlFor(authUserKey){
-  const map = { owner:'Kenny', kenny:'Kenny', shelley:'Shelley', josh:'Josh', kitchen:'Kitchen Team', admin:'Premier Caterers' };
+  const map = { owner:'Kenny', kenny:'Kenny', shelley:'Shelley', josh:'Josh', barry:'Barry', kitchen:'Kitchen Team', admin:'Premier Caterers' };
   const sender = map[authUserKey] || 'Premier Caterers';
   return [
     '',
@@ -7568,7 +7572,7 @@ function _signatureHtmlFor(authUserKey){
   ].join('\n');
 }
 function _signatureHtmlBlock(authUserKey){
-  const map = { owner:'Kenny', kenny:'Kenny', shelley:'Shelley', josh:'Josh', kitchen:'Kitchen Team', admin:'Premier Caterers' };
+  const map = { owner:'Kenny', kenny:'Kenny', shelley:'Shelley', josh:'Josh', barry:'Barry', kitchen:'Kitchen Team', admin:'Premier Caterers' };
   const sender = map[authUserKey] || 'Premier Caterers';
   return '<br><br>—<br>'+sender+'<br>Premier Caterers<br>(201) 836-7700<br><a href="https://thepremiercaterer.com">thepremiercaterer.com</a>';
 }
@@ -8296,7 +8300,7 @@ function toggleChecklistArchive(){ window._clArchiveOpen = !window._clArchiveOpe
 // Owners that exist as real logins in this app — the only ones a reminder can
 // actually land My Day items for. Client / Party planner / Other have no
 // login, so a reminder aimed at them is redirected to the event's salesperson.
-const CL_OWNER_MAP = {Kenny:'owner', Shelley:'shelley', Josh:'josh'};
+const CL_OWNER_MAP = {Kenny:'owner', Shelley:'shelley', Josh:'josh', Barry:'barry'};
 function _clOwnerFor(person){ return CL_OWNER_MAP[person] || null; }
 function _clUnitDays(amount, unit){ return unit==='weeks' ? amount*7 : unit==='months' ? amount*30 : amount; }
 function _clReminderLabel(r){ if(!r) return ''; return r.amount+' '+(r.unit==='days'?(r.amount==1?'day':'days'):r.unit==='weeks'?(r.amount==1?'week':'weeks'):(r.amount==1?'month':'months'))+' before'; }
@@ -14947,6 +14951,7 @@ function renderSettings(){
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button onclick="resetUserPassword('shelley')" style="padding:8px 14px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-size:13px;cursor:pointer">Reset Shelley&rsquo;s password</button>
       <button onclick="resetUserPassword('josh')" style="padding:8px 14px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-size:13px;cursor:pointer">Reset Josh&rsquo;s password</button>
+      <button onclick="resetUserPassword('barry')" style="padding:8px 14px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-size:13px;cursor:pointer">Reset Barry&rsquo;s password</button>
     </div>
   </div>
   ${_renderCommissarySettings()}
@@ -17126,7 +17131,7 @@ function pcRestoreSession(){
     const raw = localStorage.getItem('pcSession');
     if(!raw) return false;
     const s = JSON.parse(raw);
-    const validUsers = ['owner','shelley','josh','kitchen'];
+    const validUsers = ['owner','shelley','josh','barry','kitchen'];
     if(!s || validUsers.indexOf(s.user)===-1) return false;
     const THIRTY_DAYS = 30*24*60*60*1000;
     if(!s.ts || (Date.now()-s.ts) > THIRTY_DAYS){ localStorage.removeItem('pcSession'); return false; }
