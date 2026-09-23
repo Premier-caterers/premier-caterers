@@ -1343,7 +1343,7 @@ async function sendOrderPlacedEmail(order, orderId){
       method: 'POST',
       body: JSON.stringify({
         action: 'gmailSend',
-        to: 'events@thepremiercaterer.com,barry.h.nash@gmail.com',
+        to: 'events@thepremiercaterer.com,bnash.premiercaterers@gmail.com',
         subject: 'New drop-off order — '+(order.clientName||order.contactName),
         body: plainBody,
         htmlBody: htmlBody
