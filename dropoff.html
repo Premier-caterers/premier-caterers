@@ -166,6 +166,7 @@ a{color:var(--maroon);text-decoration:none}
       <div class="search"><i class="ti ti-search"></i><input type="text" id="menuFilterQ" name="menuFilterQ_dropoff" placeholder="Search the menu..." autocomplete="off" spellcheck="false" oninput="onSearchInput(this.value)"></div>
       <div class="chips" id="catChips"></div>
     </div>
+    <div id="reorderNotice" style="display:none"></div>
     <div class="grid" id="itemGrid"></div>
     <div class="empty" id="itemEmpty" style="display:none">No items match. Try a different search or category.</div>
     <div class="cartbar" id="cartBar" style="display:none">
@@ -1362,24 +1363,68 @@ async function lookupMyOrders(){
     listEl.innerHTML = html;
   }catch(e){ console.error(e); listEl.innerHTML = '<div class="empty">Something went wrong looking that up.</div>'; }
 }
-async function reorderFrom(orderId){
+// Loads a past order's items into the cart. Items no longer on the menu
+// (deleted, switched off, or the size was renamed) can't be added — they
+// are listed in a notice at the top of the menu instead of silently
+// disappearing. opts.fillDetails also copies the delivery/contact details
+// (used by the main app's Regulars "Start this week's order" link), and
+// opts.date sets the new delivery date.
+async function reorderFrom(orderId, opts){
+  opts = opts || {};
   try{
     const doc = await ordersCol.doc(orderId).get();
-    if(!doc.exists) return;
+    if(!doc.exists){ showToast('Could not find that past order.'); return; }
     const o = doc.data();
     cart = {}; itemNotes = {}; noteOpen = {};
+    const missing = [];
     (o.lines||[]).forEach(l=>{
       const item = catalog.find(x=> x.name===l.itemName);
-      if(!item) return;
-      const sizeIdx = (item.sizes||[]).findIndex(s=> s.label===l.sizeLabel);
-      if(sizeIdx<0) return;
+      const sizeIdx = item ? (item.sizes||[]).findIndex(s=> s.label===l.sizeLabel) : -1;
+      if(!item || item.active===false || sizeIdx<0){
+        missing.push(l.qty+'\u00d7 '+(l.itemName||'item')+(l.sizeLabel?(' ('+l.sizeLabel+')'):''));
+        return;
+      }
       cart[cartKey(item.id, sizeIdx)] = l.qty;
       if(l.note) itemNotes[item.id] = l.note;
     });
+    if(opts.fillDetails) reorderFillDetails(o, opts.date);
+    reorderShowNotice(o, missing, !!opts.fillDetails);
     hasChosenCategory = true; // reordering is itself an intentional action — don't hide the items they just added behind the empty-state prompt
     showView('order');
-    showToast('Items added — review quantities before checking out');
-  }catch(e){ console.error(e); }
+    updateCartBar();
+    showToast(missing.length ? 'Items added — some are no longer on the menu, see the note at the top' : 'Items added — review quantities before checking out');
+  }catch(e){ console.error(e); showToast('Something went wrong loading that order.'); }
+}
+function reorderFillDetails(o, date){
+  const set = (id, v)=>{ const el = document.getElementById(id); if(el && v!=null) el.value = v; };
+  set('coName', o.clientName||'');
+  set('coLoc', o.locationName||'');
+  set('coTime', o.deliveryTime||'');
+  set('coAddr', o.address||'');
+  set('coCName', o.contactName||'');
+  set('coCPhone', o.contactPhone||'');
+  set('coNotes', o.notes||'');
+  set('coDate', /^\d{4}-\d{2}-\d{2}$/.test(date||'') ? date : '');
+  const tx = document.getElementById('coTaxExempt'); if(tx) tx.checked = !!o.taxExempt;
+  const emails = (Array.isArray(o.contactEmails) && o.contactEmails.length) ? o.contactEmails.slice() : [o.contactEmail||o.clientEmail||''];
+  coEmails = emails.length ? emails : [''];
+}
+function reorderShowNotice(o, missing, filled){
+  const el = document.getElementById('reorderNotice'); if(!el) return;
+  const from = o.deliveryDate ? (' from '+esc(o.deliveryDate)) : '';
+  let h = `<div class="section" style="background:var(--brass-tint);border:2px dashed var(--brass);margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+      <div><b><i class="ti ti-copy"></i> Copied ${esc(o.clientName||'past order')}${from}.</b>
+      <div style="font-size:13px;margin-top:4px">Change what's different this week, then continue.${filled?' Delivery details are filled in too — check the date and time.':''}</div></div>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('reorderNotice').style.display='none'" aria-label="Close this note">&times;</button>
+    </div>`;
+  if(missing.length){
+    h += `<div style="margin-top:10px;font-size:13px"><b><i class="ti ti-alert-triangle"></i> Not added — no longer on the menu:</b>
+      <ul style="margin:6px 0 0 20px">${missing.map(m=>'<li>'+esc(m)+'</li>').join('')}</ul>
+      <div style="margin-top:4px">Pick a replacement below if needed.</div></div>`;
+  }
+  h += `</div>`;
+  el.innerHTML = h; el.style.display = '';
 }
 
 // Writes a new inquiry into the SAME Firestore collection the main app's
@@ -2591,7 +2636,24 @@ renderItemGrid();
 (function(){
   const params = new URLSearchParams(location.search);
   const view = params.get('view');
-  if(view && !params.get('order') && !params.get('unsubscribe')) showView(view);
+  if(view && !params.get('order') && !params.get('unsubscribe') && !params.get('reorder')) showView(view);
+})();
+
+// A link from the main app's Regulars screen (?reorder=<id>&date=YYYY-MM-DD)
+// opens the menu with that past order's items in the cart and the delivery
+// details filled in. Waits for the menu to finish loading first, since the
+// items are matched against it.
+(function(){
+  const params = new URLSearchParams(location.search);
+  const reId = params.get('reorder');
+  if(!reId || params.get('order') || params.get('unsubscribe')) return;
+  const date = params.get('date') || '';
+  let tries = 0;
+  (function go(){
+    if(catLoaded) return reorderFrom(reId, {fillDetails:true, date});
+    if(++tries > 40){ showToast('The menu is taking a while to load — please refresh the page.'); return; }
+    setTimeout(go, 250);
+  })();
 })();
 
 // A link from an order email (?order=<id>, optionally &pdf=1) opens that
