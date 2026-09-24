@@ -16089,7 +16089,13 @@ async function fetchMenuPdfBase64(link){
   if(scriptUrl){
     try{
       const url = scriptUrl + (scriptUrl.includes('?')?'&':'?') + 'action=getPdf&fileId=' + encodeURIComponent(fileId);
-      const r = await fetch(url);
+      // Never wait forever: give the Apps Script 90 seconds, then report.
+      const ctl = new AbortController();
+      const timer = setTimeout(()=>ctl.abort(), 90000);
+      let r;
+      try{ r = await fetch(url, { signal: ctl.signal }); }
+      catch(fe){ throw new Error(fe.name==='AbortError' ? 'Apps Script took longer than 90 seconds and was stopped.' : fe.message); }
+      finally{ clearTimeout(timer); }
       const d = await r.json().catch(()=>({}));
       const b64 = d && d.success && (d.pdfBase64 || d.base64);
       if(b64) return b64;
@@ -16100,8 +16106,13 @@ async function fetchMenuPdfBase64(link){
   }
 
   // 2) Fallback: Drive API with the user's token (needs Drive permission granted).
-  try{
-    await ensureGmailToken();
+  //    Skipped in relay mode (there is no personal token), and capped at 20 seconds —
+  //    Google's silent sign-in can otherwise wait forever and freeze the Send button.
+  if(!(typeof gmailViaScript==='function' && gmailViaScript())) try{
+    await Promise.race([
+      ensureGmailToken(),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('token timeout')), 20000))
+    ]);
     let apiUrl;
     if(fileM) apiUrl = 'https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media';
     else      apiUrl = 'https://www.googleapis.com/drive/v3/files/'+fileId+'/export?mimeType=application/pdf';
@@ -16112,7 +16123,7 @@ async function fetchMenuPdfBase64(link){
     }
   }catch(e){ /* ignore, report script error below */ }
 
-  throw new Error('Could not export the menu as a PDF.\n\nFix: add the getPdf function to your Apps Script and redeploy (recommended — needs no Google permission). Details: '+scriptErr);
+  throw new Error('Could not turn this menu into a PDF.\n\nReason from Google: ' + scriptErr + '\n\nLink: ' + link);
 }
 
 async function markAsRead(id){
