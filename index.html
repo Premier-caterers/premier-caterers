@@ -4276,6 +4276,7 @@ function drawerDocuments(inq, role, ev){
     _docBtn('Linen order form'+(ev&&ev.linenFiles&&ev.linenFiles.length?' ('+ev.linenFiles.length+')':''),'ti-wash', !ev, ev?`openMultiAttachModal('${ev.id}','linenFiles','Linen Order Form')`:''),
     _docBtn('BEO','ti-clipboard-list',false,`openBeo('${id}')`),
     _docBtn('Contract','ti-file-certificate',false,`openContract('${id}')`),
+    _docBtn('Other uploads'+(ev&&ev.otherUploadFiles&&ev.otherUploadFiles.length?' ('+ev.otherUploadFiles.length+')':''),'ti-folder', !ev, ev?`openMultiAttachModal('${ev.id}','otherUploadFiles','Other Uploads')`:''),
   ].join('');
   const floor = [
     _docBtn('Floor plan(s)'+(ev&&ev.floorplanFiles&&ev.floorplanFiles.length?' ('+ev.floorplanFiles.length+')':''),'ti-layout-2', !ev, ev?`openMultiAttachModal('${ev.id}','floorplanFiles','Floor Plan(s)')`:''),
@@ -5302,6 +5303,10 @@ async function attachInqMenu(id){
   if(url===null) return; // cancelled
   const trimmed = url.trim();
   if(!trimmed){ return; }
+  // Catch a folder link at paste time — it can never be emailed as a PDF.
+  if(/\/folders\//.test(trimmed) && !/\/(document|spreadsheets|presentation|file)\//.test(trimmed)){
+    if(!confirm('That looks like a link to a Drive FOLDER, not the menu file.\n\nIt will open, but it can\'t be emailed as a PDF.\n\nOK = save it anyway   \u2022   Cancel = go copy the file\'s own link')) return;
+  }
   if(!Array.isArray(inq.menus)) inq.menus = [];
   // If there was an old single menuLink and no menus yet, fold it in first
   if(inq.menus.length===0 && inq.menuLink){
@@ -6467,7 +6472,7 @@ async function saveEventField(eventId, field, value){
   await _saveEvent(e);
 }
 
-// ── Multi-file attachments (Floor plan(s), Insurance, Event photos, Linen order form) ──
+// ── Multi-file attachments (Floor plan(s), Insurance, Event photos, Linen order form, Other uploads) ──
 // Each field is an array of {url, name, addedAt, source:'you'}, same shape as the
 // client-portal upload arrays, so both places can read/display the same data.
 function _maFmtSize(n){ if(!n) return ''; if(n<1024) return n+' B'; if(n<1048576) return Math.round(n/1024)+' KB'; return (n/1048576).toFixed(1)+' MB'; }
@@ -6525,6 +6530,7 @@ function _maRenderList(eventId, field, label){
       <i class="ti ti-file" style="font-size:15px;color:var(--text3)"></i>
       <a href="${f.url}" target="_blank" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--blue-mid);text-decoration:none;font-size:12.5px">${(f.name||'File').replace(/</g,'&lt;')}</a>
       <span style="font-size:10.5px;color:var(--text3);white-space:nowrap">${_maFmtSize(f.size)}</span>
+      <button onclick="renameMultiAttachFile('${eventId}','${field}','${label.replace(/'/g,"\\'")}',${i})" class="btn btn--ghost btn--sm" title="Rename"><i class="ti ti-pencil"></i></button>
       <button onclick="removeMultiAttachFile('${eventId}','${field}','${label.replace(/'/g,"\\'")}',${i})" class="btn btn--ghost btn--sm" title="Remove">&times;</button>
     </div>`).join('');
 }
@@ -6559,6 +6565,19 @@ function saveMultiAttachUrl(eventId, field, label){
   e[field].push({ url, name, addedAt:Date.now(), source:'you' });
   _saveEvent(e);
   if(input) input.value = '';
+  _maRenderList(eventId, field, label);
+  render();
+}
+function renameMultiAttachFile(eventId, field, label, idx){
+  const e = events.find(x=>x.id===eventId); if(!e || !Array.isArray(e[field]) || !e[field][idx]) return;
+  const f = e[field][idx];
+  const old = f.name || '';
+  const nn = prompt('Rename this file:', old);
+  if(nn===null) return; // cancelled
+  const next = nn.trim().slice(0,80);
+  if(!next || next===old) return;
+  f.name = next;
+  _saveEvent(e);
   _maRenderList(eventId, field, label);
   render();
 }
@@ -16054,8 +16073,14 @@ async function fetchMenuPdfBase64(link){
   const sheetM = link.match(/\/spreadsheets\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
   const slideM = link.match(/\/presentation\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
   const fileM  = link.match(/\/file\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/) || link.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  const fileId = (docM&&docM[1]) || (sheetM&&sheetM[1]) || (slideM&&slideM[1]) || (fileM&&fileM[1]);
-  if(!fileId) throw new Error('Could not read the menu file ID from the link.');
+  // A folder link can't become a PDF — say so plainly instead of a vague error.
+  if(!(docM||sheetM||slideM||fileM) && /\/folders\//.test(link)){
+    throw new Error('This link is for a Drive FOLDER, not the menu file.\n\nDouble-click the menu file to open it, copy the address bar, add it with "Add another link", then delete this one.');
+  }
+  // Last resort: any Drive-style ID in the link (same rule used when the link was saved).
+  const anyM = link.match(/[-\w]{25,}/);
+  const fileId = (docM&&docM[1]) || (sheetM&&sheetM[1]) || (slideM&&slideM[1]) || (fileM&&fileM[1]) || (anyM&&anyM[0]);
+  if(!fileId) throw new Error('Could not read the menu file ID from the link:\n\n' + link);
 
   // 1) Preferred: export via your Apps Script. It runs as your Google account,
   //    which already has Drive access — so no extra Google permission is needed.
