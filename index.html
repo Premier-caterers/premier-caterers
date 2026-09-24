@@ -5303,6 +5303,15 @@ async function attachInqMenu(id){
   if(url===null) return; // cancelled
   const trimmed = url.trim();
   if(!trimmed){ return; }
+  // Catch the client PORTAL link pasted by mistake — it's a web page, not a menu file.
+  if(/portal\.html/i.test(trimmed)){
+    alert('That\'s the client PORTAL link, not the menu file.\n\nOpen the menu in Google Docs / Drive and copy the address bar from there.');
+    return;
+  }
+  // Anything that isn't a Google Drive / Docs link can't be turned into a PDF.
+  if(!/(docs|drive)\.google\.com/i.test(trimmed)){
+    if(!confirm('That doesn\'t look like a Google Drive or Docs link, so "Email PDF" won\'t work with it.\n\nOK = save it anyway   \u2022   Cancel = go copy the right link')) return;
+  }
   // Catch a folder link at paste time — it can never be emailed as a PDF.
   if(/\/folders\//.test(trimmed) && !/\/(document|spreadsheets|presentation|file)\//.test(trimmed)){
     if(!confirm('That looks like a link to a Drive FOLDER, not the menu file.\n\nIt will open, but it can\'t be emailed as a PDF.\n\nOK = save it anyway   \u2022   Cancel = go copy the file\'s own link')) return;
