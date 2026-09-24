@@ -4276,7 +4276,8 @@ function drawerDocuments(inq, role, ev){
     _docBtn('Linen order form'+(ev&&ev.linenFiles&&ev.linenFiles.length?' ('+ev.linenFiles.length+')':''),'ti-wash', !ev, ev?`openMultiAttachModal('${ev.id}','linenFiles','Linen Order Form')`:''),
     _docBtn('BEO','ti-clipboard-list',false,`openBeo('${id}')`),
     _docBtn('Contract','ti-file-certificate',false,`openContract('${id}')`),
-    _docBtn('Other uploads'+(inq.otherUploadFiles&&inq.otherUploadFiles.length?' ('+inq.otherUploadFiles.length+')':''),'ti-folder', false, `openOtherUploads('${id}')`),
+    ...[1,2,3].map(n=>{ const f=_otherUpField(n), c=(inq[f]&&inq[f].length)||0;
+      return _docBtn(pcEsc(_otherUpName(inq,n))+(c?' ('+c+')':''),'ti-folder', false, `openOtherUploads('${id}',${n})`); }),
   ].join('');
   const floor = [
     _docBtn('Floor plan(s)'+(ev&&ev.floorplanFiles&&ev.floorplanFiles.length?' ('+ev.floorplanFiles.length+')':''),'ti-layout-2', !ev, ev?`openMultiAttachModal('${ev.id}','floorplanFiles','Floor Plan(s)')`:''),
@@ -6487,17 +6488,35 @@ async function saveEventField(eventId, field, value){
 function _maFmtSize(n){ if(!n) return ''; if(n<1024) return n+' B'; if(n<1048576) return Math.round(n/1024)+' KB'; return (n/1048576).toFixed(1)+' MB'; }
 // "Other uploads" live on the inquiry so they work before an event exists.
 // One-time fold-in of any files added to the linked event earlier.
-function openOtherUploads(inqId){
+// Three "Other uploads" folders per client; each can be given its own name.
+function _otherUpField(n){ return n===1 ? 'otherUploadFiles' : 'otherUpload'+n+'Files'; }
+function _otherUpName(inq, n){ return (inq && inq[_otherUpField(n)+'Label']) || (n===1 ? 'Other uploads' : 'Other uploads '+n); }
+function renameOtherUploads(inqId, n){
+  const inq = inquiries.find(x=>x.id===inqId); if(!inq) return;
+  const nn = prompt('Name this folder (e.g. Seating charts, Vendor docs):\n\n(Leave blank to reset to the default name.)', _otherUpName(inq,n));
+  if(nn===null) return;
+  const clean = nn.replace(/["'<>`\\]/g,'').trim().slice(0,40);
+  const key = _otherUpField(n)+'Label';
+  if(clean) inq[key] = clean; else delete inq[key];
+  _saveInquiry(inq);
+  openOtherUploads(inqId, n);   // reopen with the new name
+  render();
+}
+function openOtherUploads(inqId, n){
+  n = n || 1;
   const inq = inquiries.find(x=>x.id===inqId); if(!inq) return;
   const ev = (typeof _eventForInq==='function') ? _eventForInq(inq) : null;
-  if(ev && Array.isArray(ev.otherUploadFiles) && ev.otherUploadFiles.length){
+  if(n===1 && ev && Array.isArray(ev.otherUploadFiles) && ev.otherUploadFiles.length){
     if(!Array.isArray(inq.otherUploadFiles)) inq.otherUploadFiles = [];
     const have = new Set(inq.otherUploadFiles.map(f=>f.url));
     ev.otherUploadFiles.forEach(f=>{ if(!have.has(f.url)) inq.otherUploadFiles.push(f); });
     ev.otherUploadFiles = [];
     _saveInquiry(inq); _saveEvent(ev);
   }
-  openMultiAttachModal(inqId, 'otherUploadFiles', 'Other Uploads', 'inq');
+  openMultiAttachModal(inqId, _otherUpField(n), _otherUpName(inq,n), 'inq');
+  // Pencil next to the title renames the folder itself.
+  const title = document.querySelector('#multiAttachModal [data-ma-title]');
+  if(title) title.insertAdjacentHTML('beforeend', ` <button onclick="renameOtherUploads('${inqId}',${n})" class="btn btn--ghost btn--sm" title="Rename this folder" style="margin-left:6px"><i class="ti ti-pencil"></i> Rename folder</button>`);
 }
 // Record lookup for the multi-file window: events by default, or the inquiry
 // itself when kind==='inq' (used by "Other uploads", which must work before booking).
@@ -6521,7 +6540,7 @@ function openMultiAttachModal(eventId, field, label, kind){
   modal.innerHTML = `
     <div style="background:var(--bg);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:480px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.3)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0">
-        <div style="font-size:16px;font-weight:600;color:var(--text)">${label}</div>
+        <div data-ma-title style="font-size:16px;font-weight:600;color:var(--text);display:flex;align-items:center">${pcEsc(label)}</div>
         <button onclick="document.getElementById('multiAttachModal').remove()" style="border:none;background:none;cursor:pointer;font-size:20px;color:var(--text3)">&times;</button>
       </div>
       <div id="maFileList" style="overflow-y:auto;margin-bottom:14px"></div>
