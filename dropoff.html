@@ -394,8 +394,10 @@ a{color:var(--maroon);text-decoration:none}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div class="section-title" style="margin-bottom:0">Drop-off menu &amp; pricing</div>
       <button class="btn btn-pri btn-sm" onclick="toggleAddItemPanel()" id="addItemBtn">+ Add item</button>
-      <button class="btn btn-ghost btn-sm" onclick="importStarterMenu()" id="importMenuBtn" style="margin-left:8px">Import starter menu</button>
-      <button class="btn btn-ghost btn-sm" onclick="importStarterMenu2()" id="importMenuBtn2" style="margin-left:8px">Import rest of menu (part 2)</button>
+      <!-- The one-time "Import starter menu" / "Import part 2" buttons were
+           removed once the menu was loaded — clicking them again adds a second
+           copy of every item. The import functions are still in the code. -->
+      <button class="btn btn-ghost btn-sm" onclick="removeDuplicateItems()" id="dedupeBtn" style="display:none;margin-left:8px;color:var(--red)"><i class="ti ti-trash"></i> Remove duplicates</button>
     </div>
     <div class="section" id="addItemPanel" style="display:none"></div>
     <div style="overflow-x:auto"><table class="tbl" id="catalogTbl"></table></div>
@@ -2487,7 +2489,45 @@ async function saveNewItem(){
     }
   }catch(e){ console.error(e); alert('Could not save that item.'); }
 }
+// Items with the same name (ignoring capitals and extra spaces) count as
+// duplicates. The OLDEST copy is kept — that's the one any edits were made
+// to — and every newer copy is removed.
+function findDuplicateItems(){
+  const groups = {};
+  catalog.forEach(it=>{
+    const k = String(it.name||'').trim().toLowerCase().replace(/\s+/g,' ');
+    if(!k) return;
+    (groups[k] = groups[k] || []).push(it);
+  });
+  const extras = [];
+  Object.values(groups).forEach(g=>{
+    if(g.length<2) return;
+    g.sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+    extras.push(...g.slice(1));
+  });
+  return extras;
+}
+async function removeDuplicateItems(){
+  const extras = findDuplicateItems();
+  if(!extras.length){ showToast('No duplicates found'); return; }
+  const names = Array.from(new Set(extras.map(x=>x.name)));
+  const preview = names.slice(0,8).join('\n') + (names.length>8 ? '\n…and '+(names.length-8)+' more' : '');
+  if(!confirm('Remove '+extras.length+' duplicate item(s)? One copy of each is kept (the original).\n\n'+preview)) return;
+  const btn = document.getElementById('dedupeBtn');
+  btn.disabled = true;
+  try{
+    for(let i=0;i<extras.length;i+=400){           // Firestore batches max out at 500
+      const batch = db.batch();
+      extras.slice(i,i+400).forEach(it=>batch.delete(catalogCol.doc(it.id)));
+      await batch.commit();
+    }
+    showToast('Removed '+extras.length+' duplicates');
+  }catch(e){ console.error(e); alert('Could not remove duplicates — please try again.'); }
+  btn.disabled = false;
+}
 function renderCatalogTable(){
+  const dBtn = document.getElementById('dedupeBtn');
+  if(dBtn){ const n = findDuplicateItems().length; dBtn.style.display = n ? '' : 'none'; dBtn.innerHTML = '<i class="ti ti-trash"></i> Remove '+n+' duplicate'+(n===1?'':'s'); }
   const tbl = document.getElementById('catalogTbl');
   if(!catalog.length){ tbl.innerHTML = '<tr><td class="empty">No items yet — add your first one above.</td></tr>'; return; }
   let html = '<tr><th>Item</th><th>Categories</th><th>Type</th><th>Sizes &amp; prices</th><th></th></tr>';
