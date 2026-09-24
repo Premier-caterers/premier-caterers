@@ -352,6 +352,10 @@ a{color:var(--maroon);text-decoration:none}
         <button class="btn btn-ghost btn-sm" onclick="eoAddItem()">+ Add item</button>
       </div>
     </div>
+    <div class="section" id="eoJobSection">
+      <div class="section-title">Job #</div>
+      <div class="field"><label for="eoJobNumber">Printed big and highlighted at the top right of the order form</label><input id="eoJobNumber" type="text" placeholder="e.g. 26-0927-04" style="max-width:260px"></div>
+    </div>
     <div class="section" id="eoPricingSection">
       <div class="section-title">Pricing</div>
       <div class="grid2" style="margin-bottom:14px">
@@ -915,13 +919,22 @@ function generateOrderPdf(order, orderId, hidePricing){
   doc.text('Premier Caterers — Drop-Off Order', 14, y);
   y += 10;
 
-  // Highlighted order number
-  const numLabel = orderDisplayNumber(order);
-  doc.setFillColor(255,224,102);
-  doc.rect(14, y, pageW-28, 12, 'F');
-  doc.setFontSize(14); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
-  doc.text('Order: '+numLabel, pageW/2, y+8, {align:'center'});
-  y += 20;
+  // Job # — top right, 18 pt, bold, yellow highlight. Replaces the old
+  // full-width "Order: 04A / Unlinked" bar. If no Job # has been entered
+  // yet, the linked order number (e.g. 04A) shows in the same spot; an
+  // unlinked order with no Job # shows nothing there.
+  const jobLabel = (order.jobNumber && String(order.jobNumber).trim())
+    ? 'Job # '+String(order.jobNumber).trim()
+    : (order.subLabel ? 'Job # '+order.subLabel : '');
+  if(jobLabel){
+    doc.setFontSize(18); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+    const w = doc.getTextWidth(jobLabel);
+    const x = pageW - 14 - w;
+    doc.setFillColor(255,224,102);
+    doc.rect(x-3, 8, w+6, 13, 'F');
+    doc.text(jobLabel, x, 17.5);
+  }
+  y += 6;
 
   doc.setFont(undefined,'normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
   const infoLine = (label,val)=>{ if(!val) return; doc.setFont(undefined,'bold'); doc.text(label+':',14,y); doc.setFont(undefined,'normal'); doc.text(String(val),45,y); y+=6; };
@@ -1727,6 +1740,9 @@ function renderStaffOrders(){
       ? `<button class="btn btn-pri btn-sm" onclick="continueDraftOrder('${o.id}')">Continue</button>` : '';
     const resendBtn = o.status==='submitted'
       ? `<button class="btn btn-ghost btn-sm" onclick="resendOrderEmails('${o.id}')" style="margin-left:6px">Resend</button>` : '';
+    // Download — saves the same PDF the client receives, for any order that has items.
+    const downloadBtn = (o.lines && o.lines.length)
+      ? `<button class="btn btn-ghost btn-sm" onclick="staffDownloadOrder('${o.id}')" style="margin-left:6px"><i class="ti ti-download"></i> Download</button>` : '';
     const deleteBtn = `<button class="btn btn-ghost btn-sm" onclick="deleteOrder('${o.id}')" style="margin-left:6px;color:var(--red)">Delete</button>`;
     html += `<tr>
       <td><b>${esc(o.clientName||o.contactName||'—')}</b><br><span style="color:var(--text3);font-size:11.5px">${esc(o.contactEmail||o.clientEmail||'')}</span></td>
@@ -1734,7 +1750,7 @@ function renderStaffOrders(){
       <td>${itemCount} item${itemCount===1?'':'s'}</td>
       <td class="mono">$${money(o.total||0)}</td>
       <td><span class="pill-status ${statusClass}">${statusLabel}</span>${flagNote}</td>
-      <td>${continueBtn}${approveBtn}${linkBtn}${editBtn}${resendBtn}${deleteBtn}</td>
+      <td>${continueBtn}${approveBtn}${linkBtn}${editBtn}${resendBtn}${downloadBtn}${deleteBtn}</td>
     </tr>`;
   });
   tbl.innerHTML = html;
@@ -1898,6 +1914,15 @@ async function deleteOrder(orderId){
 // Re-sends both the staff notification (events@, Barry, and the printer
 // PDF) and the client confirmation (to everyone on the order) for an
 // already-placed order — same emails as when it was first submitted.
+// Staff "Download" on an order row — reads the latest copy of the order
+// and saves it as a PDF (the same layout the client gets by email).
+async function staffDownloadOrder(orderId){
+  try{
+    const doc = await ordersCol.doc(orderId).get();
+    if(!doc.exists){ showToast('Could not find that order.'); return; }
+    downloadOrderPdf(doc.data(), orderId);
+  }catch(e){ console.error(e); showToast('Download failed — please try again.'); }
+}
 async function resendOrderEmails(orderId){
   if(!confirm('Resend this order\'s emails (and text, if a phone was given) to the client and to events@/Barry/the printer?')) return;
   try{
@@ -1942,6 +1967,8 @@ async function openEditOrder(orderId){
     // stay staff-only even on the public view-via-link page — a client
     // shouldn't be able to remove their own tax or add themselves a discount.
     document.getElementById('eoPricingSection').style.display = isStaff ? '' : 'none';
+    document.getElementById('eoJobSection').style.display = isStaff ? '' : 'none';
+    document.getElementById('eoJobNumber').value = o.jobNumber||'';
 
     document.getElementById('eoName').value = o.clientName||'';
     document.getElementById('eoLoc').value = o.locationName||'';
@@ -1999,6 +2026,16 @@ function eoStepQty(idx, delta){
   renderEditOrderTotals();
 }
 function eoUpdateNote(idx, val){ eoLines[idx].note = val; }
+// Staff can change the price of one line on this order only — the menu
+// price is untouched. Updates the line total and totals without redrawing
+// the list, so the cursor stays in the price box while typing.
+function eoUpdatePrice(idx, val){
+  const n = parseFloat(val);
+  eoLines[idx].price = (isNaN(n) || n<0) ? 0 : Math.round(n*100)/100;
+  const cell = document.getElementById('eoLineTotal'+idx);
+  if(cell) cell.textContent = '$'+money(eoLines[idx].price*eoLines[idx].qty);
+  renderEditOrderTotals();
+}
 function eoRemoveItem(idx){
   eoLines.splice(idx,1);
   renderEditOrderItems();
@@ -2011,7 +2048,9 @@ function renderEditOrderItems(){
     <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;flex-wrap:wrap">
       <div style="flex:1;min-width:160px">
         <div style="font-weight:600;font-size:13.5px">${esc(l.itemName)}</div>
-        <div style="font-size:11.5px;color:var(--text3)">${esc(l.sizeLabel)} &middot; $${money(l.price)} each</div>
+        ${isStaff
+          ? `<div style="font-size:11.5px;color:var(--text3);display:flex;align-items:center;gap:6px;margin-top:2px">${esc(l.sizeLabel)} &middot; $<input type="number" step="0.01" min="0" value="${money(l.price)}" oninput="eoUpdatePrice(${idx},this.value)" aria-label="Price each" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px"> each</div>`
+          : `<div style="font-size:11.5px;color:var(--text3)">${esc(l.sizeLabel)} &middot; $${money(l.price)} each</div>`}
         <input type="text" placeholder="Note" value="${esc(l.note||'')}" oninput="eoUpdateNote(${idx},this.value)" style="margin-top:5px;width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px">
       </div>
       <div class="stepper on">
@@ -2019,7 +2058,7 @@ function renderEditOrderItems(){
         <div class="n">${l.qty}</div>
         <button onclick="eoStepQty(${idx},1)">+</button>
       </div>
-      <div class="mono" style="min-width:60px;text-align:right">$${money(l.price*l.qty)}</div>
+      <div class="mono" id="eoLineTotal${idx}" style="min-width:60px;text-align:right">$${money(l.price*l.qty)}</div>
       <button onclick="eoRemoveItem(${idx})" style="width:28px;height:28px;border:1px solid var(--border);background:var(--bg);border-radius:7px;color:var(--red)">&times;</button>
     </div>
   `).join('');
@@ -2077,6 +2116,7 @@ async function saveEditedOrder(){
     notes: document.getElementById('eoNotes').value.trim(),
     updatedAt: Date.now()
   };
+  if(isStaff) updated.jobNumber = document.getElementById('eoJobNumber').value.trim();
   try{
     await ordersCol.doc(eoOrderId).set(updated, {merge:true});
     eoCurrentOrder = Object.assign({}, eoCurrentOrder, updated);
@@ -2090,36 +2130,94 @@ async function saveEditedOrder(){
    source of truth for the drop-off menu.
    ===================================================================== */
 let addItemSizes = [{label:'',price:''}];
-function toggleAddItemPanel(){
+// Menu item form — one form for both "+ Add item" and "Edit" on an existing
+// item. Categories are a tap-to-select list of every category already on the
+// menu (checkmark = selected, empty circle = not), plus "+ New" to type one.
+let editingItemId = null;   // null = adding a new item; otherwise the item being edited
+let itemCats = [];          // categories currently selected in the form
+function toggleAddItemPanel(itemId){
   const p = document.getElementById('addItemPanel');
   const open = p.style.display !== 'none';
-  if(open){ p.style.display = 'none'; document.getElementById('addItemBtn').textContent='+ Add item'; return; }
-  addItemSizes = [{label:'',price:''}];
-  renderAddItemPanel();
+  // Clicking "Close"/"Cancel" (no item id) while open just closes the form.
+  if(open && !itemId){ closeItemPanel(); return; }
+  const it = itemId ? catalog.find(x=>x.id===itemId) : null;
+  editingItemId = it ? it.id : null;
+  addItemSizes = it && (it.sizes||[]).length
+    ? it.sizes.map(z=>({label:z.label||'', price:String(z.price!=null?z.price:'')}))
+    : [{label:'',price:''}];
+  itemCats = it ? (it.categories||[]).slice() : [];
+  renderAddItemPanel(it);
   p.style.display = '';
   document.getElementById('addItemBtn').textContent = 'Close';
+  p.scrollIntoView({behavior:'smooth', block:'start'});
 }
-function renderAddItemPanel(){
-  const cats = allCategories();
+function closeItemPanel(){
+  document.getElementById('addItemPanel').style.display = 'none';
+  document.getElementById('addItemBtn').textContent = '+ Add item';
+  editingItemId = null;
+}
+function renderAddItemPanel(it){
   const p = document.getElementById('addItemPanel');
+  const type = it ? it.type : 'P';
   p.innerHTML = `
+    <div style="font-weight:600;font-size:15px;margin-bottom:12px">${it ? 'Edit item' : 'Add item'}</div>
     <div class="grid2" style="margin-bottom:14px">
-      <div class="field"><label for="niName">Item name</label><input id="niName" type="text" placeholder="e.g. Farro grain salad"></div>
+      <div class="field"><label for="niName">Item name</label><input id="niName" type="text" placeholder="e.g. Farro grain salad" value="${it?esc(it.name):''}"></div>
       <div class="field"><label for="niType">Meat / Dairy / Parve</label>
-        <select id="niType"><option value="P">Parve</option><option value="D">Dairy</option><option value="M">Meat</option></select>
+        <select id="niType"><option value="P"${type==='P'?' selected':''}>Parve</option><option value="D"${type==='D'?' selected':''}>Dairy</option><option value="M"${type==='M'?' selected':''}>Meat</option></select>
       </div>
     </div>
-    <div class="field" style="margin-bottom:14px">
-      <label>Categories (comma-separated — new ones are created automatically)</label>
-      <input id="niCats" type="text" placeholder="e.g. Salads, Party favorites" value="${cats.length?'':''}">
+    <div class="field" style="margin-bottom:6px"><label>Categories — tap all that apply</label></div>
+    <div id="niCatChips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
+    <div id="niNewCatRow" style="display:none;gap:8px;align-items:center;margin-bottom:12px">
+      <input id="niNewCat" type="text" placeholder="New category name" style="max-width:260px;padding:8px 10px;border:1px solid var(--border);border-radius:8px" onkeydown="if(event.key==='Enter'){event.preventDefault();addNewItemCat();}">
+      <button class="btn btn-ghost btn-sm" onclick="addNewItemCat()">Add</button>
     </div>
-    <div class="field" style="margin-bottom:10px"><label>Sizes &amp; prices</label></div>
+    <div class="field" style="margin:10px 0"><label>Sizes &amp; prices</label></div>
     <div id="niSizes" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px"></div>
     <button class="btn btn-ghost btn-sm" onclick="addSizeRow()" style="margin-bottom:16px">+ Add another size</button><br>
-    <button class="btn btn-pri btn-sm" onclick="saveNewItem()">Save item</button>
-    <button class="btn btn-ghost btn-sm" onclick="toggleAddItemPanel()">Cancel</button>
+    <button class="btn btn-pri btn-sm" onclick="saveNewItem()">${it ? 'Save changes' : 'Save item'}</button>
+    <button class="btn btn-ghost btn-sm" onclick="closeItemPanel()">Cancel</button>
   `;
+  renderItemCatChips();
   renderSizeRows();
+}
+function renderItemCatChips(){
+  const all = allCategories().slice();
+  itemCats.forEach(c=>{ if(!all.includes(c)) all.push(c); }); // newly typed ones
+  const box = document.getElementById('niCatChips');
+  box.innerHTML = all.map((c,i)=>{
+    const on = itemCats.includes(c);
+    return `<button type="button" onclick="toggleItemCat(${i})" data-cat="${esc(c)}" aria-pressed="${on}"
+      style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;font-size:13px;cursor:pointer;
+      ${on ? 'background:rgba(122,46,61,.10);color:#7A2E3D;border:1.5px solid #7A2E3D;font-weight:600' : 'background:var(--bg);color:var(--text);border:1px solid var(--border)'}">
+      <i class="ti ${on?'ti-check':'ti-circle'}" aria-hidden="true"></i>${esc(c)}</button>`;
+  }).join('') + `<button type="button" onclick="showNewItemCat()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;font-size:13px;cursor:pointer;background:var(--bg);color:var(--text2);border:1px dashed var(--text3)"><i class="ti ti-plus" aria-hidden="true"></i>New</button>`;
+}
+function toggleItemCat(i){
+  const btn = document.querySelectorAll('#niCatChips [data-cat]')[i];
+  if(!btn) return;
+  const c = btn.getAttribute('data-cat');
+  const k = itemCats.indexOf(c);
+  if(k>=0) itemCats.splice(k,1); else itemCats.push(c);
+  renderItemCatChips();
+}
+function showNewItemCat(){
+  const r = document.getElementById('niNewCatRow');
+  r.style.display = 'flex';
+  document.getElementById('niNewCat').focus();
+}
+function addNewItemCat(){
+  const inp = document.getElementById('niNewCat');
+  const v = inp.value.trim();
+  if(!v) return;
+  // Reuse an existing category if the same name was typed with different capitals.
+  const existing = allCategories().find(c=>c.toLowerCase()===v.toLowerCase());
+  const name = existing || v;
+  if(!itemCats.includes(name)) itemCats.push(name);
+  inp.value = '';
+  document.getElementById('niNewCatRow').style.display = 'none';
+  renderItemCatChips();
 }
 function renderSizeRows(){
   document.getElementById('niSizes').innerHTML = addItemSizes.map((row,idx)=>`
@@ -2373,14 +2471,20 @@ async function importStarterMenu2(){
 async function saveNewItem(){
   const name = document.getElementById('niName').value.trim();
   const type = document.getElementById('niType').value;
-  const cats = document.getElementById('niCats').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const cats = itemCats.slice();
   const sizes = addItemSizes.filter(s=>s.label.trim() && parseFloat(s.price)>0).map(s=>({label:s.label.trim(), price:parseFloat(s.price)}));
   if(!name){ alert('Enter an item name.'); return; }
   if(!sizes.length){ alert('Add at least one size with a price.'); return; }
   try{
-    await catalogCol.add({name, type, categories:cats, sizes, active:true, createdAt:Date.now()});
-    toggleAddItemPanel();
-    showToast('Item added');
+    if(editingItemId){
+      await catalogCol.doc(editingItemId).update({name, type, categories:cats, sizes, updatedAt:Date.now()});
+      closeItemPanel();
+      showToast('Item updated');
+    } else {
+      await catalogCol.add({name, type, categories:cats, sizes, active:true, createdAt:Date.now()});
+      closeItemPanel();
+      showToast('Item added');
+    }
   }catch(e){ console.error(e); alert('Could not save that item.'); }
 }
 function renderCatalogTable(){
@@ -2395,7 +2499,7 @@ function renderCatalogTable(){
       <td>${catsHtml}</td>
       <td><span class="badge ${it.type}">${it.type}</span></td>
       <td class="mono" style="font-size:12px">${sizesHtml}</td>
-      <td><button class="btn btn-ghost btn-sm" onclick="deleteItem('${it.id}')">Remove</button></td>
+      <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="toggleAddItemPanel('${it.id}')">Edit</button> <button class="btn btn-ghost btn-sm" onclick="deleteItem('${it.id}')">Remove</button></td>
     </tr>`;
   });
   tbl.innerHTML = html;
