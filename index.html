@@ -4276,7 +4276,7 @@ function drawerDocuments(inq, role, ev){
     _docBtn('Linen order form'+(ev&&ev.linenFiles&&ev.linenFiles.length?' ('+ev.linenFiles.length+')':''),'ti-wash', !ev, ev?`openMultiAttachModal('${ev.id}','linenFiles','Linen Order Form')`:''),
     _docBtn('BEO','ti-clipboard-list',false,`openBeo('${id}')`),
     _docBtn('Contract','ti-file-certificate',false,`openContract('${id}')`),
-    _docBtn('Other uploads'+(ev&&ev.otherUploadFiles&&ev.otherUploadFiles.length?' ('+ev.otherUploadFiles.length+')':''),'ti-folder', !ev, ev?`openMultiAttachModal('${ev.id}','otherUploadFiles','Other Uploads')`:''),
+    _docBtn('Other uploads'+(inq.otherUploadFiles&&inq.otherUploadFiles.length?' ('+inq.otherUploadFiles.length+')':''),'ti-folder', false, `openOtherUploads('${id}')`),
   ].join('');
   const floor = [
     _docBtn('Floor plan(s)'+(ev&&ev.floorplanFiles&&ev.floorplanFiles.length?' ('+ev.floorplanFiles.length+')':''),'ti-layout-2', !ev, ev?`openMultiAttachModal('${ev.id}','floorplanFiles','Floor Plan(s)')`:''),
@@ -6485,15 +6485,33 @@ async function saveEventField(eventId, field, value){
 // Each field is an array of {url, name, addedAt, source:'you'}, same shape as the
 // client-portal upload arrays, so both places can read/display the same data.
 function _maFmtSize(n){ if(!n) return ''; if(n<1024) return n+' B'; if(n<1048576) return Math.round(n/1024)+' KB'; return (n/1048576).toFixed(1)+' MB'; }
-function openMultiAttachModal(eventId, field, label){
-  const e = events.find(x=>x.id===eventId); if(!e) return;
+// "Other uploads" live on the inquiry so they work before an event exists.
+// One-time fold-in of any files added to the linked event earlier.
+function openOtherUploads(inqId){
+  const inq = inquiries.find(x=>x.id===inqId); if(!inq) return;
+  const ev = (typeof _eventForInq==='function') ? _eventForInq(inq) : null;
+  if(ev && Array.isArray(ev.otherUploadFiles) && ev.otherUploadFiles.length){
+    if(!Array.isArray(inq.otherUploadFiles)) inq.otherUploadFiles = [];
+    const have = new Set(inq.otherUploadFiles.map(f=>f.url));
+    ev.otherUploadFiles.forEach(f=>{ if(!have.has(f.url)) inq.otherUploadFiles.push(f); });
+    ev.otherUploadFiles = [];
+    _saveInquiry(inq); _saveEvent(ev);
+  }
+  openMultiAttachModal(inqId, 'otherUploadFiles', 'Other Uploads', 'inq');
+}
+// Record lookup for the multi-file window: events by default, or the inquiry
+// itself when kind==='inq' (used by "Other uploads", which must work before booking).
+function _maRec(id, kind){ return kind==='inq' ? inquiries.find(x=>x.id===id) : events.find(x=>x.id===id); }
+function _maSave(rec, kind){ return kind==='inq' ? _saveInquiry(rec) : _saveEvent(rec); }
+function openMultiAttachModal(eventId, field, label, kind){
+  const e = _maRec(eventId, kind); if(!e) return;
   // One-time migration: an event created before this field existed may still have
   // a single legacy value on the old singular field name (floorplan/insuranceDoc/eventPhotos).
   const legacyMap = { floorplanFiles:'floorplan', insuranceFiles:'insuranceDoc', eventPhotoFiles:'eventPhotos' };
   const legacyField = legacyMap[field];
   if(legacyField && e[legacyField] && !(Array.isArray(e[field]) && e[field].length)){
     e[field] = [{ url:e[legacyField], name:label, addedAt:Date.now(), source:'you' }];
-    _saveEvent(e);
+    _maSave(e, kind);
   }
   if(!Array.isArray(e[field])) e[field] = [];
   document.getElementById('multiAttachModal')?.remove();
@@ -6512,23 +6530,23 @@ function openMultiAttachModal(eventId, field, label){
         <label style="display:block;border:2px dashed var(--border2);border-radius:var(--radius);padding:20px;text-align:center;cursor:pointer;color:var(--text3);font-size:13px" onmouseover="this.style.borderColor='var(--maroon)'" onmouseout="this.style.borderColor='var(--border2)'">
           <i class="ti ti-upload" style="font-size:24px;display:block;margin-bottom:6px"></i>
           Click to upload or drag &amp; drop \u2014 multiple files OK
-          <input type="file" multiple style="display:none" onchange="handleMultiAttachUpload('${eventId}','${field}','${label.replace(/'/g,"\\'")}',this.files)">
+          <input type="file" multiple style="display:none" onchange="handleMultiAttachUpload('${eventId}','${field}','${label.replace(/'/g,"\\'")}',this.files,'${kind||''}')">
         </label>
       </div>
       <div style="flex-shrink:0">
         <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Or paste a URL</div>
         <div style="display:flex;gap:8px">
           <input id="maUrlInput" type="text" placeholder="https://..." style="flex:1;padding:8px 12px;border:0.5px solid var(--border2);border-radius:var(--radius);font-size:13px;background:var(--bg);color:var(--text);outline:none">
-          <button onclick="saveMultiAttachUrl('${eventId}','${field}','${label.replace(/'/g,"\\'")}')" class="btn btn--pri">Add</button>
+          <button onclick="saveMultiAttachUrl('${eventId}','${field}','${label.replace(/'/g,"\\'")}','${kind||''}')" class="btn btn--pri">Add</button>
         </div>
       </div>
     </div>`;
   document.body.appendChild(modal);
   modal.addEventListener('click', ev => { if(ev.target===modal) modal.remove(); });
-  _maRenderList(eventId, field, label);
+  _maRenderList(eventId, field, label, kind);
 }
-function _maRenderList(eventId, field, label){
-  const e = events.find(x=>x.id===eventId);
+function _maRenderList(eventId, field, label, kind){
+  const e = _maRec(eventId, kind);
   const el = document.getElementById('maFileList');
   if(!el) return;
   const files = (e && Array.isArray(e[field])) ? e[field] : [];
@@ -6539,13 +6557,13 @@ function _maRenderList(eventId, field, label){
       <i class="ti ti-file" style="font-size:15px;color:var(--text3)"></i>
       <a href="${f.url}" target="_blank" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--blue-mid);text-decoration:none;font-size:12.5px">${(f.name||'File').replace(/</g,'&lt;')}</a>
       <span style="font-size:10.5px;color:var(--text3);white-space:nowrap">${_maFmtSize(f.size)}</span>
-      <button onclick="renameMultiAttachFile('${eventId}','${field}','${label.replace(/'/g,"\\'")}',${i})" class="btn btn--ghost btn--sm" title="Rename"><i class="ti ti-pencil"></i></button>
-      <button onclick="removeMultiAttachFile('${eventId}','${field}','${label.replace(/'/g,"\\'")}',${i})" class="btn btn--ghost btn--sm" title="Remove">&times;</button>
+      <button onclick="renameMultiAttachFile('${eventId}','${field}','${label.replace(/'/g,"\\'")}',${i},'${kind||''}')" class="btn btn--ghost btn--sm" title="Rename"><i class="ti ti-pencil"></i></button>
+      <button onclick="removeMultiAttachFile('${eventId}','${field}','${label.replace(/'/g,"\\'")}',${i},'${kind||''}')" class="btn btn--ghost btn--sm" title="Remove">&times;</button>
     </div>`).join('');
 }
-async function handleMultiAttachUpload(eventId, field, label, fileList){
+async function handleMultiAttachUpload(eventId, field, label, fileList, kind){
   const files = Array.from(fileList||[]); if(!files.length) return;
-  const e = events.find(x=>x.id===eventId); if(!e) return;
+  const e = _maRec(eventId, kind); if(!e) return;
   if(!Array.isArray(e[field])) e[field] = [];
   showToast('Uploading '+files.length+' file'+(files.length>1?'s':'')+'\u2026');
   // Track successes and failures separately \u2014 this previously reported
@@ -6553,32 +6571,32 @@ async function handleMultiAttachUpload(eventId, field, label, fileList){
   // silently skipped and the success toast fired regardless.
   let ok = 0, failed = 0;
   for(const file of files){
-    const url = await uploadToStorage(eventId, field, file);
+    const url = await uploadToStorage(kind==='inq'?('inq_'+eventId):eventId, field, file);
     if(url){ e[field].push({ url, name:file.name, size:file.size, addedAt:Date.now(), source:'you' }); ok++; }
     else { failed++; }
   }
-  if(ok) await _saveEvent(e);
-  _maRenderList(eventId, field, label);
+  if(ok) await _maSave(e, kind);
+  _maRenderList(eventId, field, label, kind);
   if(failed && !ok) showToast('Upload failed \u2014 nothing was saved. See the error above.');
   else if(failed) showToast('Uploaded '+ok+', but '+failed+' failed');
   else showToast('Uploaded \u2713');
   render();
 }
-function saveMultiAttachUrl(eventId, field, label){
+function saveMultiAttachUrl(eventId, field, label, kind){
   const input = document.getElementById('maUrlInput');
   const url = input?.value?.trim();
   if(!url){ showToast('Please enter a URL'); return; }
-  const e = events.find(x=>x.id===eventId); if(!e) return;
+  const e = _maRec(eventId, kind); if(!e) return;
   if(!Array.isArray(e[field])) e[field] = [];
   const name = url.split('/').pop().split('?')[0] || 'Link';
   e[field].push({ url, name, addedAt:Date.now(), source:'you' });
-  _saveEvent(e);
+  _maSave(e, kind);
   if(input) input.value = '';
-  _maRenderList(eventId, field, label);
+  _maRenderList(eventId, field, label, kind);
   render();
 }
-function renameMultiAttachFile(eventId, field, label, idx){
-  const e = events.find(x=>x.id===eventId); if(!e || !Array.isArray(e[field]) || !e[field][idx]) return;
+function renameMultiAttachFile(eventId, field, label, idx, kind){
+  const e = _maRec(eventId, kind); if(!e || !Array.isArray(e[field]) || !e[field][idx]) return;
   const f = e[field][idx];
   const old = f.name || '';
   const nn = prompt('Rename this file:', old);
@@ -6586,17 +6604,17 @@ function renameMultiAttachFile(eventId, field, label, idx){
   const next = nn.trim().slice(0,80);
   if(!next || next===old) return;
   f.name = next;
-  _saveEvent(e);
-  _maRenderList(eventId, field, label);
+  _maSave(e, kind);
+  _maRenderList(eventId, field, label, kind);
   render();
 }
-function removeMultiAttachFile(eventId, field, label, idx){
+function removeMultiAttachFile(eventId, field, label, idx, kind){
   if(!confirm('Remove this file?')) return;
-  const e = events.find(x=>x.id===eventId); if(!e) return;
+  const e = _maRec(eventId, kind); if(!e) return;
   if(!Array.isArray(e[field])) return;
   e[field].splice(idx,1);
-  _saveEvent(e);
-  _maRenderList(eventId, field, label);
+  _maSave(e, kind);
+  _maRenderList(eventId, field, label, kind);
   render();
 }
 
