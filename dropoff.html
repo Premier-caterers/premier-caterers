@@ -324,7 +324,10 @@ a{color:var(--maroon);text-decoration:none}
     <div class="searchbar" style="margin-bottom:12px">
       <div class="search"><i class="ti ti-search"></i><input type="text" id="staffOrderSearch" placeholder="Search by client name or email..." oninput="renderStaffOrders()"></div>
     </div>
-    <div id="staffOrderFilters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div id="staffOrderFilters" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      <button id="bookAllBtn" class="btn btn-pri btn-sm" onclick="bookAllUpcoming()" style="display:none"></button>
+    </div>
     <div style="overflow-x:auto"><table class="tbl" id="staffOrdersTbl"></table></div>
   </div>
 
@@ -1751,6 +1754,30 @@ async function bookDropOffOrder(orderId, quiet){
   if(!quiet) showToast('Booked as '+num+' — on the W/E '+wi.weekOf+' cover sheet');
   return num;
 }
+// Orders that are ready to go on the board but aren't there yet: submitted,
+// approved, not linked/flagged to an existing event, not booked, delivery today or later.
+function _unbookedUpcoming(){
+  const today = _soRanges().today;
+  return allStaffOrders.filter(o=> o.status==='submitted' && o.approved && !o.linkedEventId && !o.bookedEventId
+    && !o.partOfExistingEventFlag && o.deliveryDate && o.deliveryDate >= today)
+    .sort((a,b)=>(a.deliveryDate||'').localeCompare(b.deliveryDate||'') || (a.deliveryTime||'').localeCompare(b.deliveryTime||''));
+}
+async function bookAllUpcoming(){
+  const list = _unbookedUpcoming();
+  if(!list.length){ showToast('Nothing left to book'); return; }
+  if(!confirm('Book '+list.length+' upcoming drop-off order'+(list.length===1?'':'s')+' onto the weekly board? Each gets a job number, goes on its week\'s cover sheet, and gets its menu attached.')) return;
+  const btn = document.getElementById('bookAllBtn'); if(btn){ btn.disabled = true; }
+  let ok = 0, fail = 0;
+  // One at a time so each order gets the next free number for its week.
+  for(let i=0;i<list.length;i++){
+    if(btn) btn.textContent = 'Booking '+(i+1)+' of '+list.length+'…';
+    try{ const num = await bookDropOffOrder(list[i].id, true); if(num) ok++; else fail++; }
+    catch(e){ console.error('book-all failed for', list[i].id, e); fail++; }
+  }
+  if(btn){ btn.disabled = false; }
+  showToast('Booked '+ok+(fail?(' — '+fail+' could not be booked'):''));
+  renderStaffOrders();
+}
 async function bookOrderNow(orderId){
   try{ await bookDropOffOrder(orderId, false); }
   catch(e){ console.error(e); alert('Could not book that order — '+(e && e.message || 'try again')); }
@@ -1874,6 +1901,12 @@ function renderStaffOrders(){
     return `<button class="chip${staffOrderRange===k?' on':''}" onclick="setStaffOrderRange('${k}')">${label} (${n})</button>`;
   }).join('');
   const rows = searched.filter(o=>_soMatch(o, staffOrderRange, R));
+  const bab = document.getElementById('bookAllBtn');
+  if(bab && !bab.disabled){
+    const n = _unbookedUpcoming().length;
+    bab.style.display = n ? '' : 'none';
+    bab.textContent = 'Book all upcoming ('+n+')';
+  }
   // Upcoming views read soonest-first; Past reads most-recent-first; All keeps its usual order.
   if(staffOrderRange==='past') rows.sort((a,b)=>(b.deliveryDate||'').localeCompare(a.deliveryDate||''));
   else if(staffOrderRange!=='all') rows.sort((a,b)=>(a.deliveryDate||'9999').localeCompare(b.deliveryDate||'9999') || (a.deliveryTime||'').localeCompare(b.deliveryTime||''));
