@@ -8505,6 +8505,35 @@ function saveSchedEdit(id){
 
 // ── CHECKLISTS ──
 const clPeople = ['Kenny','Shelley','Josh','Commissary','Client','Party planner','Other'];
+// Everyone offered in the "Assigned to" picker: the fixed list plus any
+// salesperson set up in Settings (so e.g. Barry shows up too).
+function _clPeopleList(){
+  const sp = (typeof getSalespeople==='function' ? getSalespeople() : []) || [];
+  const out = clPeople.slice(0,3);
+  sp.forEach(p=>{ if(p && !out.includes(p)) out.push(p); });
+  clPeople.slice(3).forEach(p=>{ if(!out.includes(p)) out.push(p); });
+  return out;
+}
+// The salesperson on the inquiry behind this event (falls back to the event's own field).
+function _clSalespersonFor(e){
+  if(!e) return '';
+  const inq = (typeof inquiries!=='undefined' ? inquiries : []).find(i=>('inq_'+i.id)===e.id || i.id===e.inquiryId);
+  return (inq && inq.salesperson) || e.salesperson || '';
+}
+// Default owner: any open task nobody is assigned to gets the event's
+// salesperson — once. The autoAssigned flag means if someone later clears it
+// on purpose, it is not put back.
+function _clAutoAssign(e){
+  const items = checklists[e.id]; if(!items || !items.length) return;
+  const sp = _clSalespersonFor(e); if(!sp) return;
+  let changed = false;
+  items.forEach(i=>{
+    if(i.na || i.autoAssigned || _clIsDone(i)) return;
+    if(!i.assignees || !i.assignees.length){ i.assignees = [{person:sp, otherName:''}]; changed = true; }
+    i.autoAssigned = true; changed = true;
+  });
+  if(changed && window._firebaseReady) _saveChecklist(e.id, items);
+}
 
 function initChecklist(eid){
   if(!checklists[eid]){
@@ -8548,6 +8577,7 @@ function renderChecklists(){
   const clPast      = clActiveEvents.filter(e=>(e.weekOf||'2026-05-31')<clThisWeekStr)
                         .sort((a,b)=>(b.weekOf||'').localeCompare(a.weekOf||'')); // most recent past first
 
+  if(typeof inquiries!=='undefined' && inquiries.length) clThisWeek.concat(clUpcoming).forEach(_clAutoAssign);
   h += _clDashboard(clThisWeek);
   h += '<div class="day-label">This week</div>';
   h += clThisWeek.length
@@ -8749,7 +8779,7 @@ function checklistCardHtml(e){
           + '</button>'
           + (assignOpen ? (
               '<div style="position:absolute;z-index:30;top:100%;left:0;margin-top:4px;background:var(--bg);border:0.5px solid var(--border2);border-radius:8px;padding:8px 10px;box-shadow:0 4px 18px rgba(0,0,0,.15);min-width:180px" onclick="event.stopPropagation()">'
-              + clPeople.map(function(p){
+              + _clPeopleList().map(function(p){
                   const checked = item.assignees && item.assignees.some(function(a){ return a.person===p; });
                   const otherVal = p==='Other' ? ((item.assignees.find(function(a){return a.person==='Other';})||{}).otherName||'') : '';
                   return '<label style="display:flex;align-items:center;gap:7px;padding:3px 0;font-size:12.5px;color:var(--text);cursor:pointer;white-space:nowrap">'
