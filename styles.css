@@ -1113,6 +1113,9 @@ a{color:var(--blue-mid);text-decoration:none}
   .dash-row--md > :nth-child(3),.dash-row--md > :nth-child(4),.dash-row--md > :nth-child(5){display:none}
   .dash-row--head{display:none}
 }
+/* Checklist task table — shaded header + full-width status cells like the reference */
+.cl-grid--head{background:var(--dash-head);color:var(--text) !important;font-size:12px !important;padding:8px 10px !important;border-radius:6px;border-bottom:0 !important}
+.cl-grid .pill{width:100%;justify-content:center;padding:6px 4px;font-size:12px}
 
 /* v3 — coloured header bands, donut hole, deadlines table */
 :root{--dash-band:#ECE4FA;--dash-band-ink:#2A2140}

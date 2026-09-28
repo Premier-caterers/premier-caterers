@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=26">
+<link rel="stylesheet" href="styles.css?v=27">
 </head>
 <body>
 
@@ -8548,6 +8548,7 @@ function renderChecklists(){
   const clPast      = clActiveEvents.filter(e=>(e.weekOf||'2026-05-31')<clThisWeekStr)
                         .sort((a,b)=>(b.weekOf||'').localeCompare(a.weekOf||'')); // most recent past first
 
+  h += _clDashboard(clThisWeek);
   h += '<div class="day-label">This week</div>';
   h += clThisWeek.length
     ? clThisWeek.map(checklistCardHtml).join('')
@@ -8592,6 +8593,114 @@ function _clAssignSummary(item){
   return (item.assignees||[]).map(a=> a.person==='Other' ? (a.otherName||'Other') : a.person).join(', ');
 }
 
+// ── Checklist status + dashboard (Sep 28 2026) ──
+// When a task is due, as a timestamp (end of that day), or null if no due date is set.
+function _clDueTs(e, item){
+  if(item.dueOption==='custom'){
+    if(!item.customDue) return null;
+    const d = new Date(item.customDue+'T00:00:00'); d.setHours(23,59,59,0); return d.getTime();
+  }
+  if(item.dueOption){
+    const base = getEventIsoDate(e); if(!base) return null;
+    const d = new Date(base.getTime()); d.setDate(d.getDate()-parseInt(item.dueOption)); d.setHours(23,59,59,0);
+    return d.getTime();
+  }
+  return null;
+}
+// One status per task — symbol + word + colour, never colour alone.
+function _clStatus(e, item){
+  if(item.na) return {key:'na', label:'N/A', sym:'–', cls:'pill--st-na'};
+  if(_clIsDone(item)) return {key:'done', label:'Done', sym:'✓', cls:'pill--st-done'};
+  const due = _clDueTs(e, item);
+  if(due!=null && due < Date.now()) return {key:'overdue', label:'Overdue', sym:'▲', cls:'pill--st-late'};
+  if(due!=null && due < Date.now()+3*86400000) return {key:'soon', label:'Due soon', sym:'◷', cls:'pill--st-soon'};
+  return {key:'open', label:'Not started', sym:'○', cls:'pill--st-open'};
+}
+function _clStatusPill(e, item){
+  const s = _clStatus(e, item);
+  return '<span class="pill '+s.cls+'"><span aria-hidden="true">'+s.sym+'</span> '+s.label+'</span>';
+}
+function openChecklistFromDash(eid){
+  window._pendingChecklistId = eid;
+  render();
+  setTimeout(()=>document.getElementById('cl-'+eid)?.scrollIntoView({behavior:'smooth', block:'start'}), 30);
+}
+function _clDashboard(weekEvents){
+  let total=0, done=0, overdue=0, unassigned=0, readyEvents=0;
+  const byPerson = {};
+  const evRows = [];
+  weekEvents.forEach(e=>{
+    const items = (checklists[e.id]||[]).filter(i=>!i.na);
+    const d = items.filter(_clIsDone).length;
+    total += items.length; done += d;
+    if(items.length && d===items.length) readyEvents++;
+    let evOver = 0;
+    items.forEach(i=>{
+      if(_clIsDone(i)) return;
+      if(_clStatus(e,i).key==='overdue'){ overdue++; evOver++; }
+      const who = (i.assignees||[]).map(a=>a.person==='Other' ? (a.otherName||'Other') : a.person);
+      if(!who.length){ unassigned++; return; }
+      who.forEach(p=>{ byPerson[p]=(byPerson[p]||0)+1; });
+    });
+    evRows.push({e, d, t:items.length, over:evOver});
+  });
+  const pct = total ? Math.round(done/total*100) : 0;
+  const worst = evRows.filter(r=>r.over).sort((a,b)=>b.over-a.over)[0];
+  const tile = (tone, sym, label, num, sub) => `<div class="dash-tile dash-tile--${tone}">
+      <div class="dash-tile__label"><span aria-hidden="true">${sym}</span> ${label}</div>
+      <div class="dash-tile__num">${num}</div>
+      <div class="dash-tile__sub">${sub}</div>
+    </div>`;
+  const tiles = `<div class="dash-tiles">
+      ${tile('info','○','Tasks this week', total, 'across '+weekEvents.length+' event'+(weekEvents.length===1?'':'s'))}
+      ${tile('ok','✓','Done', done, readyEvents+' event'+(readyEvents===1?'':'s')+' fully ready')}
+      ${tile('late','▲','Overdue', overdue, worst ? worst.over+' on '+pcEsc(worst.e.name||'') : 'nothing late')}
+      ${tile('soon','?','Unassigned', unassigned, unassigned ? 'nobody owns these yet' : 'every task has an owner')}
+      ${_dashRing(pct, 'Week done', done+' of '+total+' tasks')}
+    </div>`;
+  const people = Object.entries(byPerson).sort((a,b)=>b[1]-a[1]);
+  const palette = ['var(--dash-bar-blue)','var(--dash-bar-salmon)','var(--dash-bar-green)','var(--dash-bar-yellow)','var(--dash-bar-purple)'];
+  const barItems = people.slice(0,5).map(([p,n],i)=>({label:pcEsc(p), n, color:palette[i%palette.length]}));
+  if(unassigned) barItems.push({label:'Unassigned', n:unassigned, color:'var(--dash-bar-grey)', hatch:true});
+  const bars = `<section class="dash-panel dash-panel--pad">
+      <h2 class="dash-h2">Open by person</h2>
+      ${barItems.length ? _dashVBars(barItems) : '<div class="dash-empty dash-empty--sm">Nothing open this week.</div>'}
+    </section>`;
+  const soon = weekEvents.reduce((t,e)=>t+(checklists[e.id]||[]).filter(i=>!i.na && _clStatus(e,i).key==='soon').length,0);
+  const pie = `<section class="dash-panel dash-panel--pad">
+      <h2 class="dash-h2">Task overview</h2>
+      ${_dashPie([
+        {label:'Done',        n:done,                          color:'var(--dash-bar-green)',  sym:'✓'},
+        {label:'Overdue',     n:overdue,                       color:'var(--dash-bar-salmon)', sym:'▲'},
+        {label:'Due soon',    n:soon,                          color:'var(--dash-bar-yellow)', sym:'◷'},
+        {label:'Not started', n:Math.max(0,total-done-overdue-soon), color:'var(--dash-bar-grey)', sym:'○'},
+      ], 'Tasks')}
+    </section>`;
+  const evList = `<section class="dash-panel dash-panel--pad">
+      <h2 class="dash-h2">This week’s events</h2>
+      ${evRows.length ? evRows.map(r=>{
+        const full = r.t && r.d===r.t;
+        const w = r.t ? Math.round(r.d/r.t*100) : 0;
+        return `<button class="dash-ev" onclick="openChecklistFromDash('${r.e.id}')">
+          <span class="dash-ev__top"><span><span class="dash-mono dash-ev__num">${pcEsc(r.e.job||'')}</span> ${pcEsc(r.e.name||'')}</span>
+          <b class="${full?'u-ok':''}">${full?'✓ ':''}${r.d}/${r.t}${r.over?` <span class="u-danger">· ▲ ${r.over}</span>`:''}</b></span>
+          <span class="dash-ev__track"><i class="${full?'is-full':''}" style="width:${w}%"></i></span>
+        </button>`; }).join('') : '<div class="dash-empty dash-empty--sm">No events this week.</div>'}
+    </section>`;
+  const dlRows = [];
+  weekEvents.forEach(e=>(checklists[e.id]||[]).forEach(i=>{
+    if(i.na || _clIsDone(i)) return;
+    const t = _clDueTs(e, i); if(t==null) return;
+    dlRows.push({text:pcEsc(i.text||''), sub:pcEsc(e.name||''), dueTs:t});
+  }));
+  dlRows.sort((a,b)=>a.dueTs-b.dueTs);
+  const deadlines = `<section class="dash-panel dash-panel--pad">
+      <h2 class="dash-h2">Upcoming deadlines</h2>
+      ${_dashDeadlines(dlRows.slice(0,6))}
+    </section>`;
+  return tiles + `<div class="dash-duo">${pie}${deadlines}${bars}${evList}</div>`;
+}
+
 function checklistCardHtml(e){
   let h = '';
     const eid = e.id;
@@ -8607,6 +8716,7 @@ function checklistCardHtml(e){
       + '<div style="flex:1"><div class="cl-title" style="margin-bottom:0">'+e.job+' — '+e.name+' <span style="font-size:12px;color:var(--text3);font-weight:400">'+e.dayLabel+' · '+e.typeLabel+'</span></div></div>'
       + '<div style="display:flex;align-items:center;gap:10px" onclick="event.stopPropagation()">'
       + '<div style="font-size:12px;color:'+(pct===100?'var(--green-text)':'var(--text2)')+';font-weight:500">'+done+'/'+active.length+' <span style="font-weight:400;color:var(--text3)">done</span></div>'
+      + '<span class="meter" aria-hidden="true"><i style="width:'+pct+'%;background:'+(pct===100?'var(--dash-bar-green)':'var(--dash-bar-blue)')+'"></i></span>'
       + '<button onclick="printChecklist(\''+eid+'\')" class="btn btn--ghost btn--sm"><i class="ti ti-printer" style="font-size:13px"></i>Print</button>'
       + '<button onclick="downloadChecklist(\''+eid+'\')" class="btn btn--ghost btn--sm"><i class="ti ti-download" style="font-size:13px"></i>Download</button>'
       + '</div></div>'
@@ -8615,8 +8725,8 @@ function checklistCardHtml(e){
       + '<div style="padding:.75rem 1.25rem 1rem">';
 
     // Column headers
-    h += '<div style="display:grid;grid-template-columns:26px 26px 1fr 168px 150px 108px 30px 26px;gap:8px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">'
-      + '<span title="Done">Done</span><span title="Not applicable">N/A</span><span>Task</span><span>Assigned to</span><span>Notes</span><span>Due date</span><span title="Reminder"><i class="ti ti-bell"></i></span><span title="Add to change log"><i class="ti ti-clipboard-list"></i></span>'
+    h += '<div class="cl-grid cl-grid--head" style="display:grid;grid-template-columns:26px 26px 1fr 150px 140px 108px 104px 30px 26px;gap:8px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">'
+      + '<span title="Done">Done</span><span title="Not applicable">N/A</span><span>Task</span><span>Assigned to</span><span>Notes</span><span>Due date</span><span>Status</span><span title="Reminder"><i class="ti ti-bell"></i></span><span title="Add to change log"><i class="ti ti-clipboard-list"></i></span>'
       + '</div>';
 
     rawItems.forEach(function(item, idx){
@@ -8625,7 +8735,7 @@ function checklistCardHtml(e){
       const assignOpen = !!(window._clAssignPop && window._clAssignPop[assignKey]);
       const assignSummary = _clAssignSummary(item);
       h += '<div style="border-bottom:0.5px solid var(--border);padding:9px 0">'
-        + '<div style="display:grid;grid-template-columns:26px 26px 1fr 168px 150px 108px 30px 26px;gap:8px;align-items:flex-start">'
+        + '<div class="cl-grid" style="display:grid;grid-template-columns:26px 26px 1fr 150px 140px 108px 104px 30px 26px;gap:8px;align-items:flex-start">'
         // Done checkbox
         + '<button onclick="toggleClDone(\''+eid+'\','+idx+')" title="Mark done" '+(item.na?'disabled':'')+' style="width:22px;height:22px;border-radius:6px;border:1.5px solid '+(isDone?'var(--green-text)':'var(--border2)')+';background:'+(isDone?'var(--green-text)':'var(--bg)')+';color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;margin-top:1px;opacity:'+(item.na?'.4':'1')+'">'+(isDone?'<i class="ti ti-check"></i>':'')+'</button>'
         // N/A checkbox
@@ -8661,6 +8771,8 @@ function checklistCardHtml(e){
               ? '<span style="color:var(--blue-text);font-weight:600;font-size:12px">'+calcDueDate(e, parseInt(item.dueOption))+'</span><button onclick="setDueOption(\''+eid+'\','+idx+',\'\')" class="btn btn--ghost btn--sm">change</button>'
               : '<select onchange="setDueOption(\''+eid+'\','+idx+',this.value)" style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:3px 5px;font-size:11px;color:var(--text);font-family:inherit"><option value="">Set due...</option><option value="30">1 month before</option><option value="14">2 weeks before</option><option value="7">1 week before</option><option value="5">5 days before</option><option value="2">48 hrs before</option><option value="1">24 hrs before</option><option value="custom">Custom...</option></select>')
         + '</div>'
+        // Status (added) — symbol + word + colour
+        + '<div style="padding-top:1px">'+_clStatusPill(e, item)+'</div>'
         // Reminder
         + '<div style="display:flex;flex-direction:column;align-items:center;gap:2px">'
           + '<button onclick="toggleClReminderPopover(\''+eid+'\','+idx+')" title="'+(item.reminder?_clReminderLabel(item.reminder):'Set a reminder')+'" '+(item.na?'disabled':'')+' style="border:none;background:none;cursor:pointer;font-size:15px;color:'+(item.reminder?'var(--amber-text)':'var(--text3)')+'"><i class="ti ti-bell'+(item.reminder?'':'-off')+'"></i></button>'
