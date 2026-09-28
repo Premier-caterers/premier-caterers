@@ -323,6 +323,7 @@ a{color:var(--maroon);text-decoration:none}
     <div class="searchbar" style="margin-bottom:12px">
       <div class="search"><i class="ti ti-search"></i><input type="text" id="staffOrderSearch" placeholder="Search by client name or email..." oninput="renderStaffOrders()"></div>
     </div>
+    <div id="staffOrderFilters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
     <div style="overflow-x:auto"><table class="tbl" id="staffOrdersTbl"></table></div>
   </div>
 
@@ -1712,14 +1713,52 @@ ordersCol.orderBy('createdAt','desc').limit(200).onSnapshot(snap=>{
   if(currentView==='staffOrders') renderStaffOrders();
 }, err=> console.error('orders load error', err));
 
+// Date filter bar above All orders (by delivery date). Weeks run Mon–Sun.
+let staffOrderRange = 'all';
+function _soYmd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _soRanges(){
+  const t = new Date(); t.setHours(12,0,0,0);
+  const mon = new Date(t); mon.setDate(t.getDate() - ((t.getDay()+6)%7));
+  const sun = new Date(mon); sun.setDate(mon.getDate()+6);
+  const nMon = new Date(mon); nMon.setDate(mon.getDate()+7);
+  const nSun = new Date(mon); nSun.setDate(mon.getDate()+13);
+  const m1 = new Date(t.getFullYear(), t.getMonth(), 1, 12), m2 = new Date(t.getFullYear(), t.getMonth()+1, 0, 12);
+  return { today:_soYmd(t), wk:[_soYmd(mon),_soYmd(sun)], nwk:[_soYmd(nMon),_soYmd(nSun)], mo:[_soYmd(m1),_soYmd(m2)] };
+}
+const STAFF_ORDER_RANGES = [
+  ['all','All'], ['current','Current'], ['past','Past'], ['thisweek','This week'], ['nextweek','Next week'], ['thismonth','This month']
+];
+// Orders with no delivery date yet (drafts) count as Current.
+function _soMatch(o, key, R){
+  const d = o.deliveryDate || '';
+  if(key==='all') return true;
+  if(key==='current') return !d || d >= R.today;
+  if(!d) return false;
+  if(key==='past') return d < R.today;
+  if(key==='thisweek') return d >= R.wk[0] && d <= R.wk[1];
+  if(key==='nextweek') return d >= R.nwk[0] && d <= R.nwk[1];
+  if(key==='thismonth') return d >= R.mo[0] && d <= R.mo[1];
+  return true;
+}
+function setStaffOrderRange(key){ staffOrderRange = key; renderStaffOrders(); }
 function renderStaffOrders(){
   const q = (document.getElementById('staffOrderSearch').value||'').trim().toLowerCase();
-  const rows = allStaffOrders.filter(o=>{
+  const R = _soRanges();
+  const searched = allStaffOrders.filter(o=>{
     if(!q) return true;
     return (o.clientName||'').toLowerCase().includes(q) || (o.contactEmail||o.clientEmail||'').toLowerCase().includes(q);
   });
+  const bar = document.getElementById('staffOrderFilters');
+  if(bar) bar.innerHTML = STAFF_ORDER_RANGES.map(([k,label])=>{
+    const n = searched.filter(o=>_soMatch(o,k,R)).length;
+    return `<button class="chip${staffOrderRange===k?' on':''}" onclick="setStaffOrderRange('${k}')">${label} (${n})</button>`;
+  }).join('');
+  const rows = searched.filter(o=>_soMatch(o, staffOrderRange, R));
+  // Upcoming views read soonest-first; Past reads most-recent-first; All keeps its usual order.
+  if(staffOrderRange==='past') rows.sort((a,b)=>(b.deliveryDate||'').localeCompare(a.deliveryDate||''));
+  else if(staffOrderRange!=='all') rows.sort((a,b)=>(a.deliveryDate||'9999').localeCompare(b.deliveryDate||'9999') || (a.deliveryTime||'').localeCompare(b.deliveryTime||''));
   const tbl = document.getElementById('staffOrdersTbl');
-  if(!rows.length){ tbl.innerHTML = '<tr><td class="empty">No orders yet.</td></tr>'; return; }
+  if(!rows.length){ tbl.innerHTML = '<tr><td class="empty">'+(allStaffOrders.length ? 'No orders in this view.' : 'No orders yet.')+'</td></tr>'; return; }
   let html = '<tr><th>Client</th><th>Delivery</th><th>Items</th><th>Total</th><th>Status</th><th></th></tr>';
   rows.forEach(o=>{
     const itemCount = (o.lines||[]).reduce((s,l)=>s+l.qty,0);
