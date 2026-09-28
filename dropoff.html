@@ -11,6 +11,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1200,6 +1201,11 @@ async function submitOrder(){
       // an event" skips creating a phantom new lead; staff will link it
       // manually once they know which event it is.
       await bridgeNewInquiry(order, currentOrderId);
+      // Staff-placed orders are booked straight onto the weekly board.
+      if(isStaff){
+        try{ const num = await bookDropOffOrder(currentOrderId, true); if(num) order.jobNumber = num; }
+        catch(e){ console.error('booking drop-off failed', e); }
+      }
     }
     await sendOrderPlacedEmail(order, currentOrderId);
     if(!noNotify){
@@ -1634,8 +1640,122 @@ async function bridgeNewInquiry(order, orderId){
   try{
     await db.collection('inquiries').doc(inq.id).set(inq);
     await ordersCol.doc(orderId).set({linkedInquiryId: inq.id}, {merge:true});
+    return inq.id;
   }catch(e){ console.error('bridge to inquiry failed', e); }
+  return null;
 }
+
+/* =====================================================================
+   BOOK A DROP-OFF ONTO THE WEEKLY BOARD (added Sep 28 2026)
+   A drop-off order that isn't part of an existing event becomes a real
+   booked event in the main app: same record shape the Pipeline creates
+   when it books an inquiry ("inq_<id>"), on the week of its delivery
+   date, with the next free job number for that week (YY-MMDD-NN), so it
+   shows on This Week and the weekly cover sheet. The order PDF (without
+   prices) is uploaded and attached as the event's menu.
+   Staff-placed orders are booked when submitted; client-placed orders
+   when staff click Approve. Editing a booked order re-syncs it.
+   ===================================================================== */
+function _doWeekInfo(dateStr){
+  const d = new Date(dateStr + 'T12:00:00Z');
+  if(isNaN(d)) return null;
+  const dow = d.getUTCDay();
+  const sun = new Date(d.getTime() + ((7-dow)%7)*86400000);
+  const names = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+  const short = {sunday:'Sun',monday:'Mon',tuesday:'Tue',wednesday:'Wed',thursday:'Thu',friday:'Fri',saturday:'Sat'};
+  const day = names[dow];
+  return { weekOf: sun.toISOString().split('T')[0], day, dayLabel: short[day]+' '+(d.getUTCMonth()+1)+'/'+d.getUTCDate() };
+}
+// Next free number in that week, same rule as the main app's nextEventNumber.
+async function _doNextEventNumber(weekOf, ignoreId){
+  const p = weekOf.split('-');
+  let max = 0;
+  const snap = await db.collection('events').where('weekOf','==',weekOf).get();
+  snap.forEach(doc=>{
+    if(doc.id===ignoreId) return;
+    const v = doc.data(); const raw = String(v.eventNumber || v.job || '').replace(/^#/,'');
+    const seg = raw.includes('-') ? raw.split('-').pop() : raw;
+    const m = seg.match(/^(\d+)/); if(m) max = Math.max(max, parseInt(m[1],10));
+  });
+  return p[0].slice(2)+'-'+p[1]+p[2]+'-'+String(max+1).padStart(2,'0');
+}
+async function _doUploadMenuPdf(order, orderId, eventId){
+  try{
+    if(!firebase.storage) return '';
+    const blob = generateOrderPdf(order, orderId, true).output('blob');
+    const ref = firebase.storage().ref('events/'+eventId+'/dropoff_menu.pdf');
+    const snap = await ref.put(blob, {contentType:'application/pdf'});
+    return await snap.ref.getDownloadURL();
+  }catch(e){ console.error('menu PDF upload failed', e); return ''; }
+}
+async function bookDropOffOrder(orderId, quiet){
+  const oSnap = await ordersCol.doc(orderId).get();
+  if(!oSnap.exists) return null;
+  const order = oSnap.data();
+  if(order.linkedEventId) return null;                 // belongs to an existing event — nothing to book
+  if(order.status!=='submitted') return null;
+  if(!order.deliveryDate){ if(!quiet) alert('Add a delivery date to this order first — it decides which week it goes on.'); return null; }
+  const wi = _doWeekInfo(order.deliveryDate); if(!wi) return null;
+
+  let inqId = order.linkedInquiryId;
+  if(!inqId) inqId = await bridgeNewInquiry(order, orderId);
+  if(!inqId) return null;
+  const inqRef = db.collection('inquiries').doc(inqId);
+  const inqSnap = await inqRef.get();
+  const inq = inqSnap.exists ? inqSnap.data() : {};
+  const evId = 'inq_'+inqId;
+  const evRef = db.collection('events').doc(evId);
+  const evSnap = await evRef.get();
+  const ex = evSnap.exists ? evSnap.data() : null;
+
+  // Keep the number if it's already on this week; otherwise take the next free one.
+  let num = (ex && ex.weekOf===wi.weekOf && String(ex.eventNumber||'').includes('-')) ? ex.eventNumber : '';
+  if(!num) num = await _doNextEventNumber(wi.weekOf, evId);
+
+  const menuUrl = await _doUploadMenuPdf(Object.assign({}, order, {jobNumber:num}), orderId, evId);
+  const name = ((order.contactName||'').trim()) || order.clientName || 'Drop-off order';
+  const common = {
+    id: evId, inquiryId: inqId, job: num, eventNumber: num,
+    name, contactName: '', organization: '',
+    addr: order.address || '', email: order.contactEmail || '', phone: order.contactPhone || '',
+    type: 'dropoff', typeLabel: 'Drop off catering',
+    day: wi.day, dayLabel: wi.dayLabel, eventDate: order.deliveryDate, weekOf: wi.weekOf,
+    dropOffOrderId: orderId
+  };
+  if(menuUrl){ common.menuLink = menuUrl; common.pdfMenuLink = menuUrl; }
+  if(ex){
+    await evRef.set(common, {merge:true});
+  } else {
+    await evRef.set(Object.assign({
+      waiters:0, waiterNames:'', waiterTime:'-', waiterTime2:'',
+      bartenders:0, bartenderNames:'', bartenderTime:'', bartenderTime2:'',
+      chefs:0, chefNames:'', chefTime:'-', chefTime2:'',
+      porters:0, porterNames:'', porterTime:'', porterTime2:'',
+      manager:'-', mashgiach:'-', mashgiachNames:'',
+      menuLink:'', groceryLink:'', floorplan:'', venueLink:'', pdfMenuLink:'', logoData:'',
+      notes: (order.clientName||'') + (order.deliveryTime ? (' · delivery '+order.deliveryTime) : '')
+    }, common));
+  }
+  // Inquiry: booked; salesperson = whoever placed/approved it (unless one is already set);
+  // the order menu goes in its Menus list (replacing an earlier copy of this order's menu).
+  const menus = (Array.isArray(inq.menus) ? inq.menus : []).filter(m=>!m.dropOffMenu);
+  if(menuUrl) menus.unshift({ name:'Drop-off order '+num, url:menuUrl, fileId:'', dropOffMenu:true });
+  const inqPatch = {
+    stage:'booked', eventDate: order.deliveryDate, eventType:'Drop off catering',
+    venueName: order.locationName||'', venueLocation: order.address||'', menus
+  };
+  if(menuUrl) inqPatch.menuLink = menuUrl;
+  if(!inq.salesperson && staffUser) inqPatch.salesperson = prettyStaffName(staffUser);
+  await inqRef.set(inqPatch, {merge:true});
+  await ordersCol.doc(orderId).set({ bookedEventId: evId, jobNumber: num, bookedAt: Date.now() }, {merge:true});
+  if(!quiet) showToast('Booked as '+num+' — on the W/E '+wi.weekOf+' cover sheet');
+  return num;
+}
+async function bookOrderNow(orderId){
+  try{ await bookDropOffOrder(orderId, false); }
+  catch(e){ console.error(e); alert('Could not book that order — '+(e && e.message || 'try again')); }
+}
+
 
 /* =====================================================================
    STAFF AUTH — real Firebase Authentication, same accounts as the main
@@ -1763,9 +1883,11 @@ function renderStaffOrders(){
   rows.forEach(o=>{
     const itemCount = (o.lines||[]).reduce((s,l)=>s+l.qty,0);
     const pendingApproval = o.status==='submitted' && !o.approved;
-    const statusClass = o.linkedEventId ? 'linked' : (pendingApproval ? 'draft' : (o.status||'draft'));
-    let statusLabel = o.linkedEventId ? ('Linked — '+(o.subLabel||'')) : (o.status==='submitted' ? 'Submitted' : 'Draft — in progress');
+    const statusClass = (o.linkedEventId || o.bookedEventId) ? 'linked' : (pendingApproval ? 'draft' : (o.status||'draft'));
+    let statusLabel = o.linkedEventId ? ('Linked — '+(o.subLabel||'')) : (o.bookedEventId ? ('Booked — '+(o.jobNumber||'')) : (o.status==='submitted' ? 'Submitted' : 'Draft — in progress'));
     if(pendingApproval) statusLabel = 'Pending approval';
+    const bookBtn = (o.status==='submitted' && o.approved && !o.linkedEventId && !o.bookedEventId)
+      ? `<button class="btn btn-pri btn-sm" onclick="bookOrderNow('${o.id}')" style="margin-left:6px" title="Add to the weekly board as a drop-off with its own job number">Book</button>` : '';
     const flagNote = (o.partOfExistingEventFlag && !o.linkedEventId)
       ? `<div style="font-size:11px;color:var(--maroon);margin-top:2px">&#9873; Client flagged: part of an event</div>` : '';
     const approveBtn = pendingApproval
@@ -1791,7 +1913,7 @@ function renderStaffOrders(){
       <td>${itemCount} item${itemCount===1?'':'s'}</td>
       <td class="mono">$${money(o.total||0)}</td>
       <td><span class="pill-status ${statusClass}">${statusLabel}</span>${flagNote}</td>
-      <td>${continueBtn}${approveBtn}${linkBtn}${editBtn}${resendBtn}${downloadBtn}${deleteBtn}</td>
+      <td>${continueBtn}${approveBtn}${bookBtn}${linkBtn}${editBtn}${resendBtn}${downloadBtn}${deleteBtn}</td>
     </tr>`;
   });
   tbl.innerHTML = html;
@@ -1802,8 +1924,15 @@ async function approveOrder(orderId){
     if(!doc.exists) return;
     await ordersCol.doc(orderId).set({approved:true}, {merge:true});
     const order = Object.assign({}, doc.data(), {approved:true});
+    // Approving a client's order books it onto the weekly board — unless it's
+    // linked to (or flagged as part of) an existing event.
+    let num = null;
+    if(!order.linkedEventId && !order.partOfExistingEventFlag && !order.bookedEventId){
+      try{ num = await bookDropOffOrder(orderId, true); if(num) order.jobNumber = num; }
+      catch(e){ console.error('booking drop-off failed', e); }
+    }
     await sendApprovalConfirmationEmail(order, orderId);
-    showToast('Order approved — client notified');
+    showToast(num ? ('Approved and booked as '+num+' — client notified') : 'Order approved — client notified');
   }catch(e){ console.error(e); alert('Could not approve that order.'); }
 }
 // Staff manually confirm this order belongs to an already-booked event —
@@ -1922,8 +2051,9 @@ async function applyEventLink(orderId, order, found){
   }
   if(order.linkedInquiryId){
     await db.collection('inquiries').doc(order.linkedInquiryId).delete().catch(()=>{});
+    await db.collection('events').doc('inq_'+order.linkedInquiryId).delete().catch(()=>{});
   }
-  await ordersCol.doc(orderId).set({linkedEventId:eventId, linkedInquiryId:null, subLabel:subLabel}, {merge:true});
+  await ordersCol.doc(orderId).set({linkedEventId:eventId, linkedInquiryId:null, bookedEventId:null, subLabel:subLabel}, {merge:true});
   return subLabel;
 }
 async function promptLinkOrder(orderId){
@@ -1948,6 +2078,7 @@ async function deleteOrder(orderId){
     await ordersCol.doc(orderId).delete();
     if(order && order.linkedInquiryId){
       await db.collection('inquiries').doc(order.linkedInquiryId).delete().catch(()=>{});
+      await db.collection('events').doc('inq_'+order.linkedInquiryId).delete().catch(()=>{});
     }
     showToast('Order deleted');
   }catch(e){ console.error(e); alert('Could not delete that order.'); }
@@ -2161,6 +2292,11 @@ async function saveEditedOrder(){
   try{
     await ordersCol.doc(eoOrderId).set(updated, {merge:true});
     eoCurrentOrder = Object.assign({}, eoCurrentOrder, updated);
+    // Booked orders: carry the new date / address / items through to the event and its menu.
+    if(eoCurrentOrder.bookedEventId && !eoCurrentOrder.linkedEventId){
+      try{ const num = await bookDropOffOrder(eoOrderId, true); if(num) eoCurrentOrder.jobNumber = num; }
+      catch(e){ console.error('re-sync of booked order failed', e); }
+    }
     showToast('Order updated');
     if(isStaff) showView('staffOrders');
   }catch(e){ console.error(e); errEl.textContent = 'Something went wrong saving — please try again.'; }
