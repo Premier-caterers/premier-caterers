@@ -930,8 +930,10 @@ function generateOrderPdf(order, orderId, hidePricing){
   // full-width "Order: 04A / Unlinked" bar. If no Job # has been entered
   // yet, the linked order number (e.g. 04A) shows in the same spot; an
   // unlinked order with no Job # shows nothing there.
+  // A full event number (26-1004-03) prints as just its sequence: "Job # 03".
+  const _jobShort = v => { const t = String(v||'').trim(); const m = t.match(/^\d{2}-\d{4}-(\d+[a-z]?)$/i); return m ? m[1] : t; };
   const jobLabel = (order.jobNumber && String(order.jobNumber).trim())
-    ? 'Job # '+String(order.jobNumber).trim()
+    ? 'Job # '+_jobShort(order.jobNumber)
     : (order.subLabel ? 'Job # '+order.subLabel : '');
   if(jobLabel){
     doc.setFontSize(18); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
