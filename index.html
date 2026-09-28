@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=23">
+<link rel="stylesheet" href="styles.css?v=24">
 </head>
 <body>
 
@@ -1714,46 +1714,206 @@ function _myDayCol(type, title, icon, placeholder, extraControlsHtml){
   </div>`;
 }
 
+function _mdStartOfDay(ts){ const d=new Date(ts==null?Date.now():ts); d.setHours(0,0,0,0); return d.getTime(); }
+// One status per item, always shown as symbol + word (never colour alone).
+function _mdStatus(it){
+  if(it.status==='done') return {key:'done', label:'Done', sym:'✓', cls:'pill--st-done'};
+  if(_myDayIsOverdue(it)) return {key:'overdue', label:'Overdue', sym:'▲', cls:'pill--st-late'};
+  if(it.dueAtTs && it.dueAtTs < _mdStartOfDay()+86400000) return {key:'today', label:'Due today', sym:'◷', cls:'pill--st-soon'};
+  if(it.dueAtTs) return {key:'later', label:'Upcoming', sym:'○', cls:'pill--st-open'};
+  return {key:'open', label:'Open', sym:'○', cls:'pill--st-open'};
+}
+const MYDAY_TYPES = [
+  {key:'schedule', label:'Schedule',   icon:'ti-calendar-time'},
+  {key:'todo',     label:'To-Do',      icon:'ti-checklist'},
+  {key:'followup', label:'Follow-Up',  icon:'ti-phone-outgoing'},
+];
+function setMyDayFilter(f){ window._mdFilter=f; render(); }
+function toggleMyDayOldDone(){ window._mdShowOld=!window._mdShowOld; render(); }
+// Shows/hides the parts of the add bar that only apply to some types.
+function _mdTypeChanged(){
+  const t = (document.getElementById('mdType_new')||{}).value || 'todo';
+  const m = document.getElementById('mdMethod_new'); if(m) m.style.display = t==='followup' ? '' : 'none';
+  const l = document.getElementById('mdLinkWrap_new'); if(l) l.style.display = t==='schedule' ? 'none' : '';
+  const i = document.getElementById('mdInput_new');
+  if(i) i.placeholder = t==='schedule' ? 'Add to your schedule…' : t==='followup' ? 'Who do you need to follow up with?' : 'Add a to‑do…';
+}
+function addMyDayFromBar(){
+  const t = (document.getElementById('mdType_new')||{}).value || 'todo';
+  window._mdLastType = t;
+  addMyDayItem(t, 'new');
+}
+
 function renderMyDay(){
   _myDayInject();
   _myDayRequestNotifyPermission();
+  const filter = window._mdFilter || 'all';
+  const lastType = window._mdLastType || 'todo';
+  const sod = _mdStartOfDay();
+  const now = Date.now();
+
+  // "Today's list" = everything still open, plus anything finished today.
+  // Items finished on earlier days sit behind a toggle instead of piling up.
+  const current = myDayItems.filter(it=>it.status!=='done' || (it.doneAt||0)>=sod);
+  const oldDone = myDayItems.filter(it=>it.status==='done' && (it.doneAt||0)<sod);
+  const open = current.filter(it=>it.status!=='done');
+  const doneToday = current.filter(it=>it.status==='done');
+  const overdue = open.filter(_myDayIsOverdue);
+  const upcoming = open.filter(it=>it.dueAtTs && it.dueAtTs>=now).sort((a,b)=>a.dueAtTs-b.dueAtTs);
+  const next = upcoming[0];
+  const dueByToday = open.filter(it=>!it.dueAtTs || it.dueAtTs < sod+86400000);
+  const ringTotal = doneToday.length + dueByToday.length;
+  const pct = ringTotal ? Math.round(doneToday.length/ringTotal*100) : 0;
+  const oldestOver = overdue.length ? overdue.reduce((m,it)=>it.dueAtTs<m.dueAtTs?it:m) : null;
+
+  const tile = (tone, sym, label, num, sub) => `<div class="dash-tile dash-tile--${tone}">
+      <div class="dash-tile__label"><span aria-hidden="true">${sym}</span> ${label}</div>
+      <div class="dash-tile__num">${num}</div>
+      <div class="dash-tile__sub">${sub}</div>
+    </div>`;
+  const nextLabel = next ? new Date(next.dueAtTs).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) : '—';
+  const nextSub = next ? (_myDayEsc(next.text) + (next.dueAtTs>=sod+86400000 ? ' · '+new Date(next.dueAtTs).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '')) : 'nothing timed';
+  const tiles = `<div class="dash-tiles">
+      ${tile('info','○','Open', open.length, 'across all three lists')}
+      ${tile('ok','✓','Done today', doneToday.length, doneToday.length?'nice — keep going':'nothing checked off yet')}
+      ${tile('late','▲','Overdue', overdue.length, oldestOver ? 'oldest from '+new Date(oldestOver.dueAtTs).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : 'all caught up')}
+      ${tile('soon','◷','Next up', nextLabel, nextSub)}
+      ${_dashRing(pct, 'Done today', doneToday.length+' of '+ringTotal+' items')}
+    </div>`;
+
+  // Unified list
+  const shown = current
+    .filter(it=>filter==='all' || it.type===filter)
+    .sort((a,b)=>{
+      const ad=a.status==='done', bd=b.status==='done';
+      if(ad!==bd) return ad?1:-1;
+      const at=a.dueAtTs||Infinity, bt=b.dueAtTs||Infinity;
+      if(at!==bt) return at-bt;
+      return (a.createdAt||0)-(b.createdAt||0);
+    });
+  const oldShown = oldDone.filter(it=>filter==='all' || it.type===filter).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
+  const rowHtml = it => {
+    const st = _mdStatus(it);
+    const ty = MYDAY_TYPES.find(t=>t.key===it.type) || MYDAY_TYPES[1];
+    const m = it.method ? MYDAY_METHODS.find(x=>x.key===it.method) : null;
+    const how = m ? `<i class="ti ${m.icon}"></i> ${m.label}` : (it.source ? `<i class="ti ti-tag"></i> ${_myDayEsc(it.source)}` : '<span class="u-muted">—</span>');
+    let when = '<span class="u-muted">—</span>';
+    if(it.dueAtTs){
+      const d = new Date(it.dueAtTs);
+      const dayPart = _mdStartOfDay(it.dueAtTs)===sod ? 'Today' : d.toLocaleDateString('en-US',{weekday:'short', month:'numeric', day:'numeric'});
+      when = dayPart + (it.time ? ' '+d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) : '');
+    } else if(it.time){ when = _myDayEsc(it.time); }
+    const meta = [];
+    if(it.reminderMethods && it.reminderMethods.length) meta.push('<i class="ti ti-bell"></i> '+it.reminderMethods.join('/'));
+    const done = it.status==='done';
+    return `<div class="dash-row dash-row--md${done?' is-done':''}${st.key==='overdue'?' is-late':''}">
+      <button class="dash-check" onclick="toggleMyDayItem('${it.id}')" title="${done?'Mark not done':'Mark done'}" aria-label="${done?'Mark not done':'Mark done'}">${done?'✓':''}</button>
+      <div class="dash-row__main"><div class="dash-row__text">${_myDayEsc(it.text)} ${_myDayLinkBadge(it)}</div>${meta.length?`<div class="dash-row__meta">${meta.join(' &nbsp; ')}</div>`:''}</div>
+      <div class="dash-row__cell"><i class="ti ${ty.icon}"></i> ${ty.label}</div>
+      <div class="dash-row__cell">${how}</div>
+      <div class="dash-row__cell dash-mono">${when}</div>
+      <div><span class="pill ${st.cls}"><span aria-hidden="true">${st.sym}</span> ${st.label}</span></div>
+      <button class="btn--icon is-danger dash-del" onclick="deleteMyDayItem('${it.id}')" title="Delete" aria-label="Delete"><i class="ti ti-x"></i></button>
+    </div>`;
+  };
+  const counts = {all:current.length};
+  MYDAY_TYPES.forEach(t=>counts[t.key]=current.filter(it=>it.type===t.key).length);
+  const chip = (key,label) => `<button class="dash-chip${filter===key?' is-on':''}" onclick="setMyDayFilter('${key}')">${label} ${counts[key]}</button>`;
   const methodOptions = MYDAY_METHODS.map(m=>`<option value="${m.key}">${m.label}</option>`).join('');
-  const html = `
-    <div style="padding:20px 20px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div style="font-size:18px;font-weight:700;color:var(--text)"><i class="ti ti-sun" style="margin-right:8px"></i>My Day &mdash; ${_myDayEsc(prettyName(authUser))}</div>
-      <div class="md-clock" id="myDayClock"></div>
-    </div>
-    <div style="padding:0 20px;font-size:12px;color:var(--text3)">Only you can see this. Nothing here is shared with the team. Reminders fire while this app is open in a browser tab — they won't wake your phone if the tab is closed.</div>
-    <div style="padding:12px 20px 0">
-      <button onclick="_myDayToggleImport()" style="padding:7px 12px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer"><i class="ti ti-clipboard-list" style="margin-right:5px"></i>Import triage list</button>
-      <div id="myDayImportPanel" style="display:none;margin-top:8px">
-        <textarea id="myDayImportText" placeholder="Paste triage items here, one per line. Prefix a line with [Email] or [WhatsApp] to tag its source." style="width:100%;min-height:110px;padding:8px 10px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:inherit;font-size:13px;resize:vertical"></textarea>
-        <div style="margin-top:6px;display:flex;gap:8px">
-          <button class="md-add-btn" onclick="importMyDayTriage()">Import as To&#8209;Dos</button>
-          <button onclick="_myDayToggleImport()" style="padding:8px 12px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text2);font-size:13px;cursor:pointer">Cancel</button>
+  const typeOptions = MYDAY_TYPES.map(t=>`<option value="${t.key}" ${t.key===lastType?'selected':''}>${t.label}</option>`).join('');
+
+  const list = `<section class="dash-panel">
+      <div class="dash-panel__head">
+        <h2>Today's list</h2>
+        <div class="dash-chips">${chip('all','All')}${chip('schedule','Schedule')}${chip('todo','To-Do')}${chip('followup','Follow-Ups')}</div>
+      </div>
+      <div class="dash-row dash-row--md dash-row--head"><span></span><span>Item</span><span>Type</span><span>How</span><span>When</span><span>Status</span><span></span></div>
+      ${shown.length ? shown.map(rowHtml).join('') : `<div class="dash-empty">${myDayItems.length? 'Nothing here — you’re clear.' : 'Nothing here yet. Add your first item below.'}</div>`}
+      ${oldShown.length ? `<button class="dash-more" onclick="toggleMyDayOldDone()"><i class="ti ti-chevron-${window._mdShowOld?'down':'right'}"></i> Done on earlier days (${oldShown.length})</button>${window._mdShowOld?oldShown.map(rowHtml).join(''):''}` : ''}
+      <div class="dash-addbar">
+        <div class="dash-addbar__row">
+          <select id="mdType_new" aria-label="Type" onchange="_mdTypeChanged()">${typeOptions}</select>
+          <select id="mdMethod_new" aria-label="How" style="${lastType==='followup'?'':'display:none'}">${methodOptions}</select>
+          <input type="text" id="mdInput_new" class="dash-addbar__text" aria-label="New item" placeholder="Add a to&#8209;do…" onkeydown="if(event.key==='Enter')addMyDayFromBar()">
+          <input type="date" id="mdDate_new" aria-label="Date (optional)" title="Date (optional)">
+          <input type="time" id="mdTime_new" aria-label="Time (optional)" title="Time (optional)">
+          <button class="md-mic" id="mdMic_new" onclick="startMyDayVoice('new')" title="Voice input" aria-label="Voice input"><i class="ti ti-microphone"></i></button>
+          <button class="btn btn--pri" onclick="addMyDayFromBar()">Add</button>
+        </div>
+        <div class="dash-addbar__row dash-addbar__row--opts">
+          ${_myDayReminderPicker('new')}
+          <div id="mdLinkWrap_new" style="${lastType==='schedule'?'display:none':''}">${_myDayLinkControls('new')}</div>
         </div>
       </div>
+    </section>`;
+
+  // Side panels
+  const maxOpen = Math.max(1, ...MYDAY_TYPES.map(t=>open.filter(it=>it.type===t.key).length));
+  const bars = `<section class="dash-panel dash-panel--pad">
+      <h2 class="dash-h2">Still open, by type</h2>
+      ${MYDAY_TYPES.map(t=>{ const n=open.filter(it=>it.type===t.key).length;
+        return _dashBar(t.label==='Follow-Up'?'Follow-Ups':t.label, n, Math.round(n/maxOpen*100)); }).join('')}
+    </section>`;
+  const sugg = `<section class="dash-panel dash-panel--pad">
+      <div class="dash-panel__title-row"><h2 class="dash-h2">Suggested follow-ups</h2>${mySuggestions.length?`<span class="pill pill--invoice"><span aria-hidden="true">✦</span> ${mySuggestions.length} new</span>`:''}</div>
+      ${mySuggestions.length ? _mySuggestionsBlock().replace(/<div class="md-sugg-label">[\s\S]*?<\/div>/,'').replace(/<div class="md-follow-label">[\s\S]*?<\/div>$/,'') : '<div class="dash-empty dash-empty--sm">No suggestions right now.</div>'}
+    </section>`;
+
+  const html = `
+    ${typeof navReturnBreadcrumb==='function' ? navReturnBreadcrumb() : ''}
+    <div class="section-header">
+      <div><div class="eyebrow">Only you can see this</div><div class="section-title">My Day — ${_myDayEsc(prettyName(authUser))}</div>
+        <div class="dash-subtitle">${new Date().toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric'})} · <span class="md-clock" id="myDayClock"></span></div></div>
+      <div class="u-row">
+        <button class="btn" onclick="_myDayToggleImport()"><i class="ti ti-clipboard-list"></i>Import</button>
+        <button class="btn btn--pri" onclick="document.getElementById('mdInput_new')?.focus()"><i class="ti ti-plus"></i>New item</button>
+      </div>
     </div>
-    <div class="md-wrap">
-      ${_myDayCol('schedule','Schedule','ti-calendar-time','Add to your schedule…', '<input type="date" id="mdDate_schedule" title="Date" style="max-width:140px"><input type="time" id="mdTime_schedule" style="max-width:110px">')}
-      ${_myDayCol('todo','To&#8209;Do','ti-checklist','Add a to&#8209;do…')}
-      ${_myDayCol('followup','Follow&#8209;Ups','ti-phone-outgoing','Who do you need to follow up with?', `<select id="mdMethod_followup">${methodOptions}</select>`)}
+    <div id="myDayImportPanel" class="dash-panel dash-panel--pad" style="display:none;margin-bottom:16px">
+      <textarea id="myDayImportText" class="dash-textarea" placeholder="Paste triage items here, one per line. Prefix a line with [Email] or [WhatsApp] to tag its source."></textarea>
+      <div class="u-row" style="margin-top:8px">
+        <button class="btn btn--pri" onclick="importMyDayTriage()">Import as To&#8209;Dos</button>
+        <button class="btn" onclick="_myDayToggleImport()">Cancel</button>
+      </div>
     </div>
+    ${tiles}
+    <div class="dash-grid">
+      ${list}
+      <div class="dash-side">${bars}${sugg}</div>
+    </div>
+    <div class="dash-foot">Reminders fire while this app is open in a browser tab — they won’t wake your phone if the tab is closed.</div>
   `;
   setTimeout(_myDayTick, 0);
   return html;
 }
 
-async function addMyDayItem(type){
+// ── Shared dashboard pieces (My Day + Checklists) ──
+function _dashRing(pct, label, sub){
+  const c = 2*Math.PI*34, filled = Math.max(0, Math.min(100, pct))/100*c;
+  return `<div class="dash-tile dash-tile--ring">
+    <svg width="84" height="84" viewBox="0 0 84 84" role="img" aria-label="${pct} percent">
+      <circle cx="42" cy="42" r="34" fill="none" stroke="var(--bg3)" stroke-width="10"></circle>
+      ${filled>0?`<circle cx="42" cy="42" r="34" fill="none" stroke="var(--green-solid)" stroke-width="10" stroke-dasharray="${filled.toFixed(1)} ${c.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 42 42)"></circle>`:''}
+      <text x="42" y="47" text-anchor="middle" class="dash-ring__pct">${pct}%</text>
+    </svg>
+    <div><div class="dash-tile__label">${label}</div><div class="dash-ring__sub">${sub}</div></div>
+  </div>`;
+}
+function _dashBar(label, n, pct, hatch){
+  return `<div class="dash-bar"><span>${label}</span><div class="dash-bar__track"><i class="${hatch?'is-hatch':''}" style="width:${pct}%"></i></div><b>${n}</b></div>`;
+}
+
+async function addMyDayItem(type, fk){
+  fk = fk || type; // which add form the values come from (the unified bar passes 'new')
   if(!myDayCol || !authUser){ return; }
-  const inputEl = document.getElementById('mdInput_'+type);
+  const inputEl = document.getElementById('mdInput_'+fk);
   const text = (inputEl && inputEl.value || '').trim();
   if(!text){ if(inputEl) inputEl.focus(); return; }
   const rec = { owner: authUser, type, text, status:'pending', createdAt: Date.now() };
   // Date + time now apply to ALL columns, not just Schedule — this is what
   // lets a to-do or follow-up be scheduled for a future day (added).
-  const dateEl = document.getElementById('mdDate_'+type);
-  const timeEl0 = document.getElementById('mdTime_'+type);
+  const dateEl = document.getElementById('mdDate_'+fk);
+  const timeEl0 = document.getElementById('mdTime_'+fk);
   const dStr = dateEl && dateEl.value;
   const tStr = timeEl0 && timeEl0.value;
   if(dStr || tStr){
@@ -1766,28 +1926,28 @@ async function addMyDayItem(type){
   }
   // Reminder channels (added) — any combination of Browser / WhatsApp / Email
   const reminderMethods = [];
-  if(document.getElementById('mdRemindBrowser_'+type)?.checked) reminderMethods.push('browser');
-  if(document.getElementById('mdRemindWhatsapp_'+type)?.checked) reminderMethods.push('whatsapp');
-  if(document.getElementById('mdRemindEmail_'+type)?.checked) reminderMethods.push('email');
+  if(document.getElementById('mdRemindBrowser_'+fk)?.checked) reminderMethods.push('browser');
+  if(document.getElementById('mdRemindWhatsapp_'+fk)?.checked) reminderMethods.push('whatsapp');
+  if(document.getElementById('mdRemindEmail_'+fk)?.checked) reminderMethods.push('email');
   if(reminderMethods.length){
     if(!rec.dueAtTs){ alert('Set a date and/or time above so the reminder knows when to fire.'); return; }
     rec.reminderMethods = reminderMethods;
   }
   if(type==='followup'){
-    const methEl = document.getElementById('mdMethod_followup');
+    const methEl = document.getElementById('mdMethod_'+fk);
     if(methEl && methEl.value) rec.method = methEl.value;
   }
   // "Also add to Schedule" — only offered on To-Do / Follow-Up columns.
-  const linkCb = (type==='todo'||type==='followup') ? document.getElementById('mdLink_'+type) : null;
+  const linkCb = (type==='todo'||type==='followup') ? document.getElementById('mdLink_'+fk) : null;
   const wantsLink = !!(linkCb && linkCb.checked);
   try{
     const mainRef = await myDayCol.add(rec);
     if(wantsLink){
-      const whenEl = document.querySelector(`input[name="mdLinkWhen_${type}"]:checked`);
+      const whenEl = document.querySelector(`input[name="mdLinkWhen_${fk}"]:checked`);
       const at = whenEl && whenEl.value==='attime';
       const schedRec = { owner: authUser, type:'schedule', text, status:'pending', createdAt: Date.now(), linkedId: mainRef.id };
       if(at){
-        const clockEl = document.getElementById('mdLinkClock_'+type);
+        const clockEl = document.getElementById('mdLinkClock_'+fk);
         const t = clockEl && clockEl.value;
         if(t){
           schedRec.time = t;
@@ -1800,14 +1960,14 @@ async function addMyDayItem(type){
       await mainRef.update({ linkedId: schedRef.id });
     }
     if(inputEl){ inputEl.value=''; inputEl.focus(); }
-    const timeElReset = document.getElementById('mdTime_'+type); if(timeElReset) timeElReset.value='';
-    const dateElReset = document.getElementById('mdDate_'+type); if(dateElReset) dateElReset.value='';
-    ['Browser','Whatsapp','Email'].forEach(ch=>{ const cb=document.getElementById('mdRemind'+ch+'_'+type); if(cb) cb.checked=false; });
+    const timeElReset = document.getElementById('mdTime_'+fk); if(timeElReset) timeElReset.value='';
+    const dateElReset = document.getElementById('mdDate_'+fk); if(dateElReset) dateElReset.value='';
+    ['Browser','Whatsapp','Email'].forEach(ch=>{ const cb=document.getElementById('mdRemind'+ch+'_'+fk); if(cb) cb.checked=false; });
     if(linkCb){
       linkCb.checked = false;
-      const timeChoice = document.getElementById('mdLinkTime_'+type); if(timeChoice) timeChoice.classList.remove('show');
-      const clockEl = document.getElementById('mdLinkClock_'+type); if(clockEl) clockEl.value='';
-      const anytimeRadio = document.querySelector(`input[name="mdLinkWhen_${type}"][value="anytime"]`); if(anytimeRadio) anytimeRadio.checked = true;
+      const timeChoice = document.getElementById('mdLinkTime_'+fk); if(timeChoice) timeChoice.classList.remove('show');
+      const clockEl = document.getElementById('mdLinkClock_'+fk); if(clockEl) clockEl.value='';
+      const anytimeRadio = document.querySelector(`input[name="mdLinkWhen_${fk}"][value="anytime"]`); if(anytimeRadio) anytimeRadio.checked = true;
     }
   }catch(err){ console.error('My Day add error:', err); (window.showToast?showToast('Could not add — try again'):alert('Could not add — try again')); }
 }
