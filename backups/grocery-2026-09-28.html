@@ -608,6 +608,14 @@ window.addEventListener('load', async ()=>{
     await loadEvents();
     initTypeSelects();
     renderPicker();
+    const deepLinkId = new URLSearchParams(location.search).get('event');
+    if(deepLinkId){
+      const sel = document.getElementById('evSelect');
+      if([...sel.options].some(o=>o.value===deepLinkId)){
+        sel.value = deepLinkId;
+        onEventPick();
+      }
+    }
     document.getElementById('bootMsg').textContent='';
     document.getElementById('topSub').textContent = 'Connected · '+events.length+' events loaded';
   }catch(e){
