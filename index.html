@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=24">
+<link rel="stylesheet" href="styles.css?v=26">
 </head>
 <body>
 
@@ -1800,20 +1800,20 @@ function renderMyDay(){
     let when = '<span class="u-muted">—</span>';
     if(it.dueAtTs){
       const d = new Date(it.dueAtTs);
-      const dayPart = _mdStartOfDay(it.dueAtTs)===sod ? 'Today' : d.toLocaleDateString('en-US',{weekday:'short', month:'numeric', day:'numeric'});
-      when = dayPart + (it.time ? ' '+d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) : '');
+      const dayPart = _mdStartOfDay(it.dueAtTs)===sod ? 'Today' : (d.getMonth()+1)+'/'+d.getDate();
+      when = dayPart + (it.time ? ' \u00B7 '+d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) : '');
     } else if(it.time){ when = _myDayEsc(it.time); }
     const meta = [];
     if(it.reminderMethods && it.reminderMethods.length) meta.push('<i class="ti ti-bell"></i> '+it.reminderMethods.join('/'));
     const done = it.status==='done';
     return `<div class="dash-row dash-row--md${done?' is-done':''}${st.key==='overdue'?' is-late':''}">
-      <button class="dash-check" onclick="toggleMyDayItem('${it.id}')" title="${done?'Mark not done':'Mark done'}" aria-label="${done?'Mark not done':'Mark done'}">${done?'✓':''}</button>
+      <div class="dash-checkcell"><button class="dash-check" onclick="toggleMyDayItem('${it.id}')" title="${done?'Mark not done':'Mark done'}" aria-label="${done?'Mark not done':'Mark done'}">${done?'✓':''}</button></div>
       <div class="dash-row__main"><div class="dash-row__text">${_myDayEsc(it.text)} ${_myDayLinkBadge(it)}</div>${meta.length?`<div class="dash-row__meta">${meta.join(' &nbsp; ')}</div>`:''}</div>
-      <div class="dash-row__cell"><i class="ti ${ty.icon}"></i> ${ty.label}</div>
-      <div class="dash-row__cell">${how}</div>
-      <div class="dash-row__cell dash-mono">${when}</div>
-      <div><span class="pill ${st.cls}"><span aria-hidden="true">${st.sym}</span> ${st.label}</span></div>
-      <button class="btn--icon is-danger dash-del" onclick="deleteMyDayItem('${it.id}')" title="Delete" aria-label="Delete"><i class="ti ti-x"></i></button>
+      <div class="dash-row__cell dash-c"><i class="ti ${ty.icon}"></i> ${ty.label}</div>
+      <div class="dash-row__cell dash-c">${how}</div>
+      <div class="dash-row__cell dash-mono dash-c">${when}</div>
+      <div class="dash-st dash-st--${st.key}"><span aria-hidden="true">${st.sym}</span> ${st.label}</div>
+      <div class="dash-delcell"><button class="btn--icon is-danger dash-del" onclick="deleteMyDayItem('${it.id}')" title="Delete" aria-label="Delete"><i class="ti ti-x"></i></button></div>
     </div>`;
   };
   const counts = {all:current.length};
@@ -1824,7 +1824,7 @@ function renderMyDay(){
 
   const list = `<section class="dash-panel">
       <div class="dash-panel__head">
-        <h2>Today's list</h2>
+        <h2>Task list</h2>
         <div class="dash-chips">${chip('all','All')}${chip('schedule','Schedule')}${chip('todo','To-Do')}${chip('followup','Follow-Ups')}</div>
       </div>
       <div class="dash-row dash-row--md dash-row--head"><span></span><span>Item</span><span>Type</span><span>How</span><span>When</span><span>Status</span><span></span></div>
@@ -1847,23 +1847,49 @@ function renderMyDay(){
       </div>
     </section>`;
 
-  // Side panels
-  const maxOpen = Math.max(1, ...MYDAY_TYPES.map(t=>open.filter(it=>it.type===t.key).length));
+  // Side panels — chart by type + status pie (like the reference dashboard)
+  const typeColors = {schedule:'var(--dash-bar-blue)', todo:'var(--dash-bar-salmon)', followup:'var(--dash-bar-green)'};
   const bars = `<section class="dash-panel dash-panel--pad">
-      <h2 class="dash-h2">Still open, by type</h2>
-      ${MYDAY_TYPES.map(t=>{ const n=open.filter(it=>it.type===t.key).length;
-        return _dashBar(t.label==='Follow-Up'?'Follow-Ups':t.label, n, Math.round(n/maxOpen*100)); }).join('')}
+      <h2 class="dash-h2">Open by type</h2>
+      ${_dashVBars(MYDAY_TYPES.map(t=>({label:t.key==='followup'?'Follow-Ups':t.label, n:open.filter(it=>it.type===t.key).length, color:typeColors[t.key]})))}
     </section>`;
-  const sugg = `<section class="dash-panel dash-panel--pad">
-      <div class="dash-panel__title-row"><h2 class="dash-h2">Suggested follow-ups</h2>${mySuggestions.length?`<span class="pill pill--invoice"><span aria-hidden="true">✦</span> ${mySuggestions.length} new</span>`:''}</div>
-      ${mySuggestions.length ? _mySuggestionsBlock().replace(/<div class="md-sugg-label">[\s\S]*?<\/div>/,'').replace(/<div class="md-follow-label">[\s\S]*?<\/div>$/,'') : '<div class="dash-empty dash-empty--sm">No suggestions right now.</div>'}
+  const stCount = k => current.filter(it=>_mdStatus(it).key===k).length;
+  const pie = `<section class="dash-panel dash-panel--pad">
+      <h2 class="dash-h2">Task overview</h2>
+      ${_dashPie([
+        {label:'Done',      n:stCount('done'),                      color:'var(--dash-bar-green)',  sym:'✓'},
+        {label:'Overdue',   n:stCount('overdue'),                   color:'var(--dash-bar-salmon)', sym:'▲'},
+        {label:'Due today', n:stCount('today'),                     color:'var(--dash-bar-yellow)', sym:'◷'},
+        {label:'Open',      n:stCount('later')+stCount('open'),     color:'var(--dash-bar-grey)',   sym:'○'},
+      ], 'Items')}
     </section>`;
+  const deadlines = `<section class="dash-panel dash-panel--pad">
+      <h2 class="dash-h2">Upcoming deadlines</h2>
+      ${_dashDeadlines(open.filter(it=>it.dueAtTs).sort((a,b)=>a.dueAtTs-b.dueAtTs).slice(0,5).map(it=>({text:_myDayEsc(it.text), dueTs:it.dueAtTs})))}
+    </section>`;
+  // Weekly progress: items finished in each of the last 4 weeks (Mon–Sun)
+  const wk0 = new Date(sod); wk0.setDate(wk0.getDate() - ((wk0.getDay()+6)%7));
+  const weeks = [3,2,1,0].map(k=>{ const a=wk0.getTime()-k*7*86400000, b=a+7*86400000;
+    const lab = k===0 ? 'This week' : new Date(a).toLocaleDateString('en-US',{month:'numeric',day:'numeric'});
+    return {label:lab, n:myDayItems.filter(it=>it.status==='done' && it.doneAt>=a && it.doneAt<b).length, color:'#A77BE6'}; });
+  const weekly = `<section class="dash-panel dash-panel--pad">
+      <h2 class="dash-h2">Weekly progress</h2>
+      <div class="dash-vbars--purple">${_dashVBars(weeks)}</div>
+    </section>`;
+  const suggAll = !!window._mdSuggAll;
+  const suggCards = mySuggestions.length ? _mySuggestionsBlock().replace(/<div class="md-sugg-label">[\s\S]*?<\/div>/,'').replace(/<div class="md-follow-label">[\s\S]*?<\/div>$/,'') : '';
+  const suggList = suggCards.split(/(?=<div class="md-sugg-card">)/).filter(x=>x.trim());
+  const sugg = mySuggestions.length ? `<section class="dash-panel dash-panel--pad dash-sugg">
+      <div class="dash-panel__title-row"><h2 class="dash-h2">Suggested follow-ups (${mySuggestions.length})</h2>
+        ${suggList.length>3?`<button class="btn btn--sm" onclick="window._mdSuggAll=!window._mdSuggAll;render()">${suggAll?'Show fewer':'Show all '+suggList.length}</button>`:''}</div>
+      <div class="dash-sugg__grid">${(suggAll?suggList:suggList.slice(0,3)).join('')}</div>
+    </section>` : '';
 
   const html = `
     ${typeof navReturnBreadcrumb==='function' ? navReturnBreadcrumb() : ''}
     <div class="section-header">
-      <div><div class="eyebrow">Only you can see this</div><div class="section-title">My Day — ${_myDayEsc(prettyName(authUser))}</div>
-        <div class="dash-subtitle">${new Date().toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric'})} · <span class="md-clock" id="myDayClock"></span></div></div>
+      <div><div class="eyebrow">Only you can see this</div><div class="section-title">My Day</div>
+        <div class="dash-kicker">${_myDayEsc(String(prettyName(authUser)).split(' /')[0])} · ${new Date().toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric'})} · <span class="md-clock" id="myDayClock"></span></div></div>
       <div class="u-row">
         <button class="btn" onclick="_myDayToggleImport()"><i class="ti ti-clipboard-list"></i>Import</button>
         <button class="btn btn--pri" onclick="document.getElementById('mdInput_new')?.focus()"><i class="ti ti-plus"></i>New item</button>
@@ -1878,8 +1904,8 @@ function renderMyDay(){
     </div>
     ${tiles}
     <div class="dash-grid">
-      ${list}
-      <div class="dash-side">${bars}${sugg}</div>
+      <div>${list}${sugg}</div>
+      <div class="dash-side">${pie}${deadlines}${bars}${weekly}</div>
     </div>
     <div class="dash-foot">Reminders fire while this app is open in a browser tab — they won’t wake your phone if the tab is closed.</div>
   `;
@@ -1889,15 +1915,47 @@ function renderMyDay(){
 
 // ── Shared dashboard pieces (My Day + Checklists) ──
 function _dashRing(pct, label, sub){
-  const c = 2*Math.PI*34, filled = Math.max(0, Math.min(100, pct))/100*c;
+  const c = 2*Math.PI*40, filled = Math.max(0, Math.min(100, pct))/100*c;
   return `<div class="dash-tile dash-tile--ring">
-    <svg width="84" height="84" viewBox="0 0 84 84" role="img" aria-label="${pct} percent">
-      <circle cx="42" cy="42" r="34" fill="none" stroke="var(--bg3)" stroke-width="10"></circle>
-      ${filled>0?`<circle cx="42" cy="42" r="34" fill="none" stroke="var(--green-solid)" stroke-width="10" stroke-dasharray="${filled.toFixed(1)} ${c.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 42 42)"></circle>`:''}
-      <text x="42" y="47" text-anchor="middle" class="dash-ring__pct">${pct}%</text>
+    <div class="dash-tile__label">${label}</div>
+    <svg width="104" height="104" viewBox="0 0 104 104" role="img" aria-label="${pct} percent">
+      <circle cx="52" cy="52" r="40" fill="none" stroke="#E3E5E8" stroke-width="13"></circle>
+      ${filled>0?`<circle cx="52" cy="52" r="40" fill="none" stroke="#2E9E4F" stroke-width="13" stroke-dasharray="${filled.toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 52 52)"></circle>`:''}
+      <text x="52" y="59" text-anchor="middle" class="dash-ring__pct">${pct}%</text>
     </svg>
-    <div><div class="dash-tile__label">${label}</div><div class="dash-ring__sub">${sub}</div></div>
+    <div class="dash-ring__sub">${sub}</div>
   </div>`;
+}
+// Vertical bar chart: [{label, n, color, hatch}]
+function _dashVBars(items){
+  const max = Math.max(1, ...items.map(i=>i.n));
+  return `<div class="dash-vbars">${items.map(i=>`<div class="dash-vbar"><b>${i.n}</b><i class="${i.hatch?'is-hatch':''}" style="height:${Math.round(i.n/max*120)}px;background-color:${i.color}"></i></div>`).join('')}</div>
+    <div class="dash-vbars__labels">${items.map(i=>`<span title="${i.label}">${i.label}</span>`).join('')}</div>`;
+}
+// Pie with a legend that carries symbol + count + percent (never colour alone): [{label, n, color, sym}]
+function _dashPie(slices, centerLabel){
+  // Donut with the total in the middle; legend carries symbol + count + percent.
+  const total = slices.reduce((t,x)=>t+x.n,0);
+  let acc = 0;
+  const stops = total ? slices.filter(x=>x.n).map(x=>{ const a=acc/total*360; acc+=x.n; const b=acc/total*360; return `${x.color} ${a.toFixed(1)}deg ${b.toFixed(1)}deg`; }).join(',') : '#E3E5E8 0deg 360deg';
+  return `<div class="dash-pie">
+    <div class="dash-pie__disc" style="background:conic-gradient(${stops})" role="img" aria-label="${total} total">
+      <div class="dash-pie__hole"><b>${total}</b><span>${centerLabel||'Total'}</span></div>
+    </div>
+    <div class="dash-pie__legend">${slices.map(x=>`<span><i style="background:${x.color}">${x.sym}</i>${x.label}<em>${x.n} · ${total?Math.round(x.n/total*100):0}%</em></span>`).join('')}</div>
+  </div>`;
+}
+// Upcoming deadlines table: rows [{text, sub, dueTs}]
+function _dashDeadlines(rows){
+  if(!rows.length) return '<div class="dash-empty dash-empty--sm">Nothing with a due date.</div>';
+  const sod = new Date(); sod.setHours(0,0,0,0);
+  return `<div class="dash-dl"><div class="dash-dl__row dash-dl__row--head"><span>Task</span><span>Due</span><span>Days left</span></div>
+    ${rows.map(r=>{
+      const d = new Date(r.dueTs); const dd = new Date(d); dd.setHours(0,0,0,0);
+      const days = Math.round((dd - sod)/86400000);
+      const left = days<0 ? `<b class="is-late">▲ ${-days} late</b>` : days===0 ? '<b class="is-late">Today</b>' : days===1 ? '<b class="is-late">1</b>' : `<b>${days}</b>`;
+      return `<div class="dash-dl__row"><span class="dash-dl__task">${r.text}${r.sub?`<small>${r.sub}</small>`:''}</span><span>${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span><span>${left}</span></div>`;
+    }).join('')}</div>`;
 }
 function _dashBar(label, n, pct, hatch){
   return `<div class="dash-bar"><span>${label}</span><div class="dash-bar__track"><i class="${hatch?'is-hatch':''}" style="width:${pct}%"></i></div><b>${n}</b></div>`;
