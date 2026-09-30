@@ -6,6 +6,7 @@
 <title>Premier Caterers — Grocery & Kitchen Copy</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <style>
   :root{
@@ -604,6 +605,23 @@ window.addEventListener('load', async ()=>{
     GLIB = db.collection('gro_library');     // overrides/additions to the seed
     GSAVED = db.collection('gro_saved');      // saved per-event grocery
     EVENTS = db.collection('events');         // main app events (read)
+
+// --- Identity gate ----------------------------------------------------
+// Signs this page in before it touches the database. Staff already signed
+// in elsewhere keep that session; everyone else gets a silent anonymous
+// identity — no login screen, nothing visible changes. This exists so the
+// Firestore rules can require SOMEONE, instead of leaving the database
+// open to the whole internet. Every load-time read waits on this.
+const authReady = new Promise(function(resolve){
+  var off = firebase.auth().onAuthStateChanged(function(u){
+    off();
+    if(u) return resolve(u);   // already signed in (staff) — leave it be
+    firebase.auth().signInAnonymously().then(function(c){ resolve(c && c.user); })
+      .catch(function(e){ console.error('Anonymous sign-in failed:', e && e.code); resolve(null); });
+  }, function(e){ console.error('Auth listener failed:', e && e.code); resolve(null); });
+});
+
+    await authReady;
     await loadLibrary();
     await loadEvents();
     initTypeSelects();
