@@ -60,6 +60,7 @@
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script>
@@ -74,6 +75,22 @@ const firebaseConfig = {
 if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const storage = firebase.storage();
+
+// --- Identity gate ----------------------------------------------------
+// Signs this page in before it touches the database. Staff already signed
+// in elsewhere keep that session; everyone else gets a silent anonymous
+// identity — no login screen, nothing visible changes. This exists so the
+// Firestore rules can require SOMEONE, instead of leaving the database
+// open to the whole internet. Every load-time read waits on this.
+const authReady = new Promise(function(resolve){
+  var off = firebase.auth().onAuthStateChanged(function(u){
+    off();
+    if(u) return resolve(u);   // already signed in (staff) — leave it be
+    firebase.auth().signInAnonymously().then(function(c){ resolve(c && c.user); })
+      .catch(function(e){ console.error('Anonymous sign-in failed:', e && e.code); resolve(null); });
+  }, function(e){ console.error('Auth listener failed:', e && e.code); resolve(null); });
+});
+
 
 // Each item is either a plain checkbox ('check'), a Full/OK/Low level pick
 // ('level'), a fuel-tank fraction pick ('fuel'), or a number entry ('number').
@@ -125,6 +142,7 @@ document.getElementById('weekLabel').innerHTML = 'Week of ' + new Date(weekOf+'T
 let existing = {}; // truckId -> doc data, if already submitted this week
 
 async function loadExisting(){
+  await authReady;
   const snap = await db.collection('truckChecklists').where('weekOf','==',weekOf).get();
   snap.forEach(doc=>{ existing[doc.data().truckId] = { id: doc.id, ...doc.data() }; });
 }
