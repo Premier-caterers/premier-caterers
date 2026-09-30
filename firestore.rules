@@ -1,0 +1,36 @@
+// Premier Caterers — Firestore security rules
+//
+// STEP 1 (this file): require an identity.
+// Every app now signs in before it touches the database — staff with their
+// real login, everyone else silently and anonymously. So the database can
+// stop accepting requests from anyone at all on the internet.
+//
+// What this stops: someone finding the database address in the public
+// source and reading or deleting client invoices, contracts, time-clock
+// punches and vendor pricing straight from a browser console. That is
+// exactly what "if true" allowed.
+//
+// What this does NOT stop: someone who reads the public source, gets their
+// own anonymous token, and then asks for data. This is a locked door, not
+// a guard — a big improvement, not the finished job.
+//
+// STEP 2 (later): per-collection rules. Invoices, contracts, clientPortals,
+// events and the tc_* payroll collections restricted to real staff logins;
+// clients able to create a drop-off order or an inquiry but never to read
+// anyone else's. That needs testing app by app and is its own project.
+//
+// BEFORE CHANGING THIS FILE: every app must already be deployed with the
+// identity gate. Any app without it stops working the moment these rules
+// go live.
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+  }
+}
