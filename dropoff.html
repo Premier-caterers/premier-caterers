@@ -104,6 +104,20 @@ a{color:var(--maroon);text-decoration:none}
 .cp-flag{font-size:10.5px;font-weight:700;color:var(--maroon-deep);letter-spacing:.04em;margin-top:3px}
 .cp-price{font-family:'IBM Plex Mono',monospace;font-size:13px;white-space:nowrap}
 .cp-ctrl{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cp-line.dragging{opacity:.45}
+.cp-move{display:flex;flex-direction:column;align-items:center;gap:1px;flex:0 0 auto;padding-top:1px}
+.cp-move button{width:20px;height:17px;border:1px solid var(--border);background:var(--bg);border-radius:5px;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;padding:0;line-height:1}
+.cp-move button:hover:not(:disabled){background:var(--bg3);color:var(--text)}
+.cp-move button:disabled{opacity:.28;cursor:default}
+.cp-grip{color:var(--text3);font-size:13px;cursor:grab;line-height:1;margin-bottom:1px}
+.cp-grip:active{cursor:grabbing}
+.eo-row.dragging{opacity:.45}
+.eo-move{display:flex;flex-direction:column;align-items:center;gap:1px;flex:0 0 auto}
+.eo-move button{width:22px;height:18px;border:1px solid var(--border);background:var(--bg);border-radius:5px;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;padding:0;line-height:1}
+.eo-move button:hover:not(:disabled){background:var(--bg3);color:var(--text)}
+.eo-move button:disabled{opacity:.28;cursor:default}
+.eo-grip{color:var(--text3);font-size:14px;cursor:grab;line-height:1;margin-bottom:2px}
+.eo-grip:active{cursor:grabbing}
 .cp-step{display:flex;align-items:center;border:1px solid var(--maroon);border-radius:9px;overflow:hidden}
 .cp-step button{width:34px;height:32px;border:none;background:var(--bg);font-size:16px;color:var(--text);font-family:'IBM Plex Mono',monospace}
 .cp-step input{width:46px;height:32px;border:none;border-left:1px solid var(--border);border-right:1px solid var(--border);text-align:center;font-family:'IBM Plex Mono',monospace;font-size:13px;-moz-appearance:textfield}
@@ -166,6 +180,33 @@ a{color:var(--maroon);text-decoration:none}
 .pill-status.submitted{background:var(--green-bg);color:var(--green-text)}
 .pill-status.linked{background:var(--maroon-tint);color:var(--maroon-deep)}
 
+/* ── reorderable line items (cart panel + edit order) ──
+   Two ways to move a line, on purpose: the arrows work everywhere
+   including phones and tablets, where HTML5 drag-and-drop does not
+   fire at all; the grip is for a mouse, where dragging is quicker
+   than clicking an arrow five times. */
+.row-tools{display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0}
+.row-grip{cursor:grab;background:none;border:none;color:var(--text3);font-size:15px;line-height:1;padding:2px 4px;touch-action:none}
+.row-grip:active{cursor:grabbing}
+.row-move{width:26px;height:22px;border:1px solid var(--border);background:var(--bg);border-radius:6px;color:var(--text2);font-size:11px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center}
+.row-move:disabled{opacity:.3;cursor:default}
+.row-move:not(:disabled):hover{border-color:var(--maroon);color:var(--maroon)}
+.drag-over{outline:2px dashed var(--maroon);outline-offset:2px}
+.dragging{opacity:.45}
+.reorder-hint{font-size:11.5px;color:var(--text3);margin-bottom:8px}
+
+/* ── copy a past order to a new date ── */
+#copyOrderOverlay{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:20px}
+#copyOrderOverlay.show{display:flex}
+.co-modal{background:var(--bg);border-radius:16px;padding:24px;max-width:420px;width:100%}
+.co-modal h3{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:18px;margin-bottom:6px}
+.co-modal .co-sub{font-size:13px;color:var(--text2);margin-bottom:16px}
+
+/* ── info gate (collected before the menu) ── */
+.ig-strip{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--maroon-tint);border:1px solid var(--maroon);border-radius:var(--radius-lg);padding:11px 16px;margin-bottom:14px;font-size:13px}
+.ig-strip b{color:var(--maroon-deep)}
+.ig-req{color:var(--red)}
+
 /* login overlay (staff only) */
 #loginOverlay{position:fixed;inset:0;z-index:9999;background:var(--maroon);display:none;align-items:center;justify-content:center;padding:24px}
 .lg-box{background:#fff;border-radius:16px;padding:32px;max-width:340px;width:100%;text-align:center}
@@ -204,8 +245,36 @@ a{color:var(--maroon);text-decoration:none}
 
 <div class="wrap" id="appWrap">
 
+  <!-- ============ INFO GATE — comes before the menu ============
+       Collected up front and written to Firestore straight away, so an
+       order that is started and never finished still shows who started
+       it and how to reach them. Everything here is mirrored into the
+       checkout fields, which stay editable. -->
+  <div class="view active" id="view-intro">
+    <div id="igBackLink" style="margin-bottom:16px;display:none"><a href="#" onclick="showView('order');return false"><i class="ti ti-arrow-left"></i> Back to the menu</a></div>
+    <div class="section">
+      <div class="serif" style="font-size:21px;font-weight:600;margin-bottom:6px">Let's start with a few details</div>
+      <div style="color:var(--text2);font-size:13.5px;margin-bottom:18px">Just enough to get the order on our board and reach you if we have a question. You'll pick your items next.</div>
+      <div class="grid2" style="margin-bottom:14px">
+        <div class="field"><label for="igName">Name / occasion <span class="ig-req">*</span></label><input id="igName" type="text" placeholder="e.g. Skolnik Bar Mitzvah kiddush"></div>
+        <div class="field"><label for="igCName">Your name <span class="ig-req">*</span></label><input id="igCName" type="text" placeholder="Full name" autocomplete="name"></div>
+        <div class="field"><label for="igCPhone">Cell number <span class="ig-req">*</span></label><input id="igCPhone" type="tel" placeholder="(201) 555-0100" autocomplete="tel"></div>
+        <div class="field"><label for="igEmail">Email <span class="ig-req">*</span></label><input id="igEmail" type="email" placeholder="name@email.com" autocomplete="email"></div>
+        <div class="field"><label for="igDate">Delivery date <span class="ig-req">*</span></label><input id="igDate" type="date"></div>
+        <div class="field"><label for="igTime">Delivery time</label><input id="igTime" type="time"></div>
+      </div>
+      <div class="field" style="margin-bottom:14px"><label for="igLoc">Location name</label><input id="igLoc" type="text" placeholder="e.g. Congregation Beth Sholom"></div>
+      <div class="field"><label for="igAddr">Delivery address</label><input id="igAddr" type="text" placeholder="Street, city, state, zip" autocomplete="street-address"></div>
+      <div class="lg-err" id="igErr" style="margin-top:12px"></div>
+      <button class="btn btn-pri" style="width:100%;padding:14px" id="igGoBtn" onclick="submitIntroInfo()">Continue to the menu</button>
+      <div class="center-note" style="margin-bottom:0">Ordered from us before? <a href="#" onclick="showView('myorders');return false">Look up a past order</a></div>
+    </div>
+    <div style="text-align:center" id="igStaffSkipWrap"></div>
+  </div>
+
   <!-- ============ ORDER BUILDER ============ -->
-  <div class="view active" id="view-order">
+  <div class="view" id="view-order">
+   <div id="igSummaryStrip"></div>
    <div class="order-layout">
    <div class="order-main">
     <div class="searchbar">
@@ -499,6 +568,23 @@ a{color:var(--maroon);text-decoration:none}
 
 </div>
 
+<!-- Copy a past order onto a new date -->
+<div id="copyOrderOverlay" onclick="if(event.target===this) closeCopyOrderModal()">
+  <div class="co-modal">
+    <h3>Order this again</h3>
+    <div class="co-sub" id="copyOrderSub"></div>
+    <div class="grid2" style="margin-bottom:14px">
+      <div class="field"><label for="copyOrderDate">New delivery date</label><input id="copyOrderDate" type="date"></div>
+      <div class="field"><label for="copyOrderTime">Delivery time</label><input id="copyOrderTime" type="time"></div>
+    </div>
+    <div class="lg-err" id="copyOrderErr"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-pri" style="flex:1" onclick="confirmCopyOrder()">Copy the items over</button>
+      <button class="btn btn-ghost" onclick="closeCopyOrderModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div id="loginOverlay">
   <div class="lg-box" id="loginBox">
     <div class="lg-title">Staff sign in</div>
@@ -551,7 +637,7 @@ function prettyStaffName(u){ return u==='owner' ? 'Kenny' : (u ? u.charAt(0).toU
 
 let isStaff = false;
 let staffUser = null;
-let currentView = 'order';
+let currentView = 'intro';   // the page opens on the details screen, ahead of the menu
 let catalog = [];          // [{id,name,categories:[],type,sizes:[{label,price}],active}]
 let catLoaded = false;
 
@@ -566,6 +652,14 @@ let noteOpen = {};         // keyed itemId -> bool
 let currentOrderId = null; // the Firestore doc id of the in-progress draft
 let draftSaveTimer = null;
 let draftStarted = false;  // has the draft been written at least once
+// The order the lines are shown in, as chosen by whoever is building the
+// order. `cart` is keyed by item, which says nothing about sequence, so
+// the sequence is tracked separately here and everything that lists the
+// cart reads it from this.
+let cartOrder = [];
+// Info gate: true once the up-front details have been taken (or a past
+// order / draft supplied them), which is what unlocks the menu.
+let infoCaptured = false;
 
 /* ---------- small utilities ---------- */
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -588,13 +682,17 @@ function showView(v){
     openStaffLogin();
     return;
   }
+  // The menu is behind the info gate — anyone heading there before the
+  // details are in lands on the gate instead.
+  if(v==='order' && !infoCaptured) v = 'intro';
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   const el = document.getElementById('view-'+v);
   if(el) el.classList.add('active');
   currentView = v;
   window.scrollTo(0,0);
   closeMobileMenu();
-  if(v==='order') renderItemGrid();
+  if(v==='intro') renderIntroView();
+  if(v==='order'){ renderItemGrid(); renderInfoSummary(); }
   if(v==='checkout'){
     renderPaymentChoices(); coRenderEmailsList(); renderCheckoutRecap();
     document.getElementById('coStaffLinkArea').style.display = isStaff ? '' : 'none';
@@ -609,6 +707,105 @@ function showView(v){
   updateTopbar();
 }
 function money(n){ return (parseFloat(n)||0).toFixed(2); }
+
+/* =====================================================================
+   INFO GATE — the few details taken before the menu opens. The point is
+   the half-finished orders: previously someone could fill a cart, walk
+   away, and leave a draft with nobody's name on it. Now the draft is
+   written to Firestore the moment these details are in, so an abandoned
+   order always says who started it and what date they were aiming for.
+   ===================================================================== */
+function fmtPhone(v){
+  const d = String(v||'').replace(/\D/g,'');
+  if(d.length===10) return '('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6);
+  if(d.length===11 && d[0]==='1') return '('+d.slice(1,4)+') '+d.slice(4,7)+'-'+d.slice(7);
+  return String(v||'').trim();
+}
+function _igVal(id){ const el = document.getElementById(id); return el ? (el.value||'').trim() : ''; }
+function _igSet(id, v){ const el = document.getElementById(id); if(el && v!=null) el.value = v; }
+
+function renderIntroView(){
+  // Can't book yesterday. Leaves any date already chosen alone.
+  const d = document.getElementById('igDate');
+  if(d && !d.min){
+    const t = new Date();
+    d.min = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+  }
+  // Coming back to change something: show what's already there and give
+  // a way back to the menu without re-entering everything.
+  const back = document.getElementById('igBackLink');
+  if(back) back.style.display = infoCaptured ? '' : 'none';
+  if(infoCaptured){
+    _igSet('igName', _igVal('coName')); _igSet('igCName', _igVal('coCName'));
+    _igSet('igCPhone', _igVal('coCPhone')); _igSet('igDate', _igVal('coDate'));
+    _igSet('igTime', _igVal('coTime')); _igSet('igLoc', _igVal('coLoc'));
+    _igSet('igAddr', _igVal('coAddr'));
+    _igSet('igEmail', (coEmails[0]||'').trim());
+  }
+  const btn = document.getElementById('igGoBtn');
+  if(btn) btn.textContent = infoCaptured ? 'Save and go back to the menu' : 'Continue to the menu';
+  // Staff building an order on the phone for a client who is still
+  // talking get to skip ahead and fill the details at checkout.
+  const sw = document.getElementById('igStaffSkipWrap');
+  if(sw) sw.innerHTML = isStaff
+    ? '<button class="btn btn-ghost btn-sm" type="button" onclick="skipIntroInfo()">Skip for now &mdash; staff</button>'
+    : '';
+}
+
+function skipIntroInfo(){
+  infoCaptured = true;
+  showView('order');
+}
+
+async function submitIntroInfo(){
+  const err = document.getElementById('igErr');
+  const name = _igVal('igName'), cname = _igVal('igCName');
+  const phone = _igVal('igCPhone'), email = _igVal('igEmail'), date = _igVal('igDate');
+  if(!name){ err.textContent = 'Please give the order a name or occasion.'; return; }
+  if(!cname){ err.textContent = 'Please enter your name.'; return; }
+  if(!phone || String(phone).replace(/\D/g,'').length < 10){ err.textContent = 'Please enter a cell number we can reach you on.'; return; }
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ err.textContent = 'Please enter a valid email address.'; return; }
+  if(!date){ err.textContent = 'Please choose a delivery date.'; return; }
+  err.textContent = '';
+
+  // These are the same fields checkout uses — filling them here means
+  // checkout is already complete when they get to it.
+  _igSet('coName', name); _igSet('coCName', cname);
+  _igSet('coCPhone', fmtPhone(phone)); _igSet('coDate', date);
+  _igSet('coTime', _igVal('igTime')); _igSet('coLoc', _igVal('igLoc'));
+  _igSet('coAddr', _igVal('igAddr'));
+  coEmails = [email];
+
+  infoCaptured = true;
+  const btn = document.getElementById('igGoBtn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+  try{ await saveDraftNow(); }catch(e){ console.error('intro draft save failed', e); }
+  if(btn){ btn.disabled = false; }
+  showView('order');
+}
+
+// The strip across the top of the menu: a reminder of who and when,
+// and the way back to change it.
+function renderInfoSummary(){
+  const el = document.getElementById('igSummaryStrip'); if(!el) return;
+  const name = _igVal('coName'), date = _igVal('coDate'), time = _igVal('coTime');
+  const loc = _igVal('coLoc'), addr = _igVal('coAddr'), phone = _igVal('coCPhone');
+  if(!name && !date){ el.innerHTML = ''; return; }
+  let when = '';
+  if(date){
+    const dt = new Date(date + 'T12:00:00');
+    when = dt.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+    if(time) when += ' · ' + time;
+  }
+  const where = loc || addr;
+  el.innerHTML = '<div class="section" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;padding:12px 16px">'
+    + '<div style="min-width:0"><div style="font-weight:600;font-size:14px">' + esc(name||'Your order') + '</div>'
+    + '<div style="font-size:12.5px;color:var(--text2);margin-top:2px">'
+    + [when, where, phone].filter(Boolean).map(esc).join(' &middot; ')
+    + '</div></div>'
+    + '<button class="btn btn-ghost btn-sm" type="button" onclick="showView(\'intro\')">Edit details</button>'
+    + '</div>';
+}
 
 /* =====================================================================
    CATALOG — replaces the old drop-off Google Sheet. Loaded live so a
@@ -706,6 +903,11 @@ let cpLastChanged = null, cpChangedTimer = null;
 function setCartQty(key, qty){
   qty = Math.max(0, Math.min(9999, parseInt(qty,10)||0));
   if(qty===0) delete cart[key]; else cart[key] = qty;
+  // Keep the chosen sequence in step with the cart: a brand new item goes
+  // on the end, a removed one comes out, so the order panel and the
+  // finished order both list things the way they were built.
+  if(qty===0){ const i = cartOrder.indexOf(key); if(i>=0) cartOrder.splice(i,1); }
+  else if(cartOrder.indexOf(key)<0) cartOrder.push(key);
   cpLastChanged = qty>0 ? key : null;
   clearTimeout(cpChangedTimer);
   cpChangedTimer = setTimeout(()=>{ cpLastChanged = null; renderCartPanel(); }, 4000);
@@ -722,9 +924,9 @@ function cpRemove(key){ setCartQty(key, 0); }
 function renderCartPanel(){
   const el = document.getElementById('cartPanel'); if(!el) return;
   const n = cartCount();
-  const keys = Object.keys(cart).filter(k=>cart[k]>0);
+  const keys = orderedCartKeys();
   let body = '';
-  keys.forEach(key=>{
+  keys.forEach((key, kIdx)=>{
     const [itemId, sizeIdxStr] = key.split('::');
     const item = catalog.find(x=>x.id===itemId); if(!item) return;
     const sz = (item.sizes||[])[parseInt(sizeIdxStr,10)]; if(!sz) return;
@@ -732,8 +934,14 @@ function renderCartPanel(){
     const changed = key===cpLastChanged;
     const note = itemNotes[itemId];
     const safeName = esc(item.name);
-    body += `<div class="cp-line${changed?' changed':''}">
+    body += `<div class="cp-line${changed?' changed':''}${cpDragKey===key?' dragging':''}" draggable="true"
+      ondragstart="cpDragStart('${key}',event)" ondragover="cpDragOver('${key}',event)" ondragend="cpDragEnd()" ondrop="event.preventDefault()">
       <div class="cp-top">
+        <div class="cp-move">
+          <span class="cp-grip" title="Drag to move this line" aria-hidden="true"><i class="ti ti-grip-vertical"></i></span>
+          <button type="button" onclick="moveCartLine('${key}',-1)" aria-label="Move ${safeName} up" ${kIdx===0?'disabled':''}><i class="ti ti-chevron-up"></i></button>
+          <button type="button" onclick="moveCartLine('${key}',1)" aria-label="Move ${safeName} down" ${kIdx===keys.length-1?'disabled':''}><i class="ti ti-chevron-down"></i></button>
+        </div>
         <div class="cp-name"><b>${safeName}</b><div class="cp-size">${esc(sz.label)} &middot; $${money(sz.price)} each</div>
           ${note?`<div class="cp-note">&#9998; ${esc(note)}</div>`:''}
           ${changed?`<div class="cp-flag">&#9650; JUST CHANGED</div>`:''}</div>
@@ -773,9 +981,51 @@ function closeCartSheet(){
 function openNote(itemId){ noteOpen[itemId] = true; renderItemGrid(); }
 function setItemNote(itemId, val){ itemNotes[itemId] = val; renderCartPanel(); scheduleDraftSave(); }
 
+// The cart keys in the sequence they should be listed in: whatever
+// cartOrder holds first, then anything that got into the cart another way
+// (a copied past order, an older saved draft) appended on the end.
+function orderedCartKeys(){
+  const live = Object.keys(cart).filter(k=> cart[k]>0);
+  const seq = cartOrder.filter(k=> live.indexOf(k)>=0);
+  live.forEach(k=>{ if(seq.indexOf(k)<0) seq.push(k); });
+  cartOrder = seq.slice();
+  return seq;
+}
+// Moves one line up or down in the order. dir is -1 for up, +1 for down.
+function moveCartLine(key, dir){
+  const seq = orderedCartKeys();
+  const i = seq.indexOf(key);
+  const j = i + dir;
+  if(i<0 || j<0 || j>=seq.length) return;
+  seq.splice(j, 0, seq.splice(i,1)[0]);
+  cartOrder = seq;
+  renderCartPanel();
+  scheduleDraftSave();
+}
+// Drag-to-reorder for the order panel. Touch screens get the arrows
+// instead — dragging is unreliable there — so this is a bonus on desktop,
+// never the only way to move a line.
+let cpDragKey = null;
+function cpDragStart(key, ev){
+  cpDragKey = key;
+  try{ ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', key); }catch(e){}
+}
+function cpDragOver(key, ev){
+  ev.preventDefault();
+  if(!cpDragKey || cpDragKey===key) return;
+  const seq = orderedCartKeys();
+  const from = seq.indexOf(cpDragKey), to = seq.indexOf(key);
+  if(from<0 || to<0) return;
+  seq.splice(to, 0, seq.splice(from,1)[0]);
+  cartOrder = seq;
+  renderCartPanel();
+}
+function cpDragEnd(){
+  if(cpDragKey){ cpDragKey = null; renderCartPanel(); scheduleDraftSave(); }
+}
 function cartLines(){
   const lines = [];
-  Object.keys(cart).forEach(key=>{
+  orderedCartKeys().forEach(key=>{
     const [itemId, sizeIdxStr] = key.split('::');
     const qty = cart[key]; if(!qty) return;
     const item = catalog.find(x=>x.id===itemId); if(!item) return;
@@ -1087,12 +1337,24 @@ function scheduleDraftSave(){
 }
 async function saveDraftNow(){
   const lines = cartLines();
-  if(!lines.length) return; // nothing worth saving yet
+  // An order with the details in but no items yet is exactly the one
+  // worth saving — that's the person who walked away at the menu.
+  if(!lines.length && !infoCaptured) return;
+  const email = (coEmails[0]||'').trim();
   const payload = {
     status: 'draft',
     lines, total: cartTotal(),
-    clientEmail: (coEmails[0]||'').trim(),
-    clientName: (document.getElementById('coCName')||{}).value || (document.getElementById('coName')||{}).value || '',
+    clientEmail: email,
+    contactEmail: email,
+    contactEmails: coEmails.map(e=>(e||'').trim()).filter(Boolean),
+    clientName: _igVal('coName') || _igVal('coCName'),
+    contactName: _igVal('coCName'),
+    contactPhone: _igVal('coCPhone'),
+    locationName: _igVal('coLoc'),
+    deliveryDate: _igVal('coDate'),
+    deliveryTime: _igVal('coTime'),
+    address: _igVal('coAddr'),
+    placedBy: isStaff ? ('staff:'+staffUser) : 'client',
     updatedAt: Date.now()
   };
   // startNotified only needs setting once, on the very first save that
@@ -1516,7 +1778,7 @@ async function lookupMyOrders(){
       html += `<div class="section">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <div><b>${esc(o.clientName||'Order')}</b> <span style="color:var(--text3);font-size:12px">${esc(dateLabel)}</span></div>
-          <button class="btn btn-ghost btn-sm" onclick="reorderFrom('${doc.id}')">Order this again</button>
+          <button class="btn btn-ghost btn-sm" onclick="openCopyOrderModal('${doc.id}')">Order this again</button>
         </div>
         ${orderRecapHtml(o)}
       </div>`;
@@ -1549,6 +1811,24 @@ async function reorderFrom(orderId, opts){
       if(l.note) itemNotes[item.id] = l.note;
     });
     if(opts.fillDetails) reorderFillDetails(o, opts.date);
+    // Rebuild the line sequence from the order being copied, so it comes
+    // back in the order it was built rather than whatever order the keys
+    // happen to come out in.
+    cartOrder = (o.lines||[]).map(l=>{
+      const it = catalog.find(x=> x.name===l.itemName);
+      const si = it ? (it.sizes||[]).findIndex(s=> s.label===l.sizeLabel) : -1;
+      return (it && si>=0) ? cartKey(it.id, si) : null;
+    }).filter(Boolean);
+    if(opts.time) { const tEl = document.getElementById('coTime'); if(tEl) tEl.value = opts.time; }
+    // A past order already carries the name, phone and email, so whoever
+    // is reordering doesn't get sent back through the details screen.
+    if(!opts.fillDetails){
+      const set = (id,v)=>{ const el = document.getElementById(id); if(el && !el.value && v) el.value = v; };
+      set('coName', o.clientName||''); set('coCName', o.contactName||'');
+      set('coCPhone', o.contactPhone||'');
+      if(!coEmails.some(e=>e&&e.trim())) coEmails = [o.contactEmail||o.clientEmail||''];
+    }
+    infoCaptured = true;
     if(opts.resumeDraft){
       // Pick up the SAME draft rather than copying it: autosave and
       // checkout both write to this order id from here on, so no second
@@ -1588,6 +1868,60 @@ function reorderFillDetails(o, date){
   const tx = document.getElementById('coTaxExempt'); if(tx) tx.checked = !!o.taxExempt;
   const emails = (Array.isArray(o.contactEmails) && o.contactEmails.length) ? o.contactEmails.slice() : [o.contactEmail||o.clientEmail||''];
   coEmails = emails.length ? emails : [''];
+}
+/* =====================================================================
+   COPY AN ORDER ONTO A NEW DATE — "Order this again". The date is always
+   asked for rather than assumed: a repeat order is nearly always for a
+   different week, and a copied order silently keeping last month's date
+   is the mistake worth designing out.
+   ===================================================================== */
+let copyOrderId = null;
+async function openCopyOrderModal(orderId){
+  copyOrderId = orderId;
+  const ov = document.getElementById('copyOrderOverlay');
+  const err = document.getElementById('copyOrderErr'); if(err) err.textContent = '';
+  const dEl = document.getElementById('copyOrderDate');
+  const tEl = document.getElementById('copyOrderTime');
+  const t = new Date();
+  const todayStr = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+  if(dEl){ dEl.min = todayStr; dEl.value = ''; }
+  if(tEl) tEl.value = '';
+  const sub = document.getElementById('copyOrderSub');
+  if(sub) sub.textContent = 'Loading…';
+  ov.classList.add('show');
+  try{
+    const doc = await ordersCol.doc(orderId).get();
+    if(doc.exists){
+      const o = doc.data();
+      const n = (o.lines||[]).reduce((s,l)=>s+l.qty,0);
+      if(sub) sub.textContent = (o.clientName||'That order') + ' — ' + n + ' item' + (n===1?'':'s')
+        + (o.deliveryDate ? (', last delivered ' + o.deliveryDate) : '') + '. Pick the new delivery date.';
+      // Same weekday as last time is the usual answer, so it is offered
+      // as a starting point — still visible and still changeable.
+      if(dEl && o.deliveryDate && /^\d{4}-\d{2}-\d{2}$/.test(o.deliveryDate)){
+        const prev = new Date(o.deliveryDate+'T12:00:00');
+        const next = new Date(prev.getTime());
+        while(next <= t) next.setDate(next.getDate() + 7);
+        dEl.value = next.getFullYear()+'-'+String(next.getMonth()+1).padStart(2,'0')+'-'+String(next.getDate()).padStart(2,'0');
+      }
+      if(tEl && o.deliveryTime) tEl.value = o.deliveryTime;
+    } else if(sub){ sub.textContent = 'Pick the new delivery date.'; }
+  }catch(e){ console.error(e); if(sub) sub.textContent = 'Pick the new delivery date.'; }
+}
+function closeCopyOrderModal(){
+  document.getElementById('copyOrderOverlay').classList.remove('show');
+  copyOrderId = null;
+}
+async function confirmCopyOrder(){
+  const err = document.getElementById('copyOrderErr');
+  const date = (document.getElementById('copyOrderDate').value||'').trim();
+  const time = (document.getElementById('copyOrderTime').value||'').trim();
+  if(!date){ err.textContent = 'Please choose the new delivery date.'; return; }
+  if(!copyOrderId){ err.textContent = 'Something went wrong — close this and try again.'; return; }
+  const id = copyOrderId;
+  err.textContent = '';
+  closeCopyOrderModal();
+  await reorderFrom(id, {fillDetails:true, date, time});
 }
 function reorderShowNotice(o, missing, filled, resumed){
   const el = document.getElementById('reorderNotice'); if(!el) return;
@@ -1840,6 +2174,7 @@ firebase.auth().onAuthStateChanged(user=>{
     isStaff = true; staffUser = u;
     closeStaffLogin();
     updateTopbar();
+    if(currentView==='intro') renderIntroView();
     if(pendingStaffView){ const v = pendingStaffView; pendingStaffView = null; showView(v); }
   } else if(user){
     firebase.auth().signOut();
@@ -1941,6 +2276,9 @@ function renderStaffOrders(){
     // Download — saves the same PDF the client receives, for any order that has items.
     const downloadBtn = (o.lines && o.lines.length)
       ? `<button class="btn btn-ghost btn-sm" onclick="staffDownloadOrder('${o.id}')" style="margin-left:6px"><i class="ti ti-download"></i> Download</button>` : '';
+    // Copy — rebuilds this order on a new date, asking for the date first.
+    const copyBtn = (o.lines && o.lines.length)
+      ? `<button class="btn btn-ghost btn-sm" onclick="openCopyOrderModal('${o.id}')" style="margin-left:6px" title="Build this same order again on a new date"><i class="ti ti-copy"></i> Copy</button>` : '';
     const deleteBtn = `<button class="btn btn-ghost btn-sm" onclick="deleteOrder('${o.id}')" style="margin-left:6px;color:var(--red)">Delete</button>`;
     html += `<tr>
       <td><b>${esc(o.clientName||o.contactName||'—')}</b><br><span style="color:var(--text3);font-size:11.5px">${esc(o.contactEmail||o.clientEmail||'')}</span></td>
@@ -1948,7 +2286,7 @@ function renderStaffOrders(){
       <td>${itemCount} item${itemCount===1?'':'s'}</td>
       <td class="mono">$${money(o.total||0)}</td>
       <td><span class="pill-status ${statusClass}">${statusLabel}</span>${flagNote}</td>
-      <td>${continueBtn}${approveBtn}${bookBtn}${linkBtn}${editBtn}${resendBtn}${downloadBtn}${deleteBtn}</td>
+      <td>${continueBtn}${approveBtn}${bookBtn}${linkBtn}${editBtn}${resendBtn}${copyBtn}${downloadBtn}${deleteBtn}</td>
     </tr>`;
   });
   tbl.innerHTML = html;
@@ -2243,6 +2581,28 @@ function eoUpdatePrice(idx, val){
   if(cell) cell.textContent = '$'+money(eoLines[idx].price*eoLines[idx].qty);
   renderEditOrderTotals();
 }
+// Reordering the lines on an order. The arrows are the reliable way
+// (they work on a phone); dragging the grip is the quicker way on a
+// desktop. Both land here so the saved order matches what's on screen.
+function eoMoveItem(idx, dir){
+  const j = idx + dir;
+  if(j<0 || j>=eoLines.length) return;
+  eoLines.splice(j, 0, eoLines.splice(idx,1)[0]);
+  renderEditOrderItems();
+}
+let eoDragIdx = null;
+function eoDragStart(idx, ev){
+  eoDragIdx = idx;
+  try{ ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(idx)); }catch(e){}
+}
+function eoDragOver(idx, ev){
+  ev.preventDefault();
+  if(eoDragIdx===null || eoDragIdx===idx) return;
+  eoLines.splice(idx, 0, eoLines.splice(eoDragIdx,1)[0]);
+  eoDragIdx = idx;
+  renderEditOrderItems();
+}
+function eoDragEnd(){ if(eoDragIdx!==null){ eoDragIdx = null; renderEditOrderItems(); } }
 function eoRemoveItem(idx){
   eoLines.splice(idx,1);
   renderEditOrderItems();
@@ -2252,7 +2612,14 @@ function renderEditOrderItems(){
   const el = document.getElementById('eoItemsList');
   if(!eoLines.length){ el.innerHTML = '<div class="empty">No items — add at least one below.</div>'; return; }
   el.innerHTML = eoLines.map((l,idx)=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;flex-wrap:wrap">
+    <div class="eo-row${eoDragIdx===idx?' dragging':''}" draggable="true"
+      ondragstart="eoDragStart(${idx},event)" ondragover="eoDragOver(${idx},event)" ondragend="eoDragEnd()" ondrop="event.preventDefault()"
+      style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;flex-wrap:wrap">
+      <div class="eo-move">
+        <span class="eo-grip" title="Drag to move this item" aria-hidden="true"><i class="ti ti-grip-vertical"></i></span>
+        <button type="button" onclick="eoMoveItem(${idx},-1)" aria-label="Move up" ${idx===0?'disabled':''}><i class="ti ti-chevron-up"></i></button>
+        <button type="button" onclick="eoMoveItem(${idx},1)" aria-label="Move down" ${idx===eoLines.length-1?'disabled':''}><i class="ti ti-chevron-down"></i></button>
+      </div>
       <div style="flex:1;min-width:160px">
         <div style="font-weight:600;font-size:13.5px">${esc(l.itemName)}</div>
         ${isStaff
@@ -3170,6 +3537,10 @@ renderItemGrid();
     setTimeout(go, 250);
   })();
 })();
+
+// The intro screen is where the page starts, so its setup (earliest
+// bookable date, the staff skip link) has to run here too.
+if(currentView==='intro') renderIntroView();
 
 // A link from an order email (?order=<id>, optionally &pdf=1) opens that
 // order directly — works whether or not staff are logged in, so a client
