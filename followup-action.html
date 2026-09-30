@@ -112,7 +112,7 @@ const id = qs.get('id') || '';
 const c  = qs.get('c')  || '';
 const action = ACT[c] || null;
 
-let db = null, testMode = true;
+let db = null, testMode = true, authReady = null;
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function statusBlock(tone, icon, title, html){
@@ -220,7 +220,7 @@ async function start(){
 // identity — no login screen, nothing visible changes. This exists so the
 // Firestore rules can require SOMEONE, instead of leaving the database
 // open to the whole internet. Every load-time read waits on this.
-const authReady = new Promise(function(resolve){
+authReady = new Promise(function(resolve){
   var off = firebase.auth().onAuthStateChanged(function(u){
     off();
     if(u) return resolve(u);   // already signed in (staff) — leave it be
