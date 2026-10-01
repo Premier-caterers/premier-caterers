@@ -766,6 +766,8 @@ async function submitIntroInfo(){
   if(!phone || String(phone).replace(/\D/g,'').length < 10){ err.textContent = 'Please enter a cell number we can reach you on.'; return; }
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ err.textContent = 'Please enter a valid email address.'; return; }
   if(!date){ err.textContent = 'Please choose a delivery date.'; return; }
+  const own = _ownContactProblem([email]);
+  if(own && !_ownContactOk(own)){ err.textContent = own; return; }
   err.textContent = '';
 
   // These are the same fields checkout uses — filling them here means
@@ -1079,6 +1081,7 @@ function coRenderEmailsList(){
       ${coEmails.length>1?`<button onclick="coRemoveEmailField(${idx})" type="button" style="width:32px;height:32px;border:1px solid var(--border);background:var(--bg);border-radius:7px;color:var(--text3)">&times;</button>`:''}
     </div>
   `).join('');
+  try{ _staffNoAutofill(); }catch(e){}
 }
 function coAddEmailField(){ coEmails.push(''); coRenderEmailsList(); }
 function coUpdateEmail(idx,val){ coEmails[idx]=val; scheduleDraftSave(); }
@@ -1382,6 +1385,25 @@ async function saveDraftNow(){
    feeds. Staff link it to an existing event manually afterward when
    that's what it turns out to be.
    ===================================================================== */
+// Staff placing an order for a client: the browser tends to fill the
+// contact fields with the STAFF member's own name, phone and email. That
+// put "Lowy" on This Week and sent order confirmations to us instead of the
+// client. Our own addresses are never a client's, so stop on them.
+function _ownContactProblem(emails){
+  const own = (Object.values(PC_EMAILS||{}).map(e=>String(e).toLowerCase()));
+  const bad = (emails||[]).map(e=>String(e||'').trim().toLowerCase()).filter(Boolean)
+    .find(e=> /@thepremiercaterer\.com$/.test(e) || own.includes(e));
+  return bad ? ('"'+bad+'" is one of our own addresses \u2014 please enter the client\u2019s contact name, phone and email (the browser may have filled in yours).') : '';
+}
+// Staff can still go ahead on purpose (e.g. an order for ourselves).
+function _ownContactOk(msg){ return !!(isStaff && confirm(msg+'\n\nIs this order really for us? OK to keep it, Cancel to fix it.')); }
+// When staff are signed in, ask the browser not to fill these with the staff member's own details.
+function _staffNoAutofill(){
+  ['igCName','igCPhone','igEmail','coCName','coCPhone','coAddr','igAddr','eoCName','eoCPhone','eoCEmail'].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.setAttribute('autocomplete', isStaff ? 'off' : (el.dataset.ac||el.getAttribute('autocomplete')||''));
+  });
+  document.querySelectorAll('#coEmailsList input[type=email]').forEach(el=>el.setAttribute('autocomplete', isStaff?'off':'email'));
+}
 function validateCheckout(){
   const req = ['coName','coDate','coCName','coCPhone'];
   for(const id of req){
@@ -1389,6 +1411,8 @@ function validateCheckout(){
     if(!el.value || !el.value.trim()) return 'Please fill in '+el.previousElementSibling.textContent.toLowerCase()+'.';
   }
   if(!coEmails.some(e=>e && e.trim())) return 'Please fill in at least one email.';
+  const own = _ownContactProblem(coEmails);
+  if(own && !_ownContactOk(own)) return own;
   return '';
 }
 async function submitOrder(){
@@ -2052,7 +2076,9 @@ async function bookDropOffOrder(orderId, quiet){
   if(!num) num = await _doNextEventNumber(wi.weekOf, evId);
 
   const menuUrl = await _doUploadMenuPdf(Object.assign({}, order, {jobNumber:num}), orderId, evId);
-  const name = ((order.contactName||'').trim()) || order.clientName || 'Drop-off order';
+  // The order's own name (e.g. a business or family name) first; the
+  // contact person only when the order has no name of its own.
+  const name = ((order.clientName||'').trim()) || ((order.contactName||'').trim()) || 'Drop-off order';
   const common = {
     id: evId, inquiryId: inqId, job: num, eventNumber: num,
     name, contactName: '', organization: '',
@@ -2172,6 +2198,7 @@ firebase.auth().onAuthStateChanged(user=>{
   const u = user ? pcUserForEmail(user.email) : null;
   if(user && u){
     isStaff = true; staffUser = u;
+    try{ _staffNoAutofill(); }catch(e){}
     closeStaffLogin();
     updateTopbar();
     if(currentView==='intro') renderIntroView();
@@ -2658,6 +2685,7 @@ function renderEditOrderTotals(){
 async function saveEditedOrder(){
   const errEl = document.getElementById('eoErr'); errEl.textContent = '';
   if(!eoLines.length){ errEl.textContent = 'Add at least one item.'; return; }
+  { const own = _ownContactProblem([document.getElementById('eoCEmail').value]); if(own && !_ownContactOk(own)){ errEl.textContent = own; return; } }
   const taxExempt = document.getElementById('eoTaxExempt').checked;
   const payType = document.getElementById('eoPaymentType').value;
   const deliveryFee = parseFloat(document.getElementById('eoDeliveryFee').value)||0;
