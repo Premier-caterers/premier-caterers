@@ -13268,7 +13268,7 @@ async function buildPacketPdfBytes(eventId, opts){
     if(!items.length) return;
     page();
     fB(16); setT(C.dark); doc.text('Final checklist', ML, 50);
-    fN(10); setT(C.grey); doc.text(data.title+(data.job?(' \u00b7 '+data.job):''), ML, 66);
+    fN(10); setT(C.grey); doc.text(clientName+(evFull?(' \u00b7 '+evFull):''), ML, 66);
     setD(C.line); doc.setLineWidth(0.5); doc.line(ML, 76, MR, 76);
     let y = 96;
     const colW = MR-ML;
