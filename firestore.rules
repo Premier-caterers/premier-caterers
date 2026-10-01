@@ -1,35 +1,75 @@
 // Premier Caterers — Firestore security rules
 //
-// STEP 1 (this file): require an identity.
-// Every app now signs in before it touches the database — staff with their
-// real login, everyone else silently and anonymously. So the database can
-// stop accepting requests from anyone at all on the internet.
+// STEP 1 (29 Sep 2026): require an identity.
+// Every app signs in before it touches the database — staff with their real
+// login, everyone else silently and anonymously.
 //
-// What this stops: someone finding the database address in the public
-// source and reading or deleting client invoices, contracts, time-clock
-// punches and vendor pricing straight from a browser console. That is
-// exactly what "if true" allowed.
+// STEP 2 (Oct 2026): real-staff-only areas.
+// Some data is now readable ONLY by the five real staff logins (the same
+// accounts used on the main app's sign-in screen). An anonymous token — which
+// anyone can get by reading the public source — is refused for these.
 //
-// What this does NOT stop: someone who reads the public source, gets their
-// own anonymous token, and then asks for data. This is a locked door, not
-// a guard — a big improvement, not the finished job.
+//   • Everything the email inbox feature stores: the emails themselves,
+//     conversation links, attachment folders, Gmail-button tag requests,
+//     and background jobs.
+//   • Internal-only data that no public page ever touches: the changes log,
+//     equipment, checklists, venues, trash, kitchen grocery lists, activity
+//     log, roadmap, regulars and AI follow-up suggestions.
 //
-// STEP 2 (later): per-collection rules. Invoices, contracts, clientPortals,
-// events and the tc_* payroll collections restricted to real staff logins;
-// clients able to create a drop-off order or an inquiry but never to read
-// anyone else's. That needs testing app by app and is its own project.
+// Everything else keeps the Step 1 rule for now, because a public or
+// shared-device page still reads it anonymously (grocery.html and
+// purchasing.html read events; the inquiry form creates inquiries; the
+// client portal, contract signing, time clock and truck checklist each use
+// their own collection). Locking those is the next round and needs each of
+// those pages to change first.
 //
-// BEFORE CHANGING THIS FILE: every app must already be deployed with the
-// identity gate. Any app without it stops working the moment these rules
-// go live.
+// Apps Script (events@, orders@) talks to the database with its Google
+// account, which is not affected by these rules.
+//
+// TO ADD A STAFF MEMBER: add their sign-in email to staffEmails() below AND
+// to PC_EMAILS in index.html, then publish these rules again.
 
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    function staffEmails() {
+      return [
+        'kenny@thepremiercaterer.com',
+        'shelley@thepremiercaterer.com',
+        'joshg@thepremiercaterer.com',
+        'bnash.premiercaterers@gmail.com',
+        'kitchen@thepremiercaterer.com'
+      ];
+    }
+
+    // A real staff login: signed in with a password (not anonymously) as one
+    // of the accounts above.
+    function isStaff() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'password'
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() in staffEmails();
+    }
+
+    function staffOnly() {
+      return [
+        // email inbox feature
+        'eventEmails', 'emailThreads', 'emailFolders', 'emailTagRequests',
+        'emailJobs', 'emailFilingStatus',
+        // internal-only data no public page uses
+        'changes', 'equipment', 'checklists', 'venues', 'trash',
+        'groceryStations', 'groceryLists', 'activity', 'roadmap',
+        'regulars', 'followupSuggestions', 'checklistEmailLog'
+      ];
+    }
+
+    // Staff-only collections need a real staff login; everything else needs
+    // any signed-in identity, as in Step 1.
+    match /{coll}/{doc=**} {
+      allow read, write: if request.auth != null
+        && (!(coll in staffOnly()) || isStaff());
     }
 
   }

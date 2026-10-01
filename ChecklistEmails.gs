@@ -257,13 +257,18 @@ function CL_plain_(e, ymd, items, stage) {
 
 /* ================= Firestore (REST) ================= */
 
+// Since the database was locked on 29 Sep 2026, every request must say who
+// is asking. This signs requests as the Google account running the script.
+function CL_auth_() {
+  return { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'x-goog-user-project': CL_PROJECT };
+}
 function CL_base_() { return 'https://firestore.googleapis.com/v1/projects/' + CL_PROJECT + '/databases/(default)/documents/'; }
 
 function CL_list_(coll) {
   var out = [], token = '';
   do {
     var url = CL_base_() + coll + '?pageSize=300' + (token ? '&pageToken=' + encodeURIComponent(token) : '');
-    var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    var res = UrlFetchApp.fetch(url, { headers: CL_auth_(), muteHttpExceptions: true });
     if (res.getResponseCode() !== 200) { Logger.log('Read failed for ' + coll + ': ' + res.getContentText().slice(0, 300)); break; }
     var body = JSON.parse(res.getContentText());
     (body.documents || []).forEach(function (d) {
@@ -276,7 +281,7 @@ function CL_list_(coll) {
   return out;
 }
 function CL_get_(coll, id) {
-  var res = UrlFetchApp.fetch(CL_base_() + coll + '/' + encodeURIComponent(id), { muteHttpExceptions: true });
+  var res = UrlFetchApp.fetch(CL_base_() + coll + '/' + encodeURIComponent(id), { headers: CL_auth_(), muteHttpExceptions: true });
   if (res.getResponseCode() !== 200) return null;
   return CL_decodeFields_(JSON.parse(res.getContentText()).fields || {});
 }
@@ -287,7 +292,7 @@ function CL_patchLog_(eventId, patch) {
   keys.forEach(function (k) { fields[k] = { stringValue: String(patch[k]) }; });
   var url = CL_base_() + 'checklistEmailLog/' + encodeURIComponent(eventId) + '?'
     + keys.map(function (k) { return 'updateMask.fieldPaths=' + encodeURIComponent(k); }).join('&');
-  var res = UrlFetchApp.fetch(url, { method: 'patch', contentType: 'application/json', payload: JSON.stringify({ fields: fields }), muteHttpExceptions: true });
+  var res = UrlFetchApp.fetch(url, { method: 'patch', headers: CL_auth_(), contentType: 'application/json', payload: JSON.stringify({ fields: fields }), muteHttpExceptions: true });
   if (res.getResponseCode() !== 200) Logger.log('Log write failed for ' + eventId + ': ' + res.getContentText().slice(0, 300));
 }
 function CL_decodeFields_(f) {

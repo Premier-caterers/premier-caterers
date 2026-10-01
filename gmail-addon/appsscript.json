@@ -1,0 +1,39 @@
+{
+  "timeZone": "America/New_York",
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/gmail.addons.execute",
+    "https://www.googleapis.com/auth/gmail.addons.current.message.readonly",
+    "https://www.googleapis.com/auth/script.external_request",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/datastore"
+  ],
+  "webapp": {
+    "executeAs": "USER_DEPLOYING",
+    "access": "DOMAIN"
+  },
+  "addOns": {
+    "common": {
+      "name": "Premier Caterers",
+      "logoUrl": "https://premier-caterers.github.io/premier-caterers/gmail-addon/logo.png",
+      "layoutProperties": {
+        "primaryColor": "#7A2E3D",
+        "secondaryColor": "#3F7A44"
+      },
+      "homepageTrigger": {
+        "runFunction": "PB_onHomepage",
+        "enabled": true
+      }
+    },
+    "gmail": {
+      "contextualTriggers": [
+        {
+          "unconditional": {},
+          "onTriggerFunction": "PB_onMessage"
+        }
+      ]
+    }
+  }
+}

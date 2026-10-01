@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=27">
+<link rel="stylesheet" href="styles.css?v=28">
 </head>
 <body>
 
@@ -1345,6 +1345,7 @@ async function emptyTrash(){
 
 
 function startFirebaseListeners(){
+  try{ _emStartStatusListener(); }catch(e){ console.warn(e); }
   eventsCol.onSnapshot( snap=>{ const first=events.length===0; events=snap.docs.map(d=>d.data()); try{ events.forEach(ev=>{ if(ev&&String(ev.id).indexOf('inq_')===0) _actPrevEv[ev.id]=JSON.parse(JSON.stringify(ev)); }); }catch(e){} try{ backfillEventNumbers(); }catch(e){ console.warn('eventNumber backfill skipped:',e); } if(first||currentView==='events'||currentView==='home') render(); });
   changesCol.onSnapshot( snap=>{ changes=snap.docs.map(d=>d.data()).sort((a,b)=>(b.time||'').localeCompare(a.time||'')); if(currentView==='changes') render(); });
   inquiriesCol.onSnapshot( snap=>{
@@ -1486,6 +1487,672 @@ function startFirebaseListeners(){
       if(currentView==='myday') render();
     }, err=>{ console.error('Follow-up suggestions listener error:', err); });
   }
+}
+
+/* =================== EVENT EMAILS — each event's own inbox ===================
+ * Emails are filed onto events by the events@ Apps Script (EmailFiling.gs):
+ * client emails automatically, everything else with the Premier button in
+ * Gmail. This screen only reads them, and lets staff move, add or remove an
+ * email, add more addresses for a client, and rename the attachments folder.
+ *
+ * Data (all readable only by real staff logins — see firestore.rules):
+ *   eventEmails/{id}               one email: who, subject, date, snippet,
+ *                                  inquiryIds (the events it is on), attachments
+ *   eventEmails/{id}/content/body  the full text, fetched only when opened
+ *   emailThreads/{rootId}          which events a conversation's future replies go to
+ *   emailFolders/{inquiryId}       that event's "Attachments from emails" Drive folder
+ *   emailJobs/{id}                 Drive work for the events@ script (copy, rename)
+ *   emailFilingStatus/status       when the events@ script last ran
+ * ========================================================================== */
+const EM_GMAIL_SEARCH = 'https://mail.google.com/mail/u/0/#search/rfc822msgid%3A';
+let _emState = {};          // inquiryId -> { list, loaded, err }
+let _emWatchFor = null, _emUnsub = null, _emFolderUnsub = null;
+let _emFolders = {};        // inquiryId -> emailFolders doc (or null)
+let _emStatus = undefined;  // emailFilingStatus/status (undefined = not loaded yet)
+let _emOpen = {};           // emailId -> expanded?
+let _emShowAll = {};        // inquiryId -> show every email?
+let _emBody = {};           // emailId -> 'loading' | { bodyHtml, bodyText, tooLarge } | { err }
+let _emQuoted = {};         // emailId -> show quoted history?
+let _emClient = null;       // client inbox modal: { key, name, ids, list, loaded, err }
+
+function _emCanAct(){ return !!currentRole && currentRole!=='kitchen'; }
+
+function _emStartStatusListener(){
+  try{
+    db.collection('emailFilingStatus').doc('status').onSnapshot(d=>{ _emStatus = d.exists ? d.data() : null; _emRefresh(); }, ()=>{ _emStatus = null; });
+  }catch(e){ console.warn('email status listener', e); }
+}
+
+// Live-watch the emails of the event open in the drawer (one at a time).
+function _emWatch(inqId){
+  if(!inqId || _emWatchFor===inqId) return;
+  try{ if(_emUnsub) _emUnsub(); }catch(e){}
+  try{ if(_emFolderUnsub) _emFolderUnsub(); }catch(e){}
+  _emWatchFor = inqId;
+  if(!_emState[inqId]) _emState[inqId] = { list:[], loaded:false, err:'' };
+  _emUnsub = db.collection('eventEmails').where('inquiryIds','array-contains',inqId).onSnapshot(snap=>{
+    _emState[inqId] = { list: snap.docs.map(d=>({ id:d.id, ...d.data() })).sort((a,b)=>(b.date||0)-(a.date||0)), loaded:true, err:'' };
+    _emRefresh();
+  }, err=>{
+    _emState[inqId] = { list:[], loaded:true, err: _emErrText(err) };
+    _emRefresh();
+  });
+  _emFolderUnsub = db.collection('emailFolders').doc(inqId).onSnapshot(d=>{ _emFolders[inqId] = d.exists ? d.data() : null; _emRefresh(); }, ()=>{});
+}
+function _emErrText(err){
+  if(err && err.code==='permission-denied') return 'This login can’t see emails. The new security rules may not be published yet, or this isn’t one of the staff logins.';
+  return (err && err.message) || String(err);
+}
+
+// Redraw only the email parts of the screen — never the whole drawer.
+function _emRefresh(){
+  const id = _emWatchFor;
+  const inq = id ? inquiries.find(x=>x.id===id) : null;
+  const card = document.getElementById('emCard');
+  if(card && inq && card.dataset.inq===id) card.innerHTML = _emCardInner(inq);
+  const att = document.getElementById('emAtt');
+  if(att && inq && att.dataset.inq===id) att.innerHTML = _emAttInner(inq);
+  const cl = document.getElementById('emClientBody');
+  if(cl && _emClient) cl.innerHTML = _emClientInner();
+  _emHydrateFrames();
+}
+
+/* ---------- labels and dates ---------- */
+
+function _emInqYmd(inq){
+  if(!inq) return '';
+  if(inq.eventDate && /^\d{4}-\d{2}-\d{2}/.test(String(inq.eventDate))) return String(inq.eventDate).slice(0,10);
+  const ev = _eventForInq(inq);
+  if(ev){ const d = getEventIsoDate(ev); if(d && !isNaN(d)) return d.toISOString().slice(0,10); }
+  return '';
+}
+function _emPrettyYmd(ymd){
+  if(!ymd) return 'No date yet';
+  return new Date(ymd+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
+}
+function _emInqLabel(id){
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq) return 'An event that was deleted';
+  const name = clientPrimary(inq) || 'Client';
+  return name + (inq.eventType ? ' — '+inq.eventType : '');
+}
+function _emInqSub(id){
+  const inq = inquiries.find(x=>x.id===id);
+  if(!inq) return '';
+  const ev = _eventForInq(inq);
+  const num = ev ? fullEventNum(ev) : '';
+  return _emPrettyYmd(_emInqYmd(inq)) + (num ? ' · #'+num : '') + (inq.stage==='lost' ? ' · Lost' : '');
+}
+function _emWhen(ms){
+  if(!ms) return '';
+  const d = new Date(ms), now = new Date();
+  if(d.toDateString()===now.toDateString()) return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  if(d.getFullYear()===now.getFullYear()) return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+function _emAgo(ms){
+  if(!ms) return 'never';
+  const m = Math.round((Date.now()-ms)/60000);
+  if(m<1) return 'just now';
+  if(m<60) return m+' min ago';
+  const h = Math.round(m/60);
+  if(h<48) return h+' hr ago';
+  return Math.round(h/24)+' days ago';
+}
+function _emPerson(p){ p = p||{}; return p.name || p.email || ''; }
+function _emClientAddrs(inq){
+  const out = [];
+  String((inq.email||'')+' '+(inq.extraEmails||'')).toLowerCase().replace(/[A-Z0-9._%+'\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/ig, m=>{ if(out.indexOf(m)<0) out.push(m); return m; });
+  return out;
+}
+function _emExtraList(inq){ return String(inq.extraEmails||'').split(/[\s,;]+/).map(s=>s.trim().toLowerCase()).filter(Boolean); }
+
+/* ---------- the Emails card in the event drawer ---------- */
+
+function emailsHubCard(inq){
+  if(!inq || !inq.id) return '';
+  _emWatch(inq.id);
+  setTimeout(_emHydrateFrames, 0);
+  return `<div id="emCard" data-inq="${pcEsc(inq.id)}">${_emCardInner(inq)}</div>`;
+}
+
+function _emStatusLine(){
+  if(_emStatus===undefined) return '';
+  if(_emStatus===null) return `<div class="em-status em-status--warn"><i class="ti ti-alert-triangle"></i>Automatic filing isn’t switched on yet (run EF_setup in the events@ Apps Script).</div>`;
+  const ok = _emStatus.lastOkAt || 0;
+  if(Date.now()-ok > 20*60000) return `<div class="em-status em-status--warn"><i class="ti ti-alert-triangle"></i>Automatic filing last checked ${_emAgo(ok)} — the events@ timer may have stopped.${_emStatus.lastError?' Last error: '+pcEsc(String(_emStatus.lastError).slice(0,140)):''}</div>`;
+  return `<div class="em-status"><i class="ti ti-refresh"></i>New mail checked ${_emAgo(ok)}</div>`;
+}
+
+function _emCardInner(inq){
+  const st = _emState[inq.id] || { list:[], loaded:false, err:'' };
+  const act = _emCanAct();
+  const main = String(inq.email||'').trim();
+  const extras = _emExtraList(inq);
+  const addrHtml = `<div class="em-addrs">
+      <span class="em-addrs__lbl">Filed automatically from</span>
+      ${main?`<span class="em-addr" title="Main email on this inquiry">${pcEsc(main)}</span>`:'<span class="u-faint">no email on this inquiry yet</span>'}
+      ${extras.map(a=>`<span class="em-addr">${pcEsc(a)}${act?`<button class="em-addr__x" title="Stop filing emails from this address" onclick="_emRemoveAddress('${inq.id}','${pcEsc(a)}')">×</button>`:''}</span>`).join('')}
+      ${act?`<button class="btn btn--ghost btn--sm" onclick="_emAddAddress('${inq.id}')"><i class="ti ti-plus"></i>Add address</button>`:''}
+    </div>`;
+
+  let body;
+  if(!st.loaded){
+    body = `<div class="em-skel"><div></div><div></div><div></div></div>`;
+  }else if(st.err){
+    body = `<div class="em-status em-status--warn"><i class="ti ti-lock"></i>${pcEsc(st.err)}</div>`;
+  }else if(!st.list.length){
+    body = `<div class="em-empty"><i class="ti ti-mail-off"></i><div><b>No emails on this event yet.</b><br>Emails to or from the addresses above land here on their own. For anything else (venue, vendors), open the email in Gmail and use the <b>Premier Caterers</b> button.</div></div>`;
+  }else{
+    const showAll = !!_emShowAll[inq.id];
+    const rows = (showAll ? st.list : st.list.slice(0,8)).map(m=>_emRow(m, inq.id)).join('');
+    const more = st.list.length>8 ? `<button class="btn btn--ghost btn--sm btn--block" onclick="_emShowAll['${inq.id}']=${!showAll};_emRefresh()">${showAll?'Show fewer':'Show all '+st.list.length+' emails'}</button>` : '';
+    body = `<div class="em-list">${rows}</div>${more}`;
+  }
+  const count = st.loaded && !st.err ? `<span class="em-count">${st.list.length}</span>` : '';
+  return `<div class="em-top">${count}${_emStatusLine()}</div>${addrHtml}${body}`;
+}
+
+// One email row (collapsed or open). ctxInq = the event being viewed, or '' in the client inbox.
+function _emRow(m, ctxInq){
+  const open = !!_emOpen[m.id];
+  const out = m.direction==='out';
+  const who = out ? ('To: '+((m.to||[]).map(_emPerson).filter(Boolean).slice(0,2).join(', ')||'—')) : _emPerson(m.from);
+  const nAtt = (m.attachments||[]).length;
+  const asks = (m.suggestOthers||[]).filter(x=>(m.inquiryIds||[]).indexOf(x)<0 && inquiries.some(q=>q.id===x));
+  const onOthers = (m.inquiryIds||[]).filter(x=>x!==ctxInq);
+  const chips = [
+    m.source==='tag' ? `<span class="em-chip" title="Filed with the Gmail button${m.filedBy?' by '+pcEsc(m.filedBy):''}"><i class="ti ti-tag"></i>Tagged</span>` : '',
+    asks.length ? `<span class="em-chip em-chip--ask" title="This client has another upcoming event"><i class="ti ti-help-circle"></i>Other event?</span>` : '',
+    (!ctxInq && onOthers.length) ? onOthers.map(x=>`<span class="em-chip em-chip--ev">${pcEsc(_emInqLabel(x))}</span>`).join('') : ''
+  ].join('');
+  return `<div class="em-row${open?' is-open':''}${out?' em-row--out':''}">
+    <button class="em-head" onclick="_emToggle('${m.id}')" aria-expanded="${open}">
+      <span class="em-dir" title="${out?'Sent by us':'Received'}"><i class="ti ${out?'ti-arrow-up-right':'ti-arrow-down-left'}"></i></span>
+      <span class="em-main">
+        <span class="em-line1"><span class="em-who">${pcEsc(who)}</span>${chips}<span class="em-date">${nAtt?`<i class="ti ti-paperclip" title="${nAtt} attachment${nAtt>1?'s':''}"></i>${nAtt} `:''}${_emWhen(m.date)}</span></span>
+        <span class="em-line2"><span class="em-subj">${pcEsc(m.subject||'(no subject)')}</span>${m.snippet?` <span class="em-snip">— ${pcEsc(m.snippet)}</span>`:''}</span>
+      </span>
+    </button>
+    ${open ? _emOpenHtml(m, ctxInq, asks) : ''}
+  </div>`;
+}
+
+function _emOpenHtml(m, ctxInq, asks){
+  const act = _emCanAct();
+  const list = (arr)=>(arr||[]).map(p=>pcEsc(p.name?p.name+' <'+p.email+'>':p.email)).join(', ');
+  const others = (m.inquiryIds||[]).filter(x=>x!==ctxInq);
+  const meta = `<div class="em-meta">
+      <div><span>From</span><span>${list([m.from||{}])}</span></div>
+      ${(m.to||[]).length?`<div><span>To</span><span>${list(m.to)}</span></div>`:''}
+      ${(m.cc||[]).length?`<div><span>Cc</span><span>${list(m.cc)}</span></div>`:''}
+      <div><span>Date</span><span>${m.date?new Date(m.date).toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):''}</span></div>
+      ${others.length?`<div><span>${ctxInq?'Also on':'On'}</span><span>${others.map(x=>`<a href="#" onclick="event.preventDefault();_emGoToInq('${x}')">${pcEsc(_emInqLabel(x))}</a> <span class="u-faint">${pcEsc(_emInqSub(x))}</span>`).join('<br>')}</span></div>`:''}
+    </div>`;
+  const ask = (act && asks.length) ? `<div class="em-ask"><i class="ti ti-help-circle"></i><div style="flex:1">This client also has ${asks.map(x=>`<b>${pcEsc(_emInqLabel(x))}</b> <span class="u-faint">(${pcEsc(_emInqSub(x))})</span>`).join(' and ')} coming up. Does this email belong there too?
+      <div class="em-ask__btns">${asks.map(x=>`<button class="btn btn--sm" onclick="_emQuickAdd('${m.id}','${x}')"><i class="ti ti-plus"></i>Also file on ${pcEsc(_emInqLabel(x))}</button>`).join('')}<button class="btn btn--ghost btn--sm" onclick="_emDismissAsk('${m.id}')">No, just here</button></div></div></div>` : '';
+  const atts = (m.attachments||[]).map(a=>{
+    const f = (ctxInq && a.files && a.files[ctxInq]) || (a.files && a.files[Object.keys(a.files)[0]]) || null;
+    const nm = (f && f.name) || a.name || 'Attachment';
+    return f ? `<a class="em-att" href="${pcEsc(f.url)}" target="_blank" rel="noopener"><i class="ti ti-paperclip"></i>${pcEsc(nm)}</a>`
+             : `<span class="em-att em-att--wait" title="Being copied to Drive"><i class="ti ti-loader-2"></i>${pcEsc(nm)}</span>`;
+  }).join('');
+  const attHtml = (atts || m.attachmentsNote) ? `<div class="em-atts">${atts}${m.attachmentsNote?`<div class="em-status em-status--warn"><i class="ti ti-alert-triangle"></i>${pcEsc(m.attachmentsNote)}</div>`:''}</div>` : '';
+  const gmail = m.messageId && String(m.messageId).indexOf('gmail:')!==0
+    ? `<a class="btn btn--sm" href="${EM_GMAIL_SEARCH+encodeURIComponent(m.messageId)}" target="_blank" rel="noopener" title="Opens in your own Gmail (works when the email is in your mailbox)"><i class="ti ti-brand-gmail"></i>Open in Gmail</a>` : '';
+  const btns = `<div class="em-actions">
+      ${gmail}
+      ${act?`<button class="btn btn--sm" onclick="_emOpenPicker('${m.id}','${ctxInq}','change')"><i class="ti ti-arrows-exchange"></i>${ctxInq?'File on other events / move':'Change events'}</button>`:''}
+      ${act&&ctxInq?`<button class="btn btn--sm btn--danger" onclick="_emOpenPicker('${m.id}','${ctxInq}','remove')"><i class="ti ti-x"></i>Remove from this event</button>`:''}
+    </div>`;
+  return `<div class="em-open">${meta}${ask}${attHtml}${_emBodyHtml(m)}${btns}</div>`;
+}
+
+function _emToggle(id){
+  _emOpen[id] = !_emOpen[id];
+  if(_emOpen[id] && !_emBody[id]) _emLoadBody(id);
+  _emRefresh();
+}
+async function _emLoadBody(id){
+  _emBody[id] = 'loading';
+  try{
+    const d = await db.collection('eventEmails').doc(id).collection('content').doc('body').get();
+    _emBody[id] = d.exists ? d.data() : { bodyText:'', bodyHtml:'' };
+  }catch(e){ _emBody[id] = { err: _emErrText(e) }; }
+  _emRefresh();
+}
+function _emBodyHtml(m){
+  const b = _emBody[m.id];
+  if(!b || b==='loading') return `<div class="em-skel em-skel--body"><div></div><div></div></div>`;
+  if(b.err) return `<div class="em-status em-status--warn"><i class="ti ti-alert-triangle"></i>${pcEsc(b.err)}</div>`;
+  const note = b.tooLarge ? `<div class="em-status"><i class="ti ti-info-circle"></i>This email is very long, so only its plain text was saved. Use Open in Gmail for the full version.</div>` : '';
+  if(b.bodyHtml) return note + `<div class="em-bodywrap"><iframe class="em-frame" data-em="${pcEsc(m.id)}" title="Email" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
+      <button class="btn btn--ghost btn--sm" onclick="_emQuoted['${m.id}']=!_emQuoted['${m.id}'];_emApplyQuoted('${m.id}')">${_emQuoted[m.id]?'Hide earlier messages':'Show earlier messages in the conversation'}</button></div>`;
+  return note + `<pre class="em-text">${pcEsc(b.bodyText||'(no text)')}</pre>`;
+}
+// Fill each email frame once it is on screen. No scripts run inside it.
+function _emHydrateFrames(){
+  document.querySelectorAll('iframe.em-frame').forEach(fr=>{
+    const id = fr.dataset.em, b = _emBody[id];
+    if(!b || !b.bodyHtml || fr.dataset.done) return;
+    fr.dataset.done = '1';
+    fr.addEventListener('load', ()=>{ _emApplyQuoted(id); _emSizeFrame(fr); setTimeout(()=>_emSizeFrame(fr), 600); });
+    fr.srcdoc = '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="script-src \'none\'; object-src \'none\'; form-action \'none\'"><base target="_blank">'
+      + '<style>body{font:14px/1.5 -apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;color:#1D1F21;margin:4px 2px;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%!important}'
+      + 'body:not(.show-quoted) .gmail_quote,body:not(.show-quoted) blockquote[type=cite],body:not(.show-quoted) #appendonsend~*,body:not(.show-quoted) .yahoo_quoted{display:none!important}</style></head><body>'
+      + b.bodyHtml + '</body></html>';
+  });
+}
+function _emApplyQuoted(id){
+  const fr = document.querySelector('iframe.em-frame[data-em="'+id+'"]');
+  try{ fr.contentDocument.body.classList.toggle('show-quoted', !!_emQuoted[id]); _emSizeFrame(fr); }catch(e){}
+  const btn = fr && fr.parentElement && fr.parentElement.querySelector('button');
+  if(btn) btn.textContent = _emQuoted[id] ? 'Hide earlier messages' : 'Show earlier messages in the conversation';
+}
+function _emSizeFrame(fr){
+  try{ const h = fr.contentDocument.documentElement.scrollHeight; fr.style.height = Math.min(Math.max(h+8, 80), 1400)+'px'; }catch(e){}
+}
+function _emGoToInq(id){
+  const m = document.getElementById('emClientModal'); if(m) m.remove();
+  _emClient = null;
+  if(typeof goToInquiry==='function') goToInquiry(id); else selectInquiry(id);
+}
+
+/* ---------- client email addresses ---------- */
+
+function _emAddAddress(inqId){
+  _emAskText('Add an email address for this client', 'Emails to or from this address will also be filed on this client’s events — for example a spouse, assistant or office manager. Earlier emails from the last 90 days are picked up within a few minutes.', '', 'name@example.com', async v=>{
+    const a = String(v||'').trim().toLowerCase();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a)) return 'That doesn’t look like an email address.';
+    if(/@thepremiercaterer\.com$/.test(a)) return 'That’s one of our own addresses — our side of every conversation is already included.';
+    const inq = inquiries.find(x=>x.id===inqId); if(!inq) return 'This inquiry no longer exists.';
+    if(_emClientAddrs(inq).indexOf(a)>=0) return 'That address is already on this client.';
+    inq.extraEmails = _emExtraList(inq).concat([a]).join(', ');
+    await _saveInquiry(inq);
+    await _emJob({ type:'checkClient', inquiryId:inqId, addresses:[a] });
+    logActivity(inqId,'edit','Email address added for filing: '+a,{});
+    showToast('Added — earlier emails appear within a few minutes');
+    _emRefresh();
+    return '';
+  });
+}
+async function _emRemoveAddress(inqId, addr){
+  const inq = inquiries.find(x=>x.id===inqId); if(!inq) return;
+  if(!confirm('Stop filing new emails from '+addr+' on this client?\n\nEmails already filed stay where they are.')) return;
+  inq.extraEmails = _emExtraList(inq).filter(a=>a!==addr).join(', ');
+  await _saveInquiry(inq);
+  logActivity(inqId,'edit','Email address removed from filing: '+addr,{});
+  _emRefresh();
+}
+
+/* ---------- attachments folder (shown in Event documents) ---------- */
+
+function emailAttachmentsBlock(inq){
+  if(!inq || !inq.id) return '';
+  _emWatch(inq.id);
+  return `<div id="emAtt" data-inq="${pcEsc(inq.id)}">${_emAttInner(inq)}</div>`;
+}
+function _emAttFiles(inqId){
+  const st = _emState[inqId]; if(!st || !st.loaded) return [];
+  const out = [];
+  st.list.forEach(m=>(m.attachments||[]).forEach((a,ai)=>{
+    const f = a.files && a.files[inqId];
+    out.push({ emailId:m.id, ai, name:(f&&f.name)||a.name||'Attachment', url:f&&f.url, fileId:f&&f.id, subject:m.subject||'', date:m.date||0, from:_emPerson(m.from) });
+  }));
+  return out.sort((a,b)=>b.date-a.date);
+}
+function _emAttInner(inq){
+  const files = _emAttFiles(inq.id);
+  const folder = _emFolders[inq.id];
+  if(!files.length && !folder) return '';
+  const act = _emCanAct();
+  const name = (folder && folder.folderName) || 'Attachments from emails';
+  const rows = files.map(f=>`<div class="em-file">
+      <i class="ti ${f.url?'ti-file':'ti-loader-2'}"></i>
+      ${f.url?`<a href="${pcEsc(f.url)}" target="_blank" rel="noopener">${pcEsc(f.name)}</a>`:`<span>${pcEsc(f.name)} <span class="u-faint">(copying…)</span></span>`}
+      <span class="em-file__from u-faint" title="${pcEsc(f.subject)}">${pcEsc(f.from)} · ${_emWhen(f.date)}</span>
+      ${act&&f.fileId?`<button class="btn btn--icon btn--sm" title="Rename this file" onclick="_emRenameFile('${inq.id}','${f.emailId}',${f.ai})"><i class="ti ti-pencil"></i></button>`:''}
+    </div>`).join('');
+  return `<div class="em-folder">
+    <div class="em-folder__head">
+      <i class="ti ti-folder"></i><b>${pcEsc(name)}</b><span class="u-faint">${files.length} file${files.length===1?'':'s'}</span>
+      <span style="margin-left:auto;display:inline-flex;gap:6px">
+        ${folder&&folder.folderUrl?`<a class="btn btn--sm" href="${pcEsc(folder.folderUrl)}" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Open folder</a>`:''}
+        ${act&&folder?`<button class="btn btn--sm" onclick="_emRenameFolder('${inq.id}')"><i class="ti ti-pencil"></i>Rename</button>`:''}
+      </span>
+    </div>
+    ${rows || '<div class="u-faint" style="font-size:12px;padding:6px 0">No attachments yet.</div>'}
+  </div>`;
+}
+function _emRenameFolder(inqId){
+  const folder = _emFolders[inqId]; if(!folder) return;
+  _emAskText('Rename folder', '', folder.folderName||'Attachments from emails', '', async v=>{
+    const nm = String(v||'').replace(/[\/\\]/g,'-').trim().slice(0,120);
+    if(!nm) return 'Please type a name.';
+    await db.collection('emailFolders').doc(inqId).update({ folderName:nm });
+    await _emJob({ type:'renameFolder', inquiryId:inqId, name:nm });
+    showToast('Folder renamed ✓');
+    return '';
+  });
+}
+function _emRenameFile(inqId, emailId, ai){
+  const m = (_emState[inqId]&&_emState[inqId].list||[]).find(x=>x.id===emailId); if(!m) return;
+  const a = (m.attachments||[])[ai]; const f = a && a.files && a.files[inqId]; if(!f) return;
+  _emAskText('Rename file', '', f.name||a.name||'', '', async v=>{
+    const nm = String(v||'').trim().slice(0,200);
+    if(!nm) return 'Please type a name.';
+    const ref = db.collection('eventEmails').doc(emailId);
+    await db.runTransaction(async tx=>{
+      const snap = await tx.get(ref); if(!snap.exists) return;
+      const atts = (snap.data().attachments||[]).slice();
+      if(atts[ai] && atts[ai].files && atts[ai].files[inqId]) atts[ai].files[inqId].name = nm;
+      tx.update(ref, { attachments: atts });
+    });
+    await _emJob({ type:'renameFile', inquiryId:inqId, fileId:f.id, name:nm });
+    showToast('File renamed ✓');
+    return '';
+  });
+}
+
+async function _emJob(job){
+  job.status = 'pending'; job.createdAt = Date.now(); job.by = initiatorName();
+  try{ await db.collection('emailJobs').add(job); }catch(e){ console.error('email job', e); showToast('Saved, but the Drive update could not be queued: '+_emErrText(e), 5000); }
+}
+
+/* ---------- quick answers to "Other event?" ---------- */
+
+function _emFindEmail(id){
+  for(const k in _emState){ const f = (_emState[k].list||[]).find(x=>x.id===id); if(f) return f; }
+  if(_emClient){ const f = (_emClient.list||[]).find(x=>x.id===id); if(f) return f; }
+  return null;
+}
+async function _emQuickAdd(emailId, inqId){
+  const m = _emFindEmail(emailId); if(!m) return;
+  await _emApplyChange(m, { add:[inqId], remove:[] }, 'one');
+  showToast('Also filed on '+_emInqLabel(inqId)+' ✓');
+}
+async function _emDismissAsk(emailId){
+  try{ await db.collection('eventEmails').doc(emailId).update({ suggestOthers: [] }); }catch(e){ showToast(_emErrText(e), 4000); }
+}
+
+/* ---------- choose events: file on others / move / remove ---------- */
+
+let _emPick = null;
+
+function _emOpenPicker(emailId, ctxInq, mode){
+  const m = _emFindEmail(emailId); if(!m) return;
+  const current = (m.inquiryIds||[]).slice();
+  const sel = new Set(current);
+  if(mode==='remove' && ctxInq) sel.delete(ctxInq);
+  _emPick = { emailId, ctxInq, mode, current, sel, q:'', weeks:8, scope: mode==='remove' ? 'one' : 'one' };
+  document.getElementById('emPickModal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'emPickModal';
+  modal.className = 'em-modal';
+  modal.innerHTML = `<div class="em-modal__box" role="dialog" aria-modal="true">
+      <div class="em-modal__head">
+        <div><div class="em-modal__title">${mode==='remove'?'Remove from this event':'Which events is this email on?'}</div>
+        <div class="u-muted em-modal__sub">${pcEsc(m.subject||'(no subject)')}</div></div>
+        <button class="btn btn--icon" onclick="_emClosePicker()" title="Close">×</button>
+      </div>
+      <div class="em-modal__body" id="emPickBody"></div>
+      <div class="em-modal__foot">
+        <span class="u-faint" id="emPickCount"></span>
+        <button class="btn btn--ghost" onclick="_emClosePicker()">Cancel</button>
+        <button class="btn btn--pri" id="emPickSave" onclick="_emSavePicker()">Save</button>
+      </div>
+    </div>`;
+  modal.addEventListener('click', e=>{ if(e.target===modal) _emClosePicker(); });
+  document.body.appendChild(modal);
+  _emRenderPicker();
+}
+function _emClosePicker(){ document.getElementById('emPickModal')?.remove(); _emPick = null; }
+
+function _emPickItems(){
+  const p = _emPick, m = _emFindEmail(p.emailId) || {};
+  const today = new Date(); const todayYmd = new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const all = inquiries.map(q=>{
+    const ymd = _emInqYmd(q);
+    const ev = _eventForInq(q);
+    const num = ev ? fullEventNum(ev) : '';
+    return { id:q.id, ymd, lost:q.stage==='lost', label:_emInqLabel(q.id), sub:_emInqSub(q.id),
+      hay:[clientPrimary(q), q.firstName, q.lastName, q.organization, q.eventName, q.eventType, q.venueName, q.email, q.extraEmails, num, ymd, _emPrettyYmd(ymd)].join(' ').toLowerCase(),
+      addrs:_emClientAddrs(q) };
+  });
+  const byId = {}; all.forEach(it=>byId[it.id]=it);
+  const parts = (m.participants||[]);
+  const suggested = all.filter(it=>!p.current.includes(it.id) && (it.addrs.some(a=>parts.includes(a)) || (m.suggestOthers||[]).includes(it.id)))
+    .sort((a,b)=>String(b.ymd||'9').localeCompare(String(a.ymd||'9'))).slice(0,8);
+  return { all, byId, todayYmd, suggested };
+}
+function _emWeekEnd(ymd){
+  const d = new Date(ymd+'T12:00:00Z'); const add = (7-d.getUTCDay())%7;
+  return new Date(d.getTime()+add*86400000).toISOString().slice(0,10);
+}
+function _emCheck(it){
+  const on = _emPick.sel.has(it.id);
+  return `<label class="em-pick${on?' is-on':''}"><input type="checkbox" ${on?'checked':''} onchange="_emPickToggle('${it.id}',this.checked)">
+    <span><b>${pcEsc(it.label)}</b><span class="u-faint">${pcEsc(it.sub)}</span></span></label>`;
+}
+function _emPickToggle(id, on){ if(on) _emPick.sel.add(id); else _emPick.sel.delete(id); _emRenderPicker(true); }
+
+function _emRenderPicker(keepScroll){
+  const p = _emPick; if(!p) return;
+  const body = document.getElementById('emPickBody'); if(!body) return;
+  const scroll = keepScroll ? body.scrollTop : 0;
+  const { all, byId, todayYmd, suggested } = _emPickItems();
+  const sec = (title, items)=> items.length ? `<div class="em-pick-sec"><div class="em-pick-sec__t">${title}</div>${items.map(_emCheck).join('')}</div>` : '';
+  let html = '';
+
+  // Currently ticked (always on top so nothing gets lost while searching)
+  const ticked = [...p.sel].map(id=>byId[id] || { id, label:_emInqLabel(id), sub:'' });
+  html += sec(p.mode==='remove' ? 'It will stay on' : 'On these events', ticked)
+    || `<div class="em-status em-status--warn"><i class="ti ti-alert-triangle"></i>Not on any event — it will only be findable in Gmail.</div>`;
+  const removed = p.current.filter(id=>!p.sel.has(id)).map(id=>byId[id] || { id, label:_emInqLabel(id), sub:'' });
+  if(removed.length) html += `<div class="em-pick-sec"><div class="em-pick-sec__t">Taking it off</div>${removed.map(_emCheck).join('')}</div>`;
+
+  if(p.mode!=='remove'){
+    html += `<div class="em-pick-search"><i class="ti ti-search"></i><input id="emPickQ" class="field" placeholder="Search any event — client, #, venue or date" value="${pcEsc(p.q)}"
+      oninput="_emPick.q=this.value;clearTimeout(window._emPickT);window._emPickT=setTimeout(()=>{_emRenderPicker();const i=document.getElementById('emPickQ');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},200)"></div>`;
+    const notSel = arr=>arr.filter(it=>!p.sel.has(it.id) && !p.current.includes(it.id));
+    if(p.q.trim()){
+      const words = p.q.toLowerCase().trim().split(/\s+/);
+      const hits = notSel(all.filter(it=>words.every(w=>it.hay.includes(w))))
+        .sort((a,b)=>{ const k=x=>x.ymd?(x.ymd>=todayYmd?'0'+x.ymd:'1'+(99999999-Number(x.ymd.replace(/-/g,'')))):'2'; return k(a)<k(b)?-1:k(a)>k(b)?1:0; }).slice(0,30);
+      html += hits.length ? sec('Results', hits) : `<div class="u-faint" style="padding:8px 2px">No other events match.</div>`;
+    }else{
+      html += sec('Suggested — same client', notSel(suggested));
+      const end = new Date(new Date(todayYmd+'T12:00:00Z').getTime()+p.weeks*7*86400000).toISOString().slice(0,10);
+      const startYmd = new Date(new Date(todayYmd+'T12:00:00Z').getTime()-3*86400000).toISOString().slice(0,10);
+      const weeks = {};
+      notSel(all).filter(it=>!it.lost && it.ymd && it.ymd>=startYmd && it.ymd<=end).forEach(it=>{ (weeks[_emWeekEnd(it.ymd)] = weeks[_emWeekEnd(it.ymd)]||[]).push(it); });
+      Object.keys(weeks).sort().forEach(w=>{
+        const lbl = 'Week ending '+new Date(w+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',timeZone:'UTC'});
+        html += sec(lbl, weeks[w].sort((a,b)=>a.ymd<b.ymd?-1:1));
+      });
+      const undated = notSel(all).filter(it=>!it.lost && !it.ymd).slice(0,12);
+      html += sec('No date yet', undated);
+      if(p.weeks<52) html += `<button class="btn btn--ghost btn--sm btn--block" onclick="_emPick.weeks+=8;_emRenderPicker(true)">Show more weeks</button>`;
+    }
+  }
+
+  // How far the change reaches
+  const m = _emFindEmail(p.emailId) || {};
+  const scopes = [
+    ['one', 'Just this email', 'Later replies keep going where they go now.'],
+    ['fromHere', 'This email and every later reply in the conversation', 'Earlier emails stay put. Use this when an old conversation turns into planning for a new event.'],
+    ['thread', 'The whole conversation, including future replies', '']
+  ];
+  if(m.rootId){
+    html += `<div class="em-pick-sec"><div class="em-pick-sec__t">Apply to</div>${scopes.map(s=>`<label class="em-scope"><input type="radio" name="emScope" value="${s[0]}" ${p.scope===s[0]?'checked':''} onchange="_emPick.scope=this.value">
+      <span><b>${s[1]}</b>${s[2]?`<span class="u-faint">${s[2]}</span>`:''}</span></label>`).join('')}</div>`;
+  }
+  body.innerHTML = html;
+  body.scrollTop = scroll;
+  const add = [...p.sel].filter(id=>!p.current.includes(id)).length, rem = p.current.filter(id=>!p.sel.has(id)).length;
+  const cnt = document.getElementById('emPickCount');
+  if(cnt) cnt.textContent = (add||rem) ? [add?('+'+add+' event'+(add>1?'s':'')):'', rem?('−'+rem):''].filter(Boolean).join('  ') : 'No changes yet';
+}
+
+async function _emSavePicker(){
+  const p = _emPick; if(!p) return;
+  const m = _emFindEmail(p.emailId); if(!m) return _emClosePicker();
+  const add = [...p.sel].filter(id=>!p.current.includes(id));
+  const remove = p.current.filter(id=>!p.sel.has(id));
+  if(!add.length && !remove.length){ _emClosePicker(); return; }
+  const btn = document.getElementById('emPickSave'); if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+  try{
+    const n = await _emApplyChange(m, { add, remove }, m.rootId ? p.scope : 'one');
+    _emClosePicker();
+    showToast((n>1? n+' emails updated' : 'Email updated')+' ✓');
+  }catch(e){
+    console.error(e);
+    if(btn){ btn.disabled = false; btn.textContent = 'Save'; }
+    alert('Could not save: '+_emErrText(e));
+  }
+}
+
+// Add/remove events on one email, or on part/all of its conversation.
+// Also updates where future replies go, and queues the Drive copies.
+async function _emApplyChange(m, delta, scope){
+  let docs = [m];
+  if(scope!=='one' && m.rootId){
+    const snap = await db.collection('eventEmails').where('rootId','==',m.rootId).get();
+    docs = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+    if(scope==='fromHere') docs = docs.filter(d=>(d.date||0) >= (m.date||0));
+    if(!docs.some(d=>d.id===m.id)) docs.push(m);
+  }
+  const batch = db.batch();
+  const jobs = [];
+  docs.forEach(d=>{
+    const ids = new Set(d.inquiryIds||[]), gone = new Set(d.removedFrom||[]);
+    delta.add.forEach(x=>{ ids.add(x); gone.delete(x); });
+    delta.remove.forEach(x=>{ if(ids.has(x)){ ids.delete(x); gone.add(x); } });
+    batch.update(db.collection('eventEmails').doc(d.id), {
+      inquiryIds:[...ids], removedFrom:[...gone],
+      suggestOthers:(d.suggestOthers||[]).filter(x=>!ids.has(x)),
+      changedBy: initiatorName(), changedAt: Date.now()
+    });
+    if((d.attachments||[]).length) jobs.push({ type:'syncAttachments', emailId:d.id });
+  });
+  if(scope!=='one' && m.rootId){
+    const tref = db.collection('emailThreads').doc(m.rootId);
+    const t = await tref.get();
+    const tids = new Set(t.exists ? (t.data().inquiryIds||[]) : (m.inquiryIds||[]));
+    delta.add.forEach(x=>tids.add(x));
+    delta.remove.forEach(x=>tids.delete(x));
+    batch.set(tref, { root: m.root||'', subject: m.subject||'', inquiryIds:[...tids], updatedAt: Date.now(), by: initiatorName() }, { merge:true });
+  }
+  await batch.commit();
+  for(const j of jobs) await _emJob(j);
+  const subj = '"'+(m.subject||'(no subject)')+'"'+(docs.length>1?' and '+(docs.length-1)+' more in the conversation':'');
+  delta.add.forEach(x=>logActivity(x,'edit','Email filed here: '+subj,{}));
+  delta.remove.forEach(x=>logActivity(x,'edit','Email removed from this event: '+subj,{}));
+  if(_emClient) _emLoadClient(_emClient.key);
+  return docs.length;
+}
+
+/* ---------- small text prompt (instead of the browser's prompt box) ---------- */
+
+function _emAskText(title, help, value, placeholder, onOk){
+  document.getElementById('emAskModal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'emAskModal';
+  modal.className = 'em-modal';
+  modal.innerHTML = `<div class="em-modal__box em-modal__box--sm" role="dialog" aria-modal="true">
+      <div class="em-modal__head"><div class="em-modal__title">${pcEsc(title)}</div></div>
+      <div class="em-modal__body">
+        ${help?`<div class="u-muted" style="font-size:13px;margin-bottom:10px">${pcEsc(help)}</div>`:''}
+        <input id="emAskInput" class="field" style="width:100%" value="${pcEsc(value||'')}" placeholder="${pcEsc(placeholder||'')}">
+        <div id="emAskErr" class="em-err"></div>
+      </div>
+      <div class="em-modal__foot"><button class="btn btn--ghost" id="emAskCancel">Cancel</button><button class="btn btn--pri" id="emAskOk">Save</button></div>
+    </div>`;
+  document.body.appendChild(modal);
+  const inp = modal.querySelector('#emAskInput'), err = modal.querySelector('#emAskErr'), ok = modal.querySelector('#emAskOk');
+  const close = ()=>modal.remove();
+  const go = async ()=>{
+    ok.disabled = true; err.textContent = '';
+    try{ const msg = await onOk(inp.value); if(msg){ err.textContent = msg; ok.disabled = false; return; } close(); }
+    catch(e){ err.textContent = _emErrText(e); ok.disabled = false; }
+  };
+  modal.querySelector('#emAskCancel').onclick = close;
+  ok.onclick = go;
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter') go(); if(e.key==='Escape') close(); });
+  modal.addEventListener('click', e=>{ if(e.target===modal) close(); });
+  setTimeout(()=>{ inp.focus(); inp.select(); }, 30);
+}
+
+/* ---------- a client's whole inbox (Clients page) ---------- */
+
+function _emClientInqIds(key){
+  const g = (window._clientsGroups||{})[key]; if(!g) return [];
+  const ids = [];
+  (g.items||[]).forEach(it=>{
+    let id = null;
+    if(it.kind==='inq') id = it.id;
+    else {
+      const ev = events.find(e=>e.id===it.id);
+      if(ev) id = ev.inquiryId || (String(ev.id).indexOf('inq_')===0 ? String(ev.id).slice(4) : null);
+    }
+    if(id && ids.indexOf(id)<0) ids.push(id);
+  });
+  // Booked events are shown once in the group; include their inquiries, plus any lost
+  // inquiries for the same client name, so nothing filed is hidden.
+  inquiries.forEach(q=>{
+    const org = (q.organization||'').trim();
+    const person = ((q.firstName||'')+' '+(q.lastName||'')).trim();
+    const k = org ? ('org:'+org.toLowerCase()) : ('nm:'+person.toLowerCase());
+    if(k===key && ids.indexOf(q.id)<0) ids.push(q.id);
+  });
+  return ids;
+}
+function openClientEmails(key){
+  const g = (window._clientsGroups||{})[key];
+  _emClient = { key, name:(g&&g.name)||'Client', ids:_emClientInqIds(key), list:[], loaded:false, err:'' };
+  document.getElementById('emClientModal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'emClientModal';
+  modal.className = 'em-modal';
+  modal.innerHTML = `<div class="em-modal__box em-modal__box--wide" role="dialog" aria-modal="true">
+      <div class="em-modal__head">
+        <div><div class="em-modal__title">Emails — ${pcEsc(_emClient.name)}</div>
+        <div class="u-muted em-modal__sub">Every email on any of this client’s events, newest first</div></div>
+        <button class="btn btn--icon" onclick="_emCloseClient()" title="Close">×</button>
+      </div>
+      <div class="em-modal__body" id="emClientBody"></div>
+    </div>`;
+  modal.addEventListener('click', e=>{ if(e.target===modal) _emCloseClient(); });
+  document.body.appendChild(modal);
+  _emRefresh();
+  _emLoadClient(key);
+}
+function _emCloseClient(){ document.getElementById('emClientModal')?.remove(); _emClient = null; }
+async function _emLoadClient(key){
+  if(!_emClient || _emClient.key!==key) return;
+  const ids = _emClient.ids;
+  try{
+    const seen = {}, list = [];
+    for(let i=0;i<ids.length;i+=10){
+      const snap = await db.collection('eventEmails').where('inquiryIds','array-contains-any',ids.slice(i,i+10)).get();
+      snap.docs.forEach(d=>{ if(!seen[d.id]){ seen[d.id]=1; list.push({ id:d.id, ...d.data() }); } });
+    }
+    if(!_emClient || _emClient.key!==key) return;
+    _emClient.list = list.sort((a,b)=>(b.date||0)-(a.date||0));
+    _emClient.loaded = true; _emClient.err = '';
+  }catch(e){
+    if(!_emClient) return;
+    _emClient.loaded = true; _emClient.err = _emErrText(e);
+  }
+  _emRefresh();
+}
+function _emClientInner(){
+  const c = _emClient; if(!c) return '';
+  if(!c.ids.length) return `<div class="em-empty"><i class="ti ti-mail-off"></i><div>This client has no events in the app yet.</div></div>`;
+  if(!c.loaded) return `<div class="em-skel"><div></div><div></div><div></div></div>`;
+  if(c.err) return `<div class="em-status em-status--warn"><i class="ti ti-lock"></i>${pcEsc(c.err)}</div>`;
+  if(!c.list.length) return `<div class="em-empty"><i class="ti ti-mail-off"></i><div>No emails filed for this client yet.</div></div>`;
+  return `${_emStatusLine()}<div class="em-list">${c.list.map(m=>_emRow(m,'')).join('')}</div>`;
 }
 
 /* =================== MY DAY (personal, per-user) =================== */
@@ -4517,6 +5184,7 @@ function drawerDocuments(inq, role, ev){
     ${_docGroup('Uploaded files', files)}
     ${insuranceCompanyLinks_()}
     ${_docGroup('After the event', after)}
+    ${emailAttachmentsBlock(inq)}
     ${clientUploadsBlock(ev)}`;
 }
 
@@ -4682,6 +5350,7 @@ function renderInqDetail(inq, role){
         ${_hubChip(inq.cuisine)}
       </div>
       ${_hubCard('Details', `<div class="hub-facts">${fact('Client', name)}${fact('Phone', inq.phone)}${fact('Email', inq.email)}${fact('Event type', inq.eventType)}${fact('Party planner', inq.plannerName)}${_salespersonHubCell(inq, role)}</div>${_unansweredHubBanner(inq)}${refHtml}${notesHtml}`)}
+      ${_hubCard('Emails', emailsHubCard(inq))}
       ${_hubCardWrap(drawerDocuments(inq, role, ev))}
       ${_hubCard('Client portal', clientPortalHubCard(inq, ev, role))}
       ${(role.canViewInvoices && _estimateOpenId===inq.id) ? _hubCard('Money &amp; estimate', renderEstimateBlock(inq, role)) : ''}
@@ -7549,6 +8218,7 @@ function renderClients(){
 
     const acts = `<div class="icon-tile-row" style="margin-top:10px">
       <div class="icon-tile icon-tile--purple" onclick="event.stopPropagation();openClientReport('${g.key}')"><div class="icon-tile-icon"><i class="ti ti-report-money"></i></div><div class="icon-tile-label">Report</div></div>
+      <div class="icon-tile icon-tile--maroon" onclick="event.stopPropagation();openClientEmails('${g.key}')"><div class="icon-tile-icon"><i class="ti ti-mail"></i></div><div class="icon-tile-label">Emails</div></div>
       ${role.canEdit?`<div class="icon-tile icon-tile--teal" onclick="event.stopPropagation();newEventForClient('${g.key}','new')"><div class="icon-tile-icon"><i class="ti ti-plus"></i></div><div class="icon-tile-label">New potential event</div></div>`:''}
       ${role.canEdit?`<div class="icon-tile icon-tile--maroon" onclick="event.stopPropagation();newEventForClient('${g.key}','booked')"><div class="icon-tile-icon"><i class="ti ti-calendar-plus"></i></div><div class="icon-tile-label">New booked event</div></div>`:''}
     </div>`;
