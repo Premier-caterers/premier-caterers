@@ -82,6 +82,7 @@ function EF_setup() {
     ef_set_('emailFilingStatus/known', { sig: ef_sigMap_(idx), at: Date.now() });
   }
   PropertiesService.getScriptProperties().setProperty('EF_SCAN_FROM', String(Date.now() - 60 * 60 * 1000));
+  PropertiesService.getScriptProperties().deleteProperty('EF_GMAIL_PAUSE_UNTIL');
   ef_status_({ installedAt: Date.now(), lastError: '' });
   Logger.log('Email filing is ON — checking every minute. Next: run EF_startBackfill once.');
 }
@@ -117,26 +118,50 @@ function EF_run() {
   var report = { lastRun: started, tagged: 0, jobs: 0 };
   try {
     var idx = ef_loadIndex_();
-    report.tagged = ef_processTagRequests_(idx, started);
-    report.jobs = ef_processJobs_(idx, started);
-    // New mail is checked every few minutes (keeps well inside Gmail's daily
-    // limits); Gmail-button tags and app requests are handled every minute.
-    var props = PropertiesService.getScriptProperties();
-    if (Date.now() - (Number(props.getProperty('EF_LAST_SCAN')) || 0) >= 2.5 * 60 * 1000) {
-      props.setProperty('EF_LAST_SCAN', String(Date.now()));
-      report.filed = ef_scanNew_(idx, started);
-      report.lastScanAt = Date.now();
+    var gmailOk = !ef_gmailPaused_();
+    report.gmailPausedUntil = gmailOk ? 0 : ef_gmailPausedUntil_();
+    report.jobs = ef_processJobs_(idx, started, gmailOk);
+    if (gmailOk) {
+      report.tagged = ef_processTagRequests_(idx, started);
+      // New mail is checked every 5 minutes — Gmail-button tags and app
+      // requests every minute. Keeps events@ well inside Gmail's daily limit.
+      var props = PropertiesService.getScriptProperties();
+      if (Date.now() - (Number(props.getProperty('EF_LAST_SCAN')) || 0) >= 4.5 * 60 * 1000) {
+        props.setProperty('EF_LAST_SCAN', String(Date.now()));
+        report.filed = ef_scanNew_(idx, started);
+        report.lastScanAt = Date.now();
+        report.lastError = '';
+      }
+      ef_catchUpNewInquiries_(idx, started);
     }
-    ef_catchUpNewInquiries_(idx, started);
-    report.lastError = '';
     report.lastOkAt = Date.now();
   } catch (e) {
     report.lastError = String(e && e.stack || e).slice(0, 900);
+    report.lastErrorAt = Date.now();
+    if (ef_isQuotaError_(e)) report.gmailPausedUntil = ef_pauseGmail_();
     Logger.log('Email filing error: ' + report.lastError);
   } finally {
     ef_status_(report);
     lock.releaseLock();
   }
+}
+
+/* ---------- Gmail daily limit: back off instead of hammering ---------- */
+
+function ef_isQuotaError_(e) {
+  return /too many times|Service invoked|quota|rate limit/i.test(String(e && e.message || e));
+}
+function ef_gmailPausedUntil_() {
+  return Number(PropertiesService.getScriptProperties().getProperty('EF_GMAIL_PAUSE_UNTIL')) || 0;
+}
+function ef_gmailPaused_() { return ef_gmailPausedUntil_() > Date.now(); }
+// Wait an hour, then try again. Nothing is lost: the scan picks up from
+// where it last finished, so mail that arrived meanwhile is still filed.
+function ef_pauseGmail_() {
+  var until = Date.now() + 60 * 60 * 1000;
+  PropertiesService.getScriptProperties().setProperty('EF_GMAIL_PAUSE_UNTIL', String(until));
+  Logger.log('Gmail daily limit reached for this account — pausing Gmail work until ' + new Date(until));
+  return until;
 }
 
 function ef_outOfTime_(started) { return Date.now() - started > EF_RUN_BUDGET_MS; }
@@ -153,11 +178,18 @@ function ef_scanNew_(idx, started) {
   var start = 0, threads;
   do {
     threads = GmailApp.search('in:anywhere -in:spam -in:trash after:' + afterSec, start, 100);
+    var tcache = CacheService.getScriptCache();
+    var tseen = tcache.getAll(threads.map(function (t) { return 'eft:' + t.getId(); }));
     threads.forEach(function (t) {
+      // A conversation with nothing new since the last look is skipped
+      // without opening it — the biggest saving on Gmail calls.
+      var last = String(t.getLastMessageDate().getTime());
+      if (tseen['eft:' + t.getId()] === last) return;
       t.getMessages().forEach(function (m) {
         var ms = m.getDate().getTime();
         if (ms >= afterSec * 1000) msgs.push(m);
       });
+      tcache.put('eft:' + t.getId(), last, 21600);
     });
     start += threads.length;
   } while (threads.length === 100 && !ef_outOfTime_(started));
@@ -307,6 +339,7 @@ function ef_processTagRequests_(idx, started) {
       ef_patch_(path, { status: 'done', doneAt: Date.now(), note: found ? '' : 'Filed without attachments (not in events@).' });
       n++;
     } catch (e) {
+      if (ef_isQuotaError_(e)) throw e; // stays pending until Gmail is available again
       ef_patch_(path, { status: 'failed', note: String(e).slice(0, 300), doneAt: Date.now() });
     }
   });
@@ -328,11 +361,12 @@ function ef_findByMessageId_(messageId) {
 
 /* ---------- 4: requests from the app ---------- */
 
-function ef_processJobs_(idx, started) {
+function ef_processJobs_(idx, started, gmailOk) {
   var jobs = ef_query_('emailJobs', 'status', 'EQUAL', 'pending');
   var n = 0;
   jobs.forEach(function (j) {
     if (ef_outOfTime_(started)) return;
+    if (!gmailOk && j.type === 'checkClient') return; // waits until Gmail is available again
     var path = 'emailJobs/' + j._id;
     try {
       if (j.type === 'syncAttachments') ef_syncAttachments_(j.emailId, idx);
@@ -343,6 +377,7 @@ function ef_processJobs_(idx, started) {
       ef_patch_(path, { status: 'done', doneAt: Date.now() });
       n++;
     } catch (e) {
+      if (ef_isQuotaError_(e)) throw e; // leave it pending; the run pauses Gmail work
       ef_patch_(path, { status: 'failed', note: String(e).slice(0, 300), doneAt: Date.now() });
     }
   });
@@ -465,6 +500,12 @@ function EF_backfillStep() {
   if (!lock.tryLock(30000)) { ScriptApp.newTrigger('EF_backfillStep').timeBased().after(60 * 1000).create(); return; }
   var started = Date.now();
   var props = PropertiesService.getScriptProperties();
+  if (ef_gmailPaused_()) {
+    ef_status_({ backfill: 'waiting for Gmail\u2019s daily limit to reset — will continue on its own' });
+    ScriptApp.newTrigger('EF_backfillStep').timeBased().after(30 * 60 * 1000).create();
+    lock.releaseLock();
+    return;
+  }
   try {
     var addrs = JSON.parse(props.getProperty('EF_BF_ADDRS') || '[]');
     var pos = Number(props.getProperty('EF_BF_POS')) || 0;
@@ -498,8 +539,10 @@ function EF_backfillStep() {
       ScriptApp.newTrigger('EF_backfillStep').timeBased().after(60 * 1000).create();
     }
   } catch (e) {
-    ef_status_({ backfill: 'paused after an error — will retry: ' + String(e).slice(0, 200) });
-    ScriptApp.newTrigger('EF_backfillStep').timeBased().after(5 * 60 * 1000).create();
+    var quota = ef_isQuotaError_(e);
+    if (quota) ef_pauseGmail_();
+    ef_status_({ backfill: (quota ? 'waiting for Gmail\u2019s daily limit to reset' : 'paused after an error') + ' — will continue on its own: ' + String(e).slice(0, 160) });
+    ScriptApp.newTrigger('EF_backfillStep').timeBased().after((quota ? 60 : 5) * 60 * 1000).create();
   } finally {
     lock.releaseLock();
   }

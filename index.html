@@ -703,18 +703,51 @@ async function markEmailHandled(inqId){
 }
 window.markEmailHandled = markEmailHandled;
 
-// Kick off the every-2-minute background check. Started after Firestore init
-// so we already have inquiries/emailTemplates loaded.
+// Which clients have written to us and not had a reply. This used to ask the
+// events@ Gmail for 200 messages every 2 minutes from every open browser, which
+// used up events@'s whole daily Gmail allowance by late morning (and then every
+// Gmail feature failed for the rest of the day). It now reads the emails the
+// events@ filing script has already put on each event — no Gmail calls at all.
 function startUnansweredEmailWatcher(){
   if(_unansweredTimer) return;
-  const check = async () => {
-    try { await checkUnansweredEmails(); } catch(err){ console.warn('Unanswered check failed:', err); }
-  };
-  // First check after a short delay (lets the initial page render finish),
-  // then every 2 minutes.
-  setTimeout(check, 5000);
-  _unansweredTimer = setInterval(check, 120 * 1000);
+  _unansweredTimer = true;
+  try{
+    const cutoff = Date.now() - 45*86400000;
+    _unansweredTimer = db.collection('eventEmails').where('date','>=',cutoff).onSnapshot(
+      snap=>{ try{ _rebuildUnansweredFromEmails(snap.docs.map(d=>d.data())); }catch(e){ console.warn('unanswered rebuild', e); } },
+      err=>console.warn('Unanswered-email listener:', err)
+    );
+  }catch(e){ console.warn('Unanswered-email watcher not started:', e); }
 }
+function _rebuildUnansweredFromEmails(list){
+  const latest = {};
+  (list||[]).forEach(m=>{
+    const t = m.date||0; if(!t) return;
+    if(m.direction==='in'){
+      const em = String((m.from&&m.from.email)||'').toLowerCase(); if(!em) return;
+      const r = latest[em] = latest[em] || {};
+      if(!r.inAt || t > r.inAt){ r.inAt = t; r.inSubject = m.subject||''; }
+    }else{
+      (m.participants||[]).forEach(a=>{
+        const em = String(a||'').toLowerCase(); if(!em) return;
+        const r = latest[em] = latest[em] || {};
+        if(!r.outAt || t > r.outAt) r.outAt = t;
+      });
+    }
+  });
+  const clientEmails = new Set((inquiries||[]).map(x=>(x.email||'').trim().toLowerCase()).filter(Boolean));
+  const next = {};
+  Object.keys(latest).forEach(em=>{
+    if(!clientEmails.has(em)) return;
+    const r = latest[em], inAt = r.inAt||0, outAt = r.outAt||0;
+    next[em] = { lastInboundAt:inAt, lastOutboundAt:outAt, subject:r.inSubject||'', unanswered: !!(inAt && inAt > outAt) };
+  });
+  const changed = JSON.stringify(next) !== JSON.stringify(unansweredMap);
+  unansweredMap = next;
+  _lastUnansweredCheckAt = Date.now();
+  if(changed){ try { render(); } catch(_){} }
+}
+// Old Gmail-polling version, kept for reference only — no longer called.
 async function checkUnansweredEmails(){
   if(!isGmailConnected()) return;
   if(!inquiries || !inquiries.length) return;
@@ -1620,6 +1653,7 @@ function _emStatusLine(){
   if(_emStatus===undefined) return '';
   if(_emStatus===null) return `<div class="em-status em-status--warn"><i class="ti ti-alert-triangle"></i>Automatic filing isn’t switched on yet (run EF_setup in the events@ Apps Script).</div>`;
   const ok = _emStatus.lastOkAt || 0;
+  if((_emStatus.gmailPausedUntil||0) > Date.now()) return `<div class="em-status em-status--warn"><i class="ti ti-clock-pause"></i>events@ has used up today\u2019s Gmail allowance, so new emails are waiting. They\u2019ll be filed automatically once it resets \u2014 nothing is lost.</div>`;
   if(Date.now()-ok > 20*60000) return `<div class="em-status em-status--warn"><i class="ti ti-alert-triangle"></i>Automatic filing last checked ${_emAgo(ok)} — the events@ timer may have stopped.${_emStatus.lastError?' Last error: '+pcEsc(String(_emStatus.lastError).slice(0,140)):''}</div>`;
   return `<div class="em-status"><i class="ti ti-refresh"></i>New mail checked ${_emAgo(ok)}</div>`;
 }
