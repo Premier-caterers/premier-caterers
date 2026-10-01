@@ -2,6 +2,11 @@
   "timeZone": "America/New_York",
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
+  "urlFetchWhitelist": [
+    "https://script.google.com/",
+    "https://script.googleusercontent.com/",
+    "https://firestore.googleapis.com/"
+  ],
   "oauthScopes": [
     "https://www.googleapis.com/auth/gmail.addons.execute",
     "https://www.googleapis.com/auth/gmail.addons.current.message.readonly",
