@@ -180,12 +180,10 @@ function pb_render_(e, st) {
   return card.build();
 }
 
-function pb_checks_(name, title, items, selected) {
+function pb_checks_(name, title, items, ticked) {
   var w = CardService.newSelectionInput().setType(CardService.SelectionInputType.CHECK_BOX).setFieldName(name);
   if (title) w.setTitle(title);
-  items.forEach(function (it) {
-    w.addItem(it.label + '  ·  ' + it.sub, it.id, selected.indexOf(it.id) >= 0);
-  });
+  items.forEach(function (it) { w.addItem(it.label + '  \u00b7  ' + it.sub, it.id, !!ticked); });
   return w;
 }
 
