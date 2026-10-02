@@ -1388,3 +1388,36 @@ a{color:var(--blue-mid);text-decoration:none}
 /* The drawer's own section cards sit inside a cf-panel now — drop their double frame */
 .cf-panel__body .hub-sec:first-child{margin-top:0}
 @media (max-width:560px){.cf-tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.cf-tile{padding:10px}.cf-tile__n{font-size:22px}.cf-tile__n--sm{font-size:18px}.cf-tile--ring{grid-column:span 2}.cf-tile--ring svg{width:56px;height:56px}}
+
+/* ═══ Shared components → dashboard look (This Week, Clients, Invoices…) — Oct 2026 ═══
+   Override layer: same class names, so every screen built on .tbl/.card/.pill follows. */
+.tbl-wrap{border:1px solid var(--dash-line);border-radius:12px;background:var(--bg);box-shadow:0 1px 3px rgba(24,24,27,.06)}
+.tbl th,.tbl-wrap > .tbl th{background:var(--dash-head);color:var(--text);font-size:11.5px;font-weight:700;letter-spacing:.04em;padding:10px 12px;border-bottom:1px solid var(--dash-line);border-right:1px solid var(--dash-line)}
+.tbl th:last-child{border-right:0}
+.tbl td{border-bottom:1px solid #E7E9EE;border-right:1px solid #EFF1F4;padding:11px 12px}
+.tbl td:last-child{border-right:0}
+.tbl tbody tr:hover td{background:#F7F8FB}
+.tbl__band td{background:var(--bg2);font-size:13.5px;font-weight:800;letter-spacing:0;text-transform:none;color:var(--text);border-bottom:1px solid var(--dash-line);border-top:1px solid var(--dash-line)}
+.tbl tbody tr.tbl__band:hover td{background:var(--bg2)}
+.card{border:1px solid var(--dash-line);border-radius:12px;box-shadow:0 1px 3px rgba(24,24,27,.06)}
+.card__head{background:#EEE8F8;border-bottom:1px solid var(--dash-line);padding:11px 16px;font-size:13px;font-weight:800;letter-spacing:.03em;color:var(--text)}
+.card__foot{border-top:1px solid var(--dash-line)}
+.pill{border-radius:6px;padding:2px 9px;font-size:11.5px;font-weight:700}
+.pill--new{background:var(--dash-grey);color:var(--dash-grey-ink)}
+.pill--menu{background:var(--dash-yellow);color:var(--dash-yellow-ink)}
+.pill--booked{background:var(--dash-green);color:var(--dash-green-ink)}
+.pill--invoice{background:#EDE4F7;color:#4B3A73}
+.pill--paid{background:var(--dash-green-ink);color:#fff}
+.pill--lost,.pill--alert{background:var(--dash-pink);color:var(--dash-pink-ink)}
+.section-title{font-family:'Fraunces',Georgia,serif;font-weight:600}
+/* This Week summary numbers → pastel tiles */
+.wk-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;border:0;padding:0;margin:16px 0 18px}
+.wk-stat{border-radius:14px;padding:14px 12px;text-align:center;box-shadow:0 1px 3px rgba(24,24,27,.06);border:0}
+.wk-stat:nth-child(1){background:var(--bg);border:1px solid var(--dash-line)}
+.wk-stat:nth-child(2){background:#EDE4F7}
+.wk-stat:nth-child(3){background:var(--dash-blue)}
+.wk-stat:nth-child(4){background:var(--dash-green)}
+.wk-stat:nth-child(5){background:var(--dash-yellow)}
+.wk-stat__n{font-size:34px;font-weight:800;line-height:1.1;color:var(--text)}
+.wk-stat__l{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text);margin-top:4px}
+@media (max-width:640px){.wk-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
