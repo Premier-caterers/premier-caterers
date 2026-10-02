@@ -47,7 +47,16 @@ var TEMPLATE_MAP = {
   'Corporate:No':      [5],
   'Drop off catering': [1],
   'Breakfast':         [2],
-  'Brunch':            [4]
+  'Brunch':            [4],
+  // Added Oct 1, 2026 — event types the app offers that had no menu (Kenny's picks).
+  // No ':Yes'/':No' suffix = the same menus whatever Shabbos is set to.
+  'Shabbos meals':                   [8, 10],
+  'Bar mitzvah over shabbos':        [8, 10],
+  'Bar mitzvah party - not shabbos': [3, 4],
+  'Bas mitzvah party - not shabbos': [3, 4],
+  'Engagement party':                [9],
+  'Corporate event':                 [5],
+  'Organization event':              [3]
 };
 
 
