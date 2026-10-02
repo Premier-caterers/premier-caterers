@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=39">
+<link rel="stylesheet" href="styles.css?v=40">
 </head>
 <body>
 
@@ -5685,12 +5685,37 @@ function renderClientFilePage(inq, role){
   } else if(role.canViewInvoices){
     tiles.push(`<div class="cf-tile cf-tile--grey"><div class="cf-tile__l"><span aria-hidden="true">$</span> Money</div><div class="cf-tile__n cf-tile__n--sm">No quote yet</div><div class="cf-tile__s"><button class="cf-linkbtn" onclick="viewClientQuote('${inq.id}')">Start a quote →</button></div></div>`);
   }
-  if(ev){
-    const items = (checklists[ev.id]||[]).filter(i=>!i.na);
+  // Stage tile — same words as the Pipeline; symbol + colour so it reads without colour.
+  {
+    const st = inq.stage || 'new';
+    const S = {
+      new:        {t:'New inquiry',    sym:'○', c:'grey'},
+      menu_sent:  {t:'Menu sent',      sym:'●', c:'yellow'},
+      followup_1: {t:'Followed up #1', sym:'●', c:'lavender'},
+      followup_2: {t:'Followed up #2', sym:'●', c:'lavender'},
+      booked:     {t:'Booked',         sym:'✓', c:'green'},
+      lost:       {t:'Lost',           sym:'✕', c:'pink'}
+    }[st] || {t:pcEsc(st), sym:'○', c:'grey'};
+    let sub = '&nbsp;';
+    if(st==='booked'){
+      const b = plBookedBucket(inq);
+      if(b==='past'){ const pd = invoices['inq_'+inq.id] && invoices['inq_'+inq.id].status==='paid'; sub = pd ? '✓ Past — paid' : '✕ Past — not paid'; }
+      else sub = ({this_week:'This week', two_weeks:'2 weeks out', month_out:'1 month out', booked:(dayIso?'More than a month out':'No date yet')})[b] || '&nbsp;';
+    } else if(st==='followup_1' || st==='followup_2'){
+      const ts = st==='followup_1' ? inq.followup1SentAt : inq.followup2SentAt;
+      if(ts){ const d=new Date(parseInt(ts,10)); if(!isNaN(d)) sub = 'On '+d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+    }
+    // With a linked event the checklist ring takes this slot and carries the stage as a tag instead.
+    window._cfStageTag = `<div class="cf-stagetag"><span aria-hidden="true">✓</span> Booked</div>${sub!=='&nbsp;'?`<div class="cf-stagetag__s">${sub}</div>`:''}`;
+    if(st!=='booked') tiles.push(`<div class="cf-tile cf-tile--${S.c}"><div class="cf-tile__l"><span aria-hidden="true">⚑</span> Stage</div><div class="cf-tile__n cf-tile__n--sm"><span aria-hidden="true">${S.sym}</span> ${S.t}</div><div class="cf-tile__s">${sub}</div></div>`);
+  }
+  // Checklist ring only for Booked clients (an event left behind by a client moved back or marked Lost doesn't count).
+  if(inq.stage==='booked'){
+    const items = ev ? (checklists[ev.id]||[]).filter(i=>!i.na) : [];
     const done = items.filter(i=>_clIsDone(i)).length;
     const pct = items.length ? Math.round(done/items.length*100) : 0;
     const C = 2*Math.PI*30, dash = (C*pct/100).toFixed(1);
-    tiles.push(`<div class="cf-tile cf-tile--ring"><svg width="74" height="74" viewBox="0 0 74 74" role="img" aria-label="Checklist ${pct} percent done"><circle cx="37" cy="37" r="30" fill="none" stroke="#ECEDEF" stroke-width="9"/><circle cx="37" cy="37" r="30" fill="none" stroke="${pct===100?'var(--dash-bar-green)':'var(--dash-bar-blue)'}" stroke-width="9" stroke-dasharray="${dash} ${C.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 37 37)"/><text x="37" y="42" text-anchor="middle" font-size="16" font-weight="800" fill="currentColor">${pct}%</text></svg><div><div class="cf-tile__l">Checklist</div><div class="cf-tile__s">${items.length?(done+' of '+items.length+' done'):'No checklist yet'}</div><button class="cf-linkbtn" onclick="goChecklist('${ev.id}')">Open checklist →</button></div></div>`);
+    tiles.push(`<div class="cf-tile cf-tile--ring"><svg width="74" height="74" viewBox="0 0 74 74" role="img" aria-label="Checklist ${pct} percent done"><circle cx="37" cy="37" r="30" fill="none" stroke="#ECEDEF" stroke-width="9"/><circle cx="37" cy="37" r="30" fill="none" stroke="${pct===100?'var(--dash-bar-green)':'var(--dash-bar-blue)'}" stroke-width="9" stroke-dasharray="${dash} ${C.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 37 37)"/><text x="37" y="42" text-anchor="middle" font-size="16" font-weight="800" fill="currentColor">${pct}%</text></svg><div>${window._cfStageTag||''}<div class="cf-tile__l">Checklist</div><div class="cf-tile__s">${items.length?(done+' of '+items.length+' done'):'No checklist yet'}</div>${ev?`<button class="cf-linkbtn" onclick="goChecklist('${ev.id}')">Open checklist →</button>`:(role.canEdit?`<button class="cf-linkbtn" onclick="createEventFromInquiry(inquiries.find(x=>x.id==='${inq.id}'));render()">Add to This Week →</button>`:'')}</div></div>`);
   }
 
   // ── Allergy banner (unchanged behaviour) ──

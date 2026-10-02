@@ -1521,3 +1521,9 @@ a{color:var(--blue-mid);text-decoration:none}
 .cf-sg__c.is-empty{color:#C4C4CC}
 .cf-sg__c.is-gap{background:var(--dash-yellow)}
 .cf-sg__c.is-gap span{color:var(--dash-yellow-ink);font-weight:700}
+
+/* Client file: Stage tile (lavender for the follow-up stages) */
+.cf-tile--lavender{background:var(--dash-band,#ECE4FA)}.cf-tile--lavender .cf-tile__s{color:var(--dash-band-ink,#2A2140)}
+.cf-tile--ring svg{flex-shrink:0}
+.cf-stagetag{display:inline-flex;align-items:center;gap:5px;font-size:17px;font-weight:700;padding:4px 12px;border-radius:999px;background:var(--dash-green);color:var(--dash-green-ink);white-space:nowrap}
+.cf-stagetag__s{font-size:12px;color:var(--dash-green-ink);margin:3px 0 8px 4px}
