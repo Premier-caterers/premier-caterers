@@ -24,6 +24,7 @@ function doPost(e) {
     else if (req.action === 'search') out = { ok: true, results: ps_search_(req.q || '') };
     else if (req.action === 'tag') out = ps_tag_(req, who || req.by || '');
     else if (req.action === 'ping') out = { ok: true, who: who };
+    else if (req.action === 'filed') out = ps_filed_(req);
     else throw new Error('Unknown request.');
     out.ok = true;
   } catch (err) {
@@ -144,6 +145,30 @@ function ps_tag_(req, who) {
     fallback: fb
   });
   return { requestId: id };
+}
+
+/* ---------- for the "In client file" Gmail label ---------- */
+
+// Emails filed (field 'filedAt') or moved/removed in the app (field
+// 'changedAt') at or after `after`, oldest first. Each row says whether the
+// email is still on at least one client file. Read-only.
+function ps_filed_(req) {
+  var field = req.field === 'changedAt' ? 'changedAt' : 'filedAt';
+  var after = Number(req.after) || 0;
+  var limit = Math.min(Math.max(Number(req.limit) || 300, 1), 500);
+  var body = { structuredQuery: {
+    from: [{ collectionId: 'eventEmails' }],
+    select: { fields: [{ fieldPath: 'messageId' }, { fieldPath: 'inquiryIds' }, { fieldPath: field }] },
+    where: { fieldFilter: { field: { fieldPath: field }, op: 'GREATER_THAN_OR_EQUAL', value: { integerValue: String(Math.floor(after)) } } },
+    orderBy: [{ field: { fieldPath: field }, direction: 'ASCENDING' }],
+    limit: limit
+  } };
+  var rows = ps_fetch_(ps_base_() + ':runQuery', { method: 'post', payload: body }) || [];
+  var out = rows.filter(function (r) { return r.document; }).map(function (r) {
+    var d = ps_decFields_(r.document.fields || {});
+    return { id: r.document.name.split('/').pop(), m: String(d.messageId || ''), on: (d.inquiryIds || []).length > 0, t: Number(d[field]) || 0 };
+  });
+  return { rows: out, more: out.length >= limit };
 }
 
 /* ---------- the event list ---------- */
