@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=30">
+<link rel="stylesheet" href="styles.css?v=31">
 </head>
 <body>
 
@@ -3894,28 +3894,58 @@ function renderCoverSheet(){
     return `<div class="cs-name"><span class="cs-name-link" onclick="showView('events');openEventHub('${id}')" title="Open event file">${esc(val)||'\u2014'}</span><button type="button" class="cs-name-edit" onclick="coverEditName(this)" title="Edit name"><i class="ti ti-pencil"></i></button><input type="text" value="${esc(val||'')}" placeholder="\u2014" class="cs-inp cs-name-inp" onblur="this.parentNode.classList.remove('editing');${onBl}"></div>`;
   };
 
+  // Week + per-day totals (main rows and meal rows both count toward staffing)
+  const _units = e => [e].concat(e.meals||[]);
+  const _sum = (list,k) => list.reduce((t,x)=>t+(staffNum(x[k])||0),0);
+  const _gap = (count,time) => staffNum(count)>0 && !String(time||'').trim();
+  let gapCount = 0;
+  const dayTot = {};
+  weekEvents.forEach(e=>{
+    const k = formatEventDay(e)||'No day set';
+    const u = _units(e);
+    const t = dayTot[k] || (dayTot[k]={events:0,waiters:0,chefs:0,porters:0});
+    t.events++; t.waiters+=_sum(u,'waiters'); t.chefs+=_sum(u,'chefs'); t.porters+=_sum(u,'porters');
+    u.forEach(x=>{ if(_gap(x.waiters,x.waiterTime)) gapCount++; if(_gap(x.chefs,x.chefTime)) gapCount++; });
+  });
+  const weekTot = Object.values(dayTot).reduce((a,t)=>({events:a.events+t.events,waiters:a.waiters+t.waiters,chefs:a.chefs+t.chefs,porters:a.porters+t.porters}),{events:0,waiters:0,chefs:0,porters:0});
+  const maxDayStaff = Math.max(1, ...Object.values(dayTot).map(t=>t.waiters+t.chefs+t.porters));
+  const showBands = ['job','day','date'].includes(coverSortKey);
+  const timeCell = (id,field,val,count,mi) => {
+    const gap = _gap(count,val);
+    return `<td class="cs-td${gap?' cs-gap':''}">${inpTxt(id,field,val,mi).replace('placeholder="\u2014"', gap?'placeholder="! add"':'placeholder="\u2014"')}</td>`;
+  };
+  let lastDay = null;
+
   let rows = '';
   weekEvents.forEach((e,i)=>{
     const alt = i%2===1 ? ' cs-alt' : '';
-    const menuHtml = (e.menuLink||e.pdfMenuLink)
-      ? `<a href="${esc(e.menuLink||e.pdfMenuLink)}" target="_blank" class="cs-menu-pill">Menu \u2197</a>`
-      : '<span class="cs-dash">\u2014</span>';
+    const dk = formatEventDay(e)||'No day set';
+    if(showBands && dk!==lastDay){
+      lastDay = dk;
+      const t = dayTot[dk];
+      const pct = Math.round(100*(t.waiters+t.chefs+t.porters)/maxDayStaff);
+      rows += `<tr class="cs-dayband"><td colspan="${cols.length}"><div class="cs-dayband__in"><b>${esc(dk)}</b><span>${t.events} event${t.events===1?'':'s'} \u00b7 ${t.waiters} waiters \u00b7 ${t.chefs} chefs \u00b7 ${t.porters} porters</span><span class="cs-dayband__bar" aria-hidden="true"><span style="width:${pct}%"></span></span></div></td></tr>`;
+    }
+    const hasMenu = !!(e.menuLink||e.pdfMenuLink);
+    const menuHtml = hasMenu
+      ? `<a href="${esc(e.menuLink||e.pdfMenuLink)}" target="_blank" class="cs-menu-ok">\u2713 Menu</a>`
+      : '<span class="cs-menu-none">\u2715 None</span>';
 
     // Main event row
     rows += `<tr class="cs-row${alt}">
       <td class="cs-td cs-num"><span class="cs-job" onclick="editJobNum('${e.id}')" title="Click to edit job #">${esc(coverJobNum(e.job))} <i class="ti ti-pencil"></i></span></td>
       <td class="cs-td">${nameCell(e.id,e.name)}</td>
       <td class="cs-td"><span class="cs-meal-tag">Main</span></td>
-      <td class="cs-td cs-num">${menuHtml}</td>
+      <td class="cs-td cs-num cs-menu-cell${hasMenu?' is-ok':' is-none'}">${menuHtml}</td>
       <td class="cs-td">${inpTxt(e.id,'typeLabel',e.typeLabel||e.type)}</td>
       <td class="cs-td">${inpTxt(e.id,'dayLabel',formatEventDay(e))}</td>
       <td class="cs-td">${inpTxt(e.id,'startTime',e.startTime)}</td>
       <td class="cs-td">${inpTxt(e.id,'addr',e.addr)}</td>
       <td class="cs-td cs-num">${inpStaff(e.id,'waiters',e.waiters,e.waiterNames)}</td>
       <td class="cs-td cs-num">${inpStaff(e.id,'bartenders',e.bartenders,e.bartenderNames)}</td>
-      <td class="cs-td">${inpTxt(e.id,'waiterTime',e.waiterTime)}</td>
+      ${timeCell(e.id,'waiterTime',e.waiterTime,e.waiters)}
       <td class="cs-td cs-num">${inpStaff(e.id,'chefs',e.chefs,e.chefNames)}</td>
-      <td class="cs-td">${inpTxt(e.id,'chefTime',e.chefTime)}</td>
+      ${timeCell(e.id,'chefTime',e.chefTime,e.chefs)}
       <td class="cs-td cs-num">${inpStaff(e.id,'porters',e.porters,e.porterNames)}</td>
       <td class="cs-td">${inpTxt(e.id,'mashgiach',e.mashgiachNames||e.mashgiach)}</td>
       <td class="cs-td">${inpTxt(e.id,'manager',e.manager)}</td>
@@ -3934,9 +3964,9 @@ function renderCoverSheet(){
         <td class="cs-td">${inpTxt(e.id,'addr',meal.addr||'',mi)}</td>
         <td class="cs-td cs-num">${inpStaff(e.id,'waiters',meal.waiters,meal.waiterNames,mi)}</td>
         <td class="cs-td cs-num">${inpStaff(e.id,'bartenders',meal.bartenders,meal.bartenderNames,mi)}</td>
-        <td class="cs-td">${inpTxt(e.id,'waiterTime',meal.waiterTime||'',mi)}</td>
+        ${timeCell(e.id,'waiterTime',meal.waiterTime||'',meal.waiters,mi)}
         <td class="cs-td cs-num">${inpStaff(e.id,'chefs',meal.chefs,meal.chefNames,mi)}</td>
-        <td class="cs-td">${inpTxt(e.id,'chefTime',meal.chefTime||'',mi)}</td>
+        ${timeCell(e.id,'chefTime',meal.chefTime||'',meal.chefs,mi)}
         <td class="cs-td cs-num">${inpStaff(e.id,'porters',meal.porters,meal.porterNames,mi)}</td>
         <td class="cs-td">${inpTxt(e.id,'mashgiach',meal.mashgiachNames||meal.mashgiach||'',mi)}</td>
         <td class="cs-td">${inpTxt(e.id,'manager',meal.manager||'',mi)}</td>
@@ -4027,7 +4057,18 @@ function renderCoverSheet(){
       <div class="cs-scroll">
         <table class="cs-table">
           <thead>
-            <tr><th colspan="${cols.length}" class="cs-banner-cell"><div class="cs-banner"><b>${weekDate.getUTCMonth()+1}/${weekDate.getUTCDate()}</b><span>Week ending ${months[weekDate.getUTCMonth()]} ${weekDate.getUTCDate()}, '${String(weekDate.getUTCFullYear()).slice(2)}</span></div></th></tr>
+            <tr><th colspan="${cols.length}" class="cs-banner-cell"><div class="cs-weekhead">
+              <b class="cs-weekhead__title">W/E ${months[weekDate.getUTCMonth()]} ${weekDate.getUTCDate()}</b>
+              <span class="cs-weekhead__range">Week ending ${months[weekDate.getUTCMonth()]} ${weekDate.getUTCDate()}, '${String(weekDate.getUTCFullYear()).slice(2)}</span>
+              <span class="cs-weekhead__chips">
+                <span class="cs-chip"><b>${weekTot.events}</b> events</span>
+                <span class="cs-chip cs-chip--blue"><b>${weekTot.waiters}</b> waiters</span>
+                <span class="cs-chip cs-chip--green"><b>${weekTot.chefs}</b> chefs</span>
+                <span class="cs-chip cs-chip--yellow"><b>${weekTot.porters}</b> porters</span>
+                ${gapCount?`<span class="cs-chip cs-chip--red">! <b>${gapCount}</b> call time${gapCount===1?'':'s'} missing</span>`:`<span class="cs-chip cs-chip--green">\u2713 All call times set</span>`}
+              </span>
+            </div></th></tr>
+            <tr class="cs-groups"><th colspan="8" class="cs-group cs-group--event">The event</th><th colspan="6" class="cs-group cs-group--staff">Staff &amp; call times</th><th colspan="2" class="cs-group cs-group--lead">In charge</th></tr>
             <tr>${cols.map(c=>`<th class="cs-th${c.num?' cs-num':''}" style="width:${c.w};min-width:${c.w}">${c.label}</th>`).join('')}</tr>
           </thead>
           <tbody>${rows}</tbody>
