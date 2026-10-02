@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=36">
+<link rel="stylesheet" href="styles.css?v=37">
 </head>
 <body>
 
@@ -15040,33 +15040,40 @@ async function saveQuickMenu(eid){
 }
 function renderEquipment() {
   const all = events;
+  const stOf = e => { const eq=eventEquipment[e.id]; return eq ? (eq.stage||'selecting') : 'none'; };
+  const ST = {
+    none:      {cls:'dash-st--overdue', txt:'✕ No list yet'},
+    selecting: {cls:'dash-st--soon',    txt:'● Selecting items'},
+    quantities:{cls:'dash-st--today',   txt:'◑ Adding quantities'},
+    complete:  {cls:'dash-st--done',    txt:'✓ List complete'}
+  };
+  const n = k => all.filter(e=>stOf(e)===k).length;
   let h = navReturnBreadcrumb() + `
   <div class="section-header">
-    <div class="section-title">Equipment</div>
+    <div><div class="eyebrow">Kitchen &amp; ops</div><div class="section-title">Equipment</div></div>
   </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-bottom:1.25rem">
+  <div class="cf-tiles" style="margin-bottom:16px">
+    <div class="cf-tile cf-tile--pink"><div class="cf-tile__l">✕ No list yet</div><div class="cf-tile__n">${n('none')}</div><div class="cf-tile__s">&nbsp;</div></div>
+    <div class="cf-tile cf-tile--yellow"><div class="cf-tile__l">● In progress</div><div class="cf-tile__n">${n('selecting')+n('quantities')}</div><div class="cf-tile__s">${n('selecting')} selecting · ${n('quantities')} quantities</div></div>
+    <div class="cf-tile cf-tile--green"><div class="cf-tile__l">✓ Complete</div><div class="cf-tile__n">${n('complete')}</div><div class="cf-tile__s">&nbsp;</div></div>
+  </div>
+  <div id="equipDetail"></div>
+  <div class="tbl-wrap"><table class="tbl tbl--click">
+    <thead><tr><th class="shrink">#</th><th>Client</th><th>Day</th><th>Type</th><th class="shrink">Status</th><th class="shrink"></th></tr></thead>
+    <tbody>
     ${all.map(e => {
-      const eq = eventEquipment[e.id];
-      const stage = eq ? eq.stage : null;
-      let statusLabel = '<span style="font-size:11px;color:var(--text3)">No list yet</span>';
-      if (stage === 'selecting')  statusLabel = '<span style="font-size:11px;color:var(--amber-text);background:var(--amber-bg);padding:3px 8px;border-radius:10px;font-weight:500">Selecting items</span>';
-      if (stage === 'quantities') statusLabel = '<span style="font-size:11px;color:var(--blue-text);background:var(--blue-bg);padding:3px 8px;border-radius:10px;font-weight:500">Adding quantities</span>';
-      if (stage === 'complete')   statusLabel = '<span style="font-size:11px;color:var(--green-text);background:var(--green-bg);padding:3px 8px;border-radius:10px;font-weight:500">List complete</span>';
-      return `<div class="event-card" onclick="openEquipEvent('${e.id}')" style="${eq?'border-color:var(--blue-border)':''}">
-        <div class="cc-top" style="margin-bottom:6px">
-          <div class="cc-topl"><span class="job-pill">${displayJob(e.job)}</span></div>
-          <div class="cc-date">${e.dayLabel||''}</div>
-        </div>
-        <div class="client-name">${e.name}</div>
-        <div style="font-size:12px;color:var(--text3);margin-bottom:8px">${e.typeLabel||''}</div>
-        ${statusLabel}
-        <div style="margin-top:10px;font-size:12px;color:var(--blue-mid);display:flex;align-items:center;gap:4px">
-          <i class="ti ti-${eq?'edit':'plus'}" style="font-size:13px"></i> ${eq?'Continue / view list':'Start equipment list'}
-        </div>
-      </div>`;
+      const st = stOf(e); const S = ST[st];
+      return `<tr onclick="openEquipEvent('${e.id}')" tabindex="0" onkeydown="if(event.key==='Enter')openEquipEvent('${e.id}')">
+        <td class="shrink"><span class="job-pill">${pcEsc(displayJob(e.job))}</span></td>
+        <td><b>${pcEsc(e.name||'')}</b></td>
+        <td>${pcEsc(e.dayLabel||'')}</td>
+        <td class="u-muted">${pcEsc(e.typeLabel||'')}</td>
+        <td class="shrink tbl-st ${S.cls}">${S.txt}</td>
+        <td class="shrink"><span class="cf-linkbtn">${st==='none'?'Start list':'Open'} →</span></td>
+      </tr>`;
     }).join('')}
-  </div>
-  <div id="equipDetail"></div>`;
+    </tbody>
+  </table></div>`;
   return h;
 }
 
@@ -15090,17 +15097,13 @@ function renderEquipDetail() {
   if (!eq) {
     const mdp0 = eq?.meatDairyParve || '';
     el.innerHTML = `
-    <div class="detail-panel">
+    <div class="detail-panel eqd">
       <div class="detail-header">
         <div class="detail-title">${e.job} — ${e.name} · Choose template</div>
         <button class="icon-btn" onclick="document.getElementById('equipDetail').innerHTML=''"><i class="ti ti-x"></i></button>
       </div>
-      <div style="display:flex;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap">
-        ${['Meat','Dairy','Parve'].map(t=>{
-          const sel = mdp0===t;
-          const col = t==='Meat'?'var(--maroon)':t==='Dairy'?'var(--teal-text)':'var(--brass)';
-          return `<button onclick="setEquipMDP('${id}','${t}')" style="flex:1;min-width:80px;padding:14px;border-radius:var(--radius-lg);border:2px solid ${sel?col:'var(--border2)'};font-size:16px;font-weight:800;cursor:pointer;transition:all .15s;letter-spacing:.05em;${sel?'background:'+col+';color:#fff':'background:var(--bg);color:var(--text2)'}">${t.toUpperCase()}</button>`;
-        }).join('')}
+      <div class="eqd-mdprow">
+        ${['Meat','Dairy','Parve'].map(t=>{ const sel=(eq&&eq.meatDairyParve)===t; return `<button type="button" onclick="setEquipMDP('${id}','${t}')" class="eqd-mdp eqd-mdp--${t.toLowerCase()}${sel?' is-on':''}" aria-pressed="${sel}">${sel?'\u2713 ':''}${t.toUpperCase()}</button>`; }).join('')}
       </div>
       <p style="font-size:13px;color:var(--text2);margin-bottom:1rem">Choose a template — the full list will load and you check off everything you <strong>need</strong> for this event.</p>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
@@ -15124,7 +15127,7 @@ function renderEquipDetail() {
     const sections = [...new Set(eq.items.map(i=>i.section))];
     const mdp = eq.meatDairyParve || '';
     el.innerHTML = `
-    <div class="detail-panel">
+    <div class="detail-panel eqd">
       <div class="detail-header">
         <div class="detail-title">${e.job} — ${e.name} · Select needed items</div>
         <div class="detail-actions">
@@ -15132,12 +15135,8 @@ function renderEquipDetail() {
           <button class="icon-btn" onclick="document.getElementById('equipDetail').innerHTML=''"><i class="ti ti-x"></i></button>
         </div>
       </div>
-      <div style="display:flex;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap">
-        ${['Meat','Dairy','Parve'].map(t=>{
-          const colors={Meat:'background:var(--maroon);color:#fff',Dairy:'background:var(--teal-text);color:#fff',Parve:'background:var(--brass);color:#fff'};
-          const sel = mdp===t;
-          return `<button onclick="setEquipMDP('${id}','${t}')" style="flex:1;min-width:80px;padding:12px;border-radius:var(--radius-lg);border:2px solid ${sel?(t==='Meat'?'var(--maroon)':t==='Dairy'?'var(--teal-text)':'var(--brass)'):'var(--border2)'};font-size:15px;font-weight:700;cursor:pointer;transition:all .15s;${sel?colors[t]:'background:var(--bg);color:var(--text2)'}">${t.toUpperCase()}</button>`;
-        }).join('')}
+      <div class="eqd-mdprow">
+        ${['Meat','Dairy','Parve'].map(t=>{ const sel=(eq&&eq.meatDairyParve)===t; return `<button type="button" onclick="setEquipMDP('${id}','${t}')" class="eqd-mdp eqd-mdp--${t.toLowerCase()}${sel?' is-on':''}" aria-pressed="${sel}">${sel?'\u2713 ':''}${t.toUpperCase()}</button>`; }).join('')}
       </div>
       <div class="banner amber" style="margin-bottom:1rem">
         <i class="ti ti-info-circle" style="font-size:16px;color:var(--amber-text);flex-shrink:0"></i>
@@ -15147,14 +15146,14 @@ function renderEquipDetail() {
       ${sections.map(sec => {
         const secItems = eq.items.filter(i=>i.section===sec);
         const secChecked = secItems.filter(i=>i.checked).length;
-        return `<div style="margin-bottom:1rem">
-          <div style="font-size:13px;font-weight:700;color:var(--text);letter-spacing:.02em;margin:10px 0 4px;padding:6px 8px;background:var(--bg2);border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
+        return `<div class="eqd-block">
+          <div class="eqd-sec">
             ${sec}<span style="font-size:12px;font-weight:400;color:var(--text3)" id="sec-count-${id}-${sec.replace(/[^a-z0-9]/gi,'_')}">${secChecked}/${secItems.length}</span>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0">
+          <div class="eqd-grid">
           ${secItems.map(item => {
             const idx = eq.items.indexOf(item);
-            return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:0.5px solid var(--border);font-size:13px">
+            return `<div class="eqd-item">
               <input type="checkbox" ${item.checked?'checked':''} onchange="toggleSelect('${id}',${idx},this.checked)" style="width:15px;height:15px;flex-shrink:0;accent-color:var(--blue-mid);cursor:pointer">
               <span style="color:${item.checked?'var(--text)':'var(--text3)'};font-weight:${item.checked?'500':'400'}">${item.item}</span>
             </div>`;
@@ -15177,7 +15176,7 @@ function renderEquipDetail() {
   if (eq.stage === 'quantities') {
     const sections = [...new Set(eq.items.map(i=>i.section))];
     el.innerHTML = `
-    <div class="detail-panel">
+    <div class="detail-panel eqd">
       <div class="detail-header">
         <div class="detail-title">${e.job} — ${e.name} · Add quantities
           ${eq.meatDairyParve ? `<span style="margin-left:10px;padding:3px 12px;border-radius:8px;font-size:13px;font-weight:700;${eq.meatDairyParve==='Meat'?'background:var(--maroon);color:#fff':eq.meatDairyParve==='Dairy'?'background:var(--teal-text);color:#fff':'background:var(--brass);color:#fff'}">${eq.meatDairyParve.toUpperCase()}</span>` : ''}
@@ -15193,12 +15192,12 @@ function renderEquipDetail() {
       </div>
       ${sections.map(sec => {
         const secItems = eq.items.filter(i=>i.section===sec);
-        return `<div style="margin-bottom:1rem">
-          <div style="font-size:13px;font-weight:700;color:var(--text);letter-spacing:.02em;margin:10px 0 4px;padding:6px 8px;background:var(--bg2);border-radius:var(--radius)">${sec}</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0">
+        return `<div class="eqd-block">
+          <div class="eqd-sec">${sec}</div>
+          <div class="eqd-grid">
           ${secItems.map(item => {
             const idx = eq.items.indexOf(item);
-            return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:0.5px solid var(--border);font-size:13px">
+            return `<div class="eqd-item">
               <span style="flex:1;color:var(--text);min-width:0">${item.item}</span>
               <input type="text" value="${item.qty||''}" placeholder="qty" onchange="updateEquipQty('${id}',${idx},this.value)"
                 style="width:60px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:4px 6px;font-size:12px;color:var(--text);text-align:center;font-family:inherit">
@@ -15228,7 +15227,7 @@ function renderEquipDetail() {
   if (eq.stage === 'complete') {
     const sections = [...new Set(eq.items.map(i=>i.section))];
     el.innerHTML = `
-    <div class="detail-panel">
+    <div class="detail-panel eqd">
       <div class="detail-header">
         <div class="detail-title">${e.job} — ${e.name} · Equipment list complete
           ${eq.meatDairyParve ? `<span style="margin-left:10px;padding:3px 12px;border-radius:8px;font-size:13px;font-weight:700;${eq.meatDairyParve==='Meat'?'background:var(--maroon);color:#fff':eq.meatDairyParve==='Dairy'?'background:var(--teal-text);color:#fff':'background:var(--brass);color:#fff'}">${eq.meatDairyParve.toUpperCase()}</span>` : ''}
@@ -15245,17 +15244,18 @@ function renderEquipDetail() {
       </div>
       ${sections.map(sec => {
         const secItems = eq.items.filter(i=>i.section===sec);
-        return `<div style="margin-bottom:1rem">
-          <div style="font-size:13px;font-weight:700;color:var(--text);letter-spacing:.02em;margin:10px 0 4px;padding:6px 8px;background:var(--bg2);border-radius:var(--radius)">${sec}</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0">
+        return `<div class="eqd-block">
+          <div class="eqd-sec">${sec}</div>
+          <div class="eqd-grid">
           ${secItems.map(item => {
             const idx = eq.items.indexOf(item);
-            return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+            return `<div class="eqd-item">
               <input type="checkbox" ${item.packedCheck?'checked':''} onchange="togglePackedCheck('${id}',${idx},this.checked)" style="width:16px;height:16px;flex-shrink:0;accent-color:var(--blue-mid)">
               <span style="flex:1;color:${item.packedCheck?'var(--text3)':'var(--text)'};text-decoration:${item.packedCheck?'line-through':'none'}">${item.item}</span>
-              <span style="font-size:13px;font-weight:500;color:var(--text);min-width:48px;text-align:right">${item.qty||''}</span>
+              <span class="eqd-qty">${item.qty||''}</span>
             </div>`;
           }).join('')}
+          </div>
         </div>`;
       }).join('')}
     </div>`;
