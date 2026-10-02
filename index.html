@@ -9294,7 +9294,8 @@ function saveNewLead(){
     submittedAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
   };
   inquiries.push(inq);
-  _saveInquiry(inq);
+  // Save first, then ask Apps Script to make the menu right away (see _makeMenusNow).
+  Promise.resolve(_saveInquiry(inq)).then(()=>_makeMenusNow(inq)).catch(()=>{});
   try{
     const nm = ((inq.firstName||'')+' '+(inq.lastName||'')).trim() || inq.organization || inq.eventName || 'Lead';
     logActivity(inq.id,'inquiry','New lead added manually — '+nm+(inq.eventType?(' ('+inq.eventType+')'):''), {source:'manual'});
@@ -9304,6 +9305,30 @@ function saveNewLead(){
   showToast('New lead added to the pipeline ✓');
   updatePipelineBadge();
   if(currentView==='pipeline') render();
+}
+
+// Make the automatic menu(s) for a just-saved lead immediately instead of waiting
+// for the 5-minute timer. Same Apps Script code path as the timer (claim-then-make),
+// so the two can never both make menus for one inquiry. Any failure is silent: the
+// timer picks the lead up as before.
+async function _makeMenusNow(inq){
+  if(!inq || !inq.id || !inq.eventType) return;
+  const relay = getSharedSetting('scriptUrl'); if(!relay) return;
+  try{
+    showToast('Creating the menu\u2026', 6000);
+    const r = await fetch(relay + (relay.includes('?')?'&':'?') + 'action=makeMenusNow&id=' + encodeURIComponent(inq.id));
+    const d = await r.json();
+    if(d && d.made && Array.isArray(d.menus) && d.menus.length){
+      // Mirror locally so the card shows the menu at once; the database listener
+      // brings in the same links moments later. No save here (nothing to overwrite).
+      inq.menuAutomationTriggered = true;
+      if(!Array.isArray(inq.menus)) inq.menus = [];
+      d.menus.forEach(m=>{ if(m && m.url && !inq.menus.some(x=>x.url===m.url)) inq.menus.push({name:m.name||'Menu', url:m.url, fileId:m.fileId||''}); });
+      if(!inq.menuLink && inq.menus[0]) inq.menuLink = inq.menus[0].url;
+      showToast('Menu created \u2713', 3500);
+      render();
+    }
+  }catch(e){ /* the 5-minute timer is the backup */ }
 }
 
 // Paste an email/notes — send to relay for AI parsing — fill the new-lead form
