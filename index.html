@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=31">
+<link rel="stylesheet" href="styles.css?v=32">
 </head>
 <body>
 
@@ -3891,7 +3891,7 @@ function renderCoverSheet(){
   // Name cell: click the name to open the event's file; pencil switches to inline edit.
   const nameCell = (id,val,mi) => {
     const onBl = mi===undefined ? `coverSaveField('${id}','name',this.value,false)` : `coverSaveMeal('${id}',${mi},'name',this.value,false)`;
-    return `<div class="cs-name"><span class="cs-name-link" onclick="showView('events');openEventHub('${id}')" title="Open event file">${esc(val)||'\u2014'}</span><button type="button" class="cs-name-edit" onclick="coverEditName(this)" title="Edit name"><i class="ti ti-pencil"></i></button><input type="text" value="${esc(val||'')}" placeholder="\u2014" class="cs-inp cs-name-inp" onblur="this.parentNode.classList.remove('editing');${onBl}"></div>`;
+    return `<div class="cs-name"><span class="cs-name-link" onclick="openEventFile('${id}')" title="Open event file">${esc(val)||'\u2014'}</span><button type="button" class="cs-name-edit" onclick="coverEditName(this)" title="Edit name"><i class="ti ti-pencil"></i></button><input type="text" value="${esc(val||'')}" placeholder="\u2014" class="cs-inp cs-name-inp" onblur="this.parentNode.classList.remove('editing');${onBl}"></div>`;
   };
 
   // Week + per-day totals (main rows and meal rows both count toward staffing)
@@ -5383,7 +5383,7 @@ function _hubChip(txt){
   return `<span style="display:inline-flex;align-items:center;font-size:12px;color:var(--text2);background:var(--bg2);border:0.5px solid var(--border2);border-radius:20px;padding:4px 11px">${pcEsc(txt)}</span>`;
 }
 
-function renderInqDetail(inq, role){
+function renderInqDetailClassic(inq, role){
   const rows = (label,val) => val ? `<div class="drow"><span class="dkey">${label}</span><span class="dval">${val}</span></div>` : '';
   const fact = (k,v) => v ? `<div class="hub-fact"><div class="k">${k}</div><div class="v">${v}</div></div>` : '';
   const stageName = {new:'New Inquiry', menu_sent:'Menu Sent', followup_1:'Followed Up #1', followup_2:'Followed Up #2', booked:'Booked'}[inq.stage]||inq.stage;
@@ -5467,6 +5467,198 @@ function renderInqDetail(inq, role){
       ${ev ? _hubCard('Staff &amp; event details', drawerStaffDetails(inq, ev, role)) : ''}
       ${hubAiCard(inq)||''}
       ${_hubCard('Activity', `${hubTimeline(inq,6)}<div style="margin-top:11px"><button onclick="openActivityLog('${inq.id}')" style="font-size:12px;padding:6px 13px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:inherit"><i class="ti ti-history" style="font-size:15px"></i>Full activity log${_actCountFor(inq.id)?(' (' + _actCountFor(inq.id) + ')'):''}</button></div>`)}
+    </div>
+  </div>`;
+}
+
+// ── CLIENT FILE — FULL PAGE (dashboard look, Oct 2026) ─────────────────────
+// Same engine as the drawer (syncHubDrawer keeps its scroll/focus protection and
+// every existing button handler), laid out as a page: header, 4 tiles, tabs.
+// window._hubClassic = true switches back to the old drawer layout as a fallback.
+window._hubTab = window._hubTab || {};
+function setHubTab(inqId, tab){
+  window._hubTab[inqId] = tab;
+  syncHubDrawer();
+  try{ const se=document.querySelector('#hubDrawer .inq-detail.hub'); if(se) se.scrollTop=0; }catch(e){}
+}
+function setHubClassic(on){
+  window._hubClassic = !!on;
+  try{ localStorage.setItem('pcHubClassic', on?'1':''); }catch(e){}
+  syncHubDrawer();
+}
+try{ window._hubClassic = localStorage.getItem('pcHubClassic')==='1'; }catch(e){}
+
+// Opens the event's file in place from any list (cover sheet, This Week, Pipeline).
+// Events created before inquiries existed have no file — those fall back to the
+// old detail panel on This Week, exactly as before.
+function openEventFile(id){
+  const ev = events.find(x=>x.id===id);
+  const inq = ev ? _beoInquiryFor(ev) : null;
+  if(inq && inq.id){ window._hubFrom = currentView; selectedId=null; editingId=null; selectedInqId=inq.id; render(); }
+  else { showView('events'); openEventHub(id); }
+}
+
+function _cfBackLabel(){
+  return ({pipeline:'Pipeline', events:'This Week', coversheet:'Cover sheet', clients:'Clients', home:'Home'})[currentView] || 'list';
+}
+function _cfDaysAway(iso){
+  if(!iso) return '';
+  const d = new Date(iso+'T12:00:00'); if(isNaN(d)) return '';
+  const t = new Date(); t.setHours(12,0,0,0);
+  const n = Math.round((d - t)/86400000);
+  if(n===0) return 'Today';
+  if(n===1) return 'Tomorrow';
+  if(n>1) return n+' days away';
+  if(n===-1) return 'Yesterday';
+  return Math.abs(n)+' days ago';
+}
+function _cfPanel(title, inner, extraHead){
+  if(!inner || !String(inner).trim()) return '';
+  return `<section class="cf-panel"><div class="cf-panel__head"><h2>${title}</h2>${extraHead||''}</div><div class="cf-panel__body">${inner}</div></section>`;
+}
+
+function renderInqDetail(inq, role){
+  if(window._hubClassic) return renderInqDetailClassic(inq, role);
+  return renderClientFilePage(inq, role);
+}
+
+function renderClientFilePage(inq, role){
+  const fact = (k,v) => v ? `<div class="cf-fact"><div class="cf-fact__k">${k}</div><div class="cf-fact__v">${v}</div></div>` : '';
+  const stageName = {new:'New inquiry', menu_sent:'Menu sent', followup_1:'Followed up #1', followup_2:'Followed up #2', booked:'Booked', lost:'Lost'}[inq.stage]||inq.stage||'';
+  const stageSym  = {booked:'✓', lost:'✕', menu_sent:'●', new:'○'}[inq.stage]||'●';
+  const name = clientPrimary(inq) || `${inq.firstName||''} ${inq.lastName||''}`.trim();
+  const ev = _eventForInq(inq);
+  const evNum = ev ? (fullEventNum(ev)||'') : '';
+  const whenBits=[]; if(inq.eventDate || inq.eventTBD) whenBits.push(_dateNoteLabel(inq, formatDate)); if(inq.venueName) whenBits.push(pcEsc(inq.venueName)); else if(inq.venueLocation) whenBits.push(pcEsc(inq.venueLocation));
+  if(inq.salesperson) whenBits.push('Salesperson: '+pcEsc(inq.salesperson));
+
+  // Pick the tab: an estimate being edited always shows on the Money tab.
+  let tab = window._hubTab[inq.id] || 'overview';
+  if(role.canViewInvoices && _estimateOpenId===inq.id) tab = 'money';
+  const tabs = [
+    ['overview','Overview'], ['menu','Menu'],
+    ...(role.canViewInvoices?[['money','Quote / Invoice']]:[]),
+    ...(ev?[['staff','Staffing']]:[]),
+    ['docs','Documents'], ['emails','Emails'], ['portal','Client portal'], ['activity','Activity']
+  ];
+  if(!tabs.some(t=>t[0]===tab)) tab='overview';
+
+  // ── Tiles ──
+  const tiles = [];
+  const g = String(inq.guestCount||'').trim();
+  tiles.push(`<div class="cf-tile cf-tile--blue"><div class="cf-tile__l"><span aria-hidden="true">◉</span> Guests</div><div class="cf-tile__n">${g?pcEsc(g):'—'}</div><div class="cf-tile__s">${pcEsc([inq.meatDairy,inq.cuisine].filter(Boolean).join(' · '))||'&nbsp;'}</div></div>`);
+  const dayIso = (ev&&ev.eventDate) || inq.eventDate || '';
+  const dayTxt = ev ? formatEventDay(ev) : ((inq.eventDate||inq.eventTBD)?_dateNoteLabel(inq, formatDate):'');
+  const startTxt = ev && ev.startTime ? ('Starts '+pcEsc(ev.startTime)) : 'Start time not set';
+  const away = _cfDaysAway(dayIso);
+  tiles.push(`<div class="cf-tile cf-tile--yellow"><div class="cf-tile__l"><span aria-hidden="true">◷</span> Event day</div><div class="cf-tile__n cf-tile__n--sm">${dayTxt?pcEsc(dayTxt):'TBD'}</div><div class="cf-tile__s">${startTxt}${away?' · '+away:''}</div></div>`);
+  const est = inq.estimate;
+  if(role.canViewInvoices && est && Array.isArray(est.lines) && est.lines.length){
+    const t = calcInvoiceTotals(est); const dep = parseFloat(est.deposit||0); const bal = t.grand - dep;
+    const paid = t.grand>0 && bal<=0.01;
+    tiles.push(`<div class="cf-tile ${paid?'cf-tile--green':'cf-tile--pink'}"><div class="cf-tile__l"><span aria-hidden="true">$</span> ${paid?'Paid in full':'Balance due'}</div><div class="cf-tile__n">${_moneyFmt(paid?t.grand:bal)}</div><div class="cf-tile__s">${paid?'✓ Nothing owed':(dep>0.01?'◑ Deposit received':'✕ No payment yet')}</div></div>`);
+  } else if(role.canViewInvoices){
+    tiles.push(`<div class="cf-tile cf-tile--grey"><div class="cf-tile__l"><span aria-hidden="true">$</span> Money</div><div class="cf-tile__n cf-tile__n--sm">No quote yet</div><div class="cf-tile__s"><button class="cf-linkbtn" onclick="viewClientQuote('${inq.id}')">Start a quote →</button></div></div>`);
+  }
+  if(ev){
+    const items = (checklists[ev.id]||[]).filter(i=>!i.na);
+    const done = items.filter(i=>_clIsDone(i)).length;
+    const pct = items.length ? Math.round(done/items.length*100) : 0;
+    const C = 2*Math.PI*30, dash = (C*pct/100).toFixed(1);
+    tiles.push(`<div class="cf-tile cf-tile--ring"><svg width="74" height="74" viewBox="0 0 74 74" role="img" aria-label="Checklist ${pct} percent done"><circle cx="37" cy="37" r="30" fill="none" stroke="#ECEDEF" stroke-width="9"/><circle cx="37" cy="37" r="30" fill="none" stroke="${pct===100?'var(--dash-bar-green)':'var(--dash-bar-blue)'}" stroke-width="9" stroke-dasharray="${dash} ${C.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 37 37)"/><text x="37" y="42" text-anchor="middle" font-size="16" font-weight="800" fill="currentColor">${pct}%</text></svg><div><div class="cf-tile__l">Checklist</div><div class="cf-tile__s">${items.length?(done+' of '+items.length+' done'):'No checklist yet'}</div><button class="cf-linkbtn" onclick="goChecklist('${ev.id}')">Open checklist →</button></div></div>`);
+  }
+
+  // ── Allergy banner (unchanged behaviour) ──
+  const allergy = (()=>{ const a=inqAllergies(inq);
+    if(a) return `<div class="cf-allergy" title="Allergy alert"><i class="ti ti-alert-triangle"></i><span>ALLERGY ALERT: ${pcEsc(a)}</span>${role.canEdit?`<button onclick="editAllergies('${inq.id}')" title="Edit allergy note" class="cf-allergy__edit"><i class="ti ti-edit"></i></button>`:''}</div>`;
+    if(role.canEdit) return `<button onclick="editAllergies('${inq.id}')" class="cf-allergy-add"><i class="ti ti-alert-triangle"></i>Add allergy alert</button>`;
+    return ''; })();
+
+  // ── Shared section bodies (same functions the drawer used) ──
+  const menuButtons = (m,mi) => `
+      <a class="btn btn--sm" href="${m.url}" target="_blank"><i class="ti ti-file-text"></i>Open doc</a>
+      <a class="btn btn--sm" href="${menuPdfUrl(m.url)}" target="_blank"><i class="ti ti-file-type-pdf"></i>PDF</a>
+      <button class="btn btn--sm" onclick="downloadMenuPdf('${inq.id}',${mi})"><i class="ti ti-download"></i>Download PDF</button>
+      <button class="btn btn--sm btn--ok" onclick="emailMenuPdf('${inq.id}',${mi})"><i class="ti ti-mail"></i>Email PDF</button>
+      <button class="btn btn--sm" onclick="renameInqMenu('${inq.id}',${mi})" title="Give this menu a name (e.g. Client version / Caterer version)"><i class="ti ti-pencil"></i>Rename</button>
+      <button class="btn btn--sm btn--danger" onclick="deleteInqMenu('${inq.id}',${mi})" title="Remove this menu"><i class="ti ti-trash"></i>Delete</button>`;
+  const menuList = (Array.isArray(inq.menus) && inq.menus.length)
+    ? inq.menus.map((m,mi)=>`<div class="cf-menu"><div class="cf-menu__name">${pcEsc(m.name||'Menu')}</div><div class="cf-btnrow">${menuButtons(m,mi)}</div></div>`).join('')
+    : inq.menuLink
+      ? `<div class="cf-menu"><div class="cf-menu__name">Menu</div><div class="cf-btnrow"><a class="btn btn--sm" href="${inq.menuLink}" target="_blank"><i class="ti ti-file-text"></i>Open doc</a><a class="btn btn--sm" href="${menuPdfUrl(inq.menuLink)}" target="_blank"><i class="ti ti-file-type-pdf"></i>PDF</a><button class="btn btn--sm btn--ok" onclick="emailMenuLink('${inq.id}')"><i class="ti ti-mail"></i>Email PDF</button></div></div>`
+      : `<div class="cf-empty">No menu generated yet</div>`;
+  const menuBody = `${menuList}<div class="cf-btnrow" style="margin-top:12px"><button class="btn btn--sm" onclick="attachInqMenu('${inq.id}')"><i class="ti ti-link"></i>${(Array.isArray(inq.menus)&&inq.menus.length)||inq.menuLink?'Add another link':'Attach menu manually'}</button><button class="btn btn--sm" onclick="openTemplatePicker('${inq.id}')"><i class="ti ti-file-plus"></i>Create menu from template</button></div>`;
+
+  const refRows = [['How they found us',inq.howFound],['Referred by',inq.referredBy],['Event attended',inq.eventAttended]].map(([k,v])=>fact(k,v?pcEsc(v):'')).join('');
+  const detailsBody = `<div class="cf-facts">${fact('Event type', pcEsc(inq.eventType||''))}${fact('Day', dayTxt?pcEsc(dayTxt):'')}${fact('Start time', ev&&ev.startTime?pcEsc(ev.startTime):'')}${fact('Venue', pcEsc(inq.venueName||inq.venueLocation||''))}${fact('Party planner', pcEsc(inq.plannerName||''))}${refRows}</div><div class="cf-sales">${_salespersonHubCell(inq, role)}</div>${_unansweredHubBanner(inq)}`;
+  const notesBody = inq.comments ? `<div class="cf-notes">${pcEsc(inq.comments)}</div>` : '';
+  const contactBody = `<div class="cf-contact"><div class="cf-contact__name">${pcEsc(name||'—')}</div>${inq.phone?`<a href="tel:${pcEsc(inq.phone)}">${pcEsc(inq.phone)}</a>`:''}${inq.email?`<a href="mailto:${pcEsc(inq.email)}">${pcEsc(inq.email)}</a>`:''}${role.canEdit?`<button class="btn btn--sm" onclick="openContactMenu('${inq.id}')"><i class="ti ti-send"></i>Contact client</button>`:''}</div>`;
+  const moneyBody = (()=>{
+    if(!role.canViewInvoices) return '';
+    if(!(est && Array.isArray(est.lines) && est.lines.length)) return `<div class="cf-empty">No quote yet.</div><button class="btn btn--sm" onclick="viewClientQuote('${inq.id}')"><i class="ti ti-file-invoice"></i>Start a quote</button>`;
+    const t = calcInvoiceTotals(est); const dep = parseFloat(est.deposit||0); const bal = t.grand - dep;
+    return `<div class="cf-money"><div><span>Total</span><b>${_moneyFmt(t.grand)}</b></div><div><span>Paid</span><b>${_moneyFmt(dep)}</b></div><div class="cf-money__bal${bal>0.01?' is-due':''}"><span>Balance</span><b>${_moneyFmt(Math.max(0,bal))}</b></div></div><button class="btn btn--sm btn--block" onclick="viewClientQuote('${inq.id}')"><i class="ti ti-file-invoice"></i>Open quote / invoice</button>`;
+  })();
+  const activityBody = (n) => `${hubTimeline(inq,n)}<div style="margin-top:11px"><button class="btn btn--sm" onclick="openActivityLog('${inq.id}')"><i class="ti ti-history"></i>Full activity log${_actCountFor(inq.id)?(' (' + _actCountFor(inq.id) + ')'):''}</button></div>`;
+
+  let body = '';
+  if(tab==='overview'){
+    body = `<div class="cf-grid">
+      <div class="cf-col">
+        ${_cfPanel('Event details', detailsBody, role.canEdit?`<button class="btn btn--sm" onclick="openEditInquiryModal('${inq.id}')"><i class="ti ti-edit"></i>Edit</button>`:'')}
+        ${_cfPanel('Paperwork', drawerDocuments(inq, role, ev))}
+        ${ev ? _cfPanel('Staff &amp; event details', drawerStaffDetails(inq, ev, role)) : ''}
+      </div>
+      <div class="cf-col">
+        ${_cfPanel('Contact', contactBody)}
+        ${_cfPanel('Money', moneyBody)}
+        ${_cfPanel('Notes', notesBody)}
+        ${hubAiCard(inq)||''}
+        ${_cfPanel('Latest activity', activityBody(4))}
+      </div>
+    </div>`;
+  } else if(tab==='menu'){
+    body = _cfPanel('Menu', menuBody);
+  } else if(tab==='money'){
+    body = (_estimateOpenId===inq.id) ? _cfPanel('Money &amp; estimate', renderEstimateBlock(inq, role)) : _cfPanel('Quote / Invoice', moneyBody);
+  } else if(tab==='staff'){
+    body = _cfPanel('Staff &amp; event details', drawerStaffDetails(inq, ev, role));
+  } else if(tab==='docs'){
+    body = _cfPanel('Documents', drawerDocuments(inq, role, ev));
+  } else if(tab==='emails'){
+    body = _cfPanel('Emails', emailsHubCard(inq));
+  } else if(tab==='portal'){
+    body = _cfPanel('Client portal', clientPortalHubCard(inq, ev, role));
+  } else if(tab==='activity'){
+    body = `${hubAiCard(inq)||''}${_cfPanel('Activity', activityBody(50))}`;
+  }
+
+  return `<div class="inq-detail hub cf">
+    <div class="cf-top">
+      <button class="cf-back" onclick="closeInqDetail()"><i class="ti ti-chevron-left"></i>Back to ${_cfBackLabel()}</button>
+      <button class="cf-classic" onclick="setHubClassic(true)" title="Switch back to the old side panel">Classic view</button>
+    </div>
+    <div class="cf-page">
+      <header class="cf-head">
+        <div class="cf-head__main">
+          <div class="cf-eyebrow">${evNum?('Event #'+pcEsc(evNum)+' · '):''}${pcEsc(inq.eventType||'')}</div>
+          <h1 class="cf-name">${pcEsc(inq.eventName||name||'Event')}</h1>
+          <div class="cf-when">${whenBits.join(' · ')||'&nbsp;'}</div>
+        </div>
+        <div class="cf-head__actions">
+          <span class="cf-stage cf-stage--${pcEsc(inq.stage||'new')}">${stageSym} ${pcEsc(stageName)}</span>
+          ${role.canEdit?`<button class="btn btn--pri" onclick="openContactMenu('${inq.id}')"><i class="ti ti-send"></i>Contact</button>`:''}
+          ${role.canViewInvoices?`<button class="btn" onclick="viewClientQuote('${inq.id}')"><i class="ti ti-file-invoice"></i>Quote / Invoice</button>`:''}
+          ${role.canEdit?`<button class="btn" onclick="openEditInquiryModal('${inq.id}')"><i class="ti ti-edit"></i>Edit</button>`:''}
+          ${role.canEdit?`<button class="btn" onclick="openDuplicateInquiryModal('${inq.id}')" title="Duplicate this event for another date (repeat clients)"><i class="ti ti-copy"></i>Duplicate</button>`:''}
+        </div>
+      </header>
+      ${allergy}
+      <div class="cf-tiles">${tiles.join('')}</div>
+      <nav class="cf-tabs" aria-label="Client file sections">
+        ${tabs.map(([k,l])=>`<button type="button" class="cf-tab${k===tab?' is-on':''}"${k===tab?' aria-current="page"':''} onclick="setHubTab('${inq.id}','${k}')">${l}</button>`).join('')}
+      </nav>
+      <div class="cf-body">${body}</div>
     </div>
   </div>`;
 }
@@ -6207,7 +6399,7 @@ function _closeEventEditModal(){ const m=document.getElementById('eventEditModal
 function syncHubDrawer(){
   const dr=document.getElementById('hubDrawer'), sc=document.getElementById('hubScrim');
   if(!dr||!sc) return;
-  const inq = ((currentView==='pipeline'||currentView==='events') && selectedInqId) ? inquiries.find(x=>x.id===selectedInqId) : null;
+  const inq = ((currentView==='pipeline'||currentView==='events'||currentView==='coversheet') && selectedInqId) ? inquiries.find(x=>x.id===selectedInqId) : null;
   if(inq){
     // If the user is actively mid-edit on this inquiry's open estimate, skip the rebuild
     // entirely. Without this, any OTHER Firestore collection changing anywhere in the app
@@ -6252,6 +6444,7 @@ function syncHubDrawer(){
     try{ dr.innerHTML = renderInqDetail(inq, role); }
     catch(err){ dr.innerHTML = '<div style="padding:2rem;color:#b00;font:13px monospace">Hub error: '+(err&&err.message||err)+'</div>'; }
     dr.dataset.inqId = inq.id;
+    dr.classList.toggle('is-page', !window._hubClassic); sc.classList.toggle('is-page', !window._hubClassic);
     dr.setAttribute('aria-hidden','false');
     requestAnimationFrame(()=>{ dr.classList.add('show'); sc.classList.add('show'); });
     // Restore scroll first (cheap) — then refocus the equivalent input if we can find it.
