@@ -9261,6 +9261,9 @@ function saveNewLead(){
     alert('Please enter at least a first name, last name, or organization.');
     return;
   }
+  if(!get('lead-eventType')){
+    if(!confirm('No event type is selected, so a menu will NOT be created automatically.\n\nSave this lead anyway?')) return;
+  }
   const inq = {
     id: Date.now()+'',
     firstName: fn, lastName: ln,
@@ -9327,7 +9330,21 @@ async function aiParseLeadPrompt(){
       return;
     }
     const result = data.result || {};
-    const setIf = (id, val) => { if(val){ const el = document.getElementById(id); if(el) el.value = val; } };
+    const setIf = (id, val) => {
+      if(!val) return;
+      const el = document.getElementById(id); if(!el) return;
+      if(el.tagName !== 'SELECT'){ el.value = val; return; }
+      // A dropdown only accepts one of its own choices; anything else silently becomes blank.
+      // Match exact → ignoring case → one contains the other (longest choice wins).
+      const want = String(val).trim().toLowerCase();
+      const opts = Array.from(el.options).filter(o=>o.value);
+      let hit = opts.find(o=>o.value===val)
+             || opts.find(o=>o.value.toLowerCase()===want || o.text.toLowerCase()===want)
+             || opts.filter(o=>{ const v=o.value.toLowerCase(); return want.includes(v) || v.includes(want); })
+                    .sort((a,b)=>b.value.length-a.value.length)[0];
+      if(hit) el.value = hit.value;
+      else if(id==='lead-eventType'){ const other = opts.find(o=>o.value==='Other'); if(other) el.value='Other'; }
+    };
     setIf('lead-firstName', result.firstName);
     setIf('lead-lastName', result.lastName);
     setIf('lead-organization', result.organization);
@@ -9347,7 +9364,13 @@ async function aiParseLeadPrompt(){
     setIf('lead-cuisine', result.cuisine);
     setIf('lead-notes', result.comments);
     const filled = Object.keys(result).filter(k => result[k]).length;
-    showToast('Extracted ' + filled + ' field(s) — review and complete the rest', 4000);
+    const et = document.getElementById('lead-eventType');
+    if(et && (!et.value || et.value==='Other')){
+      et.style.outline = '2px solid var(--amber-text)'; et.style.outlineOffset = '2px';
+      showToast('Extracted ' + filled + ' field(s) — please pick the event type (the menu is made from it)', 6000);
+    } else {
+      showToast('Extracted ' + filled + ' field(s) — review and complete the rest', 4000);
+    }
   } catch(err){
     showToast('Network error: ' + err.message, 5000);
     console.error('aiParseInquiry fetch error:', err);
