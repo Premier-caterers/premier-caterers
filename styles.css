@@ -1484,3 +1484,11 @@ a{color:var(--blue-mid);text-decoration:none}
 @media (max-width:760px){.eqd-grid{grid-template-columns:minmax(0,1fr)}}
 .eqd-item{display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13.5px;border-bottom:1px solid #EFF1F4;border-right:1px solid #EFF1F4;min-height:40px}
 .eqd-qty{font-size:13.5px;font-weight:700;color:var(--text);min-width:48px;text-align:right}
+
+/* ═══ Settings → dashboard look — Oct 2026 ═══ */
+.set-box,.settings-card{background:var(--bg);border:1px solid var(--dash-line);border-radius:12px;padding:0 18px 16px;margin-bottom:16px;overflow:hidden;box-shadow:0 1px 3px rgba(24,24,27,.06)}
+.set-box > :first-child,.settings-card > h3:first-child{margin:0 -18px 12px!important;padding:11px 18px;background:#EEE8F8;border-bottom:1px solid var(--dash-line)}
+.set-title,.settings-card > h3:first-child{font-size:14.5px!important;font-weight:800!important;letter-spacing:.02em;text-transform:uppercase;color:var(--text)!important}
+.set-box > :first-child .set-title{margin:0!important}
+.set-box > :first-child > div > div:not(.set-title){font-size:12px;color:var(--text2);text-transform:none}
+.btn-save{border-radius:8px;font-weight:600;min-height:36px}
