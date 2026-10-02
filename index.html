@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=38">
+<link rel="stylesheet" href="styles.css?v=39">
 </head>
 <body>
 
@@ -5522,6 +5522,116 @@ function renderInqDetail(inq, role){
   return renderClientFilePage(inq, role);
 }
 
+// Documents as a gridded table with a status per document (full-page client file).
+// Same click actions as the drawer's icon tiles; status comes from data the app already keeps.
+function _cfDocsTable(inq, role, ev, full){
+  const id = inq.id;
+  const OK='dash-st--done', DUE='dash-st--soon', MISS='dash-st--overdue', NA='dash-st--open';
+  const cnt = a => (Array.isArray(a)?a.length:0);
+  const rows = [];
+  const add = (name, cls, txt, action, label, required) => rows.push({name, cls, txt, action, label, required});
+  const needEv = () => add; // readability only
+  const noEv = (name) => add(name, NA, '○ After booking', '', '', false);
+
+  // Menu
+  const hasMenu = (Array.isArray(inq.menus)&&inq.menus.length) || inq.menuLink;
+  add('Client menu', hasMenu?OK:MISS, hasMenu?'✓ On file':'✕ Missing', `openInqMenuQuick('${id}')`, hasMenu?'Open':'Create', true);
+  // Quote / invoice
+  if(role.canViewInvoices){
+    const hasEst = !!(inq.estimate&&Array.isArray(inq.estimate.lines)&&inq.estimate.lines.length);
+    let st = ev ? aggregateInvoiceStatus(ev.id) : 'none';
+    if(st==='none' && hasEst) st = 'quote';
+    const M = {none:[MISS,'✕ None'], quote:[DUE,'● Quote'], approved:[DUE,'● Approved'], invoice:[DUE,'● Invoice sent'], paid:[OK,'✓ Paid']}[st]||[NA,st];
+    add('Quote / Invoice', M[0], M[1], `viewClientQuote('${id}')`, 'Open', true);
+  }
+  // Contract
+  const cs = contractStatusInfo('inq_'+id);
+  const CM = {none:[MISS,'✕ Not created'], draft:[DUE,'● Draft'], sent:[DUE,'◷ Awaiting signature'], signed:[OK,'✓ Signed']}[cs.key]||[NA,cs.label];
+  add('Contract', CM[0], CM[1], `openContract('${id}')`, 'Open', true);
+  // BEO
+  if(ev) add('BEO', ev.beo?OK:MISS, ev.beo?'✓ Ready':'✕ Not started', `openBeo('${id}')`, ev.beo?'Open':'Start', true);
+  else add('BEO', NA, '○ After booking', `openBeo('${id}')`, 'Open', false);
+  if(ev){
+    // Checklist
+    const items = (checklists[ev.id]||[]).filter(i=>!i.na); const done = items.filter(i=>_clIsDone(i)).length;
+    const pct = items.length?Math.round(done/items.length*100):0;
+    add('Final checklist', pct===100?OK:(items.length?DUE:MISS), pct===100?'✓ Done':(items.length?('● '+pct+'% done'):'✕ Not started'), `goChecklist('${ev.id}')`, 'Open', true);
+    // Equipment
+    const eq = eventEquipment[ev.id]; const es = eq?(eq.stage||'selecting'):'none';
+    const EM = {none:[MISS,'✕ No list yet'], selecting:[DUE,'● Selecting'], quantities:[DUE,'● Quantities'], complete:[OK,'✓ Complete']}[es];
+    add('Equipment list', EM[0], EM[1], `_navReturnCapture('${ev.id}');showView('equipment');setTimeout(()=>openEquipEvent('${ev.id}'),60)`, es==='none'?'Start':'Open', true);
+    // Venue sheet
+    add('Venue sheet', ev.venueLink?OK:NA, ev.venueLink?'✓ On file':'○ Not attached', ev.venueLink?`window.open('${ev.venueLink}','_blank')`:`attachDoc('${ev.id}','venueLink')`, ev.venueLink?'Open':'Attach', false);
+    // Floor plans
+    const fp = cnt(ev.floorplanFiles) || (ev.floorplan?1:0);
+    add('Floor plan(s)', fp?OK:NA, fp?('✓ '+fp+' file'+(fp===1?'':'s')):'○ None yet', `openMultiAttachModal('${ev.id}','floorplanFiles','Floor Plan(s)')`, fp?'Open':'Upload', false);
+    // Caterer copy / grocery
+    const cc = ev.catererCopyDoc||ev.catererCopyPdf;
+    add('Caterer menu / grocery', cc?OK:NA, cc?'✓ Linked':'○ Not linked', `window.open('${cc||'https://drive.google.com/drive/u/0/folders/16u6TIcojWDWqQj6pvG6z_3pg1262Wabh'}','_blank')`, 'Open', false);
+    if(full){
+      const lf = cnt(ev.linenFiles);
+      add('Linen order form', lf?OK:NA, lf?('✓ '+lf+' file'+(lf===1?'':'s')):'○ None', `openMultiAttachModal('${ev.id}','linenFiles','Linen Order Form')`, lf?'Open':'Upload', false);
+      const ins = cnt(ev.insuranceFiles);
+      add('Insurance', ins?OK:NA, ins?('✓ '+ins+' file'+(ins===1?'':'s')):'○ None', `openMultiAttachModal('${ev.id}','insuranceFiles','Insurance')`, ins?'Open':'Upload', false);
+      add('Client logo', ev.logoData?OK:NA, ev.logoData?'✓ On file':'○ None', ev.logoData?`window.open('${driveImgUrl(ev.logoData)}','_blank')`:`attachDoc('${ev.id}','logoData')`, ev.logoData?'Open':'Attach', false);
+      const ph = cnt(ev.eventPhotoFiles);
+      add('Event photos', ph?OK:NA, ph?('✓ '+ph+' file'+(ph===1?'':'s')):'○ None', `openMultiAttachModal('${ev.id}','eventPhotoFiles','Event Photos')`, ph?'Open':'Upload', false);
+      add('Weekly cover sheet', NA, '—', `goToEventCoverSheet('${ev.weekOf||''}')`, 'Open', false);
+    }
+  } else {
+    ['Final checklist','Equipment list','Venue sheet','Floor plan(s)'].forEach(noEv);
+  }
+  if(full){
+    [1,2,3].forEach(n=>{ const f=_otherUpField(n), c=(inq[f]&&inq[f].length)||0;
+      add(pcEsc(_otherUpName(inq,n)), c?OK:NA, c?('✓ '+c+' file'+(c===1?'':'s')):'○ None', `openOtherUploads('${id}',${n})`, c?'Open':'Upload', false); });
+  }
+  const ready = rows.filter(r=>r.required && r.cls===OK).length, req = rows.filter(r=>r.required).length;
+  const table = `<div class="cf-doctbl" role="table">
+    <div class="cf-doctbl__row cf-doctbl__head" role="row"><div role="columnheader">Document</div><div role="columnheader">Status</div><div role="columnheader">Open</div></div>
+    ${rows.map(r=>`<div class="cf-doctbl__row" role="row">
+      <div role="cell">${r.name}${r.required?'':' <span class="u-faint" style="font-size:11.5px">optional</span>'}</div>
+      <div role="cell" class="cf-doctbl__st ${r.cls}">${r.txt}</div>
+      <div role="cell">${r.action?`<button class="cf-linkbtn" onclick="${r.action.replace(/"/g,'&quot;')}">${r.label} →</button>`:''}</div>
+    </div>`).join('')}
+  </div>`;
+  return { html: `<button onclick="openPaperwork('${id}')" class="btn btn--pri btn--block" style="margin-bottom:12px"><i class="ti ti-files"></i>Create event paperwork</button>${table}`
+                 + (full ? `${insuranceCompanyLinks_()}${emailAttachmentsBlock(inq)}${clientUploadsBlock(ev)}` : ''),
+           summary: req ? `${ready} of ${req} required ready` : '' };
+}
+
+// Staffing as one grid: a row per meal, a column per role (full-page client file).
+// Shows names when typed on the cover sheet, else the count. Editing stays where it was.
+function _cfStaffGrid(inq, ev, role){
+  if(!ev) return '';
+  const v = (count, names) => { const n=(names&&String(names).trim())?names:count; return (n||n===0)&&String(n)!=='0' ? pcEsc(String(n)) : ''; };
+  const cell = (val, time, needsTime) => {
+    if(!val) return `<div role="cell" class="cf-sg__c is-empty">·</div>`;
+    const gap = needsTime && !String(time||'').trim();
+    return `<div role="cell" class="cf-sg__c${gap?' is-gap':''}"><b>${val}</b>${time?`<span>@ ${pcEsc(time)}</span>`:(gap?'<span>! add time</span>':'')}</div>`;
+  };
+  const rowFor = (label, o) => `<div class="cf-sg__row" role="row">
+      <div role="rowheader" class="cf-sg__meal">${label}</div>
+      ${cell(v(o.waiters,o.waiterNames), o.waiterTime, true)}
+      ${cell(v(o.bartenders,o.bartenderNames), o.bartenderTime, false)}
+      ${cell(v(o.chefs,o.chefNames), o.chefTime, true)}
+      ${cell(v(o.porters,o.porterNames), o.porterTime, false)}
+      ${cell(pcEsc(o.mashgiachNames||(o.mashgiach&&o.mashgiach!=='-'?o.mashgiach:'')||''), '', false)}
+      ${cell(pcEsc(o.manager||''), '', false)}
+    </div>`;
+  const job = String(coverJobNum(ev.job)||'');
+  let rows = rowFor(`<b>${pcEsc(job)}</b> Main${ev.startTime?` <span class="u-faint">· ${pcEsc(ev.startTime)}</span>`:''}`, ev);
+  (ev.meals||[]).forEach(m=>{ rows += rowFor(`<b>${pcEsc(job+(m.jobSuffix||''))}</b> ${pcEsc(m.label||m.name||'Meal')}${m.startTime?` <span class="u-faint">· ${pcEsc(m.startTime)}</span>`:''}`, m); });
+  const fact = (k,val) => `<div class="cf-fact"><div class="cf-fact__k">${k}</div><div class="cf-fact__v">${val||'<span class="u-faint">—</span>'}</div></div>`;
+  const dayLabel = ev.day ? (ev.day.charAt(0).toUpperCase()+ev.day.slice(1)) : '';
+  return `${role.canEdit?`<div class="cf-btnrow" style="margin-bottom:12px"><button class="btn btn--sm" onclick="openEditInquiryModal('${inq.id}')"><i class="ti ti-edit"></i>Edit staff &amp; logistics</button><button class="btn btn--sm" onclick="goToEventCoverSheet('${ev.weekOf||''}')"><i class="ti ti-layout-rows"></i>Edit on cover sheet</button></div>`:''}
+    <div class="cf-facts" style="margin-bottom:14px">${fact('Day', pcEsc(dayLabel))}${fact('Start time', pcEsc(ev.startTime||''))}${fact('Address', pcEsc(ev.addr||''))}</div>
+    ${role.showStaff?`<div class="cf-sg" role="table" aria-label="Staffing">
+      <div class="cf-sg__row cf-sg__head" role="row"><div role="columnheader">Meal</div><div role="columnheader">Waiters</div><div role="columnheader">Bar</div><div role="columnheader">Chefs</div><div role="columnheader">Porters</div><div role="columnheader">Mashgiach</div><div role="columnheader">Manager</div></div>
+      ${rows}
+    </div>`:''}
+    ${ev.notes?`<div class="cf-notes" style="margin-top:14px"><b>Event notes:</b> ${pcEsc(ev.notes)}</div>`:''}`;
+}
+
 function renderClientFilePage(inq, role){
   const fact = (k,v) => v ? `<div class="cf-fact"><div class="cf-fact__k">${k}</div><div class="cf-fact__v">${v}</div></div>` : '';
   const stageName = {new:'New inquiry', menu_sent:'Menu sent', followup_1:'Followed up #1', followup_2:'Followed up #2', booked:'Booked', lost:'Lost'}[inq.stage]||inq.stage||'';
@@ -5556,7 +5666,7 @@ function renderClientFilePage(inq, role){
   if(role.canViewInvoices && est && Array.isArray(est.lines) && est.lines.length){
     const t = calcInvoiceTotals(est); const dep = parseFloat(est.deposit||0); const bal = t.grand - dep;
     const paid = t.grand>0 && bal<=0.01;
-    tiles.push(`<div class="cf-tile ${paid?'cf-tile--green':'cf-tile--pink'}"><div class="cf-tile__l"><span aria-hidden="true">$</span> ${paid?'Paid in full':'Balance due'}</div><div class="cf-tile__n">${_moneyFmt(paid?t.grand:bal)}</div><div class="cf-tile__s">${paid?'✓ Nothing owed':(dep>0.01?'◑ Deposit received':'✕ No payment yet')}</div></div>`);
+    tiles.push(`<div class="cf-tile ${paid?'cf-tile--green':'cf-tile--pink'}"><div class="cf-tile__l"><span aria-hidden="true">$</span> ${paid?'Paid in full':'Balance due'}</div><div class="cf-tile__n">${_moneyFmt(paid?t.grand:bal)}</div><div class="cf-tile__s">${paid?'✓ Nothing owed':(dep>0.01?'● Deposit received':'✕ No payment yet')}</div></div>`);
   } else if(role.canViewInvoices){
     tiles.push(`<div class="cf-tile cf-tile--grey"><div class="cf-tile__l"><span aria-hidden="true">$</span> Money</div><div class="cf-tile__n cf-tile__n--sm">No quote yet</div><div class="cf-tile__s"><button class="cf-linkbtn" onclick="viewClientQuote('${inq.id}')">Start a quote →</button></div></div>`);
   }
@@ -5606,8 +5716,8 @@ function renderClientFilePage(inq, role){
     body = `<div class="cf-grid">
       <div class="cf-col">
         ${_cfPanel('Event details', detailsBody, role.canEdit?`<button class="btn btn--sm" onclick="openEditInquiryModal('${inq.id}')"><i class="ti ti-edit"></i>Edit</button>`:'')}
-        ${_cfPanel('Paperwork', drawerDocuments(inq, role, ev))}
-        ${ev ? _cfPanel('Staff &amp; event details', drawerStaffDetails(inq, ev, role)) : ''}
+        ${(()=>{ const d=_cfDocsTable(inq, role, ev, false); return _cfPanel('Paperwork', d.html, d.summary?`<span class="cf-panel__meta">${d.summary}</span>`:''); })()}
+        ${ev ? _cfPanel('Staffing', _cfStaffGrid(inq, ev, role)) : ''}
       </div>
       <div class="cf-col">
         ${_cfPanel('Contact', contactBody)}
@@ -5622,9 +5732,9 @@ function renderClientFilePage(inq, role){
   } else if(tab==='money'){
     body = (_estimateOpenId===inq.id) ? _cfPanel('Money &amp; estimate', renderEstimateBlock(inq, role)) : _cfPanel('Quote / Invoice', moneyBody);
   } else if(tab==='staff'){
-    body = _cfPanel('Staff &amp; event details', drawerStaffDetails(inq, ev, role));
+    body = _cfPanel('Staffing', _cfStaffGrid(inq, ev, role)) + _cfPanel('Menu links &amp; logo', drawerStaffDetails(inq, ev, Object.assign({}, role, {showStaff:false, canEdit:false})).replace(/<div class="drow"><span class="dkey">(Day|Address)<\/span>.*?<\/div>/g,''));
   } else if(tab==='docs'){
-    body = _cfPanel('Documents', drawerDocuments(inq, role, ev));
+    { const d=_cfDocsTable(inq, role, ev, true); body = _cfPanel('Documents', d.html, d.summary?`<span class="cf-panel__meta">${d.summary}</span>`:''); }
   } else if(tab==='emails'){
     body = _cfPanel('Emails', emailsHubCard(inq));
   } else if(tab==='portal'){
@@ -15044,7 +15154,7 @@ function renderEquipment() {
   const ST = {
     none:      {cls:'dash-st--overdue', txt:'✕ No list yet'},
     selecting: {cls:'dash-st--soon',    txt:'● Selecting items'},
-    quantities:{cls:'dash-st--today',   txt:'◑ Adding quantities'},
+    quantities:{cls:'dash-st--today',   txt:'● Adding quantities'},
     complete:  {cls:'dash-st--done',    txt:'✓ List complete'}
   };
   const n = k => all.filter(e=>stOf(e)===k).length;
