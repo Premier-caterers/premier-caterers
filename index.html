@@ -5632,6 +5632,20 @@ function _cfStaffGrid(inq, ev, role){
     ${ev.notes?`<div class="cf-notes" style="margin-top:14px"><b>Event notes:</b> ${pcEsc(ev.notes)}</div>`:''}`;
 }
 
+// Money for the client file: the real invoice(s) first — the same numbers the
+// Quotes / Invoices screen and client reports use (payments live in inv.deposit) —
+// and the pre-booking quote on the inquiry only when no invoice exists yet.
+function _cfMoney(inq, ev){
+  const evId = ev ? ev.id : ('inq_'+inq.id);
+  const slots = (typeof invoiceSlotsForEvent==='function') ? invoiceSlotsForEvent(evId) : [];
+  let grand=0, paid=0, n=0;
+  slots.forEach(k=>{ const inv=invoices[k]; if(!inv) return; n++; grand+=calcInvoiceTotals(inv).grand; paid+=parseFloat(inv.deposit||0); });
+  if(n) return { has:true, grand, paid, source:'invoice' };
+  const est = inq.estimate;
+  if(est && Array.isArray(est.lines) && est.lines.length) return { has:true, grand:calcInvoiceTotals(est).grand, paid:parseFloat(est.deposit||0), source:'quote' };
+  return { has:false, grand:0, paid:0, source:'' };
+}
+
 function renderClientFilePage(inq, role){
   const fact = (k,v) => v ? `<div class="cf-fact"><div class="cf-fact__k">${k}</div><div class="cf-fact__v">${v}</div></div>` : '';
   const stageName = {new:'New inquiry', menu_sent:'Menu sent', followup_1:'Followed up #1', followup_2:'Followed up #2', booked:'Booked', lost:'Lost'}[inq.stage]||inq.stage||'';
@@ -5662,11 +5676,12 @@ function renderClientFilePage(inq, role){
   const startTxt = ev && ev.startTime ? ('Starts '+pcEsc(ev.startTime)) : 'Start time not set';
   const away = _cfDaysAway(dayIso);
   tiles.push(`<div class="cf-tile cf-tile--yellow"><div class="cf-tile__l"><span aria-hidden="true">◷</span> Event day</div><div class="cf-tile__n cf-tile__n--sm">${dayTxt?pcEsc(dayTxt):'TBD'}</div><div class="cf-tile__s">${startTxt}${away?' · '+away:''}</div></div>`);
-  const est = inq.estimate;
-  if(role.canViewInvoices && est && Array.isArray(est.lines) && est.lines.length){
-    const t = calcInvoiceTotals(est); const dep = parseFloat(est.deposit||0); const bal = t.grand - dep;
-    const paid = t.grand>0 && bal<=0.01;
-    tiles.push(`<div class="cf-tile ${paid?'cf-tile--green':'cf-tile--pink'}"><div class="cf-tile__l"><span aria-hidden="true">$</span> ${paid?'Paid in full':'Balance due'}</div><div class="cf-tile__n">${_moneyFmt(paid?t.grand:bal)}</div><div class="cf-tile__s">${paid?'✓ Nothing owed':(dep>0.01?'● Deposit received':'✕ No payment yet')}</div></div>`);
+  const money = _cfMoney(inq, ev);
+  if(role.canViewInvoices && money.has){
+    const dep = money.paid; const bal = money.grand - dep;
+    const paid = money.grand>0 && bal<=0.01;
+    const sub = paid ? '✓ Nothing owed' : (dep>0.01 ? ('● '+_moneyFmt(dep)+' paid of '+_moneyFmt(money.grand)) : '✕ No payment yet');
+    tiles.push(`<div class="cf-tile ${paid?'cf-tile--green':(dep>0.01?'cf-tile--yellow':'cf-tile--pink')}"><div class="cf-tile__l"><span aria-hidden="true">$</span> ${paid?'Paid in full':'Balance due'}${money.source==='quote'?' (quote)':''}</div><div class="cf-tile__n">${_moneyFmt(paid?money.grand:bal)}</div><div class="cf-tile__s">${sub}</div></div>`);
   } else if(role.canViewInvoices){
     tiles.push(`<div class="cf-tile cf-tile--grey"><div class="cf-tile__l"><span aria-hidden="true">$</span> Money</div><div class="cf-tile__n cf-tile__n--sm">No quote yet</div><div class="cf-tile__s"><button class="cf-linkbtn" onclick="viewClientQuote('${inq.id}')">Start a quote →</button></div></div>`);
   }
@@ -5705,9 +5720,9 @@ function renderClientFilePage(inq, role){
   const contactBody = `<div class="cf-contact"><div class="cf-contact__name">${pcEsc(name||'—')}</div>${inq.phone?`<a href="tel:${pcEsc(inq.phone)}">${pcEsc(inq.phone)}</a>`:''}${inq.email?`<a href="mailto:${pcEsc(inq.email)}">${pcEsc(inq.email)}</a>`:''}${role.canEdit?`<button class="btn btn--sm" onclick="openContactMenu('${inq.id}')"><i class="ti ti-send"></i>Contact client</button>`:''}</div>`;
   const moneyBody = (()=>{
     if(!role.canViewInvoices) return '';
-    if(!(est && Array.isArray(est.lines) && est.lines.length)) return `<div class="cf-empty">No quote yet.</div><button class="btn btn--sm" onclick="viewClientQuote('${inq.id}')"><i class="ti ti-file-invoice"></i>Start a quote</button>`;
-    const t = calcInvoiceTotals(est); const dep = parseFloat(est.deposit||0); const bal = t.grand - dep;
-    return `<div class="cf-money"><div><span>Total</span><b>${_moneyFmt(t.grand)}</b></div><div><span>Paid</span><b>${_moneyFmt(dep)}</b></div><div class="cf-money__bal${bal>0.01?' is-due':''}"><span>Balance</span><b>${_moneyFmt(Math.max(0,bal))}</b></div></div><button class="btn btn--sm btn--block" onclick="viewClientQuote('${inq.id}')"><i class="ti ti-file-invoice"></i>Open quote / invoice</button>`;
+    if(!money.has) return `<div class="cf-empty">No quote yet.</div><button class="btn btn--sm" onclick="viewClientQuote('${inq.id}')"><i class="ti ti-file-invoice"></i>Start a quote</button>`;
+    const t = { grand: money.grand }; const dep = money.paid; const bal = t.grand - dep;
+    return `<div class="cf-money">${money.source==='quote'?'<div class="u-faint" style="font-size:12px;padding:0 0 4px">From the quote — no invoice yet</div>':''}<div><span>Total</span><b>${_moneyFmt(t.grand)}</b></div><div><span>Paid</span><b>${_moneyFmt(dep)}</b></div><div class="cf-money__bal${bal>0.01?' is-due':''}"><span>Balance</span><b>${_moneyFmt(Math.max(0,bal))}</b></div></div><button class="btn btn--sm btn--block" onclick="viewClientQuote('${inq.id}')"><i class="ti ti-file-invoice"></i>Open quote / invoice</button>`;
   })();
   const activityBody = (n) => `${hubTimeline(inq,n)}<div style="margin-top:11px"><button class="btn btn--sm" onclick="openActivityLog('${inq.id}')"><i class="ti ti-history"></i>Full activity log${_actCountFor(inq.id)?(' (' + _actCountFor(inq.id) + ')'):''}</button></div>`;
 
