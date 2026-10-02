@@ -1437,3 +1437,19 @@ a{color:var(--blue-mid);text-decoration:none}
 .pipeline-count{background:var(--bg);border:1px solid var(--dash-line);color:var(--text);font-weight:800}
 .pipeline-col .inq-card{margin:0 10px 9px;border:1px solid var(--dash-line);border-radius:10px;box-shadow:none}
 .pipeline-col .inq-card:hover{box-shadow:0 2px 8px rgba(24,24,27,.08);border-color:#C3CAD6}
+
+/* ═══ Reports → dashboard look — Oct 2026 ═══ */
+.stat-card.stat-card--blue,.stat-card.stat-card--purple,.stat-card.stat-card--green,.stat-card.stat-card--yellow,.stat-card.stat-card--pink,.stat-card.stat-card--grey,.stat-card.stat-card--white{border:0;border-left:0;border-radius:14px;text-align:center;box-shadow:0 1px 3px rgba(24,24,27,.06);padding:16px 12px}
+.stat-card--blue{background:var(--dash-blue)!important}
+.stat-card--purple{background:#EDE4F7!important}
+.stat-card--green{background:var(--dash-green)!important}
+.stat-card--yellow{background:var(--dash-yellow)!important}
+.stat-card--pink{background:var(--dash-pink)!important}
+.stat-card--grey{background:var(--dash-grey)!important}
+.stat-card--white{background:var(--bg)!important;border:1px solid var(--dash-line)!important}
+.stat-card[class*="stat-card--"]::before{display:none}
+.stat-card[class*="stat-card--"] .stat-n{font-size:30px;font-weight:800;color:var(--text);justify-content:center}
+.stat-card[class*="stat-card--"] .stat-l{font-size:12px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--text)}
+.section-header.rpt ~ .day-label{font-size:15px;font-weight:800;letter-spacing:.02em;color:var(--text)}
+.section-header.rpt ~ .detail-panel{border:1px solid var(--dash-line);border-radius:12px;box-shadow:0 1px 3px rgba(24,24,27,.06)}
+.section-header.rpt ~ .detail-panel th{background:var(--dash-head);color:var(--text);font-weight:700}

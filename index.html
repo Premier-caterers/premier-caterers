@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=34">
+<link rel="stylesheet" href="styles.css?v=35">
 </head>
 <body>
 
@@ -14234,14 +14234,14 @@ function renderReports(){
     </tr>`;
   }).join('');
 
-  return `<div class="section-header"><div><div class="eyebrow">Office</div><div class="section-title">Reports</div></div></div>
+  return `<div class="section-header rpt"><div><div class="eyebrow">Office</div><div class="section-title">Reports</div></div></div>
 
   <div class="day-label">Business overview — ${thisYear}</div>
   <div class="stats-row">
-    <div class="stat-card"><div class="stat-n">${money(totalRevThis)}</div><div class="stat-l">Revenue ${thisYear} to date</div></div>
-    <div class="stat-card"><div class="stat-n" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${money(totalRevLastToDate)} <span style="font-size:12px">${pctBadge(revYoY)}</span></div><div class="stat-l">Same period ${lastYear} (YoY)</div></div>
-    <div class="stat-card"><div class="stat-n" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${money(revThisMo)} <span style="font-size:12px">${pctBadge(revMoM)}</span></div><div class="stat-l">This month (MoM)</div></div>
-    <div class="stat-card"><div class="stat-n" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${evThis} <span style="font-size:12px">${pctBadge(evYoY)}</span></div><div class="stat-l">Events ${thisYear} vs ${lastYear}</div></div>
+    <div class="stat-card stat-card--blue"><div class="stat-n">${money(totalRevThis)}</div><div class="stat-l">Revenue ${thisYear} to date</div></div>
+    <div class="stat-card stat-card--purple"><div class="stat-n" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${money(totalRevLastToDate)} <span style="font-size:12px">${pctBadge(revYoY)}</span></div><div class="stat-l">Same period ${lastYear} (YoY)</div></div>
+    <div class="stat-card stat-card--green"><div class="stat-n" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${money(revThisMo)} <span style="font-size:12px">${pctBadge(revMoM)}</span></div><div class="stat-l">This month (MoM)</div></div>
+    <div class="stat-card stat-card--yellow"><div class="stat-n" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${evThis} <span style="font-size:12px">${pctBadge(evYoY)}</span></div><div class="stat-l">Events ${thisYear} vs ${lastYear}</div></div>
   </div>
   <div class="detail-panel" style="margin-bottom:1.5rem">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -14259,10 +14259,10 @@ function renderReports(){
 
   <div class="day-label">Money on the ground</div>
   <div class="stats-row">
-    <div class="stat-card"><div class="stat-n">${money(totOutstanding)}</div><div class="stat-l">Total outstanding</div></div>
-    <div class="stat-card"><div class="stat-n" style="color:var(--coral-text)">${money(totOverdue)}</div><div class="stat-l">Overdue</div></div>
-    <div class="stat-card"><div class="stat-n" style="color:var(--amber-text)">${money(totThisMo)}</div><div class="stat-l">Due this month</div></div>
-    <div class="stat-card"><div class="stat-n" style="color:var(--text2)">${money(totLater)}</div><div class="stat-l">Due later</div></div>
+    <div class="stat-card stat-card--white"><div class="stat-n">${money(totOutstanding)}</div><div class="stat-l">Total outstanding</div></div>
+    <div class="stat-card stat-card--pink"><div class="stat-n">${money(totOverdue)}</div><div class="stat-l">\u2715 Overdue</div></div>
+    <div class="stat-card stat-card--yellow"><div class="stat-n">${money(totThisMo)}</div><div class="stat-l">\u25f7 Due this month</div></div>
+    <div class="stat-card stat-card--grey"><div class="stat-n">${money(totLater)}</div><div class="stat-l">Due later</div></div>
   </div>
   <div class="detail-panel" style="margin-bottom:1.5rem;overflow-x:auto">
     ${outstanding.length ? `<table style="width:100%;border-collapse:collapse;font-size:13px">
