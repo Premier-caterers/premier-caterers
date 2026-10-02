@@ -9283,7 +9283,9 @@ function saveNewLead(){
     plannerName: get('lead-plannerName').trim(),
     salesperson: get('lead-salesperson') || _defaultSalesperson(),
     comments: get('lead-notes').trim(),
-    source: 'manual',
+    // 'website' (not 'manual') so the Apps Script menu builder picks it up, exactly
+    // like every other way an inquiry is created in the app. Nothing else reads this label.
+    source: 'website',
     menuAutomationTriggered: false,
     stage: 'new',
     submittedAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
