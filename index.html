@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=29">
+<link rel="stylesheet" href="styles.css?v=30">
 </head>
 <body>
 
@@ -3425,6 +3425,7 @@ function showView(v){
     return;
   }
   currentView=v; selectedId=null; editingId=null;
+  if(v==='coversheet'){ currentWeekOffset=CURRENT_WEEK_OFFSET; try{ updateWeekLabel(); }catch(_){} } // cover sheet always opens on the current week
   if(v==='invoices') activeInvoiceId=null; // navigating to the section shows the list; editing keeps the invoice open
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const el=document.getElementById('nav-'+v); if(el) el.classList.add('active');
@@ -3986,19 +3987,37 @@ function renderCoverSheet(){
       <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" class="btn" style="margin-top:.5rem"><i class="ti ti-arrow-left"></i> Back to current week</button>
     </div>` : '';
 
+  // Week list: this week + next 4. A week picked outside that range is added at the edge.
+  const offs = [0,1,2,3,4].map(k=>CURRENT_WEEK_OFFSET+k);
+  if(currentWeekOffset < CURRENT_WEEK_OFFSET) offs.unshift(currentWeekOffset);
+  if(currentWeekOffset > CURRENT_WEEK_OFFSET+4) offs.push(currentWeekOffset);
+  const weekRows = offs.map(o=>{
+    const d = getWeekEndDate(o), ds = d.toISOString().split('T')[0];
+    const cnt = events.filter(e=>(e.weekOf||'2026-05-31')===ds && isActiveEvent(e)).length;
+    const sel = o===currentWeekOffset;
+    const tag = o===CURRENT_WEEK_OFFSET ? 'This week' : o===CURRENT_WEEK_OFFSET+1 ? 'Next week' : o<CURRENT_WEEK_OFFSET ? 'Past' : '';
+    return `<button type="button" class="cs-week${sel?' is-sel':''}" onclick="changeWeek(${o}-currentWeekOffset)"${sel?' aria-current="true"':''}>
+      <span class="cs-week__check">${sel?'<i class="ti ti-check"></i>':''}</span>
+      <span class="cs-week__label">W/E ${months[d.getUTCMonth()]} ${d.getUTCDate()}</span>
+      <span class="cs-week__tag">${tag}</span>
+      <span class="cs-week__count">${cnt} event${cnt===1?'':'s'}</span>
+    </button>`;
+  }).join('');
+
   return `
-    <div class="section-header">
-      <div><div class="eyebrow">This week</div><div class="section-title">Cover sheet</div></div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button onclick="changeWeek(-1)" class="icon-btn" title="Previous week"><i class="ti ti-chevron-left"></i></button>
-        <span style="font-size:13px;font-weight:600;color:var(--text)">${wLabel}</span>
-        <button onclick="changeWeek(1)" class="icon-btn" title="Next week"><i class="ti ti-chevron-right"></i></button>
-        <button onclick="changeWeek(${CURRENT_WEEK_OFFSET}-currentWeekOffset)" class="btn btn--sm">Current week</button>
-        ${coverWeekNumberingOff(weekStr) ? `<button onclick="renumberWeek('${weekStr}')" title="This week's event numbers are out of order \u2014 click to fix" class="btn btn--dashed"><i class="ti ti-list-numbers"></i> Renumber</button>` : ''}
-        <button onclick="printCoverSheet()" class="btn btn--pri"><i class="ti ti-printer"></i> Print / Save PDF</button>
-        <button onclick="coverAddNewRow()" class="btn"><i class="ti ti-plus"></i> New event</button>
-        <button onclick="coverCreateDropOff()" class="btn"><i class="ti ti-truck-delivery"></i> New drop off</button>
-      </div>
+    <div class="cs-top">
+      <div class="cs-top__title"><div class="eyebrow">This week</div><div class="section-title">Cover sheet</div></div>
+      <section class="cs-box cs-box--weeks">
+        <div class="cs-box__head"><span class="cs-box__title">Week</span><button type="button" class="cs-box__link" onclick="changeWeek(-1)">\u2039 Earlier</button></div>
+        ${weekRows}
+      </section>
+      <section class="cs-box cs-box--acts">
+        <div class="cs-box__head"><span class="cs-box__title">Actions</span></div>
+        <button onclick="printCoverSheet()" class="btn btn--pri btn--block cs-act"><i class="ti ti-printer"></i> Print / Save PDF</button>
+        <button onclick="coverAddNewRow()" class="btn btn--block cs-act"><i class="ti ti-plus"></i> New event</button>
+        <button onclick="coverCreateDropOff()" class="btn btn--block cs-act"><i class="ti ti-truck-delivery"></i> New drop off</button>
+        ${coverWeekNumberingOff(weekStr) ? `<button onclick="renumberWeek('${weekStr}')" title="This week's event numbers are out of order \u2014 click to fix" class="btn btn--dashed btn--block cs-act"><i class="ti ti-list-numbers"></i> Renumber</button>` : ''}
+      </section>
     </div>
     ${sortBar}
     ${noEvents}

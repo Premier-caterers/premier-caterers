@@ -1248,3 +1248,25 @@ a{color:var(--blue-mid);text-decoration:none}
 .cs-name-inp{display:none}
 .cs-name.editing .cs-name-link,.cs-name.editing .cs-name-edit{display:none}
 .cs-name.editing .cs-name-inp{display:block}
+
+/* Cover sheet header — title, week list box, actions box */
+.cs-top{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.cs-top__title{flex:1;min-width:180px;padding-top:4px}
+.cs-box{background:var(--bg);border:1px solid var(--border2);border-radius:12px;padding:10px 10px 8px;display:flex;flex-direction:column;gap:2px}
+.cs-box--weeks{width:290px}
+.cs-box--acts{width:210px;gap:6px}
+.cs-box__head{display:flex;justify-content:space-between;align-items:center;padding:0 4px 4px}
+.cs-box__title{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text2)}
+.cs-box__link{border:0;background:none;padding:2px 4px;font:inherit;font-size:12px;color:var(--maroon);cursor:pointer}
+.cs-box__link:hover{text-decoration:underline}
+.cs-week{display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:0 8px;border:1.5px solid transparent;border-radius:8px;background:transparent;font:inherit;color:var(--text);text-align:left;cursor:pointer}
+.cs-week:hover{background:var(--bg3)}
+.cs-week.is-sel{border-color:var(--maroon);background:var(--maroon-tint)}
+.cs-week__check{width:14px;color:var(--maroon);font-size:14px;line-height:1}
+.cs-week__label{font-size:13px;font-weight:500;width:78px;white-space:nowrap}
+.cs-week.is-sel .cs-week__label{font-weight:600}
+.cs-week__tag{flex:1;font-size:11px;color:var(--text3)}
+.cs-week.is-sel .cs-week__tag{color:var(--maroon);font-weight:600}
+.cs-week__count{font-size:11px;color:var(--text2);white-space:nowrap}
+.cs-act{justify-content:flex-start;min-height:36px}
+@media (max-width:760px){.cs-box--weeks,.cs-box--acts{width:100%}}
