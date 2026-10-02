@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=35">
+<link rel="stylesheet" href="styles.css?v=36">
 </head>
 <body>
 
@@ -14315,66 +14315,65 @@ function renderTrash(){
 }
 
 function renderVenues(){
+  const esc = x => pcEsc(x||'');
   let h = `<div class="section-header">
     <div><div class="eyebrow">Kitchen &amp; ops</div><div class="section-title">Venues</div></div>
-    <button class="add-btn" onclick="openAddVenueModal()"><i class="ti ti-plus" style="font-size:14px"></i> Add venue</button>
+    <button class="btn btn--pri" onclick="openAddVenueModal()"><i class="ti ti-plus"></i> Add venue</button>
   </div>`;
 
   if(venues.length === 0){
-    h += `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:2.5rem;text-align:center;color:var(--text2)">
-      <i class="ti ti-building-off" style="font-size:32px;margin-bottom:1rem;display:block;color:var(--text3)"></i>
-      <div style="font-size:15px;font-weight:500;margin-bottom:.5rem">No venues yet</div>
-      <div style="font-size:13px;color:var(--text3)">Venues are automatically added when you save an event with an address, or click Add venue.</div>
-    </div>`;
+    h += `<div class="cf-panel"><div class="cf-panel__body u-empty-state">
+      <i class="ti ti-building-off" aria-hidden="true"></i>
+      <div class="u-empty-state__t">No venues yet</div>
+      <div class="u-empty-state__s">Venues are automatically added when you save an event with an address, or click Add venue.</div>
+    </div></div>`;
     return h;
   }
-
-  h += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">
-    ${venues.map(v=>`
-    <div class="event-card" onclick="openVenueDetail('${v.id}')" style="cursor:pointer">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px">
-        <div style="font-size:15px;font-weight:500;color:var(--text)">${v.name}</div>
-        <i class="ti ti-building" style="font-size:16px;color:var(--text3);flex-shrink:0;margin-top:2px"></i>
-      </div>
-      ${v.addr ? `<div style="font-size:12px;color:var(--text3);display:flex;gap:5px;align-items:flex-start;margin-bottom:6px"><i class="ti ti-map-pin" style="font-size:12px;flex-shrink:0;margin-top:1px"></i>${v.addr}</div>` : ''}
-      ${v.contact ? `<div style="font-size:12px;color:var(--text2)"><i class="ti ti-phone" style="font-size:11px"></i> ${v.contact}</div>` : ''}
-      ${v.parking ? `<div style="font-size:12px;color:var(--text2)"><i class="ti ti-car" style="font-size:11px"></i> ${v.parking}</div>` : ''}
-      ${v.notes ? `<div style="font-size:12px;color:var(--text3);margin-top:6px;font-style:italic">${v.notes}</div>` : ''}
-    </div>`).join('')}
+  const withAddr = venues.filter(v=>v.addr).length;
+  const withParking = venues.filter(v=>v.parking).length;
+  h += `<div class="cf-tiles" style="margin-bottom:16px">
+    <div class="cf-tile cf-tile--blue"><div class="cf-tile__l">Venues</div><div class="cf-tile__n">${venues.length}</div><div class="cf-tile__s">&nbsp;</div></div>
+    <div class="cf-tile ${withAddr===venues.length?'cf-tile--green':'cf-tile--yellow'}"><div class="cf-tile__l">With address</div><div class="cf-tile__n">${withAddr}</div><div class="cf-tile__s">${withAddr===venues.length?'✓ All set':'! '+(venues.length-withAddr)+' missing'}</div></div>
+    <div class="cf-tile ${withParking===venues.length?'cf-tile--green':'cf-tile--grey'}"><div class="cf-tile__l">Parking notes</div><div class="cf-tile__n">${withParking}</div><div class="cf-tile__s">${withParking===venues.length?'✓ All set':(venues.length-withParking)+' without'}</div></div>
   </div>
-  <div id="venueDetail"></div>`;
+  <div id="venueDetail"></div>
+  <div class="tbl-wrap"><table class="tbl tbl--click">
+    <thead><tr><th>Venue</th><th>Address</th><th>Contact</th><th>Parking</th><th>Notes</th></tr></thead>
+    <tbody>
+    ${venues.slice().sort((x,y)=>String(x.name||'').localeCompare(String(y.name||''))).map(v=>`
+      <tr onclick="openVenueDetail('${v.id}')" tabindex="0" onkeydown="if(event.key==='Enter')openVenueDetail('${v.id}')">
+        <td><b>${esc(v.name)}</b></td>
+        <td>${v.addr?esc(v.addr):'<span class="u-faint">—</span>'}</td>
+        <td>${v.contact?esc(v.contact):'<span class="u-faint">—</span>'}</td>
+        <td>${v.parking?esc(v.parking):'<span class="u-faint">—</span>'}</td>
+        <td class="u-muted">${v.notes?esc(v.notes):''}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table></div>`;
   return h;
 }
-
 function openVenueDetail(id){
   const v = venues.find(x=>x.id===id);
   if(!v) return;
   const el = document.getElementById('venueDetail');
   if(!el) return;
-  el.innerHTML = `<div class="detail-panel" style="margin-top:1rem">
-    <div class="detail-header">
-      <div class="detail-title">${v.name}</div>
-      <div class="detail-actions">
-        <button class="icon-btn" onclick="editVenue('${v.id}')" title="Edit"><i class="ti ti-edit"></i></button>
-        <button class="icon-btn" onclick="deleteVenue('${v.id}')" title="Delete" style="color:var(--red-solid)"><i class="ti ti-trash"></i></button>
-        <button class="icon-btn" onclick="document.getElementById('venueDetail').innerHTML=''" title="Close"><i class="ti ti-x"></i></button>
+  const esc = x => pcEsc(x||'');
+  const fact = (k,val) => val ? `<div class="cf-fact"><div class="cf-fact__k">${k}</div><div class="cf-fact__v">${val}</div></div>` : '';
+  el.innerHTML = `<section class="cf-panel" style="margin-bottom:16px">
+    <div class="cf-panel__head"><h2>${esc(v.name)}</h2>
+      <div class="cf-btnrow">
+        <button class="btn btn--sm" onclick="editVenue('${v.id}')"><i class="ti ti-edit"></i>Edit</button>
+        <button class="btn btn--sm btn--danger" onclick="deleteVenue('${v.id}')"><i class="ti ti-trash"></i>Delete</button>
+        <button class="btn btn--sm" onclick="document.getElementById('venueDetail').innerHTML=''" aria-label="Close"><i class="ti ti-x"></i>Close</button>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-      <div>
-        ${v.addr ? `<div class="drow"><span class="dkey">Address</span><span class="dval">${v.addr}</span></div>` : ''}
-        ${v.contact ? `<div class="drow"><span class="dkey">Contact</span><span class="dval">${v.contact}</span></div>` : ''}
-        ${v.parking ? `<div class="drow"><span class="dkey">Parking</span><span class="dval">${v.parking}</span></div>` : ''}
-      </div>
-      <div>
-        ${v.notes ? `<div class="drow" style="flex-direction:column;gap:4px"><span class="dkey">Notes</span><span class="dval" style="text-align:left">${v.notes}</span></div>` : ''}
-        <div class="drow"><span class="dkey">Added</span><span class="dval">${v.createdAt||''}</span></div>
-      </div>
+    <div class="cf-panel__body">
+      <div class="cf-facts">${fact('Address',esc(v.addr))}${fact('Contact',esc(v.contact))}${fact('Parking',esc(v.parking))}${fact('Added',esc(v.createdAt))}</div>
+      ${v.notes?`<div class="cf-notes" style="margin-top:12px">${esc(v.notes)}</div>`:''}
     </div>
-  </div>`;
+  </section>`;
   el.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
-
 function openAddVenueModal(){
   document.getElementById('addVenueModal')?.remove();
   const m = document.createElement('div');

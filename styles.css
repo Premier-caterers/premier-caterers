@@ -1453,3 +1453,11 @@ a{color:var(--blue-mid);text-decoration:none}
 .section-header.rpt ~ .day-label{font-size:15px;font-weight:800;letter-spacing:.02em;color:var(--text)}
 .section-header.rpt ~ .detail-panel{border:1px solid var(--dash-line);border-radius:12px;box-shadow:0 1px 3px rgba(24,24,27,.06)}
 .section-header.rpt ~ .detail-panel th{background:var(--dash-head);color:var(--text);font-weight:700}
+
+/* ═══ Venues + shared helpers — Oct 2026 ═══ */
+.tbl--click tbody tr{cursor:pointer}
+.tbl--click tbody tr:focus-visible td{outline:none;background:var(--maroon-tint)}
+.u-empty-state{text-align:center;padding:2.5rem 1rem;color:var(--text2)}
+.u-empty-state i{font-size:32px;display:block;margin-bottom:12px;color:var(--text3)}
+.u-empty-state__t{font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px}
+.u-empty-state__s{font-size:13px;color:var(--text2)}
