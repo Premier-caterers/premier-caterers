@@ -1238,3 +1238,13 @@ a{color:var(--blue-mid);text-decoration:none}
   .em-modal{padding:0;align-items:flex-end}
   .em-modal__box{max-height:92vh;border-radius:var(--radius) var(--radius) 0 0}
 }
+
+/* Cover sheet — clickable name opens the event file; pencil switches to inline edit */
+.cs-name{display:flex;align-items:center;gap:2px;min-width:0}
+.cs-name-link{flex:1;min-width:0;padding:4px 6px;font-size:13px;font-weight:500;color:var(--maroon);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:2px}
+.cs-name-link:hover{text-decoration-color:currentColor}
+.cs-name-edit{border:0;background:transparent;padding:2px 4px;cursor:pointer;color:var(--text3);opacity:.5;line-height:1}
+.cs-name-edit:hover{opacity:1;color:var(--maroon)}
+.cs-name-inp{display:none}
+.cs-name.editing .cs-name-link,.cs-name.editing .cs-name-edit{display:none}
+.cs-name.editing .cs-name-inp{display:block}

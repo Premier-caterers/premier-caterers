@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=28">
+<link rel="stylesheet" href="styles.css?v=29">
 </head>
 <body>
 
@@ -3636,6 +3636,10 @@ function coverAddNewRow(){
   setTimeout(()=>document.querySelector('tfoot')?.scrollIntoView({behavior:'smooth', block:'nearest'}), 100);
 }
 
+function coverEditName(btn){
+  const wrap = btn.parentNode; wrap.classList.add('editing');
+  const inp = wrap.querySelector('input'); if(inp){ inp.focus(); inp.select(); }
+}
 function coverTempUpdate(ri, field, val){
   if(!window._coverTempRows || !window._coverTempRows[ri]) return;
   window._coverTempRows[ri][field] = val;
@@ -3674,7 +3678,7 @@ async function coverCommitRow(ri){
       const suffix = wantSeq ? wantSeq.letter : '';
       matchEvent.meals.push({
         jobSuffix: suffix, label: row.label||'', name: row.name,
-        typeLabel: row.typeLabel, dayLabel: row.dayLabel, addr: row.addr,
+        typeLabel: row.typeLabel, dayLabel: row.dayLabel, startTime: row.startTime||'', addr: row.addr,
         waiters: parseInt(row.waiters)||0, waiterTime: row.waiterTime,
         chefs: parseInt(row.chefs)||0, chefTime: row.chefTime,
         porters: parseInt(row.porters)||0, mashgiachNames: row.mashgiach, manager: row.manager
@@ -3700,7 +3704,7 @@ async function coverCommitRow(ri){
       eventNumber: fullJob,
       name: row.name,
       type: 'other', typeLabel: row.typeLabel||'',
-      day: 'friday', dayLabel: row.dayLabel||'',
+      day: 'friday', dayLabel: row.dayLabel||'', startTime: row.startTime||'',
       eventDate: _fridayDate,
       addr: row.addr||'',
       weekOf: weekStr,
@@ -3711,7 +3715,7 @@ async function coverCommitRow(ri){
       notes:'', menuLink:'', groceryLink:'', floorplan:'', venueLink:'', pdfMenuLink:'', logoData:'',
       meals:[]
     };
-    if(row.label) newEvent.meals.push({jobSuffix:'', label:row.label, name:row.name, typeLabel:row.typeLabel||'', dayLabel:row.dayLabel||'', addr:row.addr||'', waiters:parseInt(row.waiters)||0, waiterTime:row.waiterTime||'', chefs:parseInt(row.chefs)||0, chefTime:row.chefTime||'', porters:parseInt(row.porters)||0, mashgiachNames:row.mashgiach||'', manager:row.manager||''});
+    if(row.label) newEvent.meals.push({jobSuffix:'', label:row.label, name:row.name, typeLabel:row.typeLabel||'', dayLabel:row.dayLabel||'', startTime:row.startTime||'', addr:row.addr||'', waiters:parseInt(row.waiters)||0, waiterTime:row.waiterTime||'', chefs:parseInt(row.chefs)||0, chefTime:row.chefTime||'', porters:parseInt(row.porters)||0, mashgiachNames:row.mashgiach||'', manager:row.manager||''});
     events.push(newEvent);
     await _saveEvent(newEvent);
     showToast('New event created: ' + row.name + ' (' + fullJob + ')');
@@ -3856,6 +3860,7 @@ function renderCoverSheet(){
     {label:'MENU',        w:'78px',  num:true},
     {label:'TYPE',        w:'104px'},
     {label:'DAY',         w:'92px'},
+    {label:'START',       w:'84px'},
     {label:'ADDRESS',     w:'210px'},
     {label:'WAITERS',     w:'66px',  num:true},
     {label:'BAR',         w:'56px',  num:true},
@@ -3882,6 +3887,11 @@ function renderCoverSheet(){
     const onBl = mi===undefined ? `coverSaveStaff('${id}','${dept}',this.value)` : `coverSaveStaffMeal('${id}',${mi},'${dept}',this.value)`;
     return `<input type="text" value="${esc(shown)}" placeholder="\u2014" class="cs-inp cs-inp-staff" title="Type a number or names" onblur="${onBl}">`;
   };
+  // Name cell: click the name to open the event's file; pencil switches to inline edit.
+  const nameCell = (id,val,mi) => {
+    const onBl = mi===undefined ? `coverSaveField('${id}','name',this.value,false)` : `coverSaveMeal('${id}',${mi},'name',this.value,false)`;
+    return `<div class="cs-name"><span class="cs-name-link" onclick="showView('events');openEventHub('${id}')" title="Open event file">${esc(val)||'\u2014'}</span><button type="button" class="cs-name-edit" onclick="coverEditName(this)" title="Edit name"><i class="ti ti-pencil"></i></button><input type="text" value="${esc(val||'')}" placeholder="\u2014" class="cs-inp cs-name-inp" onblur="this.parentNode.classList.remove('editing');${onBl}"></div>`;
+  };
 
   let rows = '';
   weekEvents.forEach((e,i)=>{
@@ -3893,11 +3903,12 @@ function renderCoverSheet(){
     // Main event row
     rows += `<tr class="cs-row${alt}">
       <td class="cs-td cs-num"><span class="cs-job" onclick="editJobNum('${e.id}')" title="Click to edit job #">${esc(coverJobNum(e.job))} <i class="ti ti-pencil"></i></span></td>
-      <td class="cs-td">${inpTxt(e.id,'name',e.name)}</td>
+      <td class="cs-td">${nameCell(e.id,e.name)}</td>
       <td class="cs-td"><span class="cs-meal-tag">Main</span></td>
       <td class="cs-td cs-num">${menuHtml}</td>
       <td class="cs-td">${inpTxt(e.id,'typeLabel',e.typeLabel||e.type)}</td>
       <td class="cs-td">${inpTxt(e.id,'dayLabel',formatEventDay(e))}</td>
+      <td class="cs-td">${inpTxt(e.id,'startTime',e.startTime)}</td>
       <td class="cs-td">${inpTxt(e.id,'addr',e.addr)}</td>
       <td class="cs-td cs-num">${inpStaff(e.id,'waiters',e.waiters,e.waiterNames)}</td>
       <td class="cs-td cs-num">${inpStaff(e.id,'bartenders',e.bartenders,e.bartenderNames)}</td>
@@ -3913,11 +3924,12 @@ function renderCoverSheet(){
     (e.meals||[]).forEach((meal,mi)=>{
       rows += `<tr class="cs-row cs-meal">
         <td class="cs-td cs-num"><span class="cs-meal-job"><span class="cs-arrow">\u21b3</span><input type="text" value="${esc(meal.jobSuffix||'')}" placeholder="a" title="Letter suffix" class="cs-inp cs-inp-suffix" onblur="coverSaveMeal('${e.id}',${mi},'jobSuffix',this.value,false)"></span></td>
-        <td class="cs-td">${inpTxt(e.id,'name',meal.name||'',mi)}</td>
+        <td class="cs-td">${nameCell(e.id,meal.name||'',mi)}</td>
         <td class="cs-td">${inpTxt(e.id,'label',meal.label||'',mi)}</td>
         <td class="cs-td cs-num"><span class="cs-dash">\u2014</span></td>
         <td class="cs-td">${inpTxt(e.id,'typeLabel',meal.typeLabel||meal.type||'',mi)}</td>
         <td class="cs-td">${inpTxt(e.id,'dayLabel',formatMealDay(meal),mi)}</td>
+        <td class="cs-td">${inpTxt(e.id,'startTime',meal.startTime||'',mi)}</td>
         <td class="cs-td">${inpTxt(e.id,'addr',meal.addr||'',mi)}</td>
         <td class="cs-td cs-num">${inpStaff(e.id,'waiters',meal.waiters,meal.waiterNames,mi)}</td>
         <td class="cs-td cs-num">${inpStaff(e.id,'bartenders',meal.bartenders,meal.bartenderNames,mi)}</td>
@@ -3950,6 +3962,7 @@ function renderCoverSheet(){
       <td class="cs-td cs-num"><span class="cs-dash">\u2014</span></td>
       <td class="cs-td">${tinp('typeLabel',row.typeLabel,'placeholder="Type"')}</td>
       <td class="cs-td">${tinp('dayLabel',row.dayLabel,'placeholder="Day"')}</td>
+      <td class="cs-td">${tinp('startTime',row.startTime,'placeholder="Start"')}</td>
       <td class="cs-td">${tinp('addr',row.addr,'placeholder="Address"')}</td>
       <td class="cs-td cs-num">${tnum('waiters',row.waiters)}</td>
       <td class="cs-td cs-num">${tnum('bartenders',row.bartenders)}</td>
@@ -4013,7 +4026,7 @@ function printCoverSheet(){
   const weekStr  = weekDate.toISOString().split('T')[0];
   const weekEvents = coverSortEvents(events.filter(e=>(e.weekOf||'2026-05-31')===weekStr && isActiveEvent(e)));
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const cols = ['#','NAME','MEAL','TYPE','DAY','ADDRESS','# WAITERS','BARTENDERS','WAITER TIME','# CHEFS','CHEFS TIME','# PORTERS','MASHGIACH','MANAGER'];
+  const cols = ['#','NAME','MEAL','TYPE','DAY','START','ADDRESS','# WAITERS','BARTENDERS','WAITER TIME','# CHEFS','CHEFS TIME','# PORTERS','MASHGIACH','MANAGER'];
   const th = s => `<th style="padding:6px 8px;border:1px solid #999;background:#f0f0f0;font-size:10px;font-weight:700;text-align:left;white-space:nowrap">${s}</th>`;
   const td = (s,bold,center,italic) => `<td style="padding:5px 8px;border:1px solid #ccc;font-size:11px;${bold?'font-weight:700;':''}${center?'text-align:center;':''}${italic?'font-style:italic;':''}">${esc(String(s===0?'0':s||''))||'—'}</td>`;
   const num = v => td(v&&v!=0?v:'—',false,true);
@@ -4031,6 +4044,7 @@ function printCoverSheet(){
       ${td(mainLabel,false,false,true)}
       ${td(e.typeLabel||e.type)}
       ${td(formatEventDay(e))}
+      ${td(e.startTime,false,true)}
       ${td(e.addr)}
       ${staff(e.waiters,e.waiterNames)}
       ${staff(e.bartenders,e.bartenderNames)}
@@ -4049,6 +4063,7 @@ function printCoverSheet(){
         ${td(meal.label||'',false,false,true)}
         ${td(meal.typeLabel||meal.type||e.typeLabel||'')}
         ${td(meal.dayLabel||meal.day||e.dayLabel||'')}
+        ${td(meal.startTime||'',false,true)}
         ${td(meal.addr||e.addr)}
         ${staff(meal.waiters,meal.waiterNames)}
         ${staff(meal.bartenders,meal.bartenderNames)}
