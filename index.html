@@ -5294,6 +5294,7 @@ function drawerDocuments(inq, role, ev){
     _docBtn('Weekly cover sheet','ti-layout-rows', !ev, ev?`goToEventCoverSheet('${ev.weekOf||''}')`:''),
     _docBtn('Venue sheet','ti-building', !ev, ev?(ev.venueLink?`window.open('${ev.venueLink}','_blank')`:`attachDoc('${ev.id}','venueLink')`):''),
     _docBtn('Final checklist','ti-checklist', !ev, ev?`goChecklist('${ev.id}')`:''),
+    _docBtn('Food labels','ti-tag', !ev, ev?`openFoodLabels('${ev.id}')`:''),
     _docBtn('Linen order form'+(ev&&ev.linenFiles&&ev.linenFiles.length?' ('+ev.linenFiles.length+')':''),'ti-wash', !ev, ev?`openMultiAttachModal('${ev.id}','linenFiles','Linen Order Form')`:''),
     _docBtn('BEO','ti-clipboard-list',false,`openBeo('${id}')`),
     _docBtn('Contract','ti-file-certificate',false,`openContract('${id}')`),
@@ -5595,6 +5596,8 @@ function _cfDocsTable(inq, role, ev, full){
     // Caterer copy / grocery
     const cc = ev.catererCopyDoc||ev.catererCopyPdf;
     add('Caterer menu / grocery', cc?OK:NA, cc?'✓ Linked':'○ Not linked', `window.open('${cc||'https://drive.google.com/drive/u/0/folders/16u6TIcojWDWqQj6pvG6z_3pg1262Wabh'}','_blank')`, 'Open', false);
+    // Food labels
+    add('Food labels', ev.foodLabels?OK:NA, ev.foodLabels?'✓ Customized':'○ Ready to print', `openFoodLabels('${ev.id}')`, 'Open', false);
     if(full){
       const lf = cnt(ev.linenFiles);
       add('Linen order form', lf?OK:NA, lf?('✓ '+lf+' file'+(lf===1?'':'s')):'○ None', `openMultiAttachModal('${ev.id}','linenFiles','Linen Order Form')`, lf?'Open':'Upload', false);
@@ -5606,7 +5609,7 @@ function _cfDocsTable(inq, role, ev, full){
       add('Weekly cover sheet', NA, '—', `goToEventCoverSheet('${ev.weekOf||''}')`, 'Open', false);
     }
   } else {
-    ['Final checklist','Equipment list','Venue sheet','Floor plan(s)'].forEach(noEv);
+    ['Final checklist','Equipment list','Venue sheet','Floor plan(s)','Food labels'].forEach(noEv);
   }
   if(full){
     [1,2,3].forEach(n=>{ const f=_otherUpField(n), c=(inq[f]&&inq[f].length)||0;
@@ -13509,6 +13512,8 @@ async function buildPacketPdfBytes(eventId, opts){
   if(opts.logo && logoLink) enclosed.push('Client logo'+(opts.logoCopies>1?(' \u00d7'+opts.logoCopies):''));
   if(opts.weeklycover && e.weekOf) enclosed.push('Weekly cover sheet'+(opts.weeklycoverCopies>1?(' \u00d7'+opts.weeklycoverCopies):''));
   if(opts.checklist && checklists[e.id] && checklists[e.id].length) enclosed.push('Final checklist'+(opts.checklistCopies>1?(' \u00d7'+opts.checklistCopies):''));
+  if(opts.foodlabels) enclosed.push('Food labels'+(opts.foodlabelsCopies>1?(' \u00d7'+opts.foodlabelsCopies):''));
+  const flLogo = opts.foodlabels ? await _flLogoSize() : null;
 
   function header(yTop){
     fB(18); setT(C.maroon); doc.text('Premier Caterers', ML, yTop);
@@ -13805,6 +13810,7 @@ async function buildPacketPdfBytes(eventId, opts){
   if(opts.contract && contractObj){ for(let c=0;c<(opts.contractCopies||1);c++) drawContract(); }
   if(opts.weeklycover){ for(let c=0;c<(opts.weeklycoverCopies||1);c++) drawWeeklyCoverSheet(); }
   if(opts.checklist){ for(let c=0;c<(opts.checklistCopies||1);c++) drawFinalChecklist(); }
+  if(opts.foodlabels){ const fl=_flData(e).lines; for(let c=0;c<(opts.foodlabelsCopies||1);c++){ page(); _flDrawPage(doc, fl, flLogo); } }
 
   // ---- merge (our vector pages + any fetched documents) via pdf-lib ----
   const { PDFDocument }=window.PDFLib;
@@ -13851,7 +13857,7 @@ async function buildPacketPdfBytes(eventId, opts){
 function _ppGatherOpts(){
   const g=id=>document.getElementById(id);
   const ck=id=>!!(g(id)&&g(id).checked);
-  const num=(id,d)=>{ const el=g(id); let v=el?parseInt(el.value,10):d; if(!v||v<1)v=d; return Math.min(9,Math.max(1,v)); };
+  const num=(id,d,mx)=>{ const el=g(id); let v=el?parseInt(el.value,10):d; if(!v||v<1)v=d; return Math.min(mx||9,Math.max(1,v)); };
   return {
     cover:ck('pp-cover'), coverCopies:num('pp-cover-copies',1),
     contents:ck('pp-contents'), contentsCopies:num('pp-contents-copies',1),
@@ -13865,10 +13871,11 @@ function _ppGatherOpts(){
     logo:ck('pp-logo'), logoCopies:num('pp-logo-copies',1),
     weeklycover:ck('pp-weeklycover'), weeklycoverCopies:num('pp-weeklycover-copies',1),
     checklist:ck('pp-checklist'), checklistCopies:num('pp-checklist-copies',1),
+    foodlabels:ck('pp-foodlabels'), foodlabelsCopies:num('pp-foodlabels-copies',1,99),
   };
 }
 function _ppAnySelected(opts){
-  return !!(opts.cover||opts.beo||opts.invoice||opts.contract||opts.menu||opts.grocery||opts.venue||opts.floorplanDoc||opts.logo||opts.weeklycover||opts.checklist);
+  return !!(opts.cover||opts.beo||opts.invoice||opts.contract||opts.menu||opts.grocery||opts.venue||opts.floorplanDoc||opts.logo||opts.weeklycover||opts.checklist||opts.foodlabels);
 }
 const _ppFailedNames={menu:'menu',grocery:'grocery list',venue:'venue sheet',floorplanDoc:'floor plan',logo:'logo'};
 async function _runPaperwork(eventId, mode){
@@ -13988,6 +13995,8 @@ function openPaperwork(arg){
       +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#999;margin:14px 0 6px">Not yet available</div>'
       +row(false,true,'pp-equipment','Equipment list','Coming soon','')
       +row(!!(checklists[e.id]&&checklists[e.id].length),!(checklists[e.id]&&checklists[e.id].length),'pp-checklist','Final checklist', (checklists[e.id]&&checklists[e.id].length)?(checklists[e.id].filter(function(i){return !i.na;}).length+' tasks'):'No checklist for this event yet', (checklists[e.id]&&checklists[e.id].length)?cpx('pp-checklist-copies',1):'')
+      +(function(){ const fd=_flData(e); const cpx99='<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#666">copies <input type="number" id="pp-foodlabels-copies" value="'+fd.copies+'" min="1" max="99" style="width:44px;padding:5px;border:1px solid var(--border2);border-radius:6px;font-family:inherit;text-align:center"></span>';
+        return row(false,false,'pp-foodlabels','Food labels', pcEsc(fd.lines.join(' \u00b7 '))+(fd.saved?' (your saved edits)':''), cpx99); })()
       +row(false,true,'pp-linen','Linen order form','Coming soon','')
       +row(false,true,'pp-insurance','Insurance','Coming soon','')
       +row(false,true,'pp-buffetsigns','Buffet & table signs','Coming soon','')
@@ -14012,6 +14021,171 @@ function openPaperwork(arg){
 }
 window.openPaperwork=openPaperwork; window.closePaperwork=closePaperwork; window._runPaperwork=_runPaperwork;
 window._runPaperworkEmail=_runPaperworkEmail; window._runPaperworkCommissary=_runPaperworkCommissary;
+
+// ─────────────────────────────────────────────────────────────
+// FOOD LABELS — the big "Job # / Day - Address" sheet that goes with every
+// tray/box sent to an event. Filled from the event, editable, saved per event
+// on e.foodLabels = {lines:[...], copies:N}. Print / Save PDF / commissary.
+// ─────────────────────────────────────────────────────────────
+function _flDefaults(e){
+  const num = shortEventNumber(fullEventNum(e)||e.job||'');
+  const day = e.day ? (e.day.charAt(0).toUpperCase()+e.day.slice(1)) : '';
+  const second = [day, (e.addr||'').trim()].filter(Boolean).join(' - ');
+  return ['Job '+(num||'#'), second].filter(s=>s!=='');
+}
+function _flData(e){
+  const s=e&&e.foodLabels;
+  if(s && Array.isArray(s.lines) && s.lines.length) return { lines:s.lines.slice(), copies:s.copies||1, saved:true };
+  return { lines:_flDefaults(e), copies:1, saved:false };
+}
+let _flLogoDims=null;
+function _flLogoSize(){
+  if(_flLogoDims) return Promise.resolve(_flLogoDims);
+  return new Promise(res=>{
+    try{ const im=new Image(); im.onload=()=>{ _flLogoDims={w:im.naturalWidth||3,h:im.naturalHeight||1}; res(_flLogoDims); }; im.onerror=()=>res({w:3,h:1}); im.src=LOGO_DATA; }
+    catch(_){ res({w:3,h:1}); }
+  });
+}
+// Draws ONE label page on the current jsPDF page (letter, pt units).
+function _flDrawPage(doc, lines, logo){
+  const PW=612, CX=PW/2, MAXW=532;
+  try{ const lw=200, lh=lw*logo.h/logo.w; doc.addImage(LOGO_DATA,'JPEG',CX-lw/2,54,lw,lh); }catch(_){}
+  doc.setTextColor(0,0,0); doc.setFont('helvetica','bold');
+  const clean=(lines||[]).map(s=>String(s||'').trim()).filter(Boolean);
+  if(!clean.length) return;
+  // First line: as big as fits on one line (max 92pt)
+  let big=92; doc.setFontSize(big);
+  while(big>30 && doc.getTextWidth(clean[0])>MAXW){ big-=2; doc.setFontSize(big); }
+  let y=372;
+  doc.text(clean[0], CX, y, {align:'center'});
+  y += 30;
+  // Remaining lines: 38pt, wrapped, shrink if they would run off the page
+  let sz=38; let wrapped;
+  const build=()=>{ doc.setFontSize(sz); wrapped=[]; clean.slice(1).forEach(t=>{ doc.splitTextToSize(t, MAXW-20).forEach(w=>wrapped.push(w)); }); };
+  build();
+  while(sz>16 && y + wrapped.length*sz*1.2 > 750){ sz-=2; build(); }
+  wrapped.forEach(w=>{ y += sz*1.2; doc.text(w, CX, y, {align:'center'}); });
+}
+async function buildFoodLabelPdfBytes(lines, copies){
+  await ensureJsPdf();
+  const { jsPDF } = window.jspdf;
+  const logo=await _flLogoSize();
+  const doc=new jsPDF({unit:'pt',format:'letter'});
+  const n=Math.max(1,Math.min(99,parseInt(copies,10)||1));
+  for(let i=0;i<n;i++){ if(i) doc.addPage(); _flDrawPage(doc, lines, logo); }
+  return new Uint8Array(doc.output('arraybuffer'));
+}
+function _flFileName(e){
+  const num=(fullEventNum(e)||e.job||'').replace(/[^0-9A-Za-z\-]/g,'');
+  const nm=(e.name||'event').replace(/[^0-9A-Za-z]+/g,'-').replace(/^-+|-+$/g,'');
+  return ('Food-labels_'+(num?num+'_':'')+nm).slice(0,60);
+}
+function closeFoodLabels(){ const m=document.getElementById('flModal'); if(m) m.remove(); }
+function _flReadLines(){
+  return [...document.querySelectorAll('#flModal .fl-line')].map(d=>(d.innerText||'').replace(/\s+/g,' ').trim()).filter(Boolean);
+}
+function _flReadCopies(){ const el=document.getElementById('fl-copies'); let v=el?parseInt(el.value,10):1; if(!v||v<1) v=1; return Math.min(99,v); }
+function _flRenderLines(lines){
+  const box=document.getElementById('fl-lines'); if(!box) return;
+  box.innerHTML=lines.map((t,i)=>'<div style="position:relative;display:flex;justify-content:center;align-items:center;gap:4px;margin-top:'+(i===0?'0':'4px')+'">'
+    +'<div class="fl-line" contenteditable="true" spellcheck="false" style="outline:1px dashed #c9c9c9;outline-offset:2px;padding:0 4px;min-width:30px;font-family:Arial,Helvetica,sans-serif;font-weight:700;color:#000;line-height:1.15;'+(i===0?'font-size:36px':'font-size:15px')+'">'+pcEsc(t)+'</div>'
+    +(i>0?'<button type="button" title="Remove this line" onclick="this.parentNode.remove()" style="border:none;background:none;color:#999;cursor:pointer;font-size:14px;padding:0 2px"><i class="ti ti-x"></i></button>':'')
+    +'</div>').join('');
+}
+function _flAddLine(){
+  const inp=document.getElementById('fl-add'); const t=(inp&&inp.value||'').trim();
+  if(!t){ if(inp) inp.focus(); return; }
+  const lines=_flReadLines(); lines.push(t); _flRenderLines(lines); inp.value=''; inp.focus();
+}
+function _flReset(eventId){
+  const e=_beoResolveEvent(eventId); if(!e) return;
+  _flRenderLines(_flDefaults(e));
+}
+async function _flRemember(e, lines, copies){
+  const ck=document.getElementById('fl-remember');
+  if(!ck || !ck.checked) return;
+  const same = JSON.stringify(lines)===JSON.stringify(_flDefaults(e));
+  try{ await saveEventField(e.id, 'foodLabels', same && copies===1 ? null : { lines, copies }); }catch(err){ console.error('food labels save failed', err); }
+}
+async function _runFoodLabels(eventId, mode){
+  const e=_beoResolveEvent(eventId); if(!e){ alert('Event not found.'); return; }
+  const lines=_flReadLines(); const copies=_flReadCopies();
+  if(!lines.length){ alert('The sheet is empty \u2014 type at least one line.'); return; }
+  let to='';
+  if(mode==='commissary'){
+    to=(getSharedSetting('commissaryEmail')||'').trim();
+    if(!to){ alert('No commissary printer email is saved yet \u2014 add one in Settings first.'); return; }
+    if(!confirm('Send '+copies+' food label sheet'+(copies===1?'':'s')+' to the commissary printer?\n\n'+to)) return;
+  }
+  await _flRemember(e, lines, copies);
+  closeFoodLabels();
+  try{
+    const bytes=await buildFoodLabelPdfBytes(lines, copies);
+    const fname=_flFileName(e)+'.pdf';
+    if(mode==='commissary'){
+      if(typeof showToast==='function') showToast('Sending to commissary\u2026');
+      const evFull=fullEventNum(e)||(e.job||'');
+      const subject='Food labels'+(evFull?(' \u2014 #'+evFull):'')+' \u2014 '+(e.name||'Event')+' ('+copies+' sheet'+(copies===1?'':'s')+')';
+      const body='Attached: '+copies+' food label sheet'+(copies===1?'':'s')+' for '+(e.name||'this event')+(evFull?(' (#'+evFull+')'):'')+'.';
+      const ok=await sendGmailEmail(to, subject, body, body, [{ filename:fname, mime:'application/pdf', base64:_bytesToB64(bytes) }]);
+      if(ok && typeof showToast==='function') showToast('Food labels sent to commissary \u2713');
+      return;
+    }
+    const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+    const dl=()=>{ const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); };
+    if(mode==='pdf') dl(); else { const w=window.open(url,'_blank'); if(!w) dl(); }
+    setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(_){} }, 60000);
+  }catch(err){
+    console.error('food labels failed:', err);
+    alert('Sorry \u2014 making the food labels failed: '+((err&&err.message)?err.message:err));
+  }
+}
+function openFoodLabels(arg){
+  const e=_beoResolveEvent(arg);
+  if(!e){ alert('Food labels are available once the event is booked.'); return; }
+  closeFoodLabels();
+  const d=_flData(e);
+  const evFull=fullEventNum(e)||(e.job||'');
+  const wrap=document.createElement('div');
+  wrap.id='flModal';
+  wrap.setAttribute('style','position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:inherit;padding:18px');
+  wrap.onclick=function(ev){ if(ev.target===wrap) closeFoodLabels(); };
+  const fbtn='font-size:14px;font-weight:600;padding:11px 16px;border-radius:9px;cursor:pointer;font-family:inherit;border:none';
+  wrap.innerHTML='<div style="background:#fff;border-radius:15px;max-width:640px;width:100%;max-height:92vh;display:flex;flex-direction:column">'
+    +'<div style="padding:16px 20px 12px;border-bottom:1px solid #eee;display:flex;align-items:flex-start;gap:9px">'
+      +'<i class="ti ti-tag" style="font-size:20px;color:var(--maroon);margin-top:2px"></i>'
+      +'<div style="flex:1"><div style="font-size:16px;font-weight:700">Food labels</div>'
+      +'<div style="font-size:12.5px;color:#777;margin-top:2px">'+pcEsc(e.name||'Event')+(evFull?(' \u00b7 #'+pcEsc(evFull)):'')+' \u00b7 click any line on the sheet to change it</div></div>'
+      +'<button onclick="closeFoodLabels()" class="icon-btn" title="Close"><i class="ti ti-x"></i></button>'
+    +'</div>'
+    +'<div style="padding:16px 20px;overflow-y:auto;flex:1;display:flex;gap:20px;flex-wrap:wrap">'
+      +'<div style="width:255px;flex:0 0 255px;aspect-ratio:8.5/11;background:#fff;border:1px solid #cfcfcf;box-shadow:0 1px 4px rgba(0,0,0,.08);display:flex;flex-direction:column;align-items:center;padding:22px 10px;text-align:center;overflow:hidden">'
+        +'<img src="'+LOGO_DATA+'" alt="Premier Caterers" style="width:84px;height:auto;margin-bottom:68px">'
+        +'<div id="fl-lines" style="width:100%"></div>'
+      +'</div>'
+      +'<div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:16px;font-size:13px">'
+        +'<div><div style="font-weight:600;margin-bottom:6px">Add a line <span style="font-weight:400;color:#999">(optional)</span></div>'
+          +'<div style="display:flex;gap:6px"><input id="fl-add" placeholder="Keep refrigerated" onkeydown="if(event.key===\'Enter\'){event.preventDefault();_flAddLine();}" style="flex:1;padding:8px 10px;border:1px solid var(--border2);border-radius:7px;font-family:inherit;font-size:13px">'
+          +'<button onclick="_flAddLine()" class="btn" title="Add line"><i class="ti ti-plus"></i></button></div>'
+          +'<div style="font-size:11.5px;color:#999;margin-top:5px">Examples: client name, MEAT, Hot box #2, Do not open until 6 PM</div></div>'
+        +'<div style="display:flex;align-items:center;gap:8px"><span style="font-weight:600">How many to print</span>'
+          +'<input type="number" id="fl-copies" value="'+d.copies+'" min="1" max="99" style="width:62px;padding:7px;border:1px solid var(--border2);border-radius:7px;font-family:inherit;text-align:center;font-size:14px"><span style="color:#888">sheets</span></div>'
+        +'<label style="display:flex;gap:8px;align-items:flex-start;color:#555;cursor:pointer"><input type="checkbox" id="fl-remember" checked style="width:16px;height:16px;margin-top:1px;accent-color:var(--maroon)"> Remember my edits for this event</label>'
+        +'<button onclick="_flReset(\''+e.id+'\')" class="btn btn--ghost btn--sm" style="align-self:flex-start"><i class="ti ti-refresh" style="font-size:13px"></i> Reset to event info</button>'
+        +(d.saved?'<div style="font-size:11.5px;color:#888"><i class="ti ti-device-floppy" style="font-size:12px"></i> Showing your saved edits for this event.</div>':'')
+      +'</div>'
+    +'</div>'
+    +'<div style="padding:13px 20px;border-top:1px solid #eee;display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end">'
+      +'<button onclick="closeFoodLabels()" style="'+fbtn+';background:var(--bg3);color:#555">Cancel</button>'
+      +'<button onclick="_runFoodLabels(\''+e.id+'\',\'commissary\')" class="btn"><i class="ti ti-printer" style="font-size:15px;vertical-align:-2px"></i> Send to commissary</button>'
+      +'<button onclick="_runFoodLabels(\''+e.id+'\',\'pdf\')" class="btn"><i class="ti ti-file-type-pdf" style="font-size:15px;vertical-align:-2px"></i> Save PDF</button>'
+      +'<button onclick="_runFoodLabels(\''+e.id+'\',\'print\')" class="btn btn--pri"><i class="ti ti-printer" style="font-size:15px;vertical-align:-2px"></i> Print</button>'
+    +'</div></div>';
+  document.body.appendChild(wrap);
+  _flRenderLines(d.lines);
+}
+window.openFoodLabels=openFoodLabels; window.closeFoodLabels=closeFoodLabels; window._runFoodLabels=_runFoodLabels;
+window._flAddLine=_flAddLine; window._flReset=_flReset;
 
 // ─────────────────────────────────────────────────────────────
 // CONTRACT (e-signable). Client signs remotely via sign.html.
