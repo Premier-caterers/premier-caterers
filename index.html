@@ -98,6 +98,7 @@
     <button class="nav-item" id="nav-purchasing" onclick="window.open('https://premier-caterers.github.io/premier-caterers/purchasing.html','_blank')"><i class="ti ti-building-store"></i>Purchasing<i class="ti ti-external-link" style="font-size:11px;margin-left:4px;opacity:.6"></i></button>
     <button class="nav-item" id="nav-equipment" onclick="showView('equipment')"><i class="ti ti-tool"></i>Equipment</button>
     <button class="nav-item" id="nav-venues" onclick="showView('venues')"><i class="ti ti-building"></i>Venues</button>
+    <button class="nav-item" id="nav-printcenter" onclick="showView('printcenter')"><i class="ti ti-printer"></i>Print center</button>
     <button class="nav-item" onclick="window.open('timeclock.html','_blank')"><i class="ti ti-clock-hour-4"></i>Time Clock<i class="ti ti-external-link" style="font-size:11px;margin-left:auto;opacity:.5"></i></button>
     <button class="nav-item" onclick="window.open('https://premier-caterers.github.io/premier-caterers/truck-checklist-admin.html','_blank')"><i class="ti ti-truck"></i>Truck Checklist<i class="ti ti-external-link" style="font-size:11px;margin-left:auto;opacity:.5"></i></button>
     <div class="sidebar-label" id="grpOffice">Office</div>
@@ -1506,7 +1507,7 @@ function startFirebaseListeners(){
   regularsCol = db.collection('regulars');
   regularsCol.onSnapshot( snap=>{ regulars=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='regulars'||currentView==='events') render(); }, err=>console.error('regulars listener', err));
   dropOffOrdersCol = db.collection('dropOffOrders');
-  dropOffOrdersCol.where('status','==','submitted').onSnapshot( snap=>{ dropOffOrders=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='regulars'||currentView==='events') render(); }, err=>console.error('dropOffOrders listener', err));
+  dropOffOrdersCol.where('status','==','submitted').onSnapshot( snap=>{ dropOffOrders=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='regulars'||currentView==='events'||currentView==='printcenter') render(); }, err=>console.error('dropOffOrders listener', err));
   contractsCol = db.collection('contracts');
   contractsCol.onSnapshot( snap=>{
     const prevContracts = contracts || {};
@@ -3218,7 +3219,7 @@ const roles = {
 };
 
 /* ===================== LOGIN / ACCESS CONTROL (added) ===================== */
-const ALL_SECTIONS = ['home','myday','pipeline','clients','events','coversheet','schedule','checklists','changes','invoices','reports','grocery','equipment','venues','roadmap','followups','email','trash','settings','dropoffs','regulars'];
+const ALL_SECTIONS = ['home','myday','pipeline','clients','events','coversheet','schedule','checklists','changes','invoices','reports','grocery','equipment','venues','roadmap','followups','email','trash','settings','dropoffs','regulars','printcenter'];
 const access = {
   admin:   ALL_SECTIONS.slice(),
   kenny:   ALL_SECTIONS.slice(),
@@ -3349,7 +3350,7 @@ function updateUserBar(){
 const NAV_GROUPS = {
   grpWeek:    ['events','coversheet','schedule','checklists','changes'],
   grpSales:   ['pipeline','clients','invoices','email','dropoffs','regulars'],
-  grpKitchen: ['purchasing','equipment','venues'],
+  grpKitchen: ['purchasing','equipment','venues','printcenter'],
   grpOffice:  ['myday','reports','roadmap'],
   setupLabel: ['settings','trash']
 };
@@ -3545,6 +3546,7 @@ function render(){
            currentView==='email'     ? '<div id="emailPlaceholder"></div>' :
            currentView==='dropoffs'  ? renderDropoffs()  :
            currentView==='regulars'  ? renderRegulars()  :
+           currentView==='printcenter' ? renderPrintCenter() :
            currentView==='settings'  ? renderSettings()  : '';
   } catch(err) {
     html = '<div style="padding:2rem;color:red;font-size:13px;font-family:monospace"><strong>Error in '+currentView+':</strong><br>'+err.message+'</div>';
@@ -14186,6 +14188,366 @@ function openFoodLabels(arg){
 }
 window.openFoodLabels=openFoodLabels; window.closeFoodLabels=closeFoodLabels; window._runFoodLabels=_runFoodLabels;
 window._flAddLine=_flAddLine; window._flReset=_flReset;
+
+// ─────────────────────────────────────────────────────────────
+// PRINT CENTER \u2014 pick ONE document type + a date range, get every booked
+// event's copy of that document in one PDF, led by a cover sheet listing
+// the range, the document type, and each included job (# + name).
+// Reuses buildPacketPdfBytes() per event, so each document looks exactly
+// like it does in "Create event paperwork".
+// ─────────────────────────────────────────────────────────────
+const PC_DOCS = [
+  {k:'menu',        label:'Client menu',            icon:'ti-file-text',      has:e=>{ const q=_beoInquiryFor(e); return !!(q.menuLink||(Array.isArray(q.menus)&&q.menus[0]&&q.menus[0].url)); }, slow:true},
+  {k:'grocery',     label:'Caterer menu / grocery', icon:'ti-shopping-cart',  has:e=>!!(e.catererCopyDoc||e.catererCopyPdf), slow:true},
+  {k:'invoice',     label:'Invoice / estimate',     icon:'ti-file-invoice',   has:e=>_ppEventInvoiceSlots(e.id).length>0, money:true},
+  {k:'beo',         label:'BEO',                    icon:'ti-clipboard-list', has:e=>true},
+  {k:'contract',    label:'Contract',               icon:'ti-file-certificate', has:e=>!!(typeof contracts!=='undefined'&&contracts[e.id])},
+  {k:'checklist',   label:'Final checklist',        icon:'ti-checklist',      has:e=>!!(checklists[e.id]&&checklists[e.id].length)},
+  {k:'foodlabels',  label:'Food labels',            icon:'ti-tag',            has:e=>true},
+  {k:'venue',       label:'Venue sheet',            icon:'ti-building',       has:e=>!!e.venueLink, slow:true},
+  {k:'floorplanDoc',label:'Floor plan',             icon:'ti-layout-2',       has:e=>!!e.floorplan, slow:true},
+  {k:'logo',        label:'Client logo',            icon:'ti-photo',          has:e=>!!e.logoData, slow:true},
+  {k:'dropoffKitchen', label:'Drop-off orders \u2014 kitchen copy', icon:'ti-truck-delivery', dropoff:true, has:o=>true},
+  {k:'dropoffClient',  label:'Drop-off orders \u2014 client copy',  icon:'ti-truck-delivery', dropoff:true, money:true, has:o=>true},
+];
+const _PC_COPYKEY = {menu:'menuCopies',grocery:'groceryCopies',invoice:'invoiceCopies',beo:'beoCopies',contract:'contractCopies',checklist:'checklistCopies',foodlabels:'foodlabelsCopies',venue:'venueCopies',floorplanDoc:'floorplanCopies',logo:'logoCopies'};
+let _pcState = { range:'this', from:'', to:'', doc:'', copies:1, skip:{} };
+
+function _pcISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _pcRangeDates(){
+  const s=_pcState; const t=new Date(); t.setHours(12,0,0,0);
+  const add=(d,n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+  const mon=add(t, -((t.getDay()+6)%7));   // weeks run Mon\u2013Sun (week ending Sunday)
+  if(s.range==='today')    return {from:_pcISO(t), to:_pcISO(t)};
+  if(s.range==='tomorrow') return {from:_pcISO(add(t,1)), to:_pcISO(add(t,1))};
+  if(s.range==='next')     return {from:_pcISO(add(mon,7)), to:_pcISO(add(mon,13))};
+  if(s.range==='custom'){ const f=s.from||_pcISO(t); const to=(s.to&&s.to>=f)?s.to:f; return {from:f,to:to}; }
+  return {from:_pcISO(mon), to:_pcISO(add(mon,6))};
+}
+function _pcFmt(iso, withYear){ try{ return new Date(iso+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:withYear?'numeric':undefined}); }catch(_){ return iso; } }
+function _pcRangeLabel(){
+  const r=_pcRangeDates();
+  const name={this:'This week',next:'Next week',today:'Today',tomorrow:'Tomorrow',custom:'Custom dates'}[_pcState.range]||'';
+  const span = r.from===r.to ? _pcFmt(r.from,true) : (_pcFmt(r.from,false)+' \u2013 '+_pcFmt(r.to,true));
+  return {name, span};
+}
+function _pcEventDate(e){ return e.eventDate || _dateFromWeekOfAndDay(e.weekOf, e.day) || ''; }
+function _pcEvents(){
+  const r=_pcRangeDates();
+  return events.filter(e=>{
+    if((e.status||'booked')==='lost') return false;
+    const d=_pcEventDate(e); return d && d>=r.from && d<=r.to;
+  }).sort((a,b)=> _pcEventDate(a).localeCompare(_pcEventDate(b)) || String(fullEventNum(a)||a.job||'').localeCompare(String(fullEventNum(b)||b.job||'')));
+}
+// One list shape for both events and drop-off orders: {id,date,job,name,obj}
+function _pcDoJob(o){ const t=String(o.jobNumber||'').trim(); const m=t.match(/^\d{2}-\d{4}-(\d+[a-z]?)$/i); return t ? ('#'+(m?m[1]:t.replace(/^#/,''))) : (o.subLabel?('#'+o.subLabel):'Unlinked'); }
+function _pcItems(doc){
+  if(doc && doc.dropoff){
+    const r=_pcRangeDates();
+    return (dropOffOrders||[]).filter(o=>o.status==='submitted' && o.deliveryDate && o.deliveryDate>=r.from && o.deliveryDate<=r.to)
+      .sort((a,b)=>(a.deliveryDate||'').localeCompare(b.deliveryDate||'') || (a.deliveryTime||'').localeCompare(b.deliveryTime||''))
+      .map(o=>({id:o.id, date:o.deliveryDate, job:_pcDoJob(o), name:(o.contactName||'Drop-off')+(o.locationName?(' \u2014 '+o.locationName):'')+(o.approved===false?' (awaiting approval)':''), obj:o}));
+  }
+  return _pcEvents().map(e=>({id:e.id, date:_pcEventDate(e), job:_pcJob(e), name:e.name||'Event', obj:e}));
+}
+function _pcDocsForRole(){ const role=roles[currentRole]||{}; return PC_DOCS.filter(d=>!d.money || role.canViewInvoices); }
+function _pcSet(k,v){ _pcState[k]=v; if(k==='range'||k==='from'||k==='to') _pcState.skip={}; render(); }
+function _pcToggleSkip(id, on){ if(on) delete _pcState.skip[id]; else _pcState.skip[id]=true; render(); }
+function _pcJob(e){ return shortEventNumber(fullEventNum(e)||e.job||'') || ''; }
+
+function renderPrintCenter(){
+  const s=_pcState; const docs=_pcDocsForRole();
+  if(s.doc && !docs.find(d=>d.k===s.doc)) s.doc='';
+  const doc=docs.find(d=>d.k===s.doc)||null;
+  const lab=_pcRangeLabel(); const list=_pcItems(doc);
+  const chip=(k,t)=>`<button class="filter-btn${s.range===k?' active':''}" onclick="_pcSet('range','${k}')" style="${s.range===k?'background:var(--maroon);color:#fff;border-color:var(--maroon)':''}">${s.range===k?'<i class="ti ti-check" style="font-size:13px"></i> ':''}${t}</button>`;
+  let h=`<div class="section-header"><div><div class="eyebrow">Kitchen &amp; ops</div><div class="section-title">Print center</div></div></div>
+  <div style="font-size:13px;color:var(--text3);margin:-6px 0 16px">Print one kind of document for every booked event in a date range \u2014 one file, one print job. The first page is a cover sheet listing every job inside.</div>
+  <div class="cf-panel" style="margin-bottom:14px"><div class="cf-panel__body" style="padding:16px 18px">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:8px">1 \u00b7 Dates</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${chip('this','This week')}${chip('next','Next week')}${chip('today','Today')}${chip('tomorrow','Tomorrow')}${chip('custom','Pick dates')}
+      <span style="font-size:13px;font-weight:600;margin-left:6px"><i class="ti ti-calendar" style="font-size:14px;vertical-align:-2px"></i> ${pcEsc(lab.span)}</span></div>
+    ${s.range==='custom'?`<div style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px">From <input type="date" value="${s.from||_pcRangeDates().from}" onchange="_pcSet('from',this.value)" style="padding:6px 8px;border:1px solid var(--border2);border-radius:7px;font-family:inherit"> to <input type="date" value="${s.to||_pcRangeDates().to}" onchange="_pcSet('to',this.value)" style="padding:6px 8px;border:1px solid var(--border2);border-radius:7px;font-family:inherit"></div>`:''}
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin:18px 0 8px">2 \u00b7 Document</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:7px">
+      ${docs.map(d=>{ const on=s.doc===d.k; return `<label style="display:flex;align-items:center;gap:9px;padding:10px 12px;border:${on?'2px solid var(--maroon)':'1px solid #e2dcd2'};border-radius:10px;cursor:pointer;font-size:13.5px;font-weight:${on?'700':'500'}"><input type="radio" name="pcDoc" ${on?'checked':''} onchange="_pcSet('doc','${d.k}')" style="accent-color:var(--maroon);width:16px;height:16px"><i class="ti ${d.icon}" style="font-size:16px;color:var(--text3)"></i>${d.label}</label>`; }).join('')}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px"><span style="font-weight:600">Copies of each</span>
+      <input type="number" min="1" max="20" value="${s.copies}" onchange="_pcState.copies=Math.max(1,Math.min(20,parseInt(this.value,10)||1))" style="width:60px;padding:6px;border:1px solid var(--border2);border-radius:7px;text-align:center;font-family:inherit">
+      ${s.doc==='foodlabels'?'<span style="color:var(--text3);font-size:12px">Food labels use each event\u2019s saved sheet count when it has one</span>':''}</div>
+  </div></div>`;
+
+  h+=`<div class="cf-panel"><div class="cf-panel__body" style="padding:16px 18px">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:8px">3 \u00b7 ${doc&&doc.dropoff?'Drop-off orders':'Events'} in range <span style="text-transform:none;letter-spacing:0;font-weight:500">\u2014 uncheck any to leave out</span></div>`;
+  if(!list.length){
+    h+=`<div class="u-empty-state" style="padding:18px 0"><i class="ti ti-calendar-off" aria-hidden="true"></i><div class="u-empty-state__t">${doc&&doc.dropoff?'No drop-off orders':'No booked events'} in this range</div><div class="u-empty-state__s">Try another week or pick dates.</div></div>`;
+  } else {
+    h+=`<div style="border:1px solid #e9e4dc;border-radius:10px;overflow:hidden">`+list.map((it,i)=>{
+      const e=it.obj; const inc=!s.skip[it.id]; const ok=doc?doc.has(e):null;
+      const st = !doc ? '' : ok
+        ? '<span style="color:var(--green-text);font-size:12.5px;font-weight:600"><i class="ti ti-circle-check" style="font-size:14px;vertical-align:-2px"></i> On file</span>'
+        : '<span style="color:var(--coral-text);font-size:12.5px;font-weight:600;border-bottom:1.5px dashed currentColor"><i class="ti ti-alert-triangle" style="font-size:14px;vertical-align:-2px"></i> None on file \u2014 will be skipped</span>';
+      return `<label style="display:flex;align-items:center;gap:11px;padding:10px 12px;${i?'border-top:1px solid #efeae2;':''}cursor:pointer;${inc?'':'opacity:.5'}">
+        <input type="checkbox" ${inc?'checked':''} onchange="_pcToggleSkip('${it.id}',this.checked)" style="width:17px;height:17px;accent-color:var(--maroon)">
+        <span style="width:96px;font-size:12.5px;color:var(--text3)">${pcEsc(_pcFmt(it.date,false))}</span>
+        <span style="width:72px;font-weight:700;font-size:13px">${pcEsc(it.job)}</span>
+        <span style="flex:1;font-size:13.5px">${pcEsc(it.name)}</span>${st}</label>`;
+    }).join('')+`</div>`;
+  }
+  const n=list.filter(it=>!s.skip[it.id] && (!doc || doc.has(it.obj))).length;
+  const dis=(!doc||!n);
+  h+=`<div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;justify-content:flex-end;margin-top:14px">
+      <span style="margin-right:auto;font-size:13px;color:var(--text3)">${!doc?'Pick a document above':(n+(doc.dropoff?' order':' event')+(n===1?'':'s')+' will print'+(doc.slow&&n>3?' \u00b7 pulling Google Docs can take a minute':''))}</span>
+      <button class="btn" ${dis?'disabled':''} onclick="_pcRun('commissary')"><i class="ti ti-send" style="font-size:15px;vertical-align:-2px"></i> Send to commissary</button>
+      <button class="btn" ${dis?'disabled':''} onclick="_pcRun('pdf')"><i class="ti ti-file-type-pdf" style="font-size:15px;vertical-align:-2px"></i> Save PDF</button>
+      <button class="btn btn--pri" ${dis?'disabled':''} onclick="_pcRun('print')"><i class="ti ti-printer" style="font-size:15px;vertical-align:-2px"></i> Print all</button>
+    </div></div></div>`;
+  return h;
+}
+
+function _pcProgress(msg){
+  let el=document.getElementById('pcProgress');
+  if(msg===null){ if(el) el.remove(); return; }
+  if(!el){ el=document.createElement('div'); el.id='pcProgress'; el.setAttribute('style','position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:inherit'); document.body.appendChild(el); }
+  el.innerHTML='<div style="background:#fff;border-radius:14px;padding:22px 26px;min-width:280px;max-width:90vw;text-align:center"><i class="ti ti-loader-2" style="font-size:26px;color:var(--maroon);display:inline-block;animation:spin 1s linear infinite"></i><div style="font-size:14px;font-weight:600;margin-top:8px">'+pcEsc(msg)+'</div><div style="font-size:12px;color:#888;margin-top:4px">Keep this tab open</div></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
+}
+
+// Cover sheet (page 1): range, document type, then every included job.
+function _pcDrawCover(jsdoc, info){
+  const ML=50, MR=562; let y=64;
+  const T=(c)=>jsdoc.setTextColor(c[0],c[1],c[2]);
+  try{ const lw=130, lh=lw*(info.logo.h/info.logo.w); jsdoc.addImage(LOGO_DATA,'JPEG',ML-6,30,lw,lh); y=30+lh+28; }catch(_){ y=64; }
+  jsdoc.setFont('helvetica','bold'); jsdoc.setFontSize(11); T([139,26,26]); jsdoc.text('PRINT PACKET', ML, y);
+  y+=30; jsdoc.setFontSize(28); T([20,20,20]);
+  const tl=jsdoc.splitTextToSize(info.docLabel, MR-ML); jsdoc.text(tl, ML, y); y+=(tl.length-1)*32;
+  y+=26; jsdoc.setFontSize(14); jsdoc.setFillColor(255,224,102);
+  const rt=info.rangeName+':  '+info.span; const rw=jsdoc.getTextWidth(rt);
+  jsdoc.rect(ML-4, y-14, rw+8, 20, 'F'); jsdoc.text(rt, ML, y);
+  y+=24; jsdoc.setFont('helvetica','normal'); jsdoc.setFontSize(11); T([90,90,90]);
+  jsdoc.text(info.rows.length+' '+info.noun+(info.rows.length===1?'':'s')+' included   \u00b7   '+info.copies+' cop'+(info.copies===1?'y':'ies')+' each'+(info.totalPages?('   \u00b7   '+info.totalPages+' pages after this one'):''), ML, y);
+  y+=26; jsdoc.setDrawColor(200,200,200); jsdoc.setLineWidth(0.8); jsdoc.line(ML,y,MR,y); y+=18;
+  const cols={n:ML, date:ML+28, job:ML+128, name:ML+200, pg:MR};
+  const head=()=>{ jsdoc.setFont('helvetica','bold'); jsdoc.setFontSize(9); T([120,120,120]);
+    jsdoc.text('#',cols.n,y); jsdoc.text('DATE',cols.date,y); jsdoc.text('JOB #',cols.job,y); jsdoc.text('EVENT',cols.name,y); jsdoc.text('PAGES',cols.pg,y,{align:'right'}); y+=8; jsdoc.line(ML,y,MR,y); y+=16; };
+  head();
+  info.rows.forEach((r,i)=>{
+    jsdoc.setFont('helvetica','normal'); jsdoc.setFontSize(11);
+    const nameLines=jsdoc.splitTextToSize(r.name, cols.pg-40-cols.name);
+    const rh=Math.max(1,nameLines.length)*14+6;
+    if(y+rh>742){ jsdoc.addPage(); y=60; head(); }
+    T([150,150,150]); jsdoc.text(String(i+1),cols.n,y);
+    T([60,60,60]); jsdoc.text(r.date,cols.date,y);
+    jsdoc.setFont('helvetica','bold'); T([0,0,0]); jsdoc.setFontSize(12); jsdoc.text(r.job||'\u2014',cols.job,y);
+    jsdoc.setFont('helvetica','normal'); jsdoc.setFontSize(11); jsdoc.text(nameLines,cols.name,y);
+    T([90,90,90]); jsdoc.text(String(r.pages||''),cols.pg,y,{align:'right'});
+    y+=rh; jsdoc.setDrawColor(232,232,232); jsdoc.line(ML,y-11,MR,y-11);
+  });
+  if(info.skipped.length){
+    y+=10; if(y+40>742){ jsdoc.addPage(); y=60; }
+    jsdoc.setFont('helvetica','bold'); jsdoc.setFontSize(11); T([170,60,40]);
+    jsdoc.text('NOT INCLUDED ('+info.skipped.length+')', ML, y); y+=16;
+    jsdoc.setFont('helvetica','normal'); jsdoc.setFontSize(10); T([90,90,90]);
+    info.skipped.forEach(r=>{ if(y>742){ jsdoc.addPage(); y=60; } const ln=jsdoc.splitTextToSize('-  '+r.date+'   '+(r.job||'')+'   '+r.name+'  \u2014  '+r.why, MR-ML); jsdoc.text(ln,ML,y); y+=ln.length*13; });
+  }
+  jsdoc.setFontSize(8); T([160,160,160]); jsdoc.text('Generated '+new Date().toLocaleString('en-US'), ML, 770);
+}
+
+async function _pcRun(mode){
+  const s=_pcState; const doc=_pcDocsForRole().find(d=>d.k===s.doc);
+  if(!doc){ alert('Pick a document first.'); return; }
+  const lab=_pcRangeLabel();
+  const all=_pcItems(doc).filter(it=>!s.skip[it.id]);
+  const todo=all.filter(it=>doc.has(it.obj));
+  const skipped=all.filter(it=>!doc.has(it.obj)).map(it=>({date:_pcFmt(it.date,false), job:it.job, name:it.name, why:'no '+doc.label.toLowerCase()+' on file'}));
+  if(!todo.length){ alert('Nothing in this range has a '+doc.label.toLowerCase()+' to print.'); return; }
+  let to='';
+  if(mode==='commissary'){
+    to=(getSharedSetting('commissaryEmail')||'').trim();
+    if(!to){ alert('No commissary printer email is saved yet \u2014 add one in Settings first.'); return; }
+    if(!confirm('Send '+doc.label+' for '+todo.length+(doc.dropoff?' order':' event')+(todo.length===1?'':'s')+' ('+lab.span+') to the commissary printer?\n\n'+to)) return;
+  }
+  try{
+    await ensureJsPdf(); await ensurePdfLib();
+    const { PDFDocument }=window.PDFLib;
+    const parts=[]; const rows=[];
+    for(let i=0;i<todo.length;i++){
+      const it=todo[i]; const e=it.obj;
+      _pcProgress('Building '+(i+1)+' of '+todo.length+' \u2014 '+it.name);
+      const row={date:_pcFmt(it.date,false), job:it.job, name:it.name};
+      let copies=s.copies;
+      if(doc.k==='foodlabels' && e.foodLabels && e.foodLabels.copies) copies=e.foodLabels.copies;
+      const opts={}; opts[doc.k]=true; opts[_PC_COPYKEY[doc.k]]=copies;
+      try{
+        let res;
+        if(doc.dropoff){
+          const one=await PDFDocument.load(_pcDropoffPdfDoc(e, it.id, doc.k==='dropoffKitchen').output('arraybuffer'));
+          const multi=await PDFDocument.create();
+          for(let c=0;c<copies;c++){ (await multi.copyPages(one, one.getPageIndices())).forEach(p=>multi.addPage(p)); }
+          res={bytes:await multi.save(), failed:[]};
+        } else res=await buildPacketPdfBytes(it.id, opts);
+        if((res.failed||[]).indexOf(doc.k)>=0){ skipped.push(Object.assign(row,{why:'could not pull the file \u2014 check the link'})); continue; }
+        const src=await PDFDocument.load(res.bytes);
+        row.pages=src.getPageCount(); parts.push(src); rows.push(row);
+      }catch(err){ console.error('print center: '+it.id, err); skipped.push(Object.assign(row,{why:'could not build ('+((err&&err.message)||'error')+')'})); }
+    }
+    if(!parts.length){ _pcProgress(null); alert('Nothing could be built \u2014 every event was skipped. Check that your Apps Script URL is saved in Settings.'); return; }
+    _pcProgress('Putting it all together\u2026');
+    const { jsPDF }=window.jspdf; const cv=new jsPDF({unit:'pt',format:'letter'});
+    _pcDrawCover(cv, {logo:await _flLogoSize(), docLabel:doc.label, rangeName:lab.name, span:lab.span, copies:s.copies, rows, skipped, noun:(doc.dropoff?'order':'event'), totalPages:rows.reduce((a,r)=>a+(r.pages||0),0)});
+    const merged=await PDFDocument.create();
+    for(const src of [await PDFDocument.load(cv.output('arraybuffer'))].concat(parts)){ (await merged.copyPages(src, src.getPageIndices())).forEach(p=>merged.addPage(p)); }
+    const bytes=await merged.save();
+    const fname=('Print_'+doc.label.replace(/[^A-Za-z0-9]+/g,'-')+'_'+_pcRangeDates().from+(_pcRangeDates().to!==_pcRangeDates().from?('_to_'+_pcRangeDates().to):'')).replace(/-+/g,'-')+'.pdf';
+    if(mode==='commissary'){
+      _pcProgress('Sending to commissary\u2026');
+      const body=doc.label+' for '+rows.length+(doc.dropoff?' order':' event')+(rows.length===1?'':'s')+' \u2014 '+lab.name+' ('+lab.span+'). Cover sheet first.';
+      const ok=await sendGmailEmail(to, 'Print packet \u2014 '+doc.label+' \u2014 '+lab.span, body, body, [{filename:fname, mime:'application/pdf', base64:_bytesToB64(bytes)}]);
+      _pcProgress(null);
+      if(ok) showToast('Sent to commissary ✓'+(skipped.length?(' \u2014 '+skipped.length+' skipped (see cover sheet)'):''), 4000);
+      return;
+    }
+    _pcProgress(null);
+    const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+    const dl=()=>{ const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); };
+    if(mode==='pdf') dl(); else { const w=window.open(url,'_blank'); if(!w) dl(); }
+    setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(_){} }, 120000);
+    showToast('Packet ready \u2014 '+rows.length+(doc.dropoff?' order':' event')+(rows.length===1?'':'s')+(skipped.length?(', '+skipped.length+' skipped (listed on the cover sheet)'):''), 4000);
+  }catch(err){
+    _pcProgress(null); console.error('print center failed', err);
+    alert('Sorry \u2014 building the packet failed: '+((err&&err.message)?err.message:err));
+  }
+}
+
+// Drop-off order sheet — same layout as the PDF in dropoff.html (copied here so
+// the Print center can draw orders without opening the drop-off app). If the
+// drop-off PDF layout changes there, update this copy too.
+const _PC_DO_PAY=[{id:'cash',label:'Cash'},{id:'check',label:'Check'},{id:'zelle',label:'Zelle'},{id:'credit',label:'Credit card (3.4% fee added)'},{id:'masterbill',label:'Add to events master bill'}];
+// Delivery date + time as people read it: "Friday, Oct 9, 2026 · 2:30 PM".
+// Used on both PDF copies (client + kitchen) and the order emails.
+function _pcDoWhen(order){
+  const d = String(order.deliveryDate||'').trim();
+  let out = d;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(d)){
+    const dt = new Date(d+'T12:00:00');
+    if(!isNaN(dt)) out = dt.toLocaleDateString('en-US',{weekday:'long', month:'short', day:'numeric', year:'numeric'});
+  }
+  let t = String(order.deliveryTime||'').trim();
+  const m = t.match(/^(\d{1,2}):(\d{2})$/);
+  if(m){ let h=parseInt(m[1],10); const ap=h>=12?'PM':'AM'; h=h%12||12; t=h+':'+m[2]+' '+ap; }
+  return [out, t].filter(Boolean).join(' \u00b7 ');
+}
+function _pcDropoffPdfDoc(order, orderId, hidePricing){
+  const money=n=>(Number(n)||0).toFixed(2);
+  const PAYMENT_METHODS=_PC_DO_PAY;
+  const doc = new window.jspdf.jsPDF({format:'letter'});
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const bottom = pageH - 16;
+  let y = 18;
+
+  doc.setFontSize(16); doc.setFont(undefined,'bold');
+  doc.text('Premier Caterers — Drop-Off Order', 14, y);
+  y += 10;
+
+  // Job # — top right, 18 pt, bold, yellow highlight. Replaces the old
+  // full-width "Order: 04A / Unlinked" bar. If no Job # has been entered
+  // yet, the linked order number (e.g. 04A) shows in the same spot; an
+  // unlinked order with no Job # shows nothing there.
+  // A full event number (26-1004-03) prints as just its sequence: "Job # 03".
+  const _jobShort = v => { const t = String(v||'').trim(); const m = t.match(/^\d{2}-\d{4}-(\d+[a-z]?)$/i); return m ? m[1] : t; };
+  const jobLabel = (order.jobNumber && String(order.jobNumber).trim())
+    ? 'Job # '+_jobShort(order.jobNumber)
+    : (order.subLabel ? 'Job # '+order.subLabel : '');
+  if(jobLabel){
+    doc.setFontSize(18); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+    const w = doc.getTextWidth(jobLabel);
+    const x = pageW - 14 - w;
+    doc.setFillColor(255,224,102);
+    doc.rect(x-3, 8, w+6, 13, 'F');
+    doc.text(jobLabel, x, 17.5);
+  }
+  y += 6;
+
+  doc.setFont(undefined,'normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+  const infoLine = (label,val)=>{ if(!val) return; doc.setFont(undefined,'bold'); doc.text(label+':',14,y); doc.setFont(undefined,'normal'); doc.text(String(val),45,y); y+=6; };
+  infoLine('Client', order.contactName);
+  if(!hidePricing) infoLine('Email', order.contactEmail);
+  infoLine('Phone', order.contactPhone);
+  const _when = _pcDoWhen(order);
+  if(_when){
+    doc.setFont(undefined,'bold'); doc.setFontSize(10); doc.setTextColor(60,60,60); doc.text('Delivery:',14,y);
+    doc.setFontSize(11.5); doc.setTextColor(0,0,0);
+    const ww = doc.getTextWidth(_when);
+    doc.setFillColor(255,224,102); doc.rect(43.5, y-4.6, ww+3, 6.4, 'F');
+    doc.text(_when, 45, y);
+    doc.setFont(undefined,'normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+    y += 7;
+  }
+  infoLine('Location', (order.locationName||'')+(order.address?(', '+order.address):''));
+  y += 4;
+
+  doc.setDrawColor(200,200,200); doc.line(14,y,pageW-14,y); y += 8;
+
+  doc.setFont(undefined,'bold'); doc.setFontSize(10); doc.setTextColor(0,0,0);
+  doc.text('QTY',14,y); doc.text('ITEM',30,y); doc.text('SIZE',120,y);
+  if(!hidePricing) doc.text('TOTAL',pageW-14,y,{align:'right'});
+  y += 5; doc.line(14,y,pageW-14,y); y += 6;
+  doc.setFont(undefined,'normal');
+  (order.lines||[]).forEach((l,idx)=>{
+    // Measure the whole row first (name + every note line) so nothing overlaps
+    doc.setFontSize(10);
+    const nameLines = doc.splitTextToSize(String(l.itemName||''), 85);
+    doc.setFontSize(9.5);
+    const noteLines = l.note ? doc.splitTextToSize('Note: '+String(l.note).replace(/\r/g,'').trim(), 88) : [];
+    const rowH = 5*nameLines.length + (noteLines.length ? 1 + 4.6*noteLines.length : 0) + 2;
+    if(y + rowH > bottom - 4){ doc.addPage(); y=20; }
+    if(idx>0){ doc.setDrawColor(232,232,232); doc.line(14,y-4.5,pageW-14,y-4.5); }
+    doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(0,0,0);
+    doc.text(String(l.qty),14,y);
+    doc.text(nameLines,30,y);
+    doc.text(l.sizeLabel||'',120,y);
+    if(!hidePricing) doc.text('$'+money(l.price*l.qty), pageW-14, y, {align:'right'});
+    y += 5*nameLines.length;
+    if(noteLines.length){
+      y += 1;
+      doc.setFont(undefined,'bold'); doc.setFontSize(9.5); doc.setTextColor(122,46,61);
+      noteLines.forEach(t=>{ doc.text(t,30,y); y+=4.6; });
+      doc.setFont(undefined,'normal'); doc.setFontSize(10); doc.setTextColor(0,0,0);
+    }
+    y += 4;
+  });
+  doc.setDrawColor(200,200,200);
+  y += 4; doc.line(14,y,pageW-14,y); y += 8;
+
+  if(!hidePricing && y + 45 > bottom){ doc.addPage(); y=20; }
+  if(!hidePricing){
+    const totRow = (label,val,bold)=>{
+      if(bold) doc.setFont(undefined,'bold'); else doc.setFont(undefined,'normal');
+      doc.text(label, pageW-70, y);
+      doc.text(val, pageW-14, y, {align:'right'});
+      y += 6;
+    };
+    if(order.subtotal!=null) totRow('Subtotal', '$'+money(order.subtotal));
+    if(order.deliveryFee) totRow('Delivery fee', '$'+money(order.deliveryFee));
+    if(order.subtotal!=null) totRow('Sales tax', order.taxExempt ? 'Exempt' : ('$'+money(order.taxAmount)));
+    if(order.ccFeeAmount) totRow('Credit card fee', '$'+money(order.ccFeeAmount));
+    if(order.discount) totRow('Discount', '-$'+money(order.discount));
+    totRow('TOTAL', '$'+money(order.total), true);
+  }
+
+  const payLabel = (PAYMENT_METHODS.find(p=>p.id===order.paymentType)||{}).label;
+  if(!hidePricing && payLabel){ y+=2; doc.setFont(undefined,'normal'); doc.setFontSize(9); doc.text('Payment: '+payLabel, 14, y); y+=6; }
+  if(order.notes){ doc.setFontSize(9); const noteLines = doc.splitTextToSize('Notes: '+order.notes, pageW-28); if(y + 5*noteLines.length > bottom){ doc.addPage(); y=20; } doc.text(noteLines,14,y); y += 5*noteLines.length; }
+
+  // Order id sits below everything else (never on top of Payment/Notes)
+  doc.setFontSize(8); doc.setTextColor(150,150,150);
+  if(y + 6 > bottom + 8){ doc.addPage(); y=20; }
+  doc.text('Order id: '+orderId, 14, Math.max(y+6, bottom+6));
+
+  return doc;
+}
+
+window.renderPrintCenter=renderPrintCenter; window._pcSet=_pcSet; window._pcToggleSkip=_pcToggleSkip; window._pcRun=_pcRun;
 
 // ─────────────────────────────────────────────────────────────
 // CONTRACT (e-signable). Client signs remotely via sign.html.
