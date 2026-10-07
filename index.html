@@ -1241,10 +1241,36 @@ function changeInquiryStage(id, newStage){
 window.changeInquiryStage = changeInquiryStage;
 
 // Firebase save helpers
+// ── File lists are protected from stale saves ──
+// Saving a record replaces the whole document. If a screen (another tab or
+// computer) still holds an older copy, its save would wipe files added since.
+// So before every save, file lists are merged with what is stored: files on
+// either side are kept, a renamed file keeps its newest name, and a removed
+// file stays removed (its link is listed in _removedFiles).
+const _FILE_FIELDS = ['otherUploadFiles','otherUpload2Files','otherUpload3Files','linenFiles','floorplanFiles','insuranceFiles','eventPhotoFiles'];
+function _fileTs(f){ return Number(f && (f.renamedAt || f.addedAt)) || 0; }
+function _mergeFileLists(rec, stored){
+  if(!rec || !stored) return;
+  const removed = new Set([...(Array.isArray(stored._removedFiles)?stored._removedFiles:[]), ...(Array.isArray(rec._removedFiles)?rec._removedFiles:[])]);
+  if(removed.size) rec._removedFiles = [...removed].slice(-500);
+  _FILE_FIELDS.forEach(field=>{
+    const a = Array.isArray(stored[field]) ? stored[field] : [];
+    const b = Array.isArray(rec[field]) ? rec[field] : [];
+    if(!a.length && !b.length) return;
+    const out = [], idx = {};
+    a.concat(b).forEach(f=>{
+      if(!f || !f.url || removed.has(f.url)) return;
+      if(idx[f.url]===undefined){ idx[f.url]=out.length; out.push(f); }
+      else if(_fileTs(f) > _fileTs(out[idx[f.url]])) out[idx[f.url]] = f;
+    });
+    rec[field] = out;
+  });
+}
 async function _saveEvent(e){ 
   try{ 
     if(!db) throw new Error('Database not connected yet');
     _actOnSaveEvent(e);
+    try{ const snap = await db.collection('events').doc(e.id).get(); if(snap.exists) _mergeFileLists(e, snap.data()||{}); }catch(_){}
     await db.collection('events').doc(e.id).set(e); 
     showToast('Saved ✓'); 
   }catch(err){ 
@@ -1263,10 +1289,11 @@ async function _saveInquiry(i){
     const ref = db.collection('inquiries').doc(i.id);
     const incomingHasMenus = Array.isArray(i.menus) && i.menus.length > 0;
     const incomingHasLink  = !!i.menuLink;
-    if(!incomingHasMenus || !incomingHasLink){
+    {
       try{
         const snap = await ref.get();
         const prev = snap.exists ? (snap.data()||{}) : {};
+        _mergeFileLists(i, prev);
         if(!incomingHasMenus && Array.isArray(prev.menus) && prev.menus.length>0){
           i.menus = prev.menus;
         }
@@ -7849,6 +7876,7 @@ function openOtherUploads(inqId, n){
     if(!Array.isArray(inq.otherUploadFiles)) inq.otherUploadFiles = [];
     const have = new Set(inq.otherUploadFiles.map(f=>f.url));
     ev.otherUploadFiles.forEach(f=>{ if(!have.has(f.url)) inq.otherUploadFiles.push(f); });
+    ev._removedFiles = (Array.isArray(ev._removedFiles)?ev._removedFiles:[]).concat(ev.otherUploadFiles.map(f=>f.url).filter(Boolean));
     ev.otherUploadFiles = [];
     _saveInquiry(inq); _saveEvent(ev);
   }
@@ -7962,6 +7990,7 @@ function renameMultiAttachFile(eventId, field, label, idx, kind){
   const next = nn.trim().slice(0,80);
   if(!next || next===old) return;
   f.name = next;
+  f.renamedAt = Date.now();
   _maSave(e, kind);
   _maRenderList(eventId, field, label, kind);
   render();
@@ -7970,7 +7999,8 @@ function removeMultiAttachFile(eventId, field, label, idx, kind){
   if(!confirm('Remove this file?')) return;
   const e = _maRec(eventId, kind); if(!e) return;
   if(!Array.isArray(e[field])) return;
-  e[field].splice(idx,1);
+  const gone = e[field].splice(idx,1)[0];
+  if(gone && gone.url){ e._removedFiles = (Array.isArray(e._removedFiles)?e._removedFiles:[]).concat(gone.url); }
   _maSave(e, kind);
   _maRenderList(eventId, field, label, kind);
   render();
