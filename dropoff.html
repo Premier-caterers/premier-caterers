@@ -1167,9 +1167,29 @@ function orderDisplayNumber(order){ return order.subLabel || 'Unlinked'; }
 // in the Premier Caterers apps). Returns the jsPDF doc object — callers
 // either .save() it for a browser download or pull its base64 data for
 // an email attachment.
+// Delivery date + time as people read it: "Friday, Oct 9, 2026 · 2:30 PM".
+// Used on both PDF copies (client + kitchen) and the order emails.
+function deliveryWhenText(order){
+  const d = String(order.deliveryDate||'').trim();
+  let out = d;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(d)){
+    const dt = new Date(d+'T12:00:00');
+    if(!isNaN(dt)) out = dt.toLocaleDateString('en-US',{weekday:'long', month:'short', day:'numeric', year:'numeric'});
+  }
+  let t = String(order.deliveryTime||'').trim();
+  const m = t.match(/^(\d{1,2}):(\d{2})$/);
+  if(m){ let h=parseInt(m[1],10); const ap=h>=12?'PM':'AM'; h=h%12||12; t=h+':'+m[2]+' '+ap; }
+  return [out, t].filter(Boolean).join(' \u00b7 ');
+}
+function deliveryWhenHtml(order){
+  const txt = deliveryWhenText(order);
+  return txt ? '<span style="background:#FFE066;font-weight:bold;color:#000;padding:2px 6px;border-radius:3px">'+esc(txt)+'</span>' : '';
+}
 function generateOrderPdf(order, orderId, hidePricing){
-  const doc = new jspdf.jsPDF();
+  const doc = new jspdf.jsPDF({format:'letter'});
   const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const bottom = pageH - 16;
   let y = 18;
 
   doc.setFontSize(16); doc.setFont(undefined,'bold');
@@ -1200,7 +1220,16 @@ function generateOrderPdf(order, orderId, hidePricing){
   infoLine('Client', order.contactName);
   if(!hidePricing) infoLine('Email', order.contactEmail);
   infoLine('Phone', order.contactPhone);
-  infoLine('Delivery', (order.deliveryDate||'')+' '+(order.deliveryTime||''));
+  const _when = deliveryWhenText(order);
+  if(_when){
+    doc.setFont(undefined,'bold'); doc.setFontSize(10); doc.setTextColor(60,60,60); doc.text('Delivery:',14,y);
+    doc.setFontSize(11.5); doc.setTextColor(0,0,0);
+    const ww = doc.getTextWidth(_when);
+    doc.setFillColor(255,224,102); doc.rect(43.5, y-4.6, ww+3, 6.4, 'F');
+    doc.text(_when, 45, y);
+    doc.setFont(undefined,'normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+    y += 7;
+  }
   infoLine('Location', (order.locationName||'')+(order.address?(', '+order.address):''));
   y += 4;
 
@@ -1211,19 +1240,33 @@ function generateOrderPdf(order, orderId, hidePricing){
   if(!hidePricing) doc.text('TOTAL',pageW-14,y,{align:'right'});
   y += 5; doc.line(14,y,pageW-14,y); y += 6;
   doc.setFont(undefined,'normal');
-  (order.lines||[]).forEach(l=>{
-    if(y>270){ doc.addPage(); y=20; }
+  (order.lines||[]).forEach((l,idx)=>{
+    // Measure the whole row first (name + every note line) so nothing overlaps
+    doc.setFontSize(10);
+    const nameLines = doc.splitTextToSize(String(l.itemName||''), 85);
+    doc.setFontSize(9.5);
+    const noteLines = l.note ? doc.splitTextToSize('Note: '+String(l.note).replace(/\r/g,'').trim(), 88) : [];
+    const rowH = 5*nameLines.length + (noteLines.length ? 1 + 4.6*noteLines.length : 0) + 2;
+    if(y + rowH > bottom - 4){ doc.addPage(); y=20; }
+    if(idx>0){ doc.setDrawColor(232,232,232); doc.line(14,y-4.5,pageW-14,y-4.5); }
+    doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(0,0,0);
     doc.text(String(l.qty),14,y);
-    const nameLines = doc.splitTextToSize(l.itemName, 85);
     doc.text(nameLines,30,y);
     doc.text(l.sizeLabel||'',120,y);
     if(!hidePricing) doc.text('$'+money(l.price*l.qty), pageW-14, y, {align:'right'});
     y += 5*nameLines.length;
-    if(l.note){ doc.setTextColor(122,46,61); doc.setFontSize(8); doc.text('Note: '+l.note,30,y); doc.setFontSize(10); doc.setTextColor(0,0,0); y+=5; }
-    y += 2;
+    if(noteLines.length){
+      y += 1;
+      doc.setFont(undefined,'bold'); doc.setFontSize(9.5); doc.setTextColor(122,46,61);
+      noteLines.forEach(t=>{ doc.text(t,30,y); y+=4.6; });
+      doc.setFont(undefined,'normal'); doc.setFontSize(10); doc.setTextColor(0,0,0);
+    }
+    y += 4;
   });
+  doc.setDrawColor(200,200,200);
   y += 4; doc.line(14,y,pageW-14,y); y += 8;
 
+  if(!hidePricing && y + 45 > bottom){ doc.addPage(); y=20; }
   if(!hidePricing){
     const totRow = (label,val,bold)=>{
       if(bold) doc.setFont(undefined,'bold'); else doc.setFont(undefined,'normal');
@@ -1241,10 +1284,12 @@ function generateOrderPdf(order, orderId, hidePricing){
 
   const payLabel = (PAYMENT_METHODS.find(p=>p.id===order.paymentType)||{}).label;
   if(!hidePricing && payLabel){ y+=2; doc.setFont(undefined,'normal'); doc.setFontSize(9); doc.text('Payment: '+payLabel, 14, y); y+=6; }
-  if(order.notes){ doc.setFontSize(9); const noteLines = doc.splitTextToSize('Notes: '+order.notes, pageW-28); doc.text(noteLines,14,y); y += 5*noteLines.length; }
+  if(order.notes){ doc.setFontSize(9); const noteLines = doc.splitTextToSize('Notes: '+order.notes, pageW-28); if(y + 5*noteLines.length > bottom){ doc.addPage(); y=20; } doc.text(noteLines,14,y); y += 5*noteLines.length; }
 
+  // Order id sits below everything else (never on top of Payment/Notes)
   doc.setFontSize(8); doc.setTextColor(150,150,150);
-  doc.text('Order id: '+orderId, 14, 290);
+  if(y + 6 > bottom + 8){ doc.addPage(); y=20; }
+  doc.text('Order id: '+orderId, 14, Math.max(y+6, bottom+6));
 
   return doc;
 }
@@ -1597,7 +1642,7 @@ async function sendOrderPlacedEmail(order, orderId){
     + infoRow('Client', order.contactName)
     + infoRow('Email', order.contactEmail)
     + infoRow('Phone', order.contactPhone)
-    + infoRow('Delivery', (order.deliveryDate||'')+' '+(order.deliveryTime||''))
+    + (deliveryWhenText(order) ? '<tr><td style="padding:5px 12px 5px 0;color:#666;white-space:nowrap;vertical-align:top">Delivery</td><td style="padding:5px 0">'+deliveryWhenHtml(order)+'</td></tr>' : '')
     + infoRow('Location', (order.locationName||'')+(order.address ? (', '+order.address) : ''))
     + infoRow('Notes', order.notes)
     + '</table>'
@@ -1618,7 +1663,7 @@ async function sendOrderPlacedEmail(order, orderId){
   const plainBody = 'A new drop-off order was placed.\n\n'+
     'Order: '+orderDisplayNumber(order)+'\n\n'+
     'Client: '+order.contactName+' ('+order.contactEmail+', '+order.contactPhone+')\n'+
-    'Delivery: '+order.deliveryDate+' '+order.deliveryTime+' — '+order.locationName+', '+order.address+'\n\n'+
+    'Delivery: '+deliveryWhenText(order)+' — '+order.locationName+', '+order.address+'\n\n'+
     'Items:\n'+itemSummary+
     (order.notes ? ('\n\nNotes: '+order.notes) : '')+
     '\n\nTotal: $'+money(order.total)+
@@ -1716,7 +1761,7 @@ async function sendClientConfirmationEmail(order, orderId){
     + emailBreakdownHtml(order)
     + '<div style="text-align:right;margin-top:8px;font-size:16px;font-weight:bold;color:#7A2E3D">Total: $'+money(order.total)+'</div>'
     + '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:18px;border-top:1px solid #eee;padding-top:10px">'
-    + (order.deliveryDate ? '<tr><td style="padding:5px 12px 5px 0;color:#666;white-space:nowrap">Delivery</td><td style="padding:5px 0;font-weight:500;color:#222">'+esc(order.deliveryDate)+' '+esc(order.deliveryTime||'')+'</td></tr>' : '')
+    + (order.deliveryDate ? '<tr><td style="padding:5px 12px 5px 0;color:#666;white-space:nowrap">Delivery</td><td style="padding:5px 0">'+deliveryWhenHtml(order)+'</td></tr>' : '')
     + (order.locationName || order.address ? '<tr><td style="padding:5px 12px 5px 0;color:#666;white-space:nowrap;vertical-align:top">Location</td><td style="padding:5px 0;font-weight:500;color:#222">'+esc(order.locationName||'')+(order.address?(', '+esc(order.address)):'')+'</td></tr>' : '')
     + '</table>'
     + orderLinksHtml(orderId)
@@ -1728,7 +1773,7 @@ async function sendClientConfirmationEmail(order, orderId){
     'Order: '+orderDisplayNumber(order)+'\n\n'+
     'Items:\n'+itemSummary+
     '\n\nTotal: $'+money(order.total)+
-    (order.deliveryDate ? ('\n\nDelivery: '+order.deliveryDate+' '+(order.deliveryTime||'')) : '')+
+    (order.deliveryDate ? ('\n\nDelivery: '+deliveryWhenText(order)) : '')+
     (order.locationName||order.address ? ('\nLocation: '+(order.locationName||'')+(order.address?(', '+order.address):'')) : '')+
     '\n\nView or edit your order: '+APP_URL+'?order='+encodeURIComponent(orderId)+
     '\n\nQuestions? Just reply to this email.';
