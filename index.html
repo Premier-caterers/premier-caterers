@@ -14288,13 +14288,20 @@ function _pcItems(doc){
   // yet (booked/linked drop-offs are already events, so they aren't listed twice).
   const r=_pcRangeDates();
   const evItems=_pcEvents().map(e=>({id:e.id, date:_pcEventDate(e), time:'', job:_pcJob(e), name:e.name||'Event', obj:e}));
-  const doItems=(dropOffOrders||[]).filter(o=>o.status==='submitted' && !o.bookedEventId && !o.linkedEventId && o.deliveryDate && o.deliveryDate>=r.from && o.deliveryDate<=r.to)
-    .map(o=>({id:o.id, date:o.deliveryDate, time:o.deliveryTime||'', job:_pcDoJob(o), name:(o.contactName||'Drop-off')+(o.locationName?(' \u2014 '+o.locationName):'')+(o.approved===false?' (awaiting approval)':''), obj:o, drop:true}));
+  // A drop-off is left out ONLY when its own booked event is already in this list.
+  // Orders linked into a bigger event (e.g. #6c inside #06) are still listed —
+  // they get their own order sheet / labels, but never a second invoice.
+  const evIds={}; evItems.forEach(it=>{ evIds[it.id]=1; });
+  const doItems=(dropOffOrders||[]).filter(o=>o.status==='submitted' && o.deliveryDate && o.deliveryDate>=r.from && o.deliveryDate<=r.to && !(o.bookedEventId && evIds[o.bookedEventId]))
+    .map(o=>({id:o.id, date:o.deliveryDate, time:o.deliveryTime||'', job:_pcDoJob(o), name:(o.contactName||'Drop-off')+(o.locationName?(' \u2014 '+o.locationName):'')+(o.approved===false?' (awaiting approval)':''), obj:o, drop:true, linked:!!(o.linkedEventId && evIds[o.linkedEventId])}));
   return evItems.concat(doItems).sort((a,b)=>(a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||''));
 }
 // What prints for a not-yet-booked drop-off order under each document type.
 const _PC_DROP_AS = { invoice:'client', menu:'client', grocery:'kitchen', beo:'kitchen', checklist:'kitchen', foodlabels:'label' };
-function _pcHas(doc, it){ return it.drop && !doc.dropoff ? !!_PC_DROP_AS[doc.k] : doc.has(it.obj); }
+function _pcHas(doc, it){
+  if(it.drop && !doc.dropoff){ if(it.linked && (doc.k==='invoice'||doc.k==='menu')) return false; return !!_PC_DROP_AS[doc.k]; }
+  return doc.has(it.obj);
+}
 function _pcDocsForRole(){ const role=roles[currentRole]||{}; return PC_DOCS.filter(d=>!d.money || role.canViewInvoices); }
 function _pcSet(k,v){ _pcState[k]=v; if(k==='range'||k==='from'||k==='to') _pcState.skip={}; render(); }
 function _pcToggleSkip(id, on){ if(on) delete _pcState.skip[id]; else _pcState.skip[id]=true; render(); }
@@ -14323,7 +14330,7 @@ function renderPrintCenter(){
   </div></div>`;
 
   h+=`<div class="cf-panel"><div class="cf-panel__body" style="padding:16px 18px">
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:8px">3 \u00b7 ${doc&&doc.dropoff?'Drop-off orders':'Events'} in range <span style="text-transform:none;letter-spacing:0;font-weight:500">\u2014 uncheck any to leave out</span></div>`;
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:8px">3 \u00b7 ${doc&&doc.dropoff?'Drop-off orders':'Events and drop-offs'} in range <span style="text-transform:none;letter-spacing:0;font-weight:500">\u2014 uncheck any to leave out</span></div>`;
   if(!list.length){
     h+=`<div class="u-empty-state" style="padding:18px 0"><i class="ti ti-calendar-off" aria-hidden="true"></i><div class="u-empty-state__t">${doc&&doc.dropoff?'No drop-off orders':'No booked events'} in this range</div><div class="u-empty-state__s">Try another week or pick dates.</div></div>`;
   } else {
@@ -14403,7 +14410,7 @@ async function _pcRun(mode){
   const lab=_pcRangeLabel();
   const all=_pcItems(doc).filter(it=>!s.skip[it.id]);
   const todo=all.filter(it=>_pcHas(doc,it));
-  const skipped=all.filter(it=>!_pcHas(doc,it)).map(it=>({date:_pcFmt(it.date,false), job:it.job, name:it.name, why:(it.drop?'drop-off order \u2014 has no ':'no ')+doc.label.toLowerCase()+(it.drop?'':' on file')}));
+  const skipped=all.filter(it=>!_pcHas(doc,it)).map(it=>({date:_pcFmt(it.date,false), job:it.job, name:it.name, why:(it.linked&&(doc.k==='invoice'||doc.k==='menu'))?'drop-off that is part of a bigger event \u2014 it is on that event\u2019s '+doc.label.toLowerCase():(it.drop?'drop-off order \u2014 has no ':'no ')+doc.label.toLowerCase()+(it.drop?'':' on file')}));
   if(!todo.length){ alert('Nothing in this range has a '+doc.label.toLowerCase()+' to print.'); return; }
   let to='';
   if(mode==='commissary'){
