@@ -14385,22 +14385,45 @@ function _pcDrawCover(jsdoc, info){
   y+=24; jsdoc.setFont('helvetica','normal'); jsdoc.setFontSize(11); T([90,90,90]);
   jsdoc.text(info.rows.length+' '+info.noun+(info.rows.length===1?'':'s')+' included   \u00b7   '+info.copies+' cop'+(info.copies===1?'y':'ies')+' each'+(info.totalPages?('   \u00b7   '+info.totalPages+' pages after this one'):''), ML, y);
   y+=26; jsdoc.setDrawColor(200,200,200); jsdoc.setLineWidth(0.8); jsdoc.line(ML,y,MR,y); y+=18;
-  const cols={n:ML, date:ML+28, job:ML+128, name:ML+200, pg:MR};
+  const M=!!info.money;
+  const $=n=>'$'+(Math.round((n||0)*100)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const cols = M ? {n:ML, date:ML+18, job:ML+80, name:ML+146, tot:MR-168, paid:MR-88, bal:MR, pg:MR-150}
+                 : {n:ML, date:ML+28, job:ML+128, name:ML+200, pg:MR};
   const head=()=>{ jsdoc.setFont('helvetica','bold'); jsdoc.setFontSize(9); T([120,120,120]);
-    jsdoc.text('#',cols.n,y); jsdoc.text('DATE',cols.date,y); jsdoc.text('JOB #',cols.job,y); jsdoc.text('EVENT',cols.name,y); jsdoc.text('PAGES',cols.pg,y,{align:'right'}); y+=8; jsdoc.line(ML,y,MR,y); y+=16; };
+    jsdoc.text('#',cols.n,y); jsdoc.text('DATE',cols.date,y); jsdoc.text('JOB #',cols.job,y); jsdoc.text('EVENT',cols.name,y);
+    if(M){ jsdoc.text('INVOICE TOTAL',cols.tot,y,{align:'right'}); jsdoc.text('PAID',cols.paid,y,{align:'right'}); jsdoc.text('BALANCE DUE',cols.bal,y,{align:'right'}); }
+    else jsdoc.text('PAGES',cols.pg,y,{align:'right'});
+    y+=8; jsdoc.line(ML,y,MR,y); y+=16; };
   head();
   info.rows.forEach((r,i)=>{
-    jsdoc.setFont('helvetica','normal'); jsdoc.setFontSize(11);
-    const nameLines=jsdoc.splitTextToSize(r.name, cols.pg-40-cols.name);
+    jsdoc.setFont('helvetica','normal'); jsdoc.setFontSize(M?10:11);
+    const nameLines=jsdoc.splitTextToSize(r.name, M ? (cols.tot-70-cols.name) : (cols.pg-40-cols.name));
     const rh=Math.max(1,nameLines.length)*14+6;
     if(y+rh>742){ jsdoc.addPage(); y=60; head(); }
     T([150,150,150]); jsdoc.text(String(i+1),cols.n,y);
-    T([60,60,60]); jsdoc.text(r.date,cols.date,y);
-    jsdoc.setFont('helvetica','bold'); T([0,0,0]); jsdoc.setFontSize(12); jsdoc.text(r.job||'\u2014',cols.job,y);
-    jsdoc.setFont('helvetica','normal'); jsdoc.setFontSize(11); jsdoc.text(nameLines,cols.name,y);
-    T([90,90,90]); jsdoc.text(String(r.pages||''),cols.pg,y,{align:'right'});
+    T([60,60,60]); jsdoc.setFontSize(M?10:11); jsdoc.text(r.date,cols.date,y);
+    jsdoc.setFont('helvetica','bold'); T([0,0,0]); jsdoc.setFontSize(M?(String(r.job||'').length>5?9:11):12); jsdoc.text(r.job||'\u2014',cols.job,y);
+    jsdoc.setFont('helvetica','normal'); jsdoc.setFontSize(M?10:11); jsdoc.text(nameLines,cols.name,y);
+    if(M){
+      const tot=r.total||0, paid=(r.paid==null?0:r.paid), bal=tot-paid;
+      T([30,30,30]); jsdoc.text($(tot),cols.tot,y,{align:'right'});
+      T([90,90,90]); jsdoc.text(r.paid==null?'\u2014':$(paid),cols.paid,y,{align:'right'});
+      if(bal>0.01){ jsdoc.setFont('helvetica','bold'); T([0,0,0]); } else { T([90,90,90]); }
+      jsdoc.text(bal>0.01?$(bal):'Paid',cols.bal,y,{align:'right'}); jsdoc.setFont('helvetica','normal');
+    } else { T([90,90,90]); jsdoc.text(String(r.pages||''),cols.pg,y,{align:'right'}); }
     y+=rh; jsdoc.setDrawColor(232,232,232); jsdoc.line(ML,y-11,MR,y-11);
   });
+  if(M && info.rows.length){
+    const T1=info.rows.reduce((a,r)=>a+(r.total||0),0), P1=info.rows.reduce((a,r)=>a+(r.paid||0),0), B1=T1-P1;
+    if(y+40>742){ jsdoc.addPage(); y=60; }
+    y-=4; jsdoc.setDrawColor(40,40,40); jsdoc.setLineWidth(1.2); jsdoc.line(ML,y-10,MR,y-10); jsdoc.setLineWidth(0.8);
+    y+=6; jsdoc.setFont('helvetica','bold'); jsdoc.setFontSize(11); T([0,0,0]);
+    { const bw=jsdoc.getTextWidth($(B1)); jsdoc.setFillColor(255,224,102); jsdoc.rect(cols.bal-bw-5, y-12, bw+9, 17, 'F'); }
+    jsdoc.text('TOTAL \u2014 '+info.rows.length+' '+info.noun+(info.rows.length===1?'':'s'), cols.name, y);
+    jsdoc.text($(T1),cols.tot,y,{align:'right'}); jsdoc.text($(P1),cols.paid,y,{align:'right'}); jsdoc.text($(B1),cols.bal,y,{align:'right'});
+    y+=20;
+    if(info.rows.some(r=>r.paid==null)){ jsdoc.setFont('helvetica','normal'); jsdoc.setFontSize(8.5); T([120,120,120]); jsdoc.text('\u2014 = drop-off order not booked yet; payments for it are not tracked in this app, so its full amount shows as due.', ML, y); y+=14; }
+  }
   if(info.skipped.length){
     y+=10; if(y+40>742){ jsdoc.addPage(); y=60; }
     jsdoc.setFont('helvetica','bold'); jsdoc.setFontSize(11); T([170,60,40]);
@@ -14454,12 +14477,17 @@ async function _pcRun(mode){
         if((res.failed||[]).indexOf(doc.k)>=0){ skipped.push(Object.assign(row,{why:'could not pull the file \u2014 check the link'})); continue; }
         const src=await PDFDocument.load(res.bytes);
         row.pages=src.getPageCount(); parts.push(src); rows.push(row);
+        if(doc.k==='invoice' || doc.k==='dropoffClient'){
+          // Same numbers the invoice screen shows: total = grand total, paid = payments recorded.
+          if(it.drop || doc.dropoff){ row.total=parseFloat(e.total)||0; row.paid=null; }
+          else { let t=0,p=0; _ppEventInvoiceSlots(it.id).forEach(k=>{ const v=invoices[k]; if(!v) return; t+=calcInvoiceTotals(v).grand; p+=parseFloat(v.deposit||0); }); row.total=t; row.paid=p; }
+        }
       }catch(err){ console.error('print center: '+it.id, err); skipped.push(Object.assign(row,{why:'could not build ('+((err&&err.message)||'error')+')'})); }
     }
     if(!parts.length){ _pcProgress(null); alert('Nothing could be built \u2014 every event was skipped. Check that your Apps Script URL is saved in Settings.'); return; }
     _pcProgress('Putting it all together\u2026');
     const { jsPDF }=window.jspdf; const cv=new jsPDF({unit:'pt',format:'letter'});
-    _pcDrawCover(cv, {logo:await _flLogoSize(), docLabel:doc.label, rangeName:lab.name, span:lab.span, copies:s.copies, rows, skipped, noun:(doc.dropoff?'order':'job'), totalPages:rows.reduce((a,r)=>a+(r.pages||0),0)});
+    _pcDrawCover(cv, {logo:await _flLogoSize(), docLabel:doc.label, rangeName:lab.name, span:lab.span, copies:s.copies, rows, skipped, money:(doc.k==='invoice'||doc.k==='dropoffClient'), noun:(doc.dropoff?'order':'job'), totalPages:rows.reduce((a,r)=>a+(r.pages||0),0)});
     const merged=await PDFDocument.create();
     for(const src of [await PDFDocument.load(cv.output('arraybuffer'))].concat(parts)){ (await merged.copyPages(src, src.getPageIndices())).forEach(p=>merged.addPage(p)); }
     const bytes=await merged.save();
