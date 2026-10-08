@@ -14284,8 +14284,17 @@ function _pcItems(doc){
       .sort((a,b)=>(a.deliveryDate||'').localeCompare(b.deliveryDate||'') || (a.deliveryTime||'').localeCompare(b.deliveryTime||''))
       .map(o=>({id:o.id, date:o.deliveryDate, job:_pcDoJob(o), name:(o.contactName||'Drop-off')+(o.locationName?(' \u2014 '+o.locationName):'')+(o.approved===false?' (awaiting approval)':''), obj:o}));
   }
-  return _pcEvents().map(e=>({id:e.id, date:_pcEventDate(e), job:_pcJob(e), name:e.name||'Event', obj:e}));
+  // Every event in range PLUS every drop-off order in range that isn't an event
+  // yet (booked/linked drop-offs are already events, so they aren't listed twice).
+  const r=_pcRangeDates();
+  const evItems=_pcEvents().map(e=>({id:e.id, date:_pcEventDate(e), time:'', job:_pcJob(e), name:e.name||'Event', obj:e}));
+  const doItems=(dropOffOrders||[]).filter(o=>o.status==='submitted' && !o.bookedEventId && !o.linkedEventId && o.deliveryDate && o.deliveryDate>=r.from && o.deliveryDate<=r.to)
+    .map(o=>({id:o.id, date:o.deliveryDate, time:o.deliveryTime||'', job:_pcDoJob(o), name:(o.contactName||'Drop-off')+(o.locationName?(' \u2014 '+o.locationName):'')+(o.approved===false?' (awaiting approval)':''), obj:o, drop:true}));
+  return evItems.concat(doItems).sort((a,b)=>(a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||''));
 }
+// What prints for a not-yet-booked drop-off order under each document type.
+const _PC_DROP_AS = { invoice:'client', menu:'client', grocery:'kitchen', beo:'kitchen', checklist:'kitchen', foodlabels:'label' };
+function _pcHas(doc, it){ return it.drop && !doc.dropoff ? !!_PC_DROP_AS[doc.k] : doc.has(it.obj); }
 function _pcDocsForRole(){ const role=roles[currentRole]||{}; return PC_DOCS.filter(d=>!d.money || role.canViewInvoices); }
 function _pcSet(k,v){ _pcState[k]=v; if(k==='range'||k==='from'||k==='to') _pcState.skip={}; render(); }
 function _pcToggleSkip(id, on){ if(on) delete _pcState.skip[id]; else _pcState.skip[id]=true; render(); }
@@ -14319,7 +14328,7 @@ function renderPrintCenter(){
     h+=`<div class="u-empty-state" style="padding:18px 0"><i class="ti ti-calendar-off" aria-hidden="true"></i><div class="u-empty-state__t">${doc&&doc.dropoff?'No drop-off orders':'No booked events'} in this range</div><div class="u-empty-state__s">Try another week or pick dates.</div></div>`;
   } else {
     h+=`<div style="border:1px solid #e9e4dc;border-radius:10px;overflow:hidden">`+list.map((it,i)=>{
-      const e=it.obj; const inc=!s.skip[it.id]; const ok=doc?doc.has(e):null;
+      const e=it.obj; const inc=!s.skip[it.id]; const ok=doc?_pcHas(doc,it):null;
       const st = !doc ? '' : ok
         ? '<span style="color:var(--green-text);font-size:12.5px;font-weight:600"><i class="ti ti-circle-check" style="font-size:14px;vertical-align:-2px"></i> On file</span>'
         : '<span style="color:var(--coral-text);font-size:12.5px;font-weight:600;border-bottom:1.5px dashed currentColor"><i class="ti ti-alert-triangle" style="font-size:14px;vertical-align:-2px"></i> None on file \u2014 will be skipped</span>';
@@ -14327,10 +14336,10 @@ function renderPrintCenter(){
         <input type="checkbox" ${inc?'checked':''} onchange="_pcToggleSkip('${it.id}',this.checked)" style="width:17px;height:17px;accent-color:var(--maroon)">
         <span style="width:96px;font-size:12.5px;color:var(--text3)">${pcEsc(_pcFmt(it.date,false))}</span>
         <span style="width:72px;font-weight:700;font-size:13px">${pcEsc(it.job)}</span>
-        <span style="flex:1;font-size:13.5px">${pcEsc(it.name)}</span>${st}</label>`;
+        <span style="flex:1;font-size:13.5px">${it.drop&&!(doc&&doc.dropoff)?'<i class="ti ti-truck-delivery" style="font-size:15px;vertical-align:-2px;color:var(--text3)" title="Drop-off order"></i> ':''}${pcEsc(it.name)}${it.drop&&!(doc&&doc.dropoff)?' <span style="font-size:11.5px;color:var(--text3)">\u00b7 drop-off</span>':''}</span>${st}</label>`;
     }).join('')+`</div>`;
   }
-  const n=list.filter(it=>!s.skip[it.id] && (!doc || doc.has(it.obj))).length;
+  const n=list.filter(it=>!s.skip[it.id] && (!doc || _pcHas(doc,it))).length;
   const dis=(!doc||!n);
   h+=`<div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;justify-content:flex-end;margin-top:14px">
       <span style="margin-right:auto;font-size:13px;color:var(--text3)">${!doc?'Pick a document above':(n+(doc.dropoff?' order':' event')+(n===1?'':'s')+' will print'+(doc.slow&&n>3?' \u00b7 pulling Google Docs can take a minute':''))}</span>
@@ -14393,8 +14402,8 @@ async function _pcRun(mode){
   if(!doc){ alert('Pick a document first.'); return; }
   const lab=_pcRangeLabel();
   const all=_pcItems(doc).filter(it=>!s.skip[it.id]);
-  const todo=all.filter(it=>doc.has(it.obj));
-  const skipped=all.filter(it=>!doc.has(it.obj)).map(it=>({date:_pcFmt(it.date,false), job:it.job, name:it.name, why:'no '+doc.label.toLowerCase()+' on file'}));
+  const todo=all.filter(it=>_pcHas(doc,it));
+  const skipped=all.filter(it=>!_pcHas(doc,it)).map(it=>({date:_pcFmt(it.date,false), job:it.job, name:it.name, why:(it.drop?'drop-off order \u2014 has no ':'no ')+doc.label.toLowerCase()+(it.drop?'':' on file')}));
   if(!todo.length){ alert('Nothing in this range has a '+doc.label.toLowerCase()+' to print.'); return; }
   let to='';
   if(mode==='commissary'){
@@ -14415,8 +14424,15 @@ async function _pcRun(mode){
       const opts={}; opts[doc.k]=true; opts[_PC_COPYKEY[doc.k]]=copies;
       try{
         let res;
-        if(doc.dropoff){
-          const one=await PDFDocument.load(_pcDropoffPdfDoc(e, it.id, doc.k==='dropoffKitchen').output('arraybuffer'));
+        let dropAs = doc.dropoff ? (doc.k==='dropoffKitchen'?'kitchen':'client') : (it.drop ? _PC_DROP_AS[doc.k] : '');
+        if(dropAs==='client' && doc.k==='menu' && !((roles[currentRole]||{}).canViewInvoices)) dropAs='kitchen';   // no prices for staff who can't see invoices
+        if(dropAs==='label'){
+          const o=e; const day=(function(){ try{ return new Date(o.deliveryDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long'}); }catch(_){ return ''; } })();
+          const where=[o.locationName,o.address].filter(Boolean).join(', ');
+          const lines=['Job '+it.job, [day,where].filter(Boolean).join(' - ')].filter(Boolean);
+          res={bytes:await buildFoodLabelPdfBytes(lines, copies), failed:[]};
+        } else if(dropAs){
+          const one=await PDFDocument.load(_pcDropoffPdfDoc(e, it.id, dropAs==='kitchen').output('arraybuffer'));
           const multi=await PDFDocument.create();
           for(let c=0;c<copies;c++){ (await multi.copyPages(one, one.getPageIndices())).forEach(p=>multi.addPage(p)); }
           res={bytes:await multi.save(), failed:[]};
@@ -14429,7 +14445,7 @@ async function _pcRun(mode){
     if(!parts.length){ _pcProgress(null); alert('Nothing could be built \u2014 every event was skipped. Check that your Apps Script URL is saved in Settings.'); return; }
     _pcProgress('Putting it all together\u2026');
     const { jsPDF }=window.jspdf; const cv=new jsPDF({unit:'pt',format:'letter'});
-    _pcDrawCover(cv, {logo:await _flLogoSize(), docLabel:doc.label, rangeName:lab.name, span:lab.span, copies:s.copies, rows, skipped, noun:(doc.dropoff?'order':'event'), totalPages:rows.reduce((a,r)=>a+(r.pages||0),0)});
+    _pcDrawCover(cv, {logo:await _flLogoSize(), docLabel:doc.label, rangeName:lab.name, span:lab.span, copies:s.copies, rows, skipped, noun:(doc.dropoff?'order':'job'), totalPages:rows.reduce((a,r)=>a+(r.pages||0),0)});
     const merged=await PDFDocument.create();
     for(const src of [await PDFDocument.load(cv.output('arraybuffer'))].concat(parts)){ (await merged.copyPages(src, src.getPageIndices())).forEach(p=>merged.addPage(p)); }
     const bytes=await merged.save();
