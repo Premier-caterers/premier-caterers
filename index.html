@@ -1479,6 +1479,10 @@ function startFirebaseListeners(){
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
   invoicesCol.onSnapshot( snap=>{
     invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); });
+    // The drop-off app used to create invoices with status 'estimate', which this
+    // app doesn't know — so no Approve / Convert buttons showed. Treat any unknown
+    // status as a quote (in memory only; it's saved properly on the next Save).
+    try{ Object.keys(invoices).forEach(k=>{ const v=invoices[k]; if(v && ['none','quote','approved','invoice','paid'].indexOf(v.status)<0) v.status='quote'; }); }catch(e){}
     try{ Object.keys(invoices).forEach(k=>{ _actPrevInv[k]=JSON.parse(JSON.stringify(invoices[k])); }); }catch(e){}
     if(currentView==='invoices'||currentView==='pipeline'||currentView==='events') render();
     try{ if(typeof syncHubDrawer==='function') syncHubDrawer(); }catch(e){}
@@ -12103,7 +12107,7 @@ function renderInvoiceDetail(scrollToView){
     <div style="background:var(--bg2);border-radius:var(--radius);padding:.75rem 1rem;margin-bottom:1rem;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:13px">
       <div><span class="inv-lbl">${isInvoice?'Invoice':'Quote'} #</span>${e.job}</div>
       <div><span class="inv-lbl">Event date</span>${getFullEventDate(e)}</div>
-      <div><span class="inv-lbl">Created</span>${inv.createdAt}</div>
+      <div><span class="inv-lbl">Created</span>${inv.createdAt||'\u2014'}</div>
       <div><span class="inv-lbl">Client phone</span>${canEdit?`<input type="text" value="${inv.clientPhone||''}" onchange="invoices['${eid}'].clientPhone=this.value" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:(inv.clientPhone||'—')}</div>
       <div><span class="inv-lbl">Client email</span>${canEdit?`<input type="text" value="${inv.clientEmail||''}" onchange="invoices['${eid}'].clientEmail=this.value" style="background:transparent;border:none;border-bottom:0.5px solid var(--border2);padding:2px 0;font-size:13px;color:var(--text);font-family:inherit;width:100%">`:(inv.clientEmail||'—')}</div>
       <div><span class="inv-lbl">Address</span>${e.addr||'—'}</div>

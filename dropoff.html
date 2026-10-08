@@ -2465,7 +2465,7 @@ async function applyEventLink(orderId, order, found){
     const existing = invDoc.data().lines||[];
     await invRef.set({lines: existing.concat(newLines)}, {merge:true});
   } else {
-    await invRef.set({lines:newLines, status:'estimate', deposit:0}, {merge:true});
+    await invRef.set({lines:newLines, status:'quote', deposit:0, createdAt:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}, {merge:true});   // 'quote' = a status the main app understands (was 'estimate')
   }
   if(order.linkedInquiryId){
     await db.collection('inquiries').doc(order.linkedInquiryId).delete().catch(()=>{});
