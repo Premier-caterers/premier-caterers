@@ -395,7 +395,10 @@ a{color:var(--maroon);text-decoration:none}
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:12px">
       <div id="staffOrderFilters" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-      <button id="bookAllBtn" class="btn btn-pri btn-sm" onclick="bookAllUpcoming()" style="display:none"></button>
+      <span style="display:flex;gap:6px">
+        <button id="repairEvBtn" class="btn btn-sm" onclick="repairMissingEvents()" title="Recreate events that were removed when an order was linked to its own job number">Fix missing events</button>
+        <button id="bookAllBtn" class="btn btn-pri btn-sm" onclick="bookAllUpcoming()" style="display:none"></button>
+      </span>
     </div>
     <div style="overflow-x:auto"><table class="tbl" id="staffOrdersTbl"></table></div>
   </div>
@@ -2438,6 +2441,12 @@ async function findEventByJobNumber(jobNum, deliveryDate){
 // for an order that already existed (promptLinkOrder).
 async function applyEventLink(orderId, order, found){
   const {eventId, shortNumber} = found;
+  // Never link an order to ITS OWN event. Linking deletes the order's own
+  // event (it assumes you're merging into a different one), so linking to
+  // itself deleted the event outright (Oct 2026: #09, #11-#14 vanished).
+  if(eventId && (eventId===order.bookedEventId || (order.linkedInquiryId && eventId==='inq_'+order.linkedInquiryId))){
+    const err = new Error('SELF'); err.selfJob = shortNumber; throw err;
+  }
   // Multiple drop-off orders can belong to the same job (e.g. three
   // separate deliveries for one event) — each gets its own letter suffix
   // (04a, 04b, 04c...) so they're distinguishable, without creating extra
@@ -2474,6 +2483,70 @@ async function applyEventLink(orderId, order, found){
   await ordersCol.doc(orderId).set({linkedEventId:eventId, linkedInquiryId:null, bookedEventId:null, subLabel:subLabel}, {merge:true});
   return subLabel;
 }
+/* ── One-time repair (Oct 8 2026) ───────────────────────────────────────
+ * Orders linked to their own job number had their event deleted (see the
+ * guard in applyEventLink). This finds every linked order whose event no
+ * longer exists and recreates that event — SAME event id, so the invoice
+ * (which was never deleted) reconnects, and the same job number when it is
+ * still free. Orders stay linked; nothing on the orders changes. */
+async function repairMissingEvents(){
+  const btn = document.getElementById('repairEvBtn'); if(btn){ btn.disabled = true; btn.textContent = 'Checking\u2026'; }
+  try{
+    const groups = {};
+    allStaffOrders.filter(o=>o.status==='submitted' && o.linkedEventId).forEach(o=>{ (groups[o.linkedEventId] = groups[o.linkedEventId]||[]).push(o); });
+    const missing = [];
+    for(const evId of Object.keys(groups)){
+      const snap = await db.collection('events').doc(evId).get();
+      if(!snap.exists) missing.push(evId);
+    }
+    if(!missing.length){ alert('Nothing to fix \u2014 every linked order\u2019s event is there.'); return; }
+    const lines = missing.map(id=>{ const os = groups[id].slice().sort((a,b)=>String(a.subLabel||'').localeCompare(String(b.subLabel||''))); return '\u2022 '+(os[0].contactName||os[0].clientName||'Drop-off')+' \u2014 '+os.map(o=>'#'+(o.subLabel||'?')).join(', ')+' ('+(os[0].deliveryDate||'')+')'; });
+    if(!confirm(missing.length+' event'+(missing.length===1?' is':'s are')+' missing from the weekly board:\n\n'+lines.join('\n')+'\n\nRecreate '+(missing.length===1?'it':'them')+' now?')) return;
+    let fixed = 0; const notes = [];
+    for(const evId of missing){
+      const os = groups[evId].slice().sort((a,b)=>String(a.subLabel||'').localeCompare(String(b.subLabel||'')));
+      const o = os[0];
+      const wi = _doWeekInfo(o.deliveryDate||''); if(!wi){ notes.push((o.contactName||'?')+': no delivery date'); continue; }
+      const p = wi.weekOf.split('-');
+      const seq = (/^(\d+)/.exec(String(o.subLabel||'')) || [])[1];
+      let num = seq ? (p[0].slice(2)+'-'+p[1]+p[2]+'-'+String(parseInt(seq,10)).padStart(2,'0')) : '';
+      if(num){ const clash = await db.collection('events').where('eventNumber','==',num).get(); if(!clash.empty) num = ''; }
+      if(!num) num = await _doNextEventNumber(wi.weekOf, evId);
+      const inqId = evId.indexOf('inq_')===0 ? evId.slice(4) : '';
+      const name = ((o.contactName||'').trim()) || o.clientName || 'Drop-off order';
+      if(inqId){
+        const iref = db.collection('inquiries').doc(inqId);
+        const isnap = await iref.get();
+        if(isnap.exists) await iref.set({stage:'booked'}, {merge:true});
+        else {
+          const np = name.split(' ');
+          await iref.set({ id:inqId, firstName:np.shift()||'', lastName:np.join(' ')||'', organization:'',
+            eventName:o.clientName||'Drop-off order', eventType:'Drop off catering', eventDate:o.deliveryDate||'',
+            phone:o.contactPhone||'', email:o.contactEmail||'', venueName:o.locationName||'', venueLocation:o.address||'',
+            guestCount:'', comments:'DROP-OFF ORDER \u2014 event restored Oct 2026 after it was removed by a link mix-up.',
+            source:'dropoff-app', stage:'booked', salesperson:'', dropOffOrderId:o.id,
+            submittedAt:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) });
+        }
+      }
+      await db.collection('events').doc(evId).set({
+        waiters:0, waiterNames:'', waiterTime:'-', waiterTime2:'', bartenders:0, bartenderNames:'', bartenderTime:'', bartenderTime2:'',
+        chefs:0, chefNames:'', chefTime:'-', chefTime2:'', porters:0, porterNames:'', porterTime:'', porterTime2:'',
+        manager:'-', mashgiach:'-', mashgiachNames:'', menuLink:'', groceryLink:'', floorplan:'', venueLink:'', pdfMenuLink:'', logoData:'',
+        notes:(o.clientName||'')+(o.deliveryTime?(' \u00b7 delivery '+o.deliveryTime):''),
+        id:evId, inquiryId:inqId, job:num, eventNumber:num, name, contactName:'', organization:'',
+        addr:o.address||'', email:o.contactEmail||'', phone:o.contactPhone||'',
+        type:'dropoff', typeLabel:'Drop off catering', day:wi.day, dayLabel:wi.dayLabel,
+        eventDate:o.deliveryDate, weekOf:wi.weekOf, dropOffOrderId:o.id
+      });
+      try{ const ir = db.collection('invoices').doc(evId); const is = await ir.get();
+        if(is.exists && ['none','quote','approved','invoice','paid'].indexOf(is.data().status)<0) await ir.set({status:'quote'}, {merge:true}); }catch(_){}
+      fixed++;
+      if(seq && num.split('-').pop()!==String(parseInt(seq,10)).padStart(2,'0')) notes.push(name+': job #'+seq+' was taken, so it is now #'+num.split('-').pop());
+    }
+    alert('Restored '+fixed+' event'+(fixed===1?'':'s')+' to the weekly board.'+(notes.length?('\n\n'+notes.join('\n')):'')+'\n\nThey now show on This week, the cover sheet and the Print center in the main app.');
+  }catch(e){ console.error('repair failed', e); alert('Repair stopped: '+(e && e.message ? e.message : e)); }
+  finally{ if(btn){ btn.disabled = false; btn.textContent = 'Fix missing events'; } }
+}
 async function promptLinkOrder(orderId){
   const jobNum = prompt('Enter the job number of the existing event this order belongs to (e.g. 14 or #14):');
   if(!jobNum) return;
@@ -2484,7 +2557,10 @@ async function promptLinkOrder(orderId){
     if(!found) return;
     const subLabel = await applyEventLink(orderId, order, found);
     showToast('Linked to '+subLabel+' — added as one line on that invoice');
-  }catch(e){ console.error(e); alert('Something went wrong linking this order.'); }
+  }catch(e){
+    if(e && e.message==='SELF'){ alert('This order already IS job #'+(e.selfJob||jobNum)+' on the weekly board \u2014 there is nothing to link.\n\nOnly use Link when this order belongs to a DIFFERENT, bigger event.'); return; }
+    console.error(e); alert('Something went wrong linking this order.');
+  }
 }
 
 async function deleteOrder(orderId){
