@@ -14298,7 +14298,10 @@ function _pcItems(doc){
   const evIds={}; evItems.forEach(it=>{ evIds[it.id]=1; });
   const doItems=(dropOffOrders||[]).filter(o=>o.status==='submitted' && o.deliveryDate && o.deliveryDate>=r.from && o.deliveryDate<=r.to && !(o.bookedEventId && evIds[o.bookedEventId]))
     .map(o=>({id:o.id, date:o.deliveryDate, time:o.deliveryTime||'', job:_pcDoJob(o), name:(o.contactName||'Drop-off')+(o.locationName?(' \u2014 '+o.locationName):'')+(o.approved===false?' (awaiting approval)':''), obj:o, drop:true, linked:!!(o.linkedEventId && evIds[o.linkedEventId])}));
-  return evItems.concat(doItems).sort((a,b)=>(a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||''));
+  // For Invoice / Client menu, a drop-off that's part of an event is already on
+  // that event's invoice/menu — don't list it a second time.
+  const doShown = (doc && (doc.k==='invoice'||doc.k==='menu')) ? doItems.filter(it=>!it.linked) : doItems;
+  return evItems.concat(doShown).sort((a,b)=>(a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||''));
 }
 // What prints for a not-yet-booked drop-off order under each document type.
 const _PC_DROP_AS = { invoice:'client', menu:'client', grocery:'kitchen', beo:'kitchen', checklist:'kitchen', foodlabels:'label' };
