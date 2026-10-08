@@ -11363,7 +11363,7 @@ function invoiceDisplayLabel(evId, slotKey){
   const slots = invoiceSlotsForEvent(evId);
   if(slots.length<=1) return baseNum;            // single -> no letter
   const idx = slotLetterIndex(slotKey);
-  return baseNum + String.fromCharCode(97+idx);  // 0->a,1->b
+  return baseNum + '-' + String.fromCharCode(97+idx);  // 0->-a, 1->-b  (e.g. #06-a)
 }
 function invoiceSlotName(slotKey){
   const inv = invoices[slotKey];
@@ -11379,6 +11379,40 @@ function addInvoiceToEvent(evId){
   _saveInvoice(key, inv);
   return key;
 }
+// Copy an invoice into a new slot on the same event — every line item, notes,
+// tax and logistics settings — so one long invoice can be split into several
+// (copy, then delete the lines that don't belong on each). The copy starts
+// fresh on money: $0 paid, no payments, no required deposit.
+async function copyInvoiceSlot(srcKey){
+  const src = invoices[srcKey]; if(!src){ alert('Could not find this invoice. Try refreshing the page.'); return; }
+  const evId = baseEventIdOf(srcKey);
+  const e = events.find(x=>x.id===evId); if(!e){ alert('Event not found.'); return; }
+  const lbl = invoiceDisplayLabel(evId, srcKey);
+  const n = (src.lines||[]).length;
+  if(!confirm('Copy '+lbl+' into a new invoice?\n\n'
+    +'\u2713 Copies all '+n+' line item'+(n===1?'':'s')+', notes, tax and logistics settings\n'
+    +'\u2717 Starts fresh: $0 paid, no payments recorded\n\n'
+    +'Then delete the lines that don\u2019t belong on each invoice \u2014 including the original.')) return;
+  const key = nextExtraSlotKey(evId);
+  const inv = JSON.parse(JSON.stringify(src));
+  ['ts','_rev','_finalized','_revSig','paidDate','lastPaymentDate','paymentMethod','checkNumber'].forEach(f=>{ delete inv[f]; });
+  inv._slot = key;
+  inv.invLabel = '';
+  inv.payments = [];
+  inv.deposit = 0;
+  inv.depositAmount = 0;
+  if(inv.status==='paid') inv.status = 'invoice';
+  inv._editOverride = (inv.status==='invoice');   // open unlocked so lines can be deleted right away
+  if(inv.status!=='invoice') inv.invoiceDate = '';
+  inv.createdAt = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  invoices[key] = inv;
+  await _saveInvoice(key, inv);
+  activeInvoiceId = key;
+  renderInvoiceDetail();
+  render();
+  showToast('Copied \u2014 now on '+invoiceDisplayLabel(evId, key)+'. Delete the lines that don\u2019t belong.', 4000);
+}
+window.copyInvoiceSlot = copyInvoiceSlot;
 async function deleteInvoiceSlot(slotKey){
   if(!isExtraSlot(slotKey)){ alert('The first invoice on an event cannot be deleted here.'); return; }
   if(!confirm('Delete this invoice? This cannot be undone.')) return;
@@ -12023,7 +12057,8 @@ function renderInvoiceDetail(scrollToView){
       if(slots.length<=1 && !isExtraSlot(eid)){
         // single invoice: show just an "add invoice" affordance, no switcher tabs
         return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-          <button onclick="addInvoiceToEvent('${evId}');" style="font-size:12px;padding:5px 11px;border-radius:var(--radius);border:1px dashed var(--border2);background:transparent;color:var(--text2);cursor:pointer"><i class="ti ti-plus"></i> Add another invoice</button>
+          <button onclick="addInvoiceToEvent('${evId}');" style="font-size:12px;padding:5px 11px;border-radius:var(--radius);border:1px dashed var(--border2);background:transparent;color:var(--text2);cursor:pointer"><i class="ti ti-plus"></i> Add blank invoice</button>
+          <button onclick="copyInvoiceSlot('${eid}')" style="font-size:12px;font-weight:600;padding:5px 11px;border-radius:var(--radius);border:1.5px solid var(--maroon);background:transparent;color:var(--maroon);cursor:pointer"><i class="ti ti-copy"></i> Copy this invoice</button>
         </div>`;
       }
       // multiple: show switcher tabs
@@ -12035,7 +12070,8 @@ function renderInvoiceDetail(scrollToView){
       }).join('');
       return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:0.5px solid var(--border)">
         ${tabs}
-        <button onclick="addInvoiceToEvent('${evId}');" style="font-size:12px;padding:6px 11px;border-radius:8px;border:1px dashed var(--border2);background:transparent;color:var(--text2);cursor:pointer"><i class="ti ti-plus"></i> Add invoice</button>
+        <button onclick="addInvoiceToEvent('${evId}');" style="font-size:12px;padding:6px 11px;border-radius:8px;border:1px dashed var(--border2);background:transparent;color:var(--text2);cursor:pointer"><i class="ti ti-plus"></i> Add blank invoice</button>
+        <button onclick="copyInvoiceSlot('${eid}')" style="font-size:12px;font-weight:600;padding:6px 11px;border-radius:8px;border:1.5px solid var(--maroon);background:transparent;color:var(--maroon);cursor:pointer"><i class="ti ti-copy"></i> Copy this invoice</button>
         <span style="margin-left:auto;display:flex;gap:4px">
           <button onclick="renameInvoiceSlot('${eid}')" class="icon-btn" title="Rename this invoice"><i class="ti ti-pencil"></i></button>
           ${isExtraSlot(eid)?`<button onclick="deleteInvoiceSlot('${eid}')" class="icon-btn" title="Delete this invoice"><i class="ti ti-trash"></i></button>`:''}
