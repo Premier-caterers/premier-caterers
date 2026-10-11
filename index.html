@@ -3857,6 +3857,103 @@ function isActiveEvent(e){
   return true;
 }
 
+
+// ── COVER SHEET: one box per event ──────────────────────────────────────────
+// Same data as the table view, laid out as a box per event. Used on screen
+// (default view) and for printing. Inline styles so print and screen match.
+let coverView = (function(){ try{ return localStorage.getItem('pcCoverView')||'boxes'; }catch(e){ return 'boxes'; } })();
+function setCoverView(v){ coverView=v; try{ localStorage.setItem('pcCoverView',v); }catch(e){} render(); }
+function _cbIsDropOff(e){ return /drop/i.test(e.type||'') || /drop/i.test(e.typeLabel||''); }
+function coverBoxesHtml(list, forPrint){
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const up = s => esc(String(s||'').toUpperCase());
+  const pend = '<span style="border:1.5px dashed #111;border-radius:4px;padding:0 4px;font-size:11px">TBD</span>';
+  const val = v => { const t=String(v==null?'':v).trim(); return (!t||t==='-'||/^tbd$/i.test(t)) ? pend : esc(t); };
+  const staffRows = u => {
+    const rows = [
+      ['Waiters', u.waiters, u.waiterNames, u.waiterTime],
+      ['Bar',     u.bartenders, u.bartenderNames, u.bartenderTime],
+      ['Chefs',   u.chefs, u.chefNames, u.chefTime],
+      ['Porters', u.porters, u.porterNames, u.porterTime],
+    ].filter(r => staffNum(r[1])>0 || String(r[2]||'').trim());
+    if(!rows.length) return '';
+    return '<div style="display:grid;grid-template-columns:auto 1fr auto;column-gap:8px;margin-top:5px;border-top:1px solid #bbb;padding-top:5px">'+
+      rows.map(r=>{
+        const n = staffNum(r[1]) || staffNum(r[2]);
+        const names = String(r[2]||'').trim();
+        const who = names ? (n+' · '+esc(names)) : String(n);
+        const t = String(r[3]||'').trim();
+        return `<b>${r[0]}</b><span>${who}</span><span>${t?esc(t):(r[0]==='Waiters'||r[0]==='Chefs'?'<span style="border:1.5px dashed #111;border-radius:4px;padding:0 4px;font-size:11px">time?</span>':'')}</span>`;
+      }).join('')+'</div>';
+  };
+  const ship = e => {
+    const line = (lbl,field) => forPrint
+      ? `<div style="display:flex;gap:6px;align-items:flex-end;margin-top:4px"><span style="width:34px">${lbl}</span><span style="flex:1;border-bottom:1px solid #111;min-height:14px;padding-left:2px">${esc(e[field]||'')}</span></div>`
+      : `<div style="display:flex;gap:6px;align-items:center;margin-top:4px"><span style="width:34px">${lbl}</span><input type="text" value="${esc(e[field]||'')}" placeholder="—" onclick="event.stopPropagation()" onblur="coverSaveField('${e.id}','${field}',this.value,false)" style="flex:1;border:none;border-bottom:1px solid #111;background:transparent;font:inherit;padding:1px 2px;min-width:0"></div>`;
+    return `<div style="margin-top:6px;border:1.5px solid #111;border-radius:4px;padding:5px 7px"><b>Ship from commissary</b>${line('Date','shipDate')}${line('Time','shipTime')}</div>`;
+  };
+  const box = e => {
+    const inq = _beoInquiryFor(e) || {};
+    const drop = _cbIsDropOff(e);
+    const venue = inq.venueName || (String(e.addr||'').split(',')[0]) || '';
+    const addr = e.addr || inq.venueLocation || '';
+    const guests = e.guestCount || inq.guestCount || inq.guests || '';
+    const type = e.typeLabel || e.type || '';
+    const job = coverJobNum(e.eventNumber||e.job).replace('#','').replace(/^0+(?=\d)/,'');
+    const dayStr = formatEventDay(e) || '';
+    const kind = drop
+      ? '<span style="justify-self:end;font-size:10px;padding:1px 5px;border-radius:4px;white-space:nowrap;color:#fff;border:1.5px dashed #fff">DROP OFF EVENT</span>'
+      : '<span style="justify-self:end;font-size:10px;padding:1px 5px;border-radius:4px;white-space:nowrap;background:#fff;color:#111;border:1.5px solid #fff">CATERED EVENT</span>';
+    const open = forPrint ? '' : ` onclick="openEventFile('${e.id}')" title="Open event file" `;
+    const meals = (e.meals||[]).map(m=>{
+      const mj = job + (m.jobSuffix||'');
+      const md = formatMealDay(m) || '';
+      return `<div style="margin-top:7px;border-top:2px solid #111;padding-top:5px">
+        <div style="font-size:13px;font-weight:700">JOB ${esc(mj)}${m.label?' · '+up(m.label):''}${md?' · '+esc(md):''}</div>
+        ${(m.addr && m.addr!==e.addr)?`<div style="display:flex;gap:4px"><span aria-hidden="true">&#9906;</span><span>${esc(m.addr)}</span></div>`:''}
+        ${m.startTime?`<div>Start ${esc(m.startTime)}</div>`:''}
+        ${staffRows(m)}
+      </div>`;
+    }).join('');
+    return `<div style="border:2px solid #111;border-radius:6px;overflow:hidden;break-inside:avoid;page-break-inside:avoid;background:#fff;color:#111">
+      <div style="background:#111;color:#fff;padding:7px 10px;${forPrint?'':'cursor:pointer;'}-webkit-print-color-adjust:exact;print-color-adjust:exact"${open}>
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;font-weight:700">
+          <span style="font-size:20px">JOB ${esc(job)}</span>
+          <span style="font-size:17px;text-align:center">${up(dayStr)}</span>
+          ${kind}
+        </div>
+        <div style="font-size:14px;font-weight:700;margin-top:3px;line-height:1.2">${up(type)}${venue?' · '+up(venue):''}</div>
+      </div>
+      <div style="padding:7px 10px;font-size:12px;line-height:1.45">
+        <div style="font-size:14px;font-weight:700">${esc(e.name||'')}${e.mainLabel?` <span style="display:inline-block;border:1px solid #111;border-radius:4px;padding:0 5px;font-size:11px;font-weight:400">${esc(e.mainLabel)}</span>`:''}</div>
+        <div style="display:flex;gap:4px;align-items:flex-start"><span aria-hidden="true">&#9906;</span><span>${addr?esc(addr):pend}</span></div>
+        <div>${[e.startTime?('Start '+esc(e.startTime)):'', guests?(esc(guests)+' guests'):''].filter(Boolean).join(' · ')}</div>
+        ${staffRows(e)}
+        <div style="margin-top:5px;border-top:1px solid #bbb;padding-top:5px"><b>Manager</b> ${val(e.manager)} · <b>Mashgiach</b> ${val(e.mashgiachNames||e.mashgiach)}</div>
+        ${meals}
+        ${ship(e)}
+      </div>
+    </div>`;
+  };
+  return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;font-family:Arial,sans-serif">${list.map(box).join('')}</div>`;
+}
+function printCoverBoxes(){
+  const weekDate = getWeekEndDate(currentWeekOffset);
+  const weekStr  = weekDate.toISOString().split('T')[0];
+  const list = coverSortEvents(events.filter(e=>(e.weekOf||'2026-05-31')===weekStr && isActiveEvent(e)));
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Cover Sheet W/E ${weekDate.getUTCMonth()+1}/${weekDate.getUTCDate()}</title>
+  <style>@page{size:letter portrait;margin:0.4in}body{margin:0;font-family:Arial,sans-serif;color:#111}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #111;padding-bottom:6px;margin-bottom:10px">
+    <span style="font-size:18px;font-weight:700">Premier Caterers · Week ending ${months[weekDate.getUTCMonth()]} ${weekDate.getUTCDate()}, ${weekDate.getUTCFullYear()}</span>
+    <span style="font-size:12px">${list.length} event${list.length===1?'':'s'}</span></div>
+  ${coverBoxesHtml(list, true)}
+  <div style="font-size:10px;color:#555;margin-top:8px">Solid white tag = catered event · Dashed tag = drop off event · Dashed box = still to be filled in</div>
+  <script>window.onload=function(){window.print();}<\/script></body></html>`;
+  const w = window.open('','_blank','width=900,height=1000');
+  if(w){ w.document.write(html); w.document.close(); }
+}
+
 function renderCoverSheet(){
   const weekDate = getWeekEndDate(currentWeekOffset);
   const weekStr  = weekDate.toISOString().split('T')[0];
@@ -3879,6 +3976,10 @@ function renderCoverSheet(){
     {key:'waiters', label:'# Waiters'},
   ];
   const sortBar = `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+    <span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">View:</span>
+    <button onclick="setCoverView('boxes')" class="filter-btn ${coverView==='boxes'?'active':''}"><i class="ti ti-layout-grid"></i> Boxes</button>
+    <button onclick="setCoverView('table')" class="filter-btn ${coverView==='table'?'active':''}"><i class="ti ti-table"></i> Table (edit staff)</button>
+    <span style="width:12px"></span>
     <span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Sort:</span>
     ${sorts.map(s=>{
       const active = coverSortKey===s.key;
@@ -4076,7 +4177,7 @@ function renderCoverSheet(){
       </section>
       <section class="cs-box cs-box--acts">
         <div class="cs-box__head"><span class="cs-box__title">Actions</span></div>
-        <button onclick="printCoverSheet()" class="btn btn--pri btn--block cs-act"><i class="ti ti-printer"></i> Print / Save PDF</button>
+        <button onclick="coverView==='table'?printCoverSheet():printCoverBoxes()" class="btn btn--pri btn--block cs-act"><i class="ti ti-printer"></i> Print / Save PDF</button>
         <button onclick="coverAddNewRow()" class="btn btn--block cs-act"><i class="ti ti-plus"></i> New event</button>
         <button onclick="coverCreateDropOff()" class="btn btn--block cs-act"><i class="ti ti-truck-delivery"></i> New drop off</button>
         ${coverWeekNumberingOff(weekStr) ? `<button onclick="renumberWeek('${weekStr}')" title="This week's event numbers are out of order \u2014 click to fix" class="btn btn--dashed btn--block cs-act"><i class="ti ti-list-numbers"></i> Renumber</button>` : ''}
@@ -4084,7 +4185,9 @@ function renderCoverSheet(){
     </div>
     ${sortBar}
     ${noEvents}
-    ${weekEvents.length>0?`
+    ${(weekEvents.length>0 && coverView!=='table')?`<div class="cs-hint"><i class="ti ti-info-circle" style="font-size:13px"></i> Click a black header to open that event. Switch to <b>Table (edit staff)</b> to type staffing.</div>${coverBoxesHtml(weekEvents,false)}
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button onclick="setCoverView('table');setTimeout(coverAddNewRow,0)" class="btn btn--sm"><i class="ti ti-plus"></i> New event</button><button onclick="coverCreateDropOff()" class="btn btn--sm"><i class="ti ti-truck-delivery"></i> New drop off</button></div>`:''}
+    ${(weekEvents.length>0 && coverView==='table')?`
     <div class="cs-hint"><i class="ti ti-info-circle" style="font-size:13px"></i> Click any staffing cell to edit \u2014 changes sync to the Staff Schedule automatically.</div>
     <div class="cs-wrap">
       <div class="cs-scroll">
