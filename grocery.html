@@ -730,12 +730,19 @@ async function loadEvents(){
   }catch(e){ console.warn('events load failed',e); }
   const sel = document.getElementById('evSelect');
   sel.innerHTML = '<option value="">— pick an event —</option>' + events.map(e=>{
-    const num = jobNum(e.job);
+    const num = jobNum(e.eventNumber||e.job);
     const wk = e.weekOf? ('W/E '+fmtMD(e.weekOf)) : '';
     return `<option value="${e.id}">${num?('#'+num+' '):''}${esc(e.name||'Event')} · ${esc(e.typeLabel||e.type||'')} ${wk?('· '+wk):''}</option>`;
   }).join('');
 }
-function jobNum(job){ if(!job) return ''; const p=String(job).split('-'); return p.length>1? p[1] : job.replace('#',''); }
+// Short job number staff use ("Job 1", "Job 2a"): the LAST segment of any
+// format ('26-1018-01' -> '1', '101826-3' -> '3', '#2a' -> '2a').
+function jobNum(job){
+  if(!job) return '';
+  let s=String(job).trim().replace(/^#/,'');
+  if(s.indexOf('-')>-1){ const p=s.split('-'); s=p[p.length-1]; }
+  return s.replace(/^0+(?=\d)/,'');
+}
 function fmtMD(d){ if(!d) return ''; const x=new Date(d+'T12:00:00'); return (x.getMonth()+1)+'/'+x.getDate(); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -754,7 +761,7 @@ function onEventPick(){
   const e = events.find(x=>x.id===id);
   if(!e){ curEvent=null; return; }
   const tkey = TYPE_MAP[e.type] || 'wedding';
-  curEvent = { id:e.id, job:e.job, num:jobNum(e.job), name:e.name||'Event', weekOf:e.weekOf||'', type:tkey, typeLabel:e.typeLabel||'', guests:e.guestCount||'' , menuLink:e.menuLink||'', pdfMenuLink:e.pdfMenuLink||''};
+  curEvent = { id:e.id, job:e.job, num:jobNum(e.eventNumber||e.job), name:e.name||'Event', weekOf:e.weekOf||'', type:tkey, typeLabel:e.typeLabel||'', guests:e.guestCount||'' , menuLink:e.menuLink||'', pdfMenuLink:e.pdfMenuLink||''};
   curType = tkey;
   document.getElementById('typeSelect').value = tkey;
   chosen = new Set(); overrides = {};
@@ -1207,6 +1214,7 @@ const LB_SHEETS = {
 };
 let lbRows = [];      // [{name, count}]
 let lbSize = '5163';
+let lbVenue = '';     // venue name from the client's inquiry (else event address)
 
 function lbEventDate(ev){
   const e = events.find(x=>x.id===ev.id) || {};
@@ -1271,6 +1279,14 @@ async function openLabels(){
   lbRows=[]; lbSize='5163';
   document.getElementById('lbStatus').textContent='';
   document.getElementById('labelsModal').classList.remove('hide');
+  lbVenue='';
+  const evRec=events.find(x=>x.id===ev.id)||{};
+  lbVenue=evRec.addr||'';
+  if(evRec.inquiryId){
+    db.collection('inquiries').doc(evRec.inquiryId).get()
+      .then(d=>{ if(d.exists && d.data().venueName) lbVenue=d.data().venueName; })
+      .catch(()=>{});
+  }
   let saved=null;
   if(ev.id && ev.id!=='manual'){
     try{ const d=await GSAVED.doc(ev.id).get(); if(d.exists && d.data().labels) saved=d.data().labels; }catch(e){}
@@ -1314,14 +1330,16 @@ function printLabels(){
   const job=ev.num?('Job '+ev.num):'';
   const date=lbEventDate(ev);
   const name=ev.name||'';
+  const venue=lbVenue||'';
   const small=lbSize==='5160';
   const fit=(s,big,lim)=> s.length>lim ? Math.max(Math.round(big*lim/s.length), Math.round(big*0.6)) : big;
   const label=s=>{
     if(s===null) return '<div class="lab"></div>';
-    if(small) return `<div class="lab"><div class="top"><b>${esc(job)}</b><span>${esc(date)}</span></div>`+
-      `<div class="sec" style="font-size:${fit(s,15,20)}pt">${esc(s)}</div><div class="ev">${esc(name)}</div></div>`;
-    return `<div class="lab"><div class="top"><b>${esc(job)}</b><span>${esc(date)}</span></div><div class="ev">${esc(name)}</div>`+
-      `<div class="sec" style="font-size:${fit(s,24,18)}pt">${esc(s)}</div></div>`;
+    return `<div class="lab"><div class="job">${esc(job)}</div>`+
+      (date?`<div class="dt">${esc(date)}</div>`:'')+
+      `<div class="ev">${esc(name)}</div>`+
+      (venue?`<div class="vn">${esc(venue)}</div>`:'')+
+      `<div class="sec" style="font-size:${small?fit(s,13,22):fit(s,22,20)}pt">${esc(s)}</div></div>`;
   };
   let pages='';
   for(let p=0;p<cells.length;p+=per){
@@ -1330,11 +1348,13 @@ function printLabels(){
   const css=`@page{size:letter;margin:0}*{box-sizing:border-box}body{margin:0;font-family:-apple-system,Arial,sans-serif;color:#000}
 .sheet{width:8.5in;height:11in;padding:${sh.top}in 0 0 ${sh.left}in;display:grid;grid-template-columns:repeat(${sh.cols},${sh.w}in);grid-auto-rows:${sh.h}in;column-gap:${sh.gap}in;page-break-after:always;overflow:hidden}
 .sheet:last-child{page-break-after:auto}
-.lab{overflow:hidden;display:flex;flex-direction:column;justify-content:center;padding:${small?'0.06in 0.14in':'0.14in 0.25in'}}
-.top{display:flex;justify-content:space-between;align-items:baseline;font-size:${small?10:20}pt;line-height:1.1}
-.top span{font-size:${small?9:12}pt}
-.ev{font-size:${small?8.5:13}pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;margin-top:${small?1:2}px}
-.sec{font-weight:700;line-height:1.1;${small?'margin-top:2px':'border-top:2px solid #000;margin-top:6px;padding-top:6px'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}`;
+.lab{overflow:hidden;display:flex;flex-direction:column;justify-content:center;padding:${small?'0.04in 0.14in':'0.12in 0.25in'}}
+.job{font-weight:700;font-size:${small?11:20}pt;line-height:1.05}
+.dt{font-size:${small?8:11}pt;line-height:1.2}
+.ev{font-size:${small?8:12}pt;line-height:1.2;margin-top:${small?1:4}px}
+.vn{font-size:${small?7.5:10.5}pt;line-height:1.2;color:#333}
+.ev,.vn,.dt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sec{font-weight:700;line-height:1.1;border-top:${small?1:2}px solid #000;margin-top:${small?2:5}px;padding-top:${small?1:4}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}`;
   const w=window.open('','_blank');
   if(!w){ toast('Allow pop-ups to print'); return; }
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc((job?job+' ':'')+name)} labels</title><style>${css}</style></head><body>${pages}</body></html>`);
