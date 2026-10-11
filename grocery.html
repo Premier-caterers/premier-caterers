@@ -38,6 +38,7 @@
   select,input[type=text],input[type=date]{font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
   label.fld{font-size:12px;color:var(--ink2);display:block;margin-bottom:3px;font-weight:600}
   .hide{display:none!important}
+  .mtag{display:inline-flex;align-items:center;gap:2px;font-size:10.5px;border:1px dashed #888;border-radius:6px;padding:0 5px;color:#666;margin-left:4px;font-weight:400}
   .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:200;opacity:0;transition:opacity .2s;pointer-events:none}
   .toast.show{opacity:1}
   /* two-pane builder */
@@ -131,12 +132,14 @@
         <span>2 · Tick what's on the final menu</span>
         <span class="row" style="gap:7px">
           <span class="pill" id="pickCount">0 chosen</span>
+          <button class="btn btn-ghost btn-sm" onclick="tickFromMenu(true)"><i class="ti ti-wand"></i> Tick from menu</button>
           <button class="btn btn-ghost btn-sm" onclick="checkAll(true)">All</button>
           <button class="btn btn-ghost btn-sm" onclick="checkAll(false)">None</button>
         </span>
       </div>
       <div class="grid2">
         <div>
+          <div id="menuTickMsg" class="hide" style="font-size:12.5px;padding:8px 12px;border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:flex-start"></div>
           <input class="search" id="pickSearch" placeholder="Search items…" oninput="renderPicker()">
           <div class="col-body" id="picker"></div>
         </div>
@@ -633,6 +636,7 @@ let overrides = {};           // per-event qty/vendor + extra-rows + skip-rows, 
 let curEvent = null;          // {job,name,weekOf,guests,type}
 let layoutB = false;          // false=A (menu left), true=B (name heading)
 let manualMode = false;
+let menuTicked = new Set();   // section ids ticked automatically from the menu doc
 
 function uid(){ return 'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 
@@ -764,15 +768,15 @@ function onEventPick(){
   curEvent = { id:e.id, job:e.job, num:jobNum(e.eventNumber||e.job), name:e.name||'Event', weekOf:e.weekOf||'', type:tkey, typeLabel:e.typeLabel||'', guests:e.guestCount||'' , menuLink:e.menuLink||'', pdfMenuLink:e.pdfMenuLink||''};
   curType = tkey;
   document.getElementById('typeSelect').value = tkey;
-  chosen = new Set(); overrides = {};
-  loadSavedForEvent(e.id);  // if previously saved, restore picks
+  chosen = new Set(); overrides = {}; menuTicked = new Set(); menuTickMsg('');
+  loadSavedForEvent(e.id).then(had=>{ if(!had && !new URLSearchParams(location.search).get('labels')) tickFromMenu(false); });
   renderPicker(); renderKitchen();
   if(liveMenuOn) loadLiveMenu();
   document.getElementById('saveState').textContent='';
 }
 function onTypeChange(){
   curType = document.getElementById('typeSelect').value;
-  chosen = new Set(); overrides={};
+  chosen = new Set(); overrides={}; menuTicked=new Set(); menuTickMsg('');
   renderPicker(); renderKitchen();
 }
 function toggleManual(){
@@ -802,14 +806,14 @@ function renderPicker(){
     if(!secs.length) return;
     h+='<div class="dept">'+esc(d||'other')+'</div>';
     secs.forEach(s=>{
-      h+=`<label class="pickrow"><input type="checkbox" ${chosen.has(s.id)?'checked':''} onchange="togglePick('${s.id}',this.checked)"><span class="nm">${esc(cleanName(s))}</span><span class="cnt">${s.rows.length}</span></label>`;
+      h+=`<label class="pickrow"><input type="checkbox" ${chosen.has(s.id)?'checked':''} onchange="togglePick('${s.id}',this.checked)"><span class="nm">${esc(cleanName(s))}${menuTicked.has(s.id)?' <span class="mtag" title="Found in the menu"><i class="ti ti-file-text"></i> menu</span>':''}</span><span class="cnt">${s.rows.length}</span></label>`;
     });
   });
   host.innerHTML = h || '<div class="empty">No items in this menu type yet.</div>';
   updatePickCount();
 }
 function togglePick(id,on){ on?chosen.add(id):chosen.delete(id); renderKitchen(); updatePickCount(); }
-function checkAll(on){ const list=secList(); if(on) list.forEach(s=>chosen.add(s.id)); else chosen.clear(); renderPicker(); renderKitchen(); }
+function checkAll(on){ const list=secList(); if(on) list.forEach(s=>chosen.add(s.id)); else { chosen.clear(); menuTicked=new Set(); menuTickMsg(''); } renderPicker(); renderKitchen(); }
 function updatePickCount(){ document.getElementById('pickCount').textContent = chosen.size+' chosen'; }
 
 // ============ Kitchen copy (right) ============
@@ -994,8 +998,10 @@ async function loadSavedForEvent(eventId){
       chosen=new Set(d.chosenIds||[]); overrides=d.overrides||{};
       if(d.type){ curType=d.type; document.getElementById('typeSelect').value=d.type; }
       document.getElementById('saveState').textContent='Loaded saved grocery from '+(d.savedAt?new Date(d.savedAt).toLocaleDateString():'before');
+      return !!(d.chosenIds && d.chosenIds.length);
     }
   }catch(e){ /* none saved yet */ }
+  return false;
 }
 
 // ============ Weekly by-vendor ============
@@ -1203,6 +1209,109 @@ function printWeekly(){
   openPrint(doc, 'Weekly order');
 }
 
+// ============ Tick from menu ============
+// Reads the event's menu Google Doc and ticks the library items it finds.
+// Stations match the menu's section headings; dishes (salads, hors
+// d'oeuvres, entrees, sides…) match the menu's item lines. Only ADDS ticks —
+// never unticks — and marks each one with a "menu" tag so it can be checked.
+async function fetchMenuText(fileId){
+  const s=await db.collection('settings').doc('app').get();
+  const url=(s.exists && s.data().scriptUrl)||'';
+  if(!url) return null;
+  const r=await fetch(url+(url.indexOf('?')>-1?'&':'?')+'action=getDocText&fileId='+encodeURIComponent(fileId));
+  const j=await r.json();
+  if(!j || !j.success) throw new Error((j&&j.error)||'no text');
+  return j.text||'';
+}
+// Stations / headed sections, by library department → what the menu heading says
+const MT_HEADINGS = {
+  'bar':/^bar$/, 'tisch':/tisch/, 'pre set':/pre-?set/, 'preset':/pre-?set/,
+  'asian':/\basian\b/, 'middle':/middle/, 'mexican':/mexican/, 'carving':/carving/,
+  'hot station':/^hot station|^buffet.*hot/, 'hot':/^hot station/, 'fries station':/\bfr(y|ies)\b|french fr/, 'fries':/\bfr(y|ies)\b|french fr/,
+  'crepes':/crepe/, 'pasta':/pasta/, 'bbq':/bbq|barbe?c?que/, 'ramen soup station':/ram[oe]n|noodle/,
+  'poke':/poke/, 'persian':/persian/, 'pescatarian':/pe?s?cat[ae]r/, 'sushi':/sushi/, 'sushi bar':/sushi/,
+  'crepe':/crepe/, 'ice cream':/ice cream/, 'candy':/candy/, 'waffles':/waffle/, 'popcorn machine':/popcorn/,
+  'donut wall':/donut/, 'myo':/make your own|\bmyo\b/, 'wraps':/wrap/, 'pizza':/pizza/
+};
+const MT_NEVER = /^(linen|rentals|misc|kids|\*\*\*)$/;
+// Library shorthand → menu wording
+const MT_ALIAS = {
+  'gv':'grilled vegetables', 'pma':'papaya mango avocado', 'k&a w/ squash':'kale arugula squash', 'k/a - squash':'kale arugula squash',
+  'tom, baby, hop':'tomato baby corn hearts palm', 'satey':'satay', 'negamaki':'negimaki', 'brocoli cashwq':'broccoli cashew',
+  'dutches':'duchess', 'cylander salmon':'cylinder salmon', 'franks in blankets':'franks', 'frank blanket':'franks',
+  'vienesee':'viennese', 'passing vienesse':'viennese', 'port fries':'portobello fries', 'reuben sand.':'reuben',
+  'mashed pot mart':'mashed potato martinis', 'pulled / taco':'pulled beef', 'mini dumplings':'dim', 'dim sum':'dim',
+  'salad with meat':'', 'deco box':'', 'french beans':'string beans', 'sun dry tortilini':'sun dried tortellini',
+  'roullade w/ pastrami':'roulade pastrami', 'portabello fries':'portobello fries', 'portabello':'portobello', 'pulled beef / phylo':'pulled beef phyllo', 'vienesse':'viennese', 'vienesee':'viennese', 'viennese':'viennese'
+};
+const MT_STOP = new Set(['and','with','the','for','sides','side','dish','entree','passing','salad','salads','appetizer','dessert','desserts','station','stations','buffet','hor','dourves','dourvers','dourbes','x3','mini','petite','of','w']);
+function mtWords(t){ return String(t||'').toLowerCase().replace(/[^a-z0-9&]+/g,' ').trim().split(/\s+/).filter(Boolean); }
+function mtHit(tok, words){
+  return words.some(w=> w===tok
+    || (tok.length>=4 && w.startsWith(tok))
+    || (w.length>=4 && tok.startsWith(w))
+    || (tok.length>=5 && w.length>=5 && w.slice(0,5)===tok.slice(0,5)));
+}
+function menuMatches(text, sections){
+  const headings=lbSectionsFromText(text).map(h=>h.toLowerCase());
+  // each item line remembers the heading it sits under
+  const lines=[]; let under='';
+  String(text||'').split(/\r?\n/).forEach(raw=>{
+    const h=lbSectionsFromText(raw);
+    if(h.length){ under=h[0].toLowerCase(); return; }
+    const l=raw.replace(/[*_\\]/g,'').trim();
+    if(l) lines.push({ws:mtWords(l), under});
+  });
+  const hits=[];
+  sections.forEach(s=>{
+    const dept=String(s.dept||'').toLowerCase().trim();
+    if(MT_NEVER.test(dept)) return;
+    const head=MT_HEADINGS[dept];
+    if(head){ if(headings.some(h=>head.test(h))) hits.push(s.id); return; }
+    let key=cleanName(s).toLowerCase().trim()
+      .replace(/^(passing|hor ?d\w*|hors?|stations?|buffet|salads?|appetizer|entree|sides?( dish)? for entree|desserts?|vien+es+e?e?|vinesse)\s*[-\/]\s*(?=\S)/,'')
+      .replace(/^passing\s+(?=\S)/,'').trim();
+    if(MT_ALIAS[key]!==undefined) key=MT_ALIAS[key];
+    const toks=mtWords(key).filter(t=>!MT_STOP.has(t) && t.length>=3);
+    if(!toks.length) return;
+    // desserts only count when they sit under a dessert heading
+    const dz=/dessert|vien|sweet|pastr|cake/;
+    const pool = /dessert/.test(dept)
+      ? lines.filter(l=>dz.test(l.under)).concat(headings.filter(h=>dz.test(h)).map(h=>({ws:mtWords(h)})))
+      : lines;
+    if(pool.some(l=>toks.every(t=>mtHit(t,l.ws)))) hits.push(s.id);
+  });
+  return hits;
+}
+function menuTickMsg(html, ok){
+  const el=document.getElementById('menuTickMsg'); if(!el) return;
+  if(!html){ el.classList.add('hide'); el.innerHTML=''; return; }
+  el.classList.remove('hide');
+  el.style.background = ok ? '#e8f3e4' : '#f6f2ea';
+  el.style.color = ok ? '#2f5d1f' : '#6b5a2e';
+  el.innerHTML = `<i class="ti ${ok?'ti-check':'ti-info-circle'}" style="font-size:15px;margin-top:1px"></i><span>${html}</span>`;
+}
+async function tickFromMenu(manual){
+  const ev=currentEventObj()||{};
+  const id=lbDocId(ev.menuLink);
+  if(!id){ if(manual) menuTickMsg('This event has no Google Doc menu link — tick items by hand.', false); return; }
+  menuTickMsg('Reading the menu…', false);
+  try{
+    const text=await fetchMenuText(id);
+    if(text===null){ menuTickMsg('The Apps Script link isn’t saved in the main app’s Settings, so the menu can’t be read.', false); return; }
+    if((currentEventObj()||{}).id!==ev.id) return;   // event changed while reading
+    const hits=menuMatches(text, secList());
+    let added=0;
+    hits.forEach(h=>{ if(!chosen.has(h)){ chosen.add(h); added++; } menuTicked.add(h); });
+    renderPicker(); renderKitchen();
+    if(!hits.length) menuTickMsg('Nothing in the menu matched the library — tick items by hand.', false);
+    else menuTickMsg('Ticked '+hits.length+' item'+(hits.length===1?'':'s')+' found in the menu'+(added<hits.length?(' ('+(hits.length-added)+' were already ticked)'):'')+'. Check them, untick anything they didn’t order, then save.', true);
+  }catch(e){
+    console.error(e);
+    menuTickMsg('Couldn’t read the menu right now — tick items by hand.', false);
+  }
+}
+
 // ============ Pan labels (Avery sticker sheets) ============
 // One label per menu section (Hors d'oeuvres, Pasta station, Plated entree…)
 // showing the short job number, event name, date and section. Sections are
@@ -1254,13 +1363,9 @@ async function lbReadMenu(){
   if(!id){ st.textContent='This event has no Google Doc menu link — type the sections below.'; if(!lbRows.length) lbAddRow(); return; }
   st.textContent='Reading the menu…';
   try{
-    const s=await db.collection('settings').doc('app').get();
-    const url=(s.exists && s.data().scriptUrl)||'';
-    if(!url){ st.textContent='The Apps Script link isn’t saved in the main app’s Settings, so the menu can’t be read. Type the sections below.'; return; }
-    const r=await fetch(url+(url.indexOf('?')>-1?'&':'?')+'action=getDocText&fileId='+encodeURIComponent(id));
-    const j=await r.json();
-    if(!j || !j.success) throw new Error((j&&j.error)||'no text');
-    const found=lbSectionsFromText(j.text);
+    const text=await fetchMenuText(id);
+    if(text===null){ st.textContent='The Apps Script link isn’t saved in the main app’s Settings, so the menu can’t be read. Type the sections below.'; return; }
+    const found=lbSectionsFromText(text);
     if(!found.length){ st.textContent='No section headings found in the menu — type them below.'; return; }
     const old={}; lbRows.forEach(x=>{ old[x.name.toLowerCase()]=x.count; });
     lbRows=found.map(n=>({name:n, count: old[n.toLowerCase()]!=null ? old[n.toLowerCase()] : 1}));
