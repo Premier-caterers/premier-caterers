@@ -3863,12 +3863,33 @@ function isActiveEvent(e){
 // (default view) and for printing. Inline styles so print and screen match.
 let coverView = (function(){ try{ return localStorage.getItem('pcCoverView')||'boxes'; }catch(e){ return 'boxes'; } })();
 function setCoverView(v){ coverView=v; try{ localStorage.setItem('pcCoverView',v); }catch(e){} render(); }
+let coverEditing = new Set();   // ids of boxes currently in edit mode
+function coverToggleEdit(id){ if(coverEditing.has(id)) coverEditing.delete(id); else coverEditing.add(id); render(); }
 function _cbIsDropOff(e){ return /drop/i.test(e.type||'') || /drop/i.test(e.typeLabel||''); }
 function coverBoxesHtml(list, forPrint){
   const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const up = s => esc(String(s||'').toUpperCase());
   const pend = '<span style="border:1.5px dashed #111;border-radius:4px;padding:0 4px;font-size:11px">TBD</span>';
   const val = v => { const t=String(v==null?'':v).trim(); return (!t||t==='-'||/^tbd$/i.test(t)) ? pend : esc(t); };
+  // Edit-mode field helpers. Ids keep the cursor in place when the page refreshes.
+  const fid = (e,mi,f) => 'cbx_'+String(e.id).replace(/[^a-zA-Z0-9_]/g,'_')+'_'+(mi===undefined?'m':mi)+'_'+f;
+  const fin = (e,mi,f,v,ph,w) => `<input id="${fid(e,mi,f)}" type="text" value="${esc(v==null?'':v)}" placeholder="${ph||'—'}" onclick="event.stopPropagation()" `+
+     `onblur="${mi===undefined?`coverSaveField('${e.id}','${f}',this.value,false)`:`coverSaveMeal('${e.id}',${mi},'${f}',this.value,false)`}" `+
+     `style="font:inherit;color:#111;background:#fff;border:1px solid #888;border-radius:4px;padding:2px 5px;${w?('width:'+w+';'):'width:100%;'}box-sizing:border-box;min-width:0">`;
+  const fstaff = (e,mi,dept,count,names) => {
+    const shown = String(names||'').trim() ? names : (staffNum(count)>0 ? count : '');
+    return `<input id="${fid(e,mi,dept)}" type="text" value="${esc(shown)}" placeholder="# or names" title="Type a number or names" onclick="event.stopPropagation()" `+
+      `onblur="${mi===undefined?`coverSaveStaff('${e.id}','${dept}',this.value)`:`coverSaveStaffMeal('${e.id}',${mi},'${dept}',this.value)`}" `+
+      `style="font:inherit;color:#111;background:#fff;border:1px solid #888;border-radius:4px;padding:2px 5px;width:100%;box-sizing:border-box;min-width:0">`;
+  };
+  const staffEdit = (e,u,mi) => {
+    const rows = [['Waiters','waiters',u.waiters,u.waiterNames,'waiterTime',u.waiterTime],
+                  ['Bar','bartenders',u.bartenders,u.bartenderNames,'bartenderTime',u.bartenderTime],
+                  ['Chefs','chefs',u.chefs,u.chefNames,'chefTime',u.chefTime],
+                  ['Porters','porters',u.porters,u.porterNames,'porterTime',u.porterTime]];
+    return '<div style="display:grid;grid-template-columns:auto 1fr 76px;gap:4px 6px;align-items:center;margin-top:5px;border-top:1px solid #bbb;padding-top:5px">'+
+      rows.map(r=>`<b>${r[0]}</b>${fstaff(e,mi,r[1],r[2],r[3])}${fin(e,mi,r[4],r[5],'time')}`).join('')+'</div>';
+  };
   const staffRows = u => {
     const rows = [
       ['Waiters', u.waiters, u.waiterNames, u.waiterTime],
@@ -3889,7 +3910,7 @@ function coverBoxesHtml(list, forPrint){
   const ship = e => {
     const line = (lbl,field) => forPrint
       ? `<div style="display:flex;gap:6px;align-items:flex-end;margin-top:4px"><span style="width:34px">${lbl}</span><span style="flex:1;border-bottom:1px solid #111;min-height:14px;padding-left:2px">${esc(e[field]||'')}</span></div>`
-      : `<div style="display:flex;gap:6px;align-items:center;margin-top:4px"><span style="width:34px">${lbl}</span><input type="text" value="${esc(e[field]||'')}" placeholder="—" onclick="event.stopPropagation()" onblur="coverSaveField('${e.id}','${field}',this.value,false)" style="flex:1;border:none;border-bottom:1px solid #111;background:transparent;font:inherit;padding:1px 2px;min-width:0"></div>`;
+      : `<div style="display:flex;gap:6px;align-items:center;margin-top:4px"><span style="width:34px">${lbl}</span><input id="${fid(e,undefined,field)}" type="text" value="${esc(e[field]||'')}" placeholder="—" onclick="event.stopPropagation()" onblur="coverSaveField('${e.id}','${field}',this.value,false)" style="flex:1;border:none;border-bottom:1px solid #111;background:transparent;font:inherit;padding:1px 2px;min-width:0"></div>`;
     return `<div style="margin-top:6px;border:1.5px solid #111;border-radius:4px;padding:5px 7px"><b>Ship from commissary</b>${line('Date','shipDate')}${line('Time','shipTime')}</div>`;
   };
   const box = e => {
@@ -3904,10 +3925,25 @@ function coverBoxesHtml(list, forPrint){
     const kind = drop
       ? '<span style="justify-self:end;font-size:10px;padding:1px 5px;border-radius:4px;white-space:nowrap;color:#fff;border:1.5px dashed #fff">DROP OFF EVENT</span>'
       : '<span style="justify-self:end;font-size:10px;padding:1px 5px;border-radius:4px;white-space:nowrap;background:#fff;color:#111;border:1.5px solid #fff">CATERED EVENT</span>';
-    const open = forPrint ? '' : ` onclick="openEventFile('${e.id}')" title="Open event file" `;
-    const meals = (e.meals||[]).map(m=>{
+    const editing = !forPrint && coverEditing.has(e.id);
+    const open = (forPrint||editing) ? '' : ` onclick="openEventFile('${e.id}')" title="Open event file" `;
+    const pencil = forPrint ? '' : `<button type="button" onclick="event.stopPropagation();coverToggleEdit('${e.id}')" title="${editing?'Done editing':'Edit this event'}" style="margin-left:6px;font:inherit;font-size:11px;font-weight:700;border-radius:4px;padding:2px 7px;cursor:pointer;${editing?'background:#fff;color:#111;border:1.5px solid #fff':'background:transparent;color:#fff;border:1.5px solid #fff'}"><i class="ti ${editing?'ti-check':'ti-pencil'}"></i> ${editing?'Done':'Edit'}</button>`;
+    const meals = (e.meals||[]).map((m,mi)=>{
       const mj = job + (m.jobSuffix||'');
       const md = formatMealDay(m) || '';
+      if(editing) return `<div style="margin-top:7px;border-top:2px solid #111;padding-top:5px">
+        <div style="font-size:13px;font-weight:700">JOB ${esc(mj)}</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 6px;align-items:center;margin-top:3px">
+          <b>Meal</b>${fin(e,mi,'label',m.label,'Lunch, Dinner…')}
+          <b>Day</b>${fin(e,mi,'dayLabel',md,'Sat 10/17')}
+          <b>Start</b>${fin(e,mi,'startTime',m.startTime,'12:30pm')}
+          <b>Address</b>${fin(e,mi,'addr',m.addr,'Same as above')}
+        </div>
+        ${staffEdit(e,m,mi)}
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 6px;align-items:center;margin-top:5px">
+          <b>Manager</b>${fin(e,mi,'manager',m.manager)}
+          <b>Mashgiach</b>${fin(e,mi,'mashgiach',m.mashgiachNames||m.mashgiach)}
+        </div></div>`;
       return `<div style="margin-top:7px;border-top:2px solid #111;padding-top:5px">
         <div style="font-size:13px;font-weight:700">JOB ${esc(mj)}${m.label?' · '+up(m.label):''}${md?' · '+esc(md):''}</div>
         ${(m.addr && m.addr!==e.addr)?`<div style="display:flex;gap:4px"><span aria-hidden="true">&#9906;</span><span>${esc(m.addr)}</span></div>`:''}
@@ -3922,9 +3958,30 @@ function coverBoxesHtml(list, forPrint){
           <span style="font-size:17px;text-align:center">${up(dayStr)}</span>
           ${kind}
         </div>
-        <div style="font-size:14px;font-weight:700;margin-top:3px;line-height:1.2">${up(type)}${venue?' · '+up(venue):''}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:3px"><span style="font-size:14px;font-weight:700;line-height:1.2">${up(type)}${venue?' · '+up(venue):''}</span>${pencil}</div>
       </div>
-      <div style="padding:7px 10px;font-size:12px;line-height:1.45">
+      ${editing ? `<div style="padding:7px 10px;font-size:12px;line-height:1.45;background:#fffbe6">
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 6px;align-items:center">
+          <b>Client</b>${fin(e,undefined,'name',e.name)}
+          <b>Type</b>${fin(e,undefined,'typeLabel',e.typeLabel||e.type)}
+          <b>Day</b>${fin(e,undefined,'dayLabel',formatEventDay(e),'Mon 10/12')}
+          <b>Address</b>${fin(e,undefined,'addr',addr)}
+          <b>Start</b>${fin(e,undefined,'startTime',e.startTime,'6:30pm')}
+          <b>Guests</b>${fin(e,undefined,'guestCount',guests)}
+        </div>
+        ${staffEdit(e,e)}
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 6px;align-items:center;margin-top:5px;border-top:1px solid #bbb;padding-top:5px">
+          <b>Manager</b>${fin(e,undefined,'manager',e.manager)}
+          <b>Mashgiach</b>${fin(e,undefined,'mashgiach',e.mashgiachNames||e.mashgiach)}
+        </div>
+        ${meals}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+          <button type="button" onclick="coverAddMeal('${e.id}')" style="font:inherit;font-size:11px;border:1px solid #888;background:#fff;border-radius:4px;padding:2px 7px;cursor:pointer"><i class="ti ti-plus"></i> Add meal</button>
+          ${(e.meals||[]).length?`<button type="button" onclick="coverRemoveLastMeal('${e.id}')" style="font:inherit;font-size:11px;border:1px solid #888;background:#fff;border-radius:4px;padding:2px 7px;cursor:pointer"><i class="ti ti-minus"></i> Remove last meal</button>`:''}
+        </div>
+        ${ship(e)}
+        <div style="text-align:right;margin-top:6px"><button type="button" onclick="coverToggleEdit('${e.id}')" style="font:inherit;font-weight:700;background:#111;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer"><i class="ti ti-check"></i> Done</button></div>
+      </div>` : `<div style="padding:7px 10px;font-size:12px;line-height:1.45">
         <div style="font-size:14px;font-weight:700">${esc(e.name||'')}${e.mainLabel?` <span style="display:inline-block;border:1px solid #111;border-radius:4px;padding:0 5px;font-size:11px;font-weight:400">${esc(e.mainLabel)}</span>`:''}</div>
         <div style="display:flex;gap:4px;align-items:flex-start"><span aria-hidden="true">&#9906;</span><span>${addr?esc(addr):pend}</span></div>
         <div>${[e.startTime?('Start '+esc(e.startTime)):'', guests?(esc(guests)+' guests'):''].filter(Boolean).join(' · ')}</div>
@@ -3932,7 +3989,7 @@ function coverBoxesHtml(list, forPrint){
         <div style="margin-top:5px;border-top:1px solid #bbb;padding-top:5px"><b>Manager</b> ${val(e.manager)} · <b>Mashgiach</b> ${val(e.mashgiachNames||e.mashgiach)}</div>
         ${meals}
         ${ship(e)}
-      </div>
+      </div>`}
     </div>`;
   };
   return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;font-family:Arial,sans-serif">${list.map(box).join('')}</div>`;
@@ -4185,7 +4242,7 @@ function renderCoverSheet(){
     </div>
     ${sortBar}
     ${noEvents}
-    ${(weekEvents.length>0 && coverView!=='table')?`<div class="cs-hint"><i class="ti ti-info-circle" style="font-size:13px"></i> Click a black header to open that event. Switch to <b>Table (edit staff)</b> to type staffing.</div>${coverBoxesHtml(weekEvents,false)}
+    ${(weekEvents.length>0 && coverView!=='table')?`<div class="cs-hint"><i class="ti ti-info-circle" style="font-size:13px"></i> Click <b>Edit</b> on a box to change it right there. Click a black header to open the full event.</div>${coverBoxesHtml(weekEvents,false)}
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button onclick="setCoverView('table');setTimeout(coverAddNewRow,0)" class="btn btn--sm"><i class="ti ti-plus"></i> New event</button><button onclick="coverCreateDropOff()" class="btn btn--sm"><i class="ti ti-truck-delivery"></i> New drop off</button></div>`:''}
     ${(weekEvents.length>0 && coverView==='table')?`
     <div class="cs-hint"><i class="ti ti-info-circle" style="font-size:13px"></i> Click any staffing cell to edit \u2014 changes sync to the Staff Schedule automatically.</div>
