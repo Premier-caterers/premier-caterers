@@ -5301,6 +5301,7 @@ function drawerDocuments(inq, role, ev){
     _docBtn('Venue sheet','ti-building', !ev, ev?(ev.venueLink?`window.open('${ev.venueLink}','_blank')`:`attachDoc('${ev.id}','venueLink')`):''),
     _docBtn('Final checklist','ti-checklist', !ev, ev?`goChecklist('${ev.id}')`:''),
     _docBtn('Food labels','ti-tag', !ev, ev?`openFoodLabels('${ev.id}')`:''),
+    _docBtn('Pan labels','ti-tags', !ev, ev?`window.open('grocery.html?event=${ev.id}&labels=1','_blank')`:''),
     _docBtn('Linen order form'+(ev&&ev.linenFiles&&ev.linenFiles.length?' ('+ev.linenFiles.length+')':''),'ti-wash', !ev, ev?`openMultiAttachModal('${ev.id}','linenFiles','Linen Order Form')`:''),
     _docBtn('BEO','ti-clipboard-list',false,`openBeo('${id}')`),
     _docBtn('Contract','ti-file-certificate',false,`openContract('${id}')`),

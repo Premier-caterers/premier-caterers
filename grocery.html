@@ -180,6 +180,7 @@
       <div style="padding:13px 15px" class="row">
         <button class="btn btn-primary" onclick="saveGrocery()"><i class="ti ti-device-floppy"></i> Save this event's grocery</button>
         <button class="btn btn-ghost" onclick="printKitchen()"><i class="ti ti-printer"></i> Print kitchen copy</button>
+        <button class="btn btn-ghost" onclick="openLabels()"><i class="ti ti-tags"></i> Pan labels</button>
         <button class="btn btn-ghost" onclick="printClientMenu()"><i class="ti ti-external-link"></i> Open client menu (Google Doc)</button>
         <span class="muted" id="saveState" style="font-size:12px"></span>
       </div>
@@ -241,6 +242,44 @@
     </div>
   </div>
 </div>
+
+<!-- Pan labels modal (Avery sticker sheets, one label per menu section) -->
+<div id="labelsModal" class="hide" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:90vh;overflow:auto">
+    <div class="card-h" style="border-bottom:1px solid var(--line)"><span id="lbTitle">Pan labels</span><button class="btn btn-ghost btn-sm" onclick="closeLabels()"><i class="ti ti-x"></i></button></div>
+    <div style="padding:15px">
+      <label class="fld">Sticker size (number is on the Avery box)</label>
+      <div class="row" style="gap:8px;margin-bottom:12px">
+        <label class="lb-size"><input type="radio" name="lbSize" value="5163" onchange="lbSetSize(this.value)"> <b>Avery 5163</b><br><span class="muted">2" × 4" · 10 per sheet</span></label>
+        <label class="lb-size"><input type="radio" name="lbSize" value="5160" onchange="lbSetSize(this.value)"> <b>Avery 5160</b><br><span class="muted">1" × 2⅝" · 30 per sheet</span></label>
+      </div>
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label class="fld" style="margin:0">Sections · how many labels of each</label>
+        <button class="btn btn-ghost btn-sm" onclick="lbReadMenu()"><i class="ti ti-refresh"></i> Re-read menu</button>
+      </div>
+      <div class="muted" id="lbStatus" style="font-size:12px;margin-bottom:8px"></div>
+      <div id="lbRows"></div>
+      <span class="addrow" onclick="lbAddRow()"><i class="ti ti-plus"></i> Add section</span>
+      <div class="row" style="margin-top:14px;align-items:center;gap:8px">
+        <label class="fld" style="margin:0">Stickers already used on the first sheet</label>
+        <input type="number" id="lbSkip" min="0" value="0" style="width:64px" oninput="lbSummary()">
+      </div>
+      <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="muted" id="lbTotal" style="font-size:13px"></span>
+        <button class="btn btn-primary" onclick="printLabels()"><i class="ti ti-printer"></i> Print labels</button>
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:10px">In the print window set Scale to 100% (or "Actual size") and Margins to "Default" so the labels line up with the stickers.</div>
+    </div>
+  </div>
+</div>
+<style>
+  .lb-size{flex:1;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px;cursor:pointer;line-height:1.35}
+  .lb-size:has(input:checked){border:2px solid var(--maroon);padding:7px 9px}
+  .lb-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+  .lb-row input[type=text]{flex:1;min-width:0}
+  .lb-row input[type=number]{width:64px;text-align:center}
+  .lb-row.off input[type=text]{color:#999;text-decoration:line-through}
+</style>
 
 <div class="toast" id="toast"></div>
 <script>
@@ -632,6 +671,7 @@ const authReady = new Promise(function(resolve){
       if([...sel.options].some(o=>o.value===deepLinkId)){
         sel.value = deepLinkId;
         onEventPick();
+        if(new URLSearchParams(location.search).get('labels')==='1') openLabels();
       }
     }
     document.getElementById('bootMsg').textContent='';
@@ -1154,6 +1194,157 @@ function printWeekly(){
             `<h2 style="color:#8B1A1A;border-bottom:2px solid #8B1A1A;padding-bottom:6px">Weekly purchasing list</h2>`+
             `<p style="color:#555;font-size:12px;margin-top:4px">${esc(meta)}</p>`+out+`</div>`;
   openPrint(doc, 'Weekly order');
+}
+
+// ============ Pan labels (Avery sticker sheets) ============
+// One label per menu section (Hors d'oeuvres, Pasta station, Plated entree…)
+// showing the short job number, event name, date and section. Sections are
+// read from the event's menu Google Doc; counts are typed per section and
+// saved with the event's grocery so they come back next time.
+const LB_SHEETS = {
+  '5163': { cols:2, rows:5,  w:4,     h:2, top:0.5, left:0.15625, gap:0.1875 },
+  '5160': { cols:3, rows:10, w:2.625, h:1, top:0.5, left:0.1875,  gap:0.125 }
+};
+let lbRows = [];      // [{name, count}]
+let lbSize = '5163';
+
+function lbEventDate(ev){
+  const e = events.find(x=>x.id===ev.id) || {};
+  let iso = e.eventDate || '';
+  if(!iso && e.weekOf){
+    const back = {sunday:0,saturday:1,friday:2,thursday:3,wednesday:4,tuesday:5,monday:6}[(e.day||'').toLowerCase()];
+    if(back!=null){ const s=new Date(e.weekOf+'T12:00:00Z'); if(!isNaN(s)) iso=new Date(s.getTime()-back*86400000).toISOString().split('T')[0]; }
+  }
+  if(!iso) return '';
+  const d=new Date(iso+'T12:00:00');
+  return isNaN(d)?'':d.toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'});
+}
+function lbDocId(link){
+  const m=String(link||'').match(/\/d\/([a-zA-Z0-9_-]{20,})/) || String(link||'').match(/[?&]id=([a-zA-Z0-9_-]{20,})/);
+  return m?m[1]:'';
+}
+// Pick out the section headings from the menu text.
+function lbSectionsFromText(text){
+  const exact=/^(hors d'?oeuvres|salads?|appetizers?|entr[eé]es?|main course|desserts?|soups?|soup course|fish course|pre-?set|tisch|dinner|lunch|breakfast|brunch|kiddush|buffet|sides|bar)$/i;
+  const kw=/(station|stations|\bbar\b|\bshop\b|hors|hor d|d'oeuvres|dourves|tisch|\bcourse\b|\btable\b|\bbuffet\b|\bplatters?\b)/i;
+  const skip=/^(served with|each entree|fish and vegetarian|caterer to provide|regular coffee|arrangements|based on|upon arrival|enter ballroom|notes|party planner|cold|hot|or)$/i;
+  const seen=new Set(); const out=[];
+  String(text||'').split(/\r?\n/).forEach(raw=>{
+    let l=raw.replace(/[*_\\]/g,'').trim();
+    l=l.replace(/\(.*?\)/g,' ').replace(/^optional\s+/i,'').replace(/\s{2,}/g,' ').replace(/[\s:–-]+$/,'').trim();
+    if(!l || l.indexOf(',')>-1 || /[.!?]$/.test(l) || l.length>40 || skip.test(l)) return;
+    if(!(exact.test(l) || kw.test(l) || /^passing\b/i.test(l) || /^plated\b/i.test(l))) return;
+    const k=l.toLowerCase(); if(seen.has(k)) return; seen.add(k);
+    out.push(l);
+  });
+  return out;
+}
+async function lbReadMenu(){
+  const ev=currentEventObj()||{};
+  const st=document.getElementById('lbStatus');
+  const id=lbDocId(ev.menuLink);
+  if(!id){ st.textContent='This event has no Google Doc menu link — type the sections below.'; if(!lbRows.length) lbAddRow(); return; }
+  st.textContent='Reading the menu…';
+  try{
+    const s=await db.collection('settings').doc('app').get();
+    const url=(s.exists && s.data().scriptUrl)||'';
+    if(!url){ st.textContent='The Apps Script link isn’t saved in the main app’s Settings, so the menu can’t be read. Type the sections below.'; return; }
+    const r=await fetch(url+(url.indexOf('?')>-1?'&':'?')+'action=getDocText&fileId='+encodeURIComponent(id));
+    const j=await r.json();
+    if(!j || !j.success) throw new Error((j&&j.error)||'no text');
+    const found=lbSectionsFromText(j.text);
+    if(!found.length){ st.textContent='No section headings found in the menu — type them below.'; return; }
+    const old={}; lbRows.forEach(x=>{ old[x.name.toLowerCase()]=x.count; });
+    lbRows=found.map(n=>({name:n, count: old[n.toLowerCase()]!=null ? old[n.toLowerCase()] : 1}));
+    st.textContent='Found '+found.length+' sections in the menu. Set any you don’t need to 0.';
+    renderLbRows();
+  }catch(e){
+    console.error(e);
+    st.textContent='Couldn’t read the menu right now — type the sections below.';
+  }
+}
+async function openLabels(){
+  const ev=currentEventObj();
+  if(!ev || (!ev.id && !ev.name)){ toast('Pick an event first'); return; }
+  document.getElementById('lbTitle').textContent='Pan labels · '+(ev.num?('Job '+ev.num+' · '):'')+(ev.name||'');
+  document.getElementById('lbSkip').value=0;
+  lbRows=[]; lbSize='5163';
+  document.getElementById('lbStatus').textContent='';
+  document.getElementById('labelsModal').classList.remove('hide');
+  let saved=null;
+  if(ev.id && ev.id!=='manual'){
+    try{ const d=await GSAVED.doc(ev.id).get(); if(d.exists && d.data().labels) saved=d.data().labels; }catch(e){}
+  }
+  if(saved){
+    lbSize=saved.size||'5163';
+    lbRows=(saved.rows||[]).map(x=>({name:x.name||'', count:Number(x.count)||0}));
+    document.getElementById('lbStatus').textContent='Loaded the labels you set up last time. Tap "Re-read menu" if the menu changed.';
+  }
+  document.querySelectorAll('input[name=lbSize]').forEach(r=>{ r.checked=(r.value===lbSize); });
+  renderLbRows();
+  if(!saved) lbReadMenu();
+}
+function closeLabels(){ document.getElementById('labelsModal').classList.add('hide'); }
+function lbSetSize(v){ lbSize=v; lbSummary(); }
+function renderLbRows(){
+  const host=document.getElementById('lbRows');
+  host.innerHTML=lbRows.map((r,i)=>
+    `<div class="lb-row${r.count>0?'':' off'}">`+
+    `<input type="text" value="${esc(r.name)}" placeholder="Section name" oninput="lbRows[${i}].name=this.value">`+
+    `<input type="number" min="0" value="${r.count}" aria-label="How many labels" oninput="lbRows[${i}].count=Math.max(0,parseInt(this.value,10)||0);this.parentNode.classList.toggle('off',!(lbRows[${i}].count>0));lbSummary()">`+
+    `<button class="btn btn-ghost btn-sm" aria-label="Remove" onclick="lbRows.splice(${i},1);renderLbRows()"><i class="ti ti-trash"></i></button></div>`
+  ).join('');
+  lbSummary();
+}
+function lbAddRow(){ lbRows.push({name:'',count:1}); renderLbRows(); const ins=document.querySelectorAll('#lbRows input[type=text]'); if(ins.length) ins[ins.length-1].focus(); }
+function lbSummary(){
+  const n=lbRows.filter(r=>r.name.trim()).reduce((a,r)=>a+(r.count||0),0);
+  const sh=LB_SHEETS[lbSize]; const per=sh.cols*sh.rows;
+  const skip=Math.max(0,parseInt(document.getElementById('lbSkip').value,10)||0)%per;
+  const sheets=n?Math.ceil((n+skip)/per):0;
+  document.getElementById('lbTotal').textContent=n+' label'+(n===1?'':'s')+' · '+sheets+' sheet'+(sheets===1?'':'s');
+}
+function printLabels(){
+  const ev=currentEventObj()||{};
+  const list=[]; lbRows.forEach(r=>{ const nm=r.name.trim(); for(let i=0;i<(r.count||0)&&nm;i++) list.push(nm); });
+  if(!list.length){ toast('Set at least one label to 1 or more'); return; }
+  const sh=LB_SHEETS[lbSize]; const per=sh.cols*sh.rows;
+  const skip=Math.max(0,parseInt(document.getElementById('lbSkip').value,10)||0)%per;
+  const cells=Array(skip).fill(null).concat(list);
+  const job=ev.num?('Job '+ev.num):'';
+  const date=lbEventDate(ev);
+  const name=ev.name||'';
+  const small=lbSize==='5160';
+  const fit=(s,big,lim)=> s.length>lim ? Math.max(Math.round(big*lim/s.length), Math.round(big*0.6)) : big;
+  const label=s=>{
+    if(s===null) return '<div class="lab"></div>';
+    if(small) return `<div class="lab"><div class="top"><b>${esc(job)}</b><span>${esc(date)}</span></div>`+
+      `<div class="sec" style="font-size:${fit(s,15,20)}pt">${esc(s)}</div><div class="ev">${esc(name)}</div></div>`;
+    return `<div class="lab"><div class="top"><b>${esc(job)}</b><span>${esc(date)}</span></div><div class="ev">${esc(name)}</div>`+
+      `<div class="sec" style="font-size:${fit(s,24,18)}pt">${esc(s)}</div></div>`;
+  };
+  let pages='';
+  for(let p=0;p<cells.length;p+=per){
+    pages+='<div class="sheet">'+cells.slice(p,p+per).map(label).join('')+'</div>';
+  }
+  const css=`@page{size:letter;margin:0}*{box-sizing:border-box}body{margin:0;font-family:-apple-system,Arial,sans-serif;color:#000}
+.sheet{width:8.5in;height:11in;padding:${sh.top}in 0 0 ${sh.left}in;display:grid;grid-template-columns:repeat(${sh.cols},${sh.w}in);grid-auto-rows:${sh.h}in;column-gap:${sh.gap}in;page-break-after:always;overflow:hidden}
+.sheet:last-child{page-break-after:auto}
+.lab{overflow:hidden;display:flex;flex-direction:column;justify-content:center;padding:${small?'0.06in 0.14in':'0.14in 0.25in'}}
+.top{display:flex;justify-content:space-between;align-items:baseline;font-size:${small?10:20}pt;line-height:1.1}
+.top span{font-size:${small?9:12}pt}
+.ev{font-size:${small?8.5:13}pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;margin-top:${small?1:2}px}
+.sec{font-weight:700;line-height:1.1;${small?'margin-top:2px':'border-top:2px solid #000;margin-top:6px;padding-top:6px'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}`;
+  const w=window.open('','_blank');
+  if(!w){ toast('Allow pop-ups to print'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc((job?job+' ':'')+name)} labels</title><style>${css}</style></head><body>${pages}</body></html>`);
+  w.document.close(); w.focus();
+  setTimeout(()=>{ w.print(); }, 350);
+  // remember the setup for this event
+  if(ev.id && ev.id!=='manual'){
+    GSAVED.doc(ev.id).set({labels:{size:lbSize, rows:lbRows.filter(r=>r.name.trim()).map(r=>({name:r.name.trim(),count:r.count||0}))}},{merge:true})
+      .catch(e=>console.warn('labels save failed',e));
+  }
 }
 
 // ============ Tabs ============
