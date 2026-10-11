@@ -5605,6 +5605,8 @@ function _cfDocsTable(inq, role, ev, full){
     add('Caterer menu / grocery', cc?OK:NA, cc?'✓ Linked':'○ Not linked', `window.open('${cc||'https://drive.google.com/drive/u/0/folders/16u6TIcojWDWqQj6pvG6z_3pg1262Wabh'}','_blank')`, 'Open', false);
     // Food labels
     add('Food labels', ev.foodLabels?OK:NA, ev.foodLabels?'✓ Customized':'○ Ready to print', `openFoodLabels('${ev.id}')`, 'Open', false);
+    // Pan labels (Avery sticker sheets per menu section)
+    add('Pan labels', NA, '○ Ready to print', `window.open('grocery.html?event=${ev.id}&labels=1','_blank')`, 'Open', false);
     if(full){
       const lf = cnt(ev.linenFiles);
       add('Linen order form', lf?OK:NA, lf?('✓ '+lf+' file'+(lf===1?'':'s')):'○ None', `openMultiAttachModal('${ev.id}','linenFiles','Linen Order Form')`, lf?'Open':'Upload', false);
@@ -5616,7 +5618,7 @@ function _cfDocsTable(inq, role, ev, full){
       add('Weekly cover sheet', NA, '—', `goToEventCoverSheet('${ev.weekOf||''}')`, 'Open', false);
     }
   } else {
-    ['Final checklist','Equipment list','Venue sheet','Floor plan(s)','Food labels'].forEach(noEv);
+    ['Final checklist','Equipment list','Venue sheet','Floor plan(s)','Food labels','Pan labels'].forEach(noEv);
   }
   if(full){
     [1,2,3].forEach(n=>{ const f=_otherUpField(n), c=(inq[f]&&inq[f].length)||0;
