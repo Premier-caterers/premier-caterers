@@ -184,6 +184,8 @@
         <button class="btn btn-primary" onclick="saveGrocery()"><i class="ti ti-device-floppy"></i> Save this event's grocery</button>
         <button class="btn btn-ghost" onclick="printKitchen()"><i class="ti ti-printer"></i> Print kitchen copy</button>
         <button class="btn btn-ghost" onclick="openLabels()"><i class="ti ti-tags"></i> Pan labels</button>
+        <button class="btn btn-ghost" id="ccBtn" onclick="makeCatererCopy()"><i class="ti ti-columns"></i> Make caterer copy</button>
+        <a href="#" onclick="ccScriptUrl(true);return false" class="muted" style="font-size:11px">change copy link</a>
         <button class="btn btn-ghost" onclick="printClientMenu()"><i class="ti ti-external-link"></i> Open client menu (Google Doc)</button>
         <span class="muted" id="saveState" style="font-size:12px"></span>
       </div>
@@ -956,7 +958,7 @@ function buildSavedRows(){
       s.rows.forEach((r,ri)=>{
         if(isDel(s.id,ri)) return;
         out.push({
-          dept:s.dept, section:cleanName(s),
+          dept:s.dept, section:cleanName(s), sid:s.id,
           code:(getOv(s.id,ri,'c',(r[0]||'X'))).toUpperCase(),
           item:r[1], qty:getOv(s.id,ri,'q',r[2]), vendor:getOv(s.id,ri,'v',r[3])
         });
@@ -964,7 +966,7 @@ function buildSavedRows(){
       getExtras(s.id).forEach(er=>{
         if(!er[1] || !er[1].trim()) return;
         out.push({
-          dept:s.dept, section:cleanName(s),
+          dept:s.dept, section:cleanName(s), sid:s.id,
           code:(er[0]||'X').toUpperCase(),
           item:er[1].trim(), qty:(er[2]||'').trim(), vendor:(er[3]||'').trim()
         });
@@ -1252,7 +1254,9 @@ function mtHit(tok, words){
     || (w.length>=4 && tok.startsWith(w))
     || (tok.length>=5 && w.length>=5 && w.slice(0,5)===tok.slice(0,5)));
 }
-function menuMatches(text, sections){
+function menuMatches(text, sections){ return Object.keys(menuMatchDetail(text, sections)); }
+// {libraryId: 'menu heading (lowercase)'} for every library item found in the menu
+function menuMatchDetail(text, sections){
   const headings=lbSectionsFromText(text).map(h=>h.toLowerCase());
   // each item line remembers the heading it sits under
   const lines=[]; let under='';
@@ -1262,12 +1266,12 @@ function menuMatches(text, sections){
     const l=raw.replace(/[*_\\]/g,'').trim();
     if(l) lines.push({ws:mtWords(l), under});
   });
-  const hits=[];
+  const hits={};
   sections.forEach(s=>{
     const dept=String(s.dept||'').toLowerCase().trim();
     if(MT_NEVER.test(dept)) return;
     const head=MT_HEADINGS[dept];
-    if(head){ if(headings.some(h=>head.test(h))) hits.push(s.id); return; }
+    if(head){ const h=headings.find(h=>head.test(h)); if(h) hits[s.id]=h; return; }
     let key=cleanName(s).toLowerCase().trim()
       .replace(/^(passing|hor ?d\w*|hors?|stations?|buffet|salads?|appetizer|entree|sides?( dish)? for entree|desserts?|vien+es+e?e?|vinesse)\s*[-\/]\s*(?=\S)/,'')
       .replace(/^passing\s+(?=\S)/,'').trim();
@@ -1277,9 +1281,10 @@ function menuMatches(text, sections){
     // desserts only count when they sit under a dessert heading
     const dz=/dessert|vien|sweet|pastr|cake/;
     const pool = /dessert/.test(dept)
-      ? lines.filter(l=>dz.test(l.under)).concat(headings.filter(h=>dz.test(h)).map(h=>({ws:mtWords(h)})))
+      ? lines.filter(l=>dz.test(l.under)).concat(headings.filter(h=>dz.test(h)).map(h=>({ws:mtWords(h), under:h})))
       : lines;
-    if(pool.some(l=>toks.every(t=>mtHit(t,l.ws)))) hits.push(s.id);
+    const m=pool.find(l=>toks.every(t=>mtHit(t,l.ws)));
+    if(m) hits[s.id]=m.under||'';
   });
   return hits;
 }
@@ -1309,6 +1314,60 @@ async function tickFromMenu(manual){
   }catch(e){
     console.error(e);
     menuTickMsg('Couldn’t read the menu right now — tick items by hand.', false);
+  }
+}
+
+// ============ Caterer copy (real menu left, groceries right) ============
+// A separate Apps Script web app ("Premier Caterers Caterer Copy") copies the
+// event's real menu Google Doc and puts each menu section in a table with
+// that section's groceries beside it. Its link lives in settings/app as
+// catererCopyUrl; the finished doc's link goes on the event as catererCopyDoc.
+async function ccScriptUrl(forceAsk){
+  let url='';
+  try{ const d=await db.collection('settings').doc('app').get(); url=(d.exists && d.data().catererCopyUrl)||''; }catch(e){}
+  if(url && !forceAsk) return url;
+  const pasted=(window.prompt('Paste the Web app link for the "Premier Caterers Caterer Copy" Apps Script (from Deploy → New deployment):', url)||'').trim();
+  if(!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec/.test(pasted)){ if(pasted) toast('That doesn’t look like an Apps Script web app link'); return ''; }
+  try{ await db.collection('settings').doc('app').set({catererCopyUrl:pasted},{merge:true}); }catch(e){ console.warn(e); }
+  return pasted;
+}
+async function makeCatererCopy(){
+  const ev=currentEventObj();
+  if(!ev || !ev.id || ev.id==='manual'){ toast('Pick a booked event first'); return; }
+  if(!chosen.size){ toast('Tick items first'); return; }
+  const fileId=lbDocId(ev.menuLink);
+  if(!fileId){ toast('This event has no Google Doc menu link'); return; }
+  const evRec=events.find(x=>x.id===ev.id)||{};
+  if(evRec.catererCopyDoc && !evRec.catererCopyAuto &&
+     !confirm('This event already has a caterer copy linked. Make a new one and link it instead? (The old doc is not deleted.)')) return;
+  const url=await ccScriptUrl(false);
+  if(!url) return;
+  const btn=document.getElementById('ccBtn'); const old=btn.innerHTML;
+  btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i> Making copy…';
+  try{
+    await saveGrocery();
+    // which menu section does each ticked item belong to?
+    const text=await fetchMenuText(fileId);
+    const where = text ? menuMatchDetail(text, secList()) : {};
+    const groceries={};
+    buildSavedRows().forEach(r=>{
+      const key=where[r.sid]||'';
+      const line=(r.code||'X')+' · '+r.item+(r.qty&&r.qty!=='yes'?' · '+r.qty:'')+(r.vendor?' · '+r.vendor:'');
+      (groceries[key]=groceries[key]||[]).push(line);
+    });
+    const header=[ev.num?('Job '+ev.num):'', lbEventDate(ev), ev.name||''].filter(Boolean).join(' · ');
+    const r=await fetch(url,{method:'POST', body:JSON.stringify({action:'makeCatererCopy', fileId, header, groceries})});
+    const j=await r.json();
+    if(!j || !j.success) throw new Error((j&&j.error)||'failed');
+    await EVENTS.doc(ev.id).set({catererCopyDoc:j.url, catererCopyAuto:true},{merge:true});
+    evRec.catererCopyDoc=j.url; evRec.catererCopyAuto=true;
+    toast('Caterer copy made'+(j.other?(' · '+j.other+' item'+(j.other===1?'':'s')+' under "Other"'):''));
+    window.open(j.url,'_blank');
+  }catch(e){
+    console.error(e);
+    toast('Couldn’t make the caterer copy — '+(e.message||'check connection'));
+  }finally{
+    btn.disabled=false; btn.innerHTML=old;
   }
 }
 
