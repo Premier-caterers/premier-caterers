@@ -1355,8 +1355,7 @@ async function makeCatererCopy(){
     const groceries={};
     buildSavedRows().forEach(r=>{
       const key=where[r.sid]||'';
-      const line=(r.code||'X')+' · '+r.item+(r.qty&&r.qty!=='yes'?' · '+r.qty:'')+(r.vendor?' · '+r.vendor:'');
-      (groceries[key]=groceries[key]||[]).push(line);
+      (groceries[key]=groceries[key]||[]).push({code:(r.code||'X'), item:r.item||'', qty:r.qty||'—', vendor:r.vendor||'—'});
     });
     const header=[ev.num?('Job '+ev.num):'', lbEventDate(ev), ev.name||''].filter(Boolean).join(' · ');
     const r=await fetch(url,{method:'POST', body:JSON.stringify({action:'makeCatererCopy', fileId, header, groceries})});
