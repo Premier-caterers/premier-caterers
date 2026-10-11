@@ -1344,6 +1344,9 @@ async function makeCatererCopy(){
   if(!url) return;
   const btn=document.getElementById('ccBtn'); const old=btn.innerHTML;
   btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i> Making copy…';
+  // open the tab now (while it still counts as your click) so the browser doesn't block it
+  const tab=window.open('','_blank');
+  if(tab){ try{ tab.document.write('<p style="font-family:Arial;padding:24px">Making the caterer copy… this takes about 10–30 seconds.</p>'); }catch(e){} }
   try{
     await saveGrocery();
     // which menu section does each ticked item belong to?
@@ -1362,10 +1365,12 @@ async function makeCatererCopy(){
     await EVENTS.doc(ev.id).set({catererCopyDoc:j.url, catererCopyAuto:true},{merge:true});
     evRec.catererCopyDoc=j.url; evRec.catererCopyAuto=true;
     toast('Caterer copy made'+(j.other?(' · '+j.other+' item'+(j.other===1?'':'s')+' under "Other"'):''));
-    window.open(j.url,'_blank');
+    if(tab) tab.location.href=j.url; else window.open(j.url,'_blank');
+    if(j.errors && j.errors.length) alert('Caterer copy made, but '+j.errors.length+' section(s) were left as plain menu text:\n\n'+j.errors.join('\n'));
   }catch(e){
     console.error(e);
-    toast('Couldn’t make the caterer copy — '+(e.message||'check connection'));
+    if(tab) tab.close();
+    alert('Couldn’t make the caterer copy:\n\n'+(e.message||'check connection'));
   }finally{
     btn.disabled=false; btn.innerHTML=old;
   }
@@ -1407,6 +1412,7 @@ function lbSectionsFromText(text){
   const seen=new Set(); const out=[];
   String(text||'').split(/\r?\n/).forEach(raw=>{
     let l=raw.replace(/[*_\\]/g,'').trim();
+    l=l.replace(/\s+[-–]\s+.*$/,'');   // drop equipment notes after " - "
     l=l.replace(/\(.*?\)/g,' ').replace(/^optional\s+/i,'').replace(/\s{2,}/g,' ').replace(/[\s:–-]+$/,'').trim();
     if(!l || l.indexOf(',')>-1 || /[.!?]$/.test(l) || l.length>40 || skip.test(l)) return;
     if(!(exact.test(l) || kw.test(l) || /^passing\b/i.test(l) || /^plated\b/i.test(l))) return;
