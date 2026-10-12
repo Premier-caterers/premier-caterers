@@ -9362,6 +9362,10 @@ function saveInquiryEdits(id){
   Object.keys(_ACT_FIELDS_INQ).forEach(k=>{ _prevSnap[k]=inq[k]; });
   const g = k => { const el=document.getElementById('ie-'+k); return el? (el.value||'').trim() : (inq[k]||''); };
   const wasBooked = inq.stage==='booked';
+  // Remember the event address as it was when the form opened, so we can tell
+  // whether the user actually typed in the "Event address" box (see below).
+  const _evBefore = _eventForInq(inq);
+  const _evAddrBefore = _evBefore ? String(_evBefore.addr||'') : '';
   inq.firstName=g('firstName'); inq.lastName=g('lastName'); inq.organization=g('organization');
   inq.eventName=g('eventName'); inq.eventType=g('eventType'); inq.eventDate=g('eventDate');
   inq.eventTBD = !!(document.getElementById('ie-eventTBD')||{}).checked;
@@ -9399,6 +9403,16 @@ function saveInquiryEdits(id){
       const gi = k => { const el=document.getElementById('iee-'+k); return el?(parseInt(el.value)||0):undefined; };
       const tv=ge('type'); if(tv!==undefined && tv!==''){ ev2.type=tv; ev2.typeLabel=(typeof typeMap==='object'&&typeMap[tv])||tv; }
       const dv=ge('day'); if(dv!==undefined) ev2.day=dv;
+      // Venue fix: changing the client's Venue location used to be undone here,
+      // because the untouched "Event address" box still held the OLD address
+      // and overwrote it — so the cover sheet kept the old venue. Now: if the
+      // Event address box wasn't changed, the venue location wins.
+      const venueChanged = (inq.venueLocation||'') !== (_prevSnap.venueLocation||'') || (inq.venueName||'') !== (_prevSnap.venueName||'');
+      const addrTyped = ge('addr');
+      if(addrTyped !== undefined && addrTyped.trim() === _evAddrBefore.trim() && venueChanged){
+        const newAddr = inq.venueLocation || inq.venueName || '';
+        if(newAddr) document.getElementById('iee-addr').value = newAddr;
+      }
       ['addr','notes','menuLink','groceryLink','floorplan','venueLink','logoData','manager','mashgiach','waiterTime','chefTime'].forEach(k=>{ const v=ge(k); if(v!==undefined) ev2[k]=v; });
       ['waiters','bartenders','porters','chefs'].forEach(k=>{ const v=gi(k); if(v!==undefined) ev2[k]=v; });
       if(inq.venueName) autoSaveVenue(inq.venueName, inq.venueLocation||ev2.addr);
