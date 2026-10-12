@@ -8487,9 +8487,16 @@ function createEventFromInquiry(inq){
     // number — either it was booked before a date was set, or it carries an
     // old global-count artifact like "#63" — assign the next free number now.
     // (A healthy number always contains a dash, e.g. 26-0705-02.)
+    // Also: if the event's DATE moved to a different week, its old number
+    // (e.g. 26-1011-01) belongs to the old week and would clash with the new
+    // week's #01. Give it the next free number in its new week.
     if(existing.weekOf){
       const cur = String(existing.eventNumber || '');
-      if(!cur || !cur.includes('-')){
+      const wp = weDateParts(existing.weekOf);
+      const wantPrefix = wp ? (wp.yy+'-'+wp.mm+wp.dd+'-') : '';
+      const wrongWeek = !!(cur && /^\d{2}-\d{4}-\d/.test(cur) && wantPrefix && cur.indexOf(wantPrefix) !== 0);
+      if(wrongWeek) console.log('[eventNumber] '+(existing.name||existing.id)+' moved weeks — '+cur+' replaced with a number in W/E '+existing.weekOf);
+      if(!cur || !cur.includes('-') || wrongWeek){
         existing.eventNumber = ''; existing.job = '';   // clear stale value so it can't inflate the per-week count
         const n = nextEventNumber(existing.weekOf);
         if(n){ existing.eventNumber = n; existing.job = n; }
