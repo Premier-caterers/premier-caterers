@@ -6,6 +6,7 @@
 <title>Premier Caterers — Grocery & Kitchen Copy</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <style>
   :root{
@@ -37,6 +38,7 @@
   select,input[type=text],input[type=date]{font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
   label.fld{font-size:12px;color:var(--ink2);display:block;margin-bottom:3px;font-weight:600}
   .hide{display:none!important}
+  .mtag{display:inline-flex;align-items:center;gap:2px;font-size:10.5px;border:1px dashed #888;border-radius:6px;padding:0 5px;color:#666;margin-left:4px;font-weight:400}
   .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:200;opacity:0;transition:opacity .2s;pointer-events:none}
   .toast.show{opacity:1}
   /* two-pane builder */
@@ -130,12 +132,14 @@
         <span>2 · Tick what's on the final menu</span>
         <span class="row" style="gap:7px">
           <span class="pill" id="pickCount">0 chosen</span>
+          <button class="btn btn-ghost btn-sm" onclick="tickFromMenu(true)"><i class="ti ti-wand"></i> Tick from menu</button>
           <button class="btn btn-ghost btn-sm" onclick="checkAll(true)">All</button>
           <button class="btn btn-ghost btn-sm" onclick="checkAll(false)">None</button>
         </span>
       </div>
       <div class="grid2">
         <div>
+          <div id="menuTickMsg" class="hide" style="font-size:12.5px;padding:8px 12px;border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:flex-start"></div>
           <input class="search" id="pickSearch" placeholder="Search items…" oninput="renderPicker()">
           <div class="col-body" id="picker"></div>
         </div>
@@ -179,6 +183,9 @@
       <div style="padding:13px 15px" class="row">
         <button class="btn btn-primary" onclick="saveGrocery()"><i class="ti ti-device-floppy"></i> Save this event's grocery</button>
         <button class="btn btn-ghost" onclick="printKitchen()"><i class="ti ti-printer"></i> Print kitchen copy</button>
+        <button class="btn btn-ghost" onclick="openLabels()"><i class="ti ti-tags"></i> Pan labels</button>
+        <button class="btn btn-ghost" id="ccBtn" onclick="makeCatererCopy()"><i class="ti ti-columns"></i> Make caterer copy</button>
+        <a href="#" onclick="ccScriptUrl(true);return false" class="muted" style="font-size:11px">change copy link</a>
         <button class="btn btn-ghost" onclick="printClientMenu()"><i class="ti ti-external-link"></i> Open client menu (Google Doc)</button>
         <span class="muted" id="saveState" style="font-size:12px"></span>
       </div>
@@ -240,6 +247,44 @@
     </div>
   </div>
 </div>
+
+<!-- Pan labels modal (Avery sticker sheets, one label per menu section) -->
+<div id="labelsModal" class="hide" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:90vh;overflow:auto">
+    <div class="card-h" style="border-bottom:1px solid var(--line)"><span id="lbTitle">Pan labels</span><button class="btn btn-ghost btn-sm" onclick="closeLabels()"><i class="ti ti-x"></i></button></div>
+    <div style="padding:15px">
+      <label class="fld">Sticker size (number is on the Avery box)</label>
+      <div class="row" style="gap:8px;margin-bottom:12px">
+        <label class="lb-size"><input type="radio" name="lbSize" value="5163" onchange="lbSetSize(this.value)"> <b>Avery 5163</b><br><span class="muted">2" × 4" · 10 per sheet</span></label>
+        <label class="lb-size"><input type="radio" name="lbSize" value="5160" onchange="lbSetSize(this.value)"> <b>Avery 5160</b><br><span class="muted">1" × 2⅝" · 30 per sheet</span></label>
+      </div>
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label class="fld" style="margin:0">Sections · how many labels of each</label>
+        <button class="btn btn-ghost btn-sm" onclick="lbReadMenu()"><i class="ti ti-refresh"></i> Re-read menu</button>
+      </div>
+      <div class="muted" id="lbStatus" style="font-size:12px;margin-bottom:8px"></div>
+      <div id="lbRows"></div>
+      <span class="addrow" onclick="lbAddRow()"><i class="ti ti-plus"></i> Add section</span>
+      <div class="row" style="margin-top:14px;align-items:center;gap:8px">
+        <label class="fld" style="margin:0">Stickers already used on the first sheet</label>
+        <input type="number" id="lbSkip" min="0" value="0" style="width:64px" oninput="lbSummary()">
+      </div>
+      <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="muted" id="lbTotal" style="font-size:13px"></span>
+        <button class="btn btn-primary" onclick="printLabels()"><i class="ti ti-printer"></i> Print labels</button>
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:10px">In the print window set Scale to 100% (or "Actual size") and Margins to "Default" so the labels line up with the stickers.</div>
+    </div>
+  </div>
+</div>
+<style>
+  .lb-size{flex:1;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px;cursor:pointer;line-height:1.35}
+  .lb-size:has(input:checked){border:2px solid var(--maroon);padding:7px 9px}
+  .lb-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+  .lb-row input[type=text]{flex:1;min-width:0}
+  .lb-row input[type=number]{width:64px;text-align:center}
+  .lb-row.off input[type=text]{color:#999;text-decoration:line-through}
+</style>
 
 <div class="toast" id="toast"></div>
 <script>
@@ -593,6 +638,7 @@ let overrides = {};           // per-event qty/vendor + extra-rows + skip-rows, 
 let curEvent = null;          // {job,name,weekOf,guests,type}
 let layoutB = false;          // false=A (menu left), true=B (name heading)
 let manualMode = false;
+let menuTicked = new Set();   // section ids ticked automatically from the menu doc
 
 function uid(){ return 'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 
@@ -604,10 +650,36 @@ window.addEventListener('load', async ()=>{
     GLIB = db.collection('gro_library');     // overrides/additions to the seed
     GSAVED = db.collection('gro_saved');      // saved per-event grocery
     EVENTS = db.collection('events');         // main app events (read)
+
+// --- Identity gate ----------------------------------------------------
+// Signs this page in before it touches the database. Staff already signed
+// in elsewhere keep that session; everyone else gets a silent anonymous
+// identity — no login screen, nothing visible changes. This exists so the
+// Firestore rules can require SOMEONE, instead of leaving the database
+// open to the whole internet. Every load-time read waits on this.
+const authReady = new Promise(function(resolve){
+  var off = firebase.auth().onAuthStateChanged(function(u){
+    off();
+    if(u) return resolve(u);   // already signed in (staff) — leave it be
+    firebase.auth().signInAnonymously().then(function(c){ resolve(c && c.user); })
+      .catch(function(e){ console.error('Anonymous sign-in failed:', e && e.code); resolve(null); });
+  }, function(e){ console.error('Auth listener failed:', e && e.code); resolve(null); });
+});
+
+    await authReady;
     await loadLibrary();
     await loadEvents();
     initTypeSelects();
     renderPicker();
+    const deepLinkId = new URLSearchParams(location.search).get('event');
+    if(deepLinkId){
+      const sel = document.getElementById('evSelect');
+      if([...sel.options].some(o=>o.value===deepLinkId)){
+        sel.value = deepLinkId;
+        onEventPick();
+        if(new URLSearchParams(location.search).get('labels')==='1') openLabels();
+      }
+    }
     document.getElementById('bootMsg').textContent='';
     document.getElementById('topSub').textContent = 'Connected · '+events.length+' events loaded';
   }catch(e){
@@ -664,12 +736,19 @@ async function loadEvents(){
   }catch(e){ console.warn('events load failed',e); }
   const sel = document.getElementById('evSelect');
   sel.innerHTML = '<option value="">— pick an event —</option>' + events.map(e=>{
-    const num = jobNum(e.job);
+    const num = jobNum(e.eventNumber||e.job);
     const wk = e.weekOf? ('W/E '+fmtMD(e.weekOf)) : '';
     return `<option value="${e.id}">${num?('#'+num+' '):''}${esc(e.name||'Event')} · ${esc(e.typeLabel||e.type||'')} ${wk?('· '+wk):''}</option>`;
   }).join('');
 }
-function jobNum(job){ if(!job) return ''; const p=String(job).split('-'); return p.length>1? p[1] : job.replace('#',''); }
+// Short job number staff use ("Job 1", "Job 2a"): the LAST segment of any
+// format ('26-1018-01' -> '1', '101826-3' -> '3', '#2a' -> '2a').
+function jobNum(job){
+  if(!job) return '';
+  let s=String(job).trim().replace(/^#/,'');
+  if(s.indexOf('-')>-1){ const p=s.split('-'); s=p[p.length-1]; }
+  return s.replace(/^0+(?=\d)/,'');
+}
 function fmtMD(d){ if(!d) return ''; const x=new Date(d+'T12:00:00'); return (x.getMonth()+1)+'/'+x.getDate(); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -688,18 +767,18 @@ function onEventPick(){
   const e = events.find(x=>x.id===id);
   if(!e){ curEvent=null; return; }
   const tkey = TYPE_MAP[e.type] || 'wedding';
-  curEvent = { id:e.id, job:e.job, num:jobNum(e.job), name:e.name||'Event', weekOf:e.weekOf||'', type:tkey, typeLabel:e.typeLabel||'', guests:e.guestCount||'' , menuLink:e.menuLink||'', pdfMenuLink:e.pdfMenuLink||''};
+  curEvent = { id:e.id, job:e.job, num:jobNum(e.eventNumber||e.job), name:e.name||'Event', weekOf:e.weekOf||'', type:tkey, typeLabel:e.typeLabel||'', guests:e.guestCount||'' , menuLink:e.menuLink||'', pdfMenuLink:e.pdfMenuLink||''};
   curType = tkey;
   document.getElementById('typeSelect').value = tkey;
-  chosen = new Set(); overrides = {};
-  loadSavedForEvent(e.id);  // if previously saved, restore picks
+  chosen = new Set(); overrides = {}; menuTicked = new Set(); menuTickMsg('');
+  loadSavedForEvent(e.id).then(had=>{ if(!had && !new URLSearchParams(location.search).get('labels')) tickFromMenu(false); });
   renderPicker(); renderKitchen();
   if(liveMenuOn) loadLiveMenu();
   document.getElementById('saveState').textContent='';
 }
 function onTypeChange(){
   curType = document.getElementById('typeSelect').value;
-  chosen = new Set(); overrides={};
+  chosen = new Set(); overrides={}; menuTicked=new Set(); menuTickMsg('');
   renderPicker(); renderKitchen();
 }
 function toggleManual(){
@@ -729,14 +808,14 @@ function renderPicker(){
     if(!secs.length) return;
     h+='<div class="dept">'+esc(d||'other')+'</div>';
     secs.forEach(s=>{
-      h+=`<label class="pickrow"><input type="checkbox" ${chosen.has(s.id)?'checked':''} onchange="togglePick('${s.id}',this.checked)"><span class="nm">${esc(cleanName(s))}</span><span class="cnt">${s.rows.length}</span></label>`;
+      h+=`<label class="pickrow"><input type="checkbox" ${chosen.has(s.id)?'checked':''} onchange="togglePick('${s.id}',this.checked)"><span class="nm">${esc(cleanName(s))}${menuTicked.has(s.id)?' <span class="mtag" title="Found in the menu"><i class="ti ti-file-text"></i> menu</span>':''}</span><span class="cnt">${s.rows.length}</span></label>`;
     });
   });
   host.innerHTML = h || '<div class="empty">No items in this menu type yet.</div>';
   updatePickCount();
 }
 function togglePick(id,on){ on?chosen.add(id):chosen.delete(id); renderKitchen(); updatePickCount(); }
-function checkAll(on){ const list=secList(); if(on) list.forEach(s=>chosen.add(s.id)); else chosen.clear(); renderPicker(); renderKitchen(); }
+function checkAll(on){ const list=secList(); if(on) list.forEach(s=>chosen.add(s.id)); else { chosen.clear(); menuTicked=new Set(); menuTickMsg(''); } renderPicker(); renderKitchen(); }
 function updatePickCount(){ document.getElementById('pickCount').textContent = chosen.size+' chosen'; }
 
 // ============ Kitchen copy (right) ============
@@ -879,7 +958,7 @@ function buildSavedRows(){
       s.rows.forEach((r,ri)=>{
         if(isDel(s.id,ri)) return;
         out.push({
-          dept:s.dept, section:cleanName(s),
+          dept:s.dept, section:cleanName(s), sid:s.id,
           code:(getOv(s.id,ri,'c',(r[0]||'X'))).toUpperCase(),
           item:r[1], qty:getOv(s.id,ri,'q',r[2]), vendor:getOv(s.id,ri,'v',r[3])
         });
@@ -887,7 +966,7 @@ function buildSavedRows(){
       getExtras(s.id).forEach(er=>{
         if(!er[1] || !er[1].trim()) return;
         out.push({
-          dept:s.dept, section:cleanName(s),
+          dept:s.dept, section:cleanName(s), sid:s.id,
           code:(er[0]||'X').toUpperCase(),
           item:er[1].trim(), qty:(er[2]||'').trim(), vendor:(er[3]||'').trim()
         });
@@ -921,8 +1000,10 @@ async function loadSavedForEvent(eventId){
       chosen=new Set(d.chosenIds||[]); overrides=d.overrides||{};
       if(d.type){ curType=d.type; document.getElementById('typeSelect').value=d.type; }
       document.getElementById('saveState').textContent='Loaded saved grocery from '+(d.savedAt?new Date(d.savedAt).toLocaleDateString():'before');
+      return !!(d.chosenIds && d.chosenIds.length);
     }
   }catch(e){ /* none saved yet */ }
+  return false;
 }
 
 // ============ Weekly by-vendor ============
@@ -1128,6 +1209,331 @@ function printWeekly(){
             `<h2 style="color:#8B1A1A;border-bottom:2px solid #8B1A1A;padding-bottom:6px">Weekly purchasing list</h2>`+
             `<p style="color:#555;font-size:12px;margin-top:4px">${esc(meta)}</p>`+out+`</div>`;
   openPrint(doc, 'Weekly order');
+}
+
+// ============ Tick from menu ============
+// Reads the event's menu Google Doc and ticks the library items it finds.
+// Stations match the menu's section headings; dishes (salads, hors
+// d'oeuvres, entrees, sides…) match the menu's item lines. Only ADDS ticks —
+// never unticks — and marks each one with a "menu" tag so it can be checked.
+async function fetchMenuText(fileId){
+  const s=await db.collection('settings').doc('app').get();
+  const url=(s.exists && s.data().scriptUrl)||'';
+  if(!url) return null;
+  const r=await fetch(url+(url.indexOf('?')>-1?'&':'?')+'action=getDocText&fileId='+encodeURIComponent(fileId));
+  const j=await r.json();
+  if(!j || !j.success) throw new Error((j&&j.error)||'no text');
+  return j.text||'';
+}
+// Stations / headed sections, by library department → what the menu heading says
+const MT_HEADINGS = {
+  'bar':/^bar$/, 'tisch':/tisch/, 'pre set':/pre-?set/, 'preset':/pre-?set/,
+  'asian':/\basian\b/, 'middle':/middle/, 'mexican':/mexican/, 'carving':/carving/,
+  'hot station':/^hot station|^buffet.*hot/, 'hot':/^hot station/, 'fries station':/\bfr(y|ies)\b|french fr/, 'fries':/\bfr(y|ies)\b|french fr/,
+  'crepes':/crepe/, 'pasta':/pasta/, 'bbq':/bbq|barbe?c?que/, 'ramen soup station':/ram[oe]n|noodle/,
+  'poke':/poke/, 'persian':/persian/, 'pescatarian':/pe?s?cat[ae]r/, 'sushi':/sushi/, 'sushi bar':/sushi/,
+  'crepe':/crepe/, 'ice cream':/ice cream/, 'candy':/candy/, 'waffles':/waffle/, 'popcorn machine':/popcorn/,
+  'donut wall':/donut/, 'myo':/make your own|\bmyo\b/, 'wraps':/wrap/, 'pizza':/pizza/
+};
+const MT_NEVER = /^(linen|rentals|misc|kids|\*\*\*)$/;
+// Library shorthand → menu wording
+const MT_ALIAS = {
+  'gv':'grilled vegetables', 'pma':'papaya mango avocado', 'k&a w/ squash':'kale arugula squash', 'k/a - squash':'kale arugula squash',
+  'tom, baby, hop':'tomato baby corn hearts palm', 'satey':'satay', 'negamaki':'negimaki', 'brocoli cashwq':'broccoli cashew',
+  'dutches':'duchess', 'cylander salmon':'cylinder salmon', 'franks in blankets':'franks', 'frank blanket':'franks',
+  'vienesee':'viennese', 'passing vienesse':'viennese', 'port fries':'portobello fries', 'reuben sand.':'reuben',
+  'mashed pot mart':'mashed potato martinis', 'pulled / taco':'pulled beef', 'mini dumplings':'dim', 'dim sum':'dim',
+  'salad with meat':'', 'deco box':'', 'french beans':'string beans', 'sun dry tortilini':'sun dried tortellini',
+  'roullade w/ pastrami':'roulade pastrami', 'portabello fries':'portobello fries', 'portabello':'portobello', 'pulled beef / phylo':'pulled beef phyllo', 'vienesse':'viennese', 'vienesee':'viennese', 'viennese':'viennese'
+};
+const MT_STOP = new Set(['and','with','the','for','sides','side','dish','entree','passing','salad','salads','appetizer','dessert','desserts','station','stations','buffet','hor','dourves','dourvers','dourbes','x3','mini','petite','of','w']);
+function mtWords(t){ return String(t||'').toLowerCase().replace(/[^a-z0-9&]+/g,' ').trim().split(/\s+/).filter(Boolean); }
+function mtHit(tok, words){
+  return words.some(w=> w===tok
+    || (tok.length>=4 && w.startsWith(tok))
+    || (w.length>=4 && tok.startsWith(w))
+    || (tok.length>=5 && w.length>=5 && w.slice(0,5)===tok.slice(0,5)));
+}
+function menuMatches(text, sections){ return Object.keys(menuMatchDetail(text, sections)); }
+// {libraryId: 'menu heading (lowercase)'} for every library item found in the menu
+function menuMatchDetail(text, sections){
+  const headings=lbSectionsFromText(text).map(h=>h.toLowerCase());
+  // each item line remembers the heading it sits under
+  const lines=[]; let under='';
+  String(text||'').split(/\r?\n/).forEach(raw=>{
+    const h=lbSectionsFromText(raw);
+    if(h.length){ under=h[0].toLowerCase(); return; }
+    const l=raw.replace(/[*_\\]/g,'').trim();
+    if(l) lines.push({ws:mtWords(l), under});
+  });
+  const hits={};
+  sections.forEach(s=>{
+    const dept=String(s.dept||'').toLowerCase().trim();
+    if(MT_NEVER.test(dept)) return;
+    const head=MT_HEADINGS[dept];
+    if(head){ const h=headings.find(h=>head.test(h)); if(h) hits[s.id]=h; return; }
+    let key=cleanName(s).toLowerCase().trim()
+      .replace(/^(passing|hor ?d\w*|hors?|stations?|buffet|salads?|appetizer|entree|sides?( dish)? for entree|desserts?|vien+es+e?e?|vinesse)\s*[-\/]\s*(?=\S)/,'')
+      .replace(/^passing\s+(?=\S)/,'').trim();
+    if(MT_ALIAS[key]!==undefined) key=MT_ALIAS[key];
+    const toks=mtWords(key).filter(t=>!MT_STOP.has(t) && t.length>=3);
+    if(!toks.length) return;
+    // desserts only count when they sit under a dessert heading
+    const dz=/dessert|vien|sweet|pastr|cake/;
+    const pool = /dessert/.test(dept)
+      ? lines.filter(l=>dz.test(l.under)).concat(headings.filter(h=>dz.test(h)).map(h=>({ws:mtWords(h), under:h})))
+      : lines;
+    const m=pool.find(l=>toks.every(t=>mtHit(t,l.ws)));
+    if(m) hits[s.id]=m.under||'';
+  });
+  return hits;
+}
+function menuTickMsg(html, ok){
+  const el=document.getElementById('menuTickMsg'); if(!el) return;
+  if(!html){ el.classList.add('hide'); el.innerHTML=''; return; }
+  el.classList.remove('hide');
+  el.style.background = ok ? '#e8f3e4' : '#f6f2ea';
+  el.style.color = ok ? '#2f5d1f' : '#6b5a2e';
+  el.innerHTML = `<i class="ti ${ok?'ti-check':'ti-info-circle'}" style="font-size:15px;margin-top:1px"></i><span>${html}</span>`;
+}
+async function tickFromMenu(manual){
+  const ev=currentEventObj()||{};
+  const id=lbDocId(ev.menuLink);
+  if(!id){ if(manual) menuTickMsg('This event has no Google Doc menu link — tick items by hand.', false); return; }
+  menuTickMsg('Reading the menu…', false);
+  try{
+    const text=await fetchMenuText(id);
+    if(text===null){ menuTickMsg('The Apps Script link isn’t saved in the main app’s Settings, so the menu can’t be read.', false); return; }
+    if((currentEventObj()||{}).id!==ev.id) return;   // event changed while reading
+    const hits=menuMatches(text, secList());
+    let added=0;
+    hits.forEach(h=>{ if(!chosen.has(h)){ chosen.add(h); added++; } menuTicked.add(h); });
+    renderPicker(); renderKitchen();
+    if(!hits.length) menuTickMsg('Nothing in the menu matched the library — tick items by hand.', false);
+    else menuTickMsg('Ticked '+hits.length+' item'+(hits.length===1?'':'s')+' found in the menu'+(added<hits.length?(' ('+(hits.length-added)+' were already ticked)'):'')+'. Check them, untick anything they didn’t order, then save.', true);
+  }catch(e){
+    console.error(e);
+    menuTickMsg('Couldn’t read the menu right now — tick items by hand.', false);
+  }
+}
+
+// ============ Caterer copy (real menu left, groceries right) ============
+// A separate Apps Script web app ("Premier Caterers Caterer Copy") copies the
+// event's real menu Google Doc and puts each menu section in a table with
+// that section's groceries beside it. Its link lives in settings/app as
+// catererCopyUrl; the finished doc's link goes on the event as catererCopyDoc.
+async function ccScriptUrl(forceAsk){
+  let url='';
+  try{ const d=await db.collection('settings').doc('app').get(); url=(d.exists && d.data().catererCopyUrl)||''; }catch(e){}
+  if(url && !forceAsk) return url;
+  const pasted=(window.prompt('Paste the Web app link for the "Premier Caterers Caterer Copy" Apps Script (from Deploy → New deployment):', url)||'').trim();
+  if(!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec/.test(pasted)){ if(pasted) toast('That doesn’t look like an Apps Script web app link'); return ''; }
+  try{ await db.collection('settings').doc('app').set({catererCopyUrl:pasted},{merge:true}); }catch(e){ console.warn(e); }
+  return pasted;
+}
+async function makeCatererCopy(){
+  const ev=currentEventObj();
+  if(!ev || !ev.id || ev.id==='manual'){ toast('Pick a booked event first'); return; }
+  if(!chosen.size){ toast('Tick items first'); return; }
+  const fileId=lbDocId(ev.menuLink);
+  if(!fileId){ toast('This event has no Google Doc menu link'); return; }
+  const evRec=events.find(x=>x.id===ev.id)||{};
+  if(evRec.catererCopyDoc && !evRec.catererCopyAuto &&
+     !confirm('This event already has a caterer copy linked. Make a new one and link it instead? (The old doc is not deleted.)')) return;
+  const url=await ccScriptUrl(false);
+  if(!url) return;
+  const btn=document.getElementById('ccBtn'); const old=btn.innerHTML;
+  btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i> Making copy…';
+  // open the tab now (while it still counts as your click) so the browser doesn't block it
+  const tab=window.open('','_blank');
+  if(tab){ try{ tab.document.write('<p style="font-family:Arial;padding:24px">Making the caterer copy… this takes about 10–30 seconds.</p>'); }catch(e){} }
+  try{
+    await saveGrocery();
+    // which menu section does each ticked item belong to?
+    const text=await fetchMenuText(fileId);
+    const where = text ? menuMatchDetail(text, secList()) : {};
+    const groceries={};
+    buildSavedRows().forEach(r=>{
+      const key=where[r.sid]||'';
+      (groceries[key]=groceries[key]||[]).push({code:(r.code||'X'), item:r.item||'', qty:r.qty||'—', vendor:r.vendor||'—'});
+    });
+    const header=[ev.num?('Job '+ev.num):'', lbEventDate(ev), ev.name||''].filter(Boolean).join(' · ');
+    const r=await fetch(url,{method:'POST', body:JSON.stringify({action:'makeCatererCopy', fileId, header, groceries})});
+    const j=await r.json();
+    if(!j || !j.success) throw new Error((j&&j.error)||'failed');
+    await EVENTS.doc(ev.id).set({catererCopyDoc:j.url, catererCopyAuto:true},{merge:true});
+    evRec.catererCopyDoc=j.url; evRec.catererCopyAuto=true;
+    toast('Caterer copy made'+(j.other?(' · '+j.other+' item'+(j.other===1?'':'s')+' under "Other"'):''));
+    if(tab) tab.location.href=j.url; else window.open(j.url,'_blank');
+    if(j.errors && j.errors.length) alert('Caterer copy made, but '+j.errors.length+' section(s) were left as plain menu text:\n\n'+j.errors.join('\n'));
+  }catch(e){
+    console.error(e);
+    if(tab) tab.close();
+    alert('Couldn’t make the caterer copy:\n\n'+(e.message||'check connection'));
+  }finally{
+    btn.disabled=false; btn.innerHTML=old;
+  }
+}
+
+// ============ Pan labels (Avery sticker sheets) ============
+// One label per menu section (Hors d'oeuvres, Pasta station, Plated entree…)
+// showing the short job number, event name, date and section. Sections are
+// read from the event's menu Google Doc; counts are typed per section and
+// saved with the event's grocery so they come back next time.
+const LB_SHEETS = {
+  '5163': { cols:2, rows:5,  w:4,     h:2, top:0.5, left:0.15625, gap:0.1875 },
+  '5160': { cols:3, rows:10, w:2.625, h:1, top:0.5, left:0.1875,  gap:0.125 }
+};
+let lbRows = [];      // [{name, count}]
+let lbSize = '5163';
+let lbVenue = '';     // venue name from the client's inquiry (else event address)
+
+function lbEventDate(ev){
+  const e = events.find(x=>x.id===ev.id) || {};
+  let iso = e.eventDate || '';
+  if(!iso && e.weekOf){
+    const back = {sunday:0,saturday:1,friday:2,thursday:3,wednesday:4,tuesday:5,monday:6}[(e.day||'').toLowerCase()];
+    if(back!=null){ const s=new Date(e.weekOf+'T12:00:00Z'); if(!isNaN(s)) iso=new Date(s.getTime()-back*86400000).toISOString().split('T')[0]; }
+  }
+  if(!iso) return '';
+  const d=new Date(iso+'T12:00:00');
+  return isNaN(d)?'':d.toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'});
+}
+function lbDocId(link){
+  const m=String(link||'').match(/\/d\/([a-zA-Z0-9_-]{20,})/) || String(link||'').match(/[?&]id=([a-zA-Z0-9_-]{20,})/);
+  return m?m[1]:'';
+}
+// Pick out the section headings from the menu text.
+function lbSectionsFromText(text){
+  const exact=/^(hors d'?oeuvres|salads?|appetizers?|entr[eé]es?|main course|desserts?|soups?|soup course|fish course|pre-?set|tisch|dinner|lunch|breakfast|brunch|kiddush|buffet|sides|bar)$/i;
+  const kw=/(station|stations|\bbar\b|\bshop\b|hors|hor d|d'oeuvres|dourves|tisch|\bcourse\b|\btable\b|\bbuffet\b|\bplatters?\b)/i;
+  const skip=/^(served with|each entree|fish and vegetarian|caterer to provide|regular coffee|arrangements|based on|upon arrival|enter ballroom|notes|party planner|cold|hot|or)$/i;
+  const seen=new Set(); const out=[];
+  String(text||'').split(/\r?\n/).forEach(raw=>{
+    let l=raw.replace(/[*_\\]/g,'').trim();
+    l=l.replace(/\s+[-–]\s+.*$/,'');   // drop equipment notes after " - "
+    l=l.replace(/\(.*?\)/g,' ').replace(/^optional\s+/i,'').replace(/\s{2,}/g,' ').replace(/[\s:–-]+$/,'').trim();
+    if(!l || l.indexOf(',')>-1 || /[.!?]$/.test(l) || l.length>40 || skip.test(l)) return;
+    if(!(exact.test(l) || kw.test(l) || /^passing\b/i.test(l) || /^plated\b/i.test(l))) return;
+    const k=l.toLowerCase(); if(seen.has(k)) return; seen.add(k);
+    out.push(l);
+  });
+  return out;
+}
+async function lbReadMenu(){
+  const ev=currentEventObj()||{};
+  const st=document.getElementById('lbStatus');
+  const id=lbDocId(ev.menuLink);
+  if(!id){ st.textContent='This event has no Google Doc menu link — type the sections below.'; if(!lbRows.length) lbAddRow(); return; }
+  st.textContent='Reading the menu…';
+  try{
+    const text=await fetchMenuText(id);
+    if(text===null){ st.textContent='The Apps Script link isn’t saved in the main app’s Settings, so the menu can’t be read. Type the sections below.'; return; }
+    const found=lbSectionsFromText(text);
+    if(!found.length){ st.textContent='No section headings found in the menu — type them below.'; return; }
+    const old={}; lbRows.forEach(x=>{ old[x.name.toLowerCase()]=x.count; });
+    lbRows=found.map(n=>({name:n, count: old[n.toLowerCase()]!=null ? old[n.toLowerCase()] : 1}));
+    st.textContent='Found '+found.length+' sections in the menu. Set any you don’t need to 0.';
+    renderLbRows();
+  }catch(e){
+    console.error(e);
+    st.textContent='Couldn’t read the menu right now — type the sections below.';
+  }
+}
+async function openLabels(){
+  const ev=currentEventObj();
+  if(!ev || (!ev.id && !ev.name)){ toast('Pick an event first'); return; }
+  document.getElementById('lbTitle').textContent='Pan labels · '+(ev.num?('Job '+ev.num+' · '):'')+(ev.name||'');
+  document.getElementById('lbSkip').value=0;
+  lbRows=[]; lbSize='5163';
+  document.getElementById('lbStatus').textContent='';
+  document.getElementById('labelsModal').classList.remove('hide');
+  lbVenue='';
+  const evRec=events.find(x=>x.id===ev.id)||{};
+  lbVenue=evRec.addr||'';
+  if(evRec.inquiryId){
+    db.collection('inquiries').doc(evRec.inquiryId).get()
+      .then(d=>{ if(d.exists && d.data().venueName) lbVenue=d.data().venueName; })
+      .catch(()=>{});
+  }
+  let saved=null;
+  if(ev.id && ev.id!=='manual'){
+    try{ const d=await GSAVED.doc(ev.id).get(); if(d.exists && d.data().labels) saved=d.data().labels; }catch(e){}
+  }
+  if(saved){
+    lbSize=saved.size||'5163';
+    lbRows=(saved.rows||[]).map(x=>({name:x.name||'', count:Number(x.count)||0}));
+    document.getElementById('lbStatus').textContent='Loaded the labels you set up last time. Tap "Re-read menu" if the menu changed.';
+  }
+  document.querySelectorAll('input[name=lbSize]').forEach(r=>{ r.checked=(r.value===lbSize); });
+  renderLbRows();
+  if(!saved) lbReadMenu();
+}
+function closeLabels(){ document.getElementById('labelsModal').classList.add('hide'); }
+function lbSetSize(v){ lbSize=v; lbSummary(); }
+function renderLbRows(){
+  const host=document.getElementById('lbRows');
+  host.innerHTML=lbRows.map((r,i)=>
+    `<div class="lb-row${r.count>0?'':' off'}">`+
+    `<input type="text" value="${esc(r.name)}" placeholder="Section name" oninput="lbRows[${i}].name=this.value">`+
+    `<input type="number" min="0" value="${r.count}" aria-label="How many labels" oninput="lbRows[${i}].count=Math.max(0,parseInt(this.value,10)||0);this.parentNode.classList.toggle('off',!(lbRows[${i}].count>0));lbSummary()">`+
+    `<button class="btn btn-ghost btn-sm" aria-label="Remove" onclick="lbRows.splice(${i},1);renderLbRows()"><i class="ti ti-trash"></i></button></div>`
+  ).join('');
+  lbSummary();
+}
+function lbAddRow(){ lbRows.push({name:'',count:1}); renderLbRows(); const ins=document.querySelectorAll('#lbRows input[type=text]'); if(ins.length) ins[ins.length-1].focus(); }
+function lbSummary(){
+  const n=lbRows.filter(r=>r.name.trim()).reduce((a,r)=>a+(r.count||0),0);
+  const sh=LB_SHEETS[lbSize]; const per=sh.cols*sh.rows;
+  const skip=Math.max(0,parseInt(document.getElementById('lbSkip').value,10)||0)%per;
+  const sheets=n?Math.ceil((n+skip)/per):0;
+  document.getElementById('lbTotal').textContent=n+' label'+(n===1?'':'s')+' · '+sheets+' sheet'+(sheets===1?'':'s');
+}
+function printLabels(){
+  const ev=currentEventObj()||{};
+  const list=[]; lbRows.forEach(r=>{ const nm=r.name.trim(); for(let i=0;i<(r.count||0)&&nm;i++) list.push(nm); });
+  if(!list.length){ toast('Set at least one label to 1 or more'); return; }
+  const sh=LB_SHEETS[lbSize]; const per=sh.cols*sh.rows;
+  const skip=Math.max(0,parseInt(document.getElementById('lbSkip').value,10)||0)%per;
+  const cells=Array(skip).fill(null).concat(list);
+  const job=ev.num?('Job '+ev.num):'';
+  const date=lbEventDate(ev);
+  const name=ev.name||'';
+  const venue=lbVenue||'';
+  const small=lbSize==='5160';
+  const fit=(s,big,lim)=> s.length>lim ? Math.max(Math.round(big*lim/s.length), Math.round(big*0.6)) : big;
+  const label=s=>{
+    if(s===null) return '<div class="lab"></div>';
+    return `<div class="lab"><div class="job">${esc(job)}</div>`+
+      (date?`<div class="dt">${esc(date)}</div>`:'')+
+      `<div class="ev">${esc(name)}</div>`+
+      (venue?`<div class="vn">${esc(venue)}</div>`:'')+
+      `<div class="sec" style="font-size:${small?fit(s,13,22):fit(s,22,20)}pt">${esc(s)}</div></div>`;
+  };
+  let pages='';
+  for(let p=0;p<cells.length;p+=per){
+    pages+='<div class="sheet">'+cells.slice(p,p+per).map(label).join('')+'</div>';
+  }
+  const css=`@page{size:letter;margin:0}*{box-sizing:border-box}body{margin:0;font-family:-apple-system,Arial,sans-serif;color:#000}
+.sheet{width:8.5in;height:11in;padding:${sh.top}in 0 0 ${sh.left}in;display:grid;grid-template-columns:repeat(${sh.cols},${sh.w}in);grid-auto-rows:${sh.h}in;column-gap:${sh.gap}in;page-break-after:always;overflow:hidden}
+.sheet:last-child{page-break-after:auto}
+.lab{overflow:hidden;display:flex;flex-direction:column;justify-content:center;padding:${small?'0.04in 0.14in':'0.12in 0.25in'}}
+.job{font-weight:700;font-size:${small?11:20}pt;line-height:1.05}
+.dt{font-size:${small?8:11}pt;line-height:1.2}
+.ev{font-size:${small?8:12}pt;line-height:1.2;margin-top:${small?1:4}px}
+.vn{font-size:${small?7.5:10.5}pt;line-height:1.2;color:#333}
+.ev,.vn,.dt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sec{font-weight:700;line-height:1.1;border-top:${small?1:2}px solid #000;margin-top:${small?2:5}px;padding-top:${small?1:4}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}`;
+  const w=window.open('','_blank');
+  if(!w){ toast('Allow pop-ups to print'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc((job?job+' ':'')+name)} labels</title><style>${css}</style></head><body>${pages}</body></html>`);
+  w.document.close(); w.focus();
+  setTimeout(()=>{ w.print(); }, 350);
+  // remember the setup for this event
+  if(ev.id && ev.id!=='manual'){
+    GSAVED.doc(ev.id).set({labels:{size:lbSize, rows:lbRows.filter(r=>r.name.trim()).map(r=>({name:r.name.trim(),count:r.count||0}))}},{merge:true})
+      .catch(e=>console.warn('labels save failed',e));
+  }
 }
 
 // ============ Tabs ============
