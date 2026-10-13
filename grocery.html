@@ -1504,11 +1504,12 @@ function printLabels(){
   const fit=(s,big,lim)=> s.length>lim ? Math.max(Math.round(big*lim/s.length), Math.round(big*0.6)) : big;
   const label=s=>{
     if(s===null) return '<div class="lab"></div>';
-    return `<div class="lab"><div class="job">${esc(job)}</div>`+
+    return `<div class="lab"><div class="top">`+
+      (job?`<div class="job">${esc(job)}</div>`:'')+
+      `<div class="sec" style="font-size:${small?(s.length<=12?14:s.length<=26?11:fit(s,11,26)):(s.length<=12?26:s.length<=26?19:fit(s,19,26))}pt"><span>${esc(s)}</span></div></div>`+
       (date?`<div class="dt">${esc(date)}</div>`:'')+
       `<div class="ev">${esc(name)}</div>`+
-      (venue?`<div class="vn">${esc(venue)}</div>`:'')+
-      `<div class="sec" style="font-size:${small?fit(s,13,22):fit(s,22,20)}pt">${esc(s)}</div></div>`;
+      (venue?`<div class="vn">${esc(venue)}</div>`:'')+`</div>`;
   };
   let pages='';
   for(let p=0;p<cells.length;p+=per){
@@ -1518,12 +1519,16 @@ function printLabels(){
 .sheet{width:8.5in;height:11in;padding:${sh.top}in 0 0 ${sh.left}in;display:grid;grid-template-columns:repeat(${sh.cols},${sh.w}in);grid-auto-rows:${sh.h}in;column-gap:${sh.gap}in;page-break-after:always;overflow:hidden}
 .sheet:last-child{page-break-after:auto}
 .lab{overflow:hidden;display:flex;flex-direction:column;justify-content:center;padding:${small?'0.04in 0.14in':'0.12in 0.25in'}}
-.job{font-weight:700;font-size:${small?11:20}pt;line-height:1.05}
-.dt{font-size:${small?8:11}pt;line-height:1.2}
-.ev{font-size:${small?8:12}pt;line-height:1.2;margin-top:${small?1:4}px}
+html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.top{display:flex;align-items:stretch;gap:${small?3:6}px;margin-bottom:${small?2:5}px}
+.job,.sec{background:#FFE34D;border:${small?1:1.5}px solid #000;border-radius:${small?2:4}px;font-weight:800;display:flex;align-items:center;line-height:1.05}
+.job{flex-shrink:0;white-space:nowrap;font-size:${small?16:30}pt;padding:${small?'1px 4px':'3px 8px'}}
+.sec{flex:1;min-width:0;padding:${small?'1px 4px':'3px 8px'};overflow:hidden}
+.sec span{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
+.dt{font-size:${small?11:16}pt;font-weight:800;line-height:1.15}
+.ev{font-size:${small?8:12}pt;line-height:1.2}
 .vn{font-size:${small?7.5:10.5}pt;line-height:1.2;color:#333}
-.ev,.vn,.dt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sec{font-weight:700;line-height:1.1;border-top:${small?1:2}px solid #000;margin-top:${small?2:5}px;padding-top:${small?1:4}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}`;
+.ev,.vn,.dt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}`;
   const w=window.open('','_blank');
   if(!w){ toast('Allow pop-ups to print'); return; }
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc((job?job+' ':'')+name)} labels</title><style>${css}</style></head><body>${pages}</body></html>`);
