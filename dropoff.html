@@ -815,14 +815,20 @@ function renderInfoSummary(){
    staff edit in Catalog management shows up immediately for anyone
    currently browsing the menu.
    ===================================================================== */
-catalogCol.orderBy('name').onSnapshot(snap=>{
-  catalog = [];
-  snap.forEach(doc=> catalog.push(Object.assign({id:doc.id}, doc.data())) );
-  catLoaded = true;
-  if(currentView==='order') renderItemGrid();
-  if(currentView==='staffCatalog') renderCatalogTable();
-  if(currentView==='editOrder' && document.getElementById('eoAddItemSelect')) eoPopulateAddItemSelect();
-}, err=>{ console.error('catalog load error', err); });
+// Started only once this page is signed in (staff, or a silent guest
+// identity for clients) — the database rules refuse anyone signed out.
+let catalogUnsub = null;
+function startCatalogListener(){
+  if(catalogUnsub) return;
+  catalogUnsub = catalogCol.orderBy('name').onSnapshot(snap=>{
+    catalog = [];
+    snap.forEach(doc=> catalog.push(Object.assign({id:doc.id}, doc.data())) );
+    catLoaded = true;
+    if(currentView==='order') renderItemGrid();
+    if(currentView==='staffCatalog') renderCatalogTable();
+    if(currentView==='editOrder' && document.getElementById('eoAddItemSelect')) eoPopulateAddItemSelect();
+  }, err=>{ console.error('catalog load error', err); catalogUnsub = null; });
+}
 
 function allCategories(){
   const set = new Set();
@@ -2217,19 +2223,30 @@ function staffLogout(){
   showView('order');
 }
 firebase.auth().onAuthStateChanged(user=>{
-  const u = user ? pcUserForEmail(user.email) : null;
+  const u = (user && !user.isAnonymous) ? pcUserForEmail(user.email) : null;
   if(user && u){
     isStaff = true; staffUser = u;
+    startCatalogListener();
+    startOrdersListener();
     closeStaffLogin();
     updateTopbar();
     if(currentView==='intro') renderIntroView();
     if(pendingStaffView){ const v = pendingStaffView; pendingStaffView = null; showView(v); }
+  } else if(user && user.isAnonymous){
+    // Client ordering — silent guest identity, nothing visible changes.
+    isStaff = false; staffUser = null;
+    stopOrdersListener();
+    startCatalogListener();
+    updateTopbar();
   } else if(user){
     firebase.auth().signOut();
     document.getElementById('lgErr').textContent = 'That account is not set up for this app.';
   } else {
     isStaff = false; staffUser = null;
+    stopOrdersListener();
     updateTopbar();
+    firebase.auth().signInAnonymously()
+      .catch(e=>console.error('Guest sign-in failed:', e && e.code));
   }
 });
 
@@ -2239,11 +2256,16 @@ firebase.auth().onAuthStateChanged(user=>{
    already be a booked event rather than a fresh inquiry.
    ===================================================================== */
 let allStaffOrders = [];
-ordersCol.orderBy('createdAt','desc').limit(200).onSnapshot(snap=>{
-  allStaffOrders = [];
-  snap.forEach(doc=> allStaffOrders.push(Object.assign({id:doc.id}, doc.data())) );
-  if(currentView==='staffOrders') renderStaffOrders();
-}, err=> console.error('orders load error', err));
+let ordersUnsub = null;
+function startOrdersListener(){
+  if(ordersUnsub) return;
+  ordersUnsub = ordersCol.orderBy('createdAt','desc').limit(200).onSnapshot(snap=>{
+    allStaffOrders = [];
+    snap.forEach(doc=> allStaffOrders.push(Object.assign({id:doc.id}, doc.data())) );
+    if(currentView==='staffOrders') renderStaffOrders();
+  }, err=>{ console.error('orders load error', err); ordersUnsub = null; });
+}
+function stopOrdersListener(){ if(ordersUnsub){ ordersUnsub(); ordersUnsub = null; } allStaffOrders = []; }
 
 // Date filter bar above All orders (by delivery date). Weeks run Mon–Sun.
 let staffOrderRange = 'all';
