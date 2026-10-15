@@ -16519,7 +16519,16 @@ async function saveCommissaryEmail(){
 // ── FOLLOW-UP SETTINGS PANEL ──
 // ── Client Portal: notification contacts (Settings → who gets texted) ──
 function getNotifyContacts(){
-  return getSharedSetting('notifyContacts') || [];
+  // Always hand back a real list. The saved value has turned up as a list,
+  // as a {0:{..},1:{..}} map (older merge-saves), or as raw text — any of
+  // those used to crash the whole Settings screen ("contacts.map is not a function").
+  let v = getSharedSetting('notifyContacts');
+  if(typeof v === 'string'){
+    try { v = JSON.parse(v); } catch(_){ v = []; }
+  }
+  if(Array.isArray(v)) return v.filter(c => c && typeof c === 'object');
+  if(v && typeof v === 'object') return Object.values(v).filter(c => c && typeof c === 'object');
+  return [];
 }
 function _renderNotifyContactsSettings(){
   const contacts = getNotifyContacts();
