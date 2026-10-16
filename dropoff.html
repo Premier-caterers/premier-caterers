@@ -2517,14 +2517,37 @@ async function repairMissingEvents(){
     const groups = {};
     allStaffOrders.filter(o=>o.status==='submitted' && o.linkedEventId).forEach(o=>{ (groups[o.linkedEventId] = groups[o.linkedEventId]||[]).push(o); });
     const missing = [];
+    // Second kind of break (found Oct 16 2026): the event is still there but
+    // its client record (inquiry) was deleted. The main app hides any event
+    // whose client record is gone, so it vanishes from the board just the same.
+    const noClient = [];
     for(const evId of Object.keys(groups)){
       const snap = await db.collection('events').doc(evId).get();
-      if(!snap.exists) missing.push(evId);
+      if(!snap.exists){ missing.push(evId); continue; }
+      const inqId = (snap.data().inquiryId) || (evId.indexOf('inq_')===0 ? evId.slice(4) : '');
+      if(inqId){
+        const isnap = await db.collection('inquiries').doc(inqId).get();
+        if(!isnap.exists) noClient.push({evId, inqId, ev: snap.data()});
+      }
     }
-    if(!missing.length){ alert('Nothing to fix \u2014 every linked order\u2019s event is there.'); return; }
-    const lines = missing.map(id=>{ const os = groups[id].slice().sort((a,b)=>String(a.subLabel||'').localeCompare(String(b.subLabel||''))); return '\u2022 '+(os[0].contactName||os[0].clientName||'Drop-off')+' \u2014 '+os.map(o=>'#'+(o.subLabel||'?')).join(', ')+' ('+(os[0].deliveryDate||'')+')'; });
-    if(!confirm(missing.length+' event'+(missing.length===1?' is':'s are')+' missing from the weekly board:\n\n'+lines.join('\n')+'\n\nRecreate '+(missing.length===1?'it':'them')+' now?')) return;
+    if(!missing.length && !noClient.length){ alert('Nothing to fix \u2014 every linked order\u2019s event is there and showing.'); return; }
+    const _line = id=>{ const os = groups[id].slice().sort((a,b)=>String(a.subLabel||'').localeCompare(String(b.subLabel||''))); return '\u2022 '+(os[0].clientName||os[0].contactName||'Drop-off')+' \u2014 '+os.map(o=>'#'+(o.subLabel||'?')).join(', ')+' ('+(os[0].deliveryDate||'')+')'; };
+    const total = missing.length + noClient.length;
+    if(!confirm(total+' event'+(total===1?' is':'s are')+' missing from the weekly board:\n\n'+missing.concat(noClient.map(x=>x.evId)).map(_line).join('\n')+'\n\nRestore '+(total===1?'it':'them')+' now?')) return;
     let fixed = 0; const notes = [];
+    for(const x of noClient){
+      const os = groups[x.evId].slice().sort((a,b)=>String(a.subLabel||'').localeCompare(String(b.subLabel||'')));
+      const o = os[0];
+      const np = (o.contactName||'').trim().split(' ');
+      await db.collection('inquiries').doc(x.inqId).set({ id:x.inqId, firstName:np.shift()||'', lastName:np.join(' ')||'',
+        organization: o.locationName || o.clientName || '',
+        eventName:o.clientName||'Drop-off order', eventType:'Drop off catering', eventDate:o.deliveryDate||x.ev.eventDate||'',
+        phone:o.contactPhone||'', email:o.contactEmail||'', venueName:o.locationName||'', venueLocation:o.address||'',
+        guestCount:'', comments:'DROP-OFF ORDER \u2014 client record restored Oct 2026 (it was removed by a link mix-up, which hid this event from the weekly board).',
+        source:'dropoff-app', stage:'booked', salesperson:'', dropOffOrderId:o.id,
+        submittedAt:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) });
+      fixed++;
+    }
     for(const evId of missing){
       const os = groups[evId].slice().sort((a,b)=>String(a.subLabel||'').localeCompare(String(b.subLabel||'')));
       const o = os[0];
