@@ -1407,7 +1407,7 @@ async function emptyTrash(){
 
 function startFirebaseListeners(){
   try{ _emStartStatusListener(); }catch(e){ console.warn(e); }
-  eventsCol.onSnapshot( snap=>{ const first=events.length===0; events=snap.docs.map(d=>d.data()); try{ events.forEach(ev=>{ if(ev&&String(ev.id).indexOf('inq_')===0) _actPrevEv[ev.id]=JSON.parse(JSON.stringify(ev)); }); }catch(e){} try{ backfillEventNumbers(); }catch(e){ console.warn('eventNumber backfill skipped:',e); } if(first||currentView==='events'||currentView==='home') render(); });
+  eventsCol.onSnapshot( snap=>{ const first=events.length===0; events=snap.docs.map(d=>d.data()); try{ events.forEach(ev=>{ if(ev&&String(ev.id).indexOf('inq_')===0) _actPrevEv[ev.id]=JSON.parse(JSON.stringify(ev)); }); }catch(e){} try{ backfillEventNumbers(); }catch(e){ console.warn('eventNumber backfill skipped:',e); } _doInvLoaded.events=true; _doInvSchedule(); if(first||currentView==='events'||currentView==='home') render(); });
   changesCol.onSnapshot( snap=>{ changes=snap.docs.map(d=>d.data()).sort((a,b)=>(b.time||'').localeCompare(a.time||'')); if(currentView==='changes') render(); });
   inquiriesCol.onSnapshot( snap=>{
     inquiries=snap.docs.map(d=>d.data());
@@ -1479,6 +1479,7 @@ function startFirebaseListeners(){
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
   invoicesCol.onSnapshot( snap=>{
     invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); });
+    _doInvLoaded.invoices=true; _doInvSchedule();
     // The drop-off app used to create invoices with status 'estimate', which this
     // app doesn't know — so no Approve / Convert buttons showed. Treat any unknown
     // status as a quote (in memory only; it's saved properly on the next Save).
@@ -1511,7 +1512,7 @@ function startFirebaseListeners(){
   regularsCol = db.collection('regulars');
   regularsCol.onSnapshot( snap=>{ regulars=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='regulars'||currentView==='events') render(); }, err=>console.error('regulars listener', err));
   dropOffOrdersCol = db.collection('dropOffOrders');
-  dropOffOrdersCol.where('status','==','submitted').onSnapshot( snap=>{ dropOffOrders=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='regulars'||currentView==='events'||currentView==='printcenter') render(); }, err=>console.error('dropOffOrders listener', err));
+  dropOffOrdersCol.where('status','==','submitted').onSnapshot( snap=>{ dropOffOrders=snap.docs.map(d=>({id:d.id,...d.data()})); _doInvLoaded.orders=true; _doInvSchedule(); if(currentView==='regulars'||currentView==='events'||currentView==='printcenter') render(); }, err=>console.error('dropOffOrders listener', err));
   contractsCol = db.collection('contracts');
   contractsCol.onSnapshot( snap=>{
     const prevContracts = contracts || {};
@@ -15571,6 +15572,99 @@ function renderRoadmap(){
     </div>`;
   });
   return h;
+}
+
+// ── Drop-off orders → invoices (Oct 19 2026) ─────────────────────────────
+// A booked drop-off order becomes an event (dropoff.html → bookDropOffOrder)
+// but used to get NO invoice — so there was nowhere to record a payment and
+// Reports counted every drop-off as $0. This gives each booked drop-off event
+// its own invoice, built from the order, at status 'invoice' (a sale counts
+// when booked, same as catered events). Runs here in the main app so it also
+// catches up every drop-off booked before this existed.
+//  - Matches the order total to the penny: logistics 0%, delivery fee taxed
+//    like the order, credit-card fee and discount not taxed.
+//  - Never overwrites an invoice it didn't create.
+//  - If the order is edited later, the invoice's lines follow — but only while
+//    nobody has hand-edited those lines. Payments are never touched.
+//  - Orders merged into a bigger event (linkedEventId) are left alone; they're
+//    a line on that event's invoice already.
+const _doInvLoaded = {events:false, invoices:false, orders:false};
+let _doInvTimer = null, _doInvBusy = false;
+function _doInvSchedule(){
+  clearTimeout(_doInvTimer);
+  _doInvTimer = setTimeout(()=>{ _doInvSyncAll().catch(e=>console.warn('drop-off invoice sync', e)); }, 2500);
+}
+function _doInvLines(order){
+  const lines = [];
+  (order.lines||[]).forEach((l,i)=>{
+    const qty = parseFloat(l.qty)||0, price = parseFloat(l.price)||0;
+    if(!qty) return;
+    let desc = l.itemName || l.name || 'Item';
+    if(l.note) desc += ' — ' + l.note;
+    lines.push({id:'do'+i, category:'Food', description:desc, qty, unit:l.sizeLabel||'each', price});
+  });
+  const fee = parseFloat(order.deliveryFee)||0;
+  if(fee) lines.push({id:'doDelivery', category:'Logistics', description:'Delivery fee', qty:1, unit:'event', price:fee});
+  const disc = parseFloat(order.discount)||0;
+  if(disc) lines.push({id:'doDisc', category:'Discount', description:'Discount'+(order.discountCode?(' ('+order.discountCode+')'):''), qty:1, unit:'event', price:-Math.round(disc*100)/100, noTax:true});
+  const cc = parseFloat(order.ccFeeAmount)||0;
+  if(cc){
+    // Sized so the invoice total shows exactly the order total the client was quoted.
+    const r2 = n=>Math.round(n*100)/100;
+    const rest = calcInvoiceTotals({lines, taxExempt:!!order.taxExempt, logisticsRate:0}).grand;
+    const want = (order.total!=null) ? r2(parseFloat(order.total)||0) - r2(rest) : r2(cc);
+    lines.push({id:'doCc', category:'Fees', description:'Credit card fee (3.4%)', qty:1, unit:'event', price:r2(want), noTax:true});
+  }
+  return lines;
+}
+function _doInvSig(lines, taxExempt){
+  return JSON.stringify({t:!!taxExempt, l:(lines||[]).map(l=>[l.description, +l.qty||0, +l.price||0, l.unit||'', !!l.noTax])});
+}
+async function _doInvSyncAll(){
+  if(_doInvBusy) return;
+  if(!_doInvLoaded.events || !_doInvLoaded.invoices || !_doInvLoaded.orders) return;
+  const role = (typeof roles!=='undefined' && roles[currentRole]) || {};
+  if(!role.canEdit) return;
+  _doInvBusy = true;
+  try{
+    const byId = {}; (dropOffOrders||[]).forEach(o=>{ byId[o.id]=o; });
+    for(const e of events){
+      if(!e || !e.dropOffOrderId || e.type!=='dropoff') continue;
+      const o = byId[e.dropOffOrderId];
+      if(!o || o.linkedEventId || o.bookedEventId!==e.id) continue;
+      const lines = _doInvLines(o);
+      if(!lines.length) continue;
+      const sig = _doInvSig(lines, o.taxExempt);
+      const slots = invoiceSlotsForEvent(e.id);
+      if(!slots.length){
+        // Create — in a transaction so two open tabs can't both create it,
+        // and so an invoice that exists but hasn't reached this tab is never overwritten.
+        const ref = invoicesCol.doc(e.id);
+        const made = await db.runTransaction(async tx=>{
+          const snap = await tx.get(ref);
+          if(snap.exists) return false;
+          const today = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+          tx.set(ref, {
+            eventId:e.id, status:'invoice', quoteNumber:e.job||e.eventNumber||'',
+            clientName:e.name||'', eventType:e.typeLabel||'Drop off catering', eventDate:e.dayLabel||'',
+            address:e.addr||'', clientPhone:e.phone||o.contactPhone||'', clientEmail:e.email||o.contactEmail||'',
+            lines, taxExempt:!!o.taxExempt, logisticsRate:0, deposit:0, payments:[],
+            notes:DEFAULT_DOC_NOTES, createdAt:today, invoiceDate:today,
+            dropOffOrderId:o.id, dropOffSig:sig, ts:Date.now()
+          });
+          return true;
+        });
+        if(made){ try{ if(e.inquiryId) logActivity(e.inquiryId, 'invoice', 'Invoice created from drop-off order ($'+(parseFloat(o.total)||0).toFixed(2)+')', {invoiceId:e.id}); }catch(_){} }
+        continue;
+      }
+      // Update — only our own invoice, only if its lines are still exactly what we wrote.
+      const inv = invoices[e.id];
+      if(!inv || inv.dropOffOrderId!==o.id || inv.dropOffSig===sig) continue;
+      if(_doInvSig(inv.lines, inv.taxExempt)!==inv.dropOffSig) continue; // hand-edited — leave it
+      await invoicesCol.doc(e.id).set({lines, taxExempt:!!o.taxExempt, dropOffSig:sig, ts:Date.now()}, {merge:true});
+      try{ if(e.inquiryId) logActivity(e.inquiryId, 'invoice', 'Invoice updated to match edited drop-off order ($'+(parseFloat(o.total)||0).toFixed(2)+')', {invoiceId:e.id}); }catch(_){}
+    }
+  } finally { _doInvBusy = false; }
 }
 
 // Simple links panel — the drop-off ordering app is a separate module

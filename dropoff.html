@@ -2501,6 +2501,14 @@ async function applyEventLink(orderId, order, found){
   if(order.linkedInquiryId){
     await db.collection('inquiries').doc(order.linkedInquiryId).delete().catch(()=>{});
     await db.collection('events').doc('inq_'+order.linkedInquiryId).delete().catch(()=>{});
+    // The main app gives each booked drop-off its own invoice. Once the order is
+    // folded into another event's bill, that standalone invoice must go too, or
+    // the sale would be counted twice — unless a payment was already recorded on it.
+    try{
+      const oiRef = db.collection('invoices').doc('inq_'+order.linkedInquiryId);
+      const oi = await oiRef.get();
+      if(oi.exists && oi.data().dropOffOrderId===orderId && !((oi.data().payments||[]).length) && !(parseFloat(oi.data().deposit)||0)) await oiRef.delete();
+    }catch(e){ console.warn('standalone invoice cleanup', e); }
   }
   await ordersCol.doc(orderId).set({linkedEventId:eventId, linkedInquiryId:null, bookedEventId:null, subLabel:subLabel}, {merge:true});
   return subLabel;
