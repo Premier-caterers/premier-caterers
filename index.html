@@ -387,9 +387,12 @@ function _followupStageMeta(inq){
   const ts = inq.stage==='followup_1' ? inq.followup1SentAt : inq.stage==='followup_2' ? inq.followup2SentAt : null;
   if(!ts) return '';
   const d = new Date(parseInt(ts,10));
-  const label = 'Followed up on '+d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+', '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  const n = inq.stage==='followup_2' ? 2 : 1;
+  const how = _fuMethodLabel(inq, n);
+  const label = 'Followed up'+(how?(' by '+_actEsc(how)):'')+' · '+d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+', '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
   const color = inq.stage==='followup_1' ? 'var(--teal-text)' : 'var(--purple-text)';
-  return `<span style="color:${color};font-weight:600"><i class="ti ti-phone-outgoing" style="font-size:11px"></i>${label}</span>`;
+  const note = inq['followup'+n+'Note'];
+  return `<span style="color:${color};font-weight:600"${note?` title="${_actEsc(note).replace(/"/g,'&quot;')}"`:''}><i class="ti ${_fuMethodIcon(inq,n)}" style="font-size:11px"></i> ${label}${note?' <i class="ti ti-note" style="font-size:11px" aria-label="has notes"></i>':''}</span>`;
 }
 function _followupBadge(inq){
   if(!inq) return '';
@@ -1318,12 +1321,125 @@ const plStatusOptions = [
 function changeInquiryStage(id, newStage){
   const inq = inquiries.find(x=>x.id===id); if(!inq) return;
   const prevStage = inq.stage;
+  // Followed up #1 / #2: ask when, how, and notes before moving the card.
+  if(newStage==='followup_1' || newStage==='followup_2'){
+    render();   // put the dropdown back until the popup is saved
+    openFollowupLogModal(id, newStage);
+    return;
+  }
   if(newStage==='lost'){ markInquiryLost(id); }
   else if(prevStage==='lost'){ reviveInquiry(id); if(newStage!=='new') moveInquiry(id,newStage); }
   else { moveInquiry(id,newStage); }
   render();
 }
 window.changeInquiryStage = changeInquiryStage;
+
+// ── Follow-up log popup (Oct 2026) ──
+// When a card is moved to Followed up #1/#2, record when (defaults to the
+// moment of the click, editable), how (email/text/WhatsApp/...), and notes.
+const PC_FOLLOWUP_METHODS = [
+  {key:'email',    label:'Email',             icon:'ti-mail'},
+  {key:'text',     label:'Text',              icon:'ti-message'},
+  {key:'whatsapp', label:'WhatsApp',          icon:'ti-brand-whatsapp'},
+  {key:'phone',    label:'Phone call',        icon:'ti-phone'},
+  {key:'portal',   label:'Client portal chat',icon:'ti-messages'},
+  {key:'other',    label:'Other',             icon:'ti-dots'}
+];
+function _fuLocalInput(ts){
+  const d = new Date(ts); const z = n => String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+'T'+z(d.getHours())+':'+z(d.getMinutes());
+}
+function openFollowupLogModal(id, stage){
+  const inq = inquiries.find(x=>x.id===id); if(!inq) return;
+  const n = stage==='followup_2' ? 2 : 1;
+  const clickedAt = Date.now();
+  const name = inq.eventName || (((inq.firstName||'')+' '+(inq.lastName||'')).trim()) || inq.organization || 'Client';
+  document.getElementById('fu-log-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'fu-log-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML = `
+    <div role="dialog" aria-modal="true" aria-labelledby="fu-log-title" style="background:#fff;border-radius:12px;width:100%;max-width:440px;padding:20px 22px;box-shadow:0 10px 40px rgba(0,0,0,.25);font-family:inherit;color:var(--text)">
+      <div id="fu-log-title" style="font-size:17px;font-weight:700;margin-bottom:2px">Log follow-up #${n}</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">${_actEsc(name)}</div>
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px">When</label>
+      <input id="fu-log-when" type="datetime-local" value="${_fuLocalInput(clickedAt)}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:13px;font-family:inherit;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px">How</div>
+      <div id="fu-log-methods" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px">
+        ${PC_FOLLOWUP_METHODS.map(m=>`<button type="button" data-m="${m.key}" onclick="_fuPickMethod('${m.key}')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 10px;border:1px solid var(--border2);border-radius:8px;background:#fff;font-size:12.5px;cursor:pointer;font-family:inherit;color:var(--text)"><i class="ti ti-check fu-chk" style="display:none;font-size:13px"></i><i class="ti ${m.icon}" style="font-size:14px"></i>${m.label}</button>`).join('')}
+      </div>
+      <input id="fu-log-other" type="text" placeholder="What was it?" style="display:none;width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:13px;font-family:inherit;margin-top:6px">
+      <div id="fu-log-err" style="display:none;font-size:12px;color:var(--crimson,#a32d2d);margin-top:4px"><i class="ti ti-alert-triangle"></i> Pick how you followed up</div>
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text2);margin:14px 0 4px">Notes <span style="font-weight:400">(optional)</span></label>
+      <textarea id="fu-log-note" rows="3" placeholder="Left a voicemail, she'll call back Monday" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+        <button type="button" class="btn" onclick="document.getElementById('fu-log-overlay').remove()">Cancel</button>
+        <button type="button" class="btn btn--pri" onclick="_fuSaveLog('${id}','${stage}')">Save</button>
+      </div>
+    </div>`;
+  ov.addEventListener('click', e => { if(e.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+  window._fuMethod = '';
+}
+window.openFollowupLogModal = openFollowupLogModal;
+function _fuPickMethod(key){
+  window._fuMethod = key;
+  document.querySelectorAll('#fu-log-methods button').forEach(b => {
+    const on = b.dataset.m===key;
+    b.style.border = on ? '2px solid var(--text)' : '1px solid var(--border2)';
+    b.style.fontWeight = on ? '700' : '400';
+    b.style.background = on ? 'var(--bg2)' : '#fff';
+    b.querySelector('.fu-chk').style.display = on ? 'inline-block' : 'none';
+  });
+  const other = document.getElementById('fu-log-other');
+  if(other){ other.style.display = key==='other' ? 'block' : 'none'; if(key==='other') other.focus(); }
+  const err = document.getElementById('fu-log-err'); if(err) err.style.display='none';
+}
+window._fuPickMethod = _fuPickMethod;
+function _fuSaveLog(id, stage){
+  const inq = inquiries.find(x=>x.id===id); if(!inq) return;
+  const method = window._fuMethod || '';
+  if(!method){ document.getElementById('fu-log-err').style.display='block'; return; }
+  const whenVal = document.getElementById('fu-log-when').value;
+  let ts = whenVal ? new Date(whenVal).getTime() : Date.now();
+  if(isNaN(ts)) ts = Date.now();
+  const other = (document.getElementById('fu-log-other').value||'').trim();
+  const note = (document.getElementById('fu-log-note').value||'').trim();
+  const n = stage==='followup_2' ? 2 : 1;
+  inq['followup'+n+'SentAt'] = ts;
+  inq['followup'+n+'Method'] = method;
+  inq['followup'+n+'MethodOther'] = method==='other' ? other : '';
+  inq['followup'+n+'Note'] = note;
+  inq['followup'+n+'By'] = _actUserName();
+  inq['followup'+n+'LoggedAt'] = Date.now();
+  document.getElementById('fu-log-overlay')?.remove();
+  const label = _fuMethodLabel(inq, n);
+  const whenTxt = new Date(ts).toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+  logActivity(inq.id, 'followup', 'Follow-up #'+n+' by '+label+' — '+whenTxt+(note?(' — '+note):''), {round:n, method:method, methodOther:other, note:note, at:ts});
+  if(inq.stage==='lost'){ reviveInquiry(id); }
+  moveInquiry(id, stage);   // saves the inquiry (with the fields above) and re-renders
+  showToast('Follow-up #'+n+' logged ✓');
+}
+window._fuSaveLog = _fuSaveLog;
+// "Phone call", "Other: Instagram DM", or "Email" for ones sent automatically
+// by the 24-hour approval emails (those don't go through the popup).
+function _fuMethodLabel(inq, n){
+  const m = inq && inq['followup'+n+'Method'];
+  if(m==='other'){ const o = inq['followup'+n+'MethodOther']; return o ? o : 'Other'; }
+  const f = PC_FOLLOWUP_METHODS.find(x=>x.key===m);
+  if(f) return f.label;
+  if(inq && inq['followup'+n+'SentAt']){
+    const auto = Object.values(followupReminders||{}).some(r => r.inquiryId===inq.id && r.status==='sent' && (Number(r.round)||1)===n);
+    if(auto) return 'Email';
+  }
+  return '';
+}
+function _fuMethodIcon(inq, n){
+  const m = inq && inq['followup'+n+'Method'];
+  const f = PC_FOLLOWUP_METHODS.find(x=>x.key===m);
+  if(f) return f.icon;
+  return _fuMethodLabel(inq,n)==='Email' ? 'ti-mail' : 'ti-phone-outgoing';
+}
 
 // Firebase save helpers
 // ── File lists are protected from stale saves ──
@@ -5989,7 +6105,7 @@ function renderClientFilePage(inq, role){
       else sub = ({this_week:'This week', two_weeks:'2 weeks out', month_out:'1 month out', booked:(dayIso?'More than a month out':'No date yet')})[b] || '&nbsp;';
     } else if(st==='followup_1' || st==='followup_2'){
       const ts = st==='followup_1' ? inq.followup1SentAt : inq.followup2SentAt;
-      if(ts){ const d=new Date(parseInt(ts,10)); if(!isNaN(d)) sub = 'On '+d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+      if(ts){ const d=new Date(parseInt(ts,10)); if(!isNaN(d)){ const n = st==='followup_2'?2:1; const how=_fuMethodLabel(inq,n); sub = (how?(pcEsc(how)+' · '):'')+d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+', '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); } }
     }
     // With a linked event the checklist ring takes this slot and carries the stage as a tag instead.
     window._cfStageTag = `<div class="cf-stagetag"><span aria-hidden="true">✓</span> Booked</div>${sub!=='&nbsp;'?`<div class="cf-stagetag__s">${sub}</div>`:''}`;
@@ -6082,7 +6198,11 @@ function renderClientFilePage(inq, role){
           <div class="cf-when">${whenBits.join(' · ')||'&nbsp;'}</div>
         </div>
         <div class="cf-head__actions">
-          <span class="cf-stage cf-stage--${pcEsc(inq.stage||'new')}">${stageSym} ${pcEsc(stageName)}</span>
+          ${role.canEdit
+            ? `<select class="cf-stage cf-stage--${pcEsc(inq.stage||'new')}" title="Change stage" aria-label="Change stage" onchange="changeInquiryStage('${inq.id}',this.value)" style="border:0;cursor:pointer;font-family:inherit;appearance:auto">
+                ${plStatusOptions.map(o=>`<option value="${o.key}" ${((inq.stage||'new')===o.key)?'selected':''}>${({booked:'✓',lost:'✕',new:'○'}[o.key]||'●')} ${o.label}</option>`).join('')}
+              </select>`
+            : `<span class="cf-stage cf-stage--${pcEsc(inq.stage||'new')}">${stageSym} ${pcEsc(stageName)}</span>`}
           ${role.canEdit?`<button class="btn btn--pri" onclick="openContactMenu('${inq.id}')"><i class="ti ti-send"></i>Contact</button>`:''}
           ${role.canViewInvoices?`<button class="btn" onclick="viewClientQuote('${inq.id}')"><i class="ti ti-file-invoice"></i>Quote / Invoice</button>`:''}
           ${role.canEdit?`<button class="btn" onclick="openEditInquiryModal('${inq.id}')"><i class="ti ti-edit"></i>Edit</button>`:''}
