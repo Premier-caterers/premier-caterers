@@ -1119,6 +1119,66 @@ async function setSharedSetting(key, value){
   }
 }
 
+// ── Settings repair helpers (Oct 2026) ──
+// These settings are lists or yes/no values. If one was ever saved as plain
+// text (e.g. '{"Kenny":"kenny@..."}'), turn it back into the real thing.
+const _PC_OBJECT_SETTINGS = ['salespersonEmails','delegationReady','notifyContacts','deptCarriers'];
+const _PC_ARRAY_SETTINGS  = ['savedLineItems'];
+const _PC_BOOL_SETTINGS   = ['followupsPaused','followupsTestMode'];
+function _pcDecodeSetting(key, v){
+  if(_PC_BOOL_SETTINGS.includes(key)){
+    if(v === 'true') return true;
+    if(v === 'false') return false;
+    return v;
+  }
+  if(_PC_OBJECT_SETTINGS.includes(key) || _PC_ARRAY_SETTINGS.includes(key)){
+    // Case 1: saved as a line of text
+    if(typeof v === 'string'){
+      const t = v.trim();
+      if(t.startsWith('{') || t.startsWith('[')){ try { return JSON.parse(t); } catch(_){ return _pcLooseParse(t); } }
+      return v;
+    }
+    // Case 2: the broken text was re-saved from Settings as one letter per
+    // row ({"0":"{","1":"","2":"K",...}). Join the letters back up.
+    if(v && typeof v === 'object' && !Array.isArray(v)){
+      const keys = Object.keys(v);
+      if(keys.length > 3 && keys.every((k,i) => k === String(i)) && keys.every(k => typeof v[k] === 'string' && v[k].length <= 1) && v['0'] === '{'){
+        const joined = keys.map(k => v[k]).join('');
+        try { return JSON.parse(joined); } catch(_){ return _pcLooseParse(joined); }
+      }
+    }
+  }
+  return v;
+}
+// Reads '{Kenny:kenny@x.com,Shelley:shelley@x.com}' (quotes lost) back into a list.
+function _pcLooseParse(t){
+  const out = {};
+  t.replace(/^[{\s]+|[}\s]+$/g,'').split(',').forEach(part => {
+    const i = part.indexOf(':'); if(i < 1) return;
+    const k = part.slice(0,i).replace(/["']/g,'').trim();
+    let val = part.slice(i+1).replace(/["']/g,'').trim();
+    if(val === 'true') val = true; else if(val === 'false') val = false;
+    if(k) out[k] = val;
+  });
+  return out;
+}
+// Reminders created while the salesperson list was broken were saved with no
+// email address, so nobody was ever told about them. Fill those in.
+async function _pcRepairReminderEmails(map){
+  if(!db || !map || typeof map !== 'object') return;
+  const snap = await db.collection('followupReminders').where('status','==','pending').get();
+  let n = 0;
+  for(const d of snap.docs){
+    const r = d.data() || {};
+    const sp = r.salesperson || '';
+    const email = sp ? String(map[sp] || map[sp.toLowerCase()] || '').trim() : '';
+    if(sp && email && !r.salespersonEmail){
+      try { await db.collection('followupReminders').doc(d.id).update({ salespersonEmail: email }); n++; } catch(e){ console.warn('reminder repair failed', d.id, e); }
+    }
+  }
+  if(n) console.warn('[followup] filled in the salesperson email on '+n+' pending reminder(s)');
+}
+
 // One-time on Firestore init: pull the shared doc and subscribe to changes.
 function startSharedSettings(){
   if(!db) return;
@@ -1128,14 +1188,32 @@ function startSharedSettings(){
       const before = JSON.stringify(sharedSettings);
       const next = {};
       _SHARED_KEYS.forEach(k => { if(data[k] != null) next[k] = data[k]; });
+      // Self-repair: put back any setting that got saved as text instead of
+      // a list / yes-no value, then fix it in the database too.
+      const _repaired = {};
+      _SHARED_KEYS.forEach(k => {
+        if(next[k] == null) return;
+        const fixed = _pcDecodeSetting(k, next[k]);
+        if(JSON.stringify(fixed) !== JSON.stringify(next[k])){ next[k] = fixed; _repaired[k] = fixed; }
+      });
+      if(Object.keys(_repaired).length && !(snap.metadata && snap.metadata.fromCache)){
+        console.warn('[sharedSettings] repairing damaged settings:', Object.keys(_repaired).join(', '));
+        db.collection('settings').doc('app').update(Object.assign({ _updatedAt: Date.now() }, _repaired))
+          .then(() => { try { _pcRepairReminderEmails(next.salespersonEmails); } catch(_){} })
+          .catch(e => console.warn('[sharedSettings] repair write failed:', e));
+      }
       // First-time sync: if Firestore has nothing yet but localStorage does,
       // seed Firestore from localStorage so this device's existing setup
       // becomes the shared source. Only runs once.
-      if(!snap.exists || Object.keys(next).length===0){
+      // Only ever seed from a real answer from the server (never from an
+      // empty cached snapshot), and decode lists/yes-no values first — the old
+      // version wrote the salesperson list back as a line of text, which broke
+      // the Settings list and every follow-up reminder (Oct 2026).
+      if(!(snap.metadata && snap.metadata.fromCache) && (!snap.exists || Object.keys(next).length===0)){
         const seed = {};
         _SHARED_KEYS.forEach(k => {
           const v = (function(){ try { return localStorage.getItem(k)||''; } catch(_){ return ''; } })();
-          if(v) seed[k] = v;
+          if(v) seed[k] = _pcDecodeSetting(k, v);
         });
         if(Object.keys(seed).length){
           db.collection('settings').doc('app').set(Object.assign({ _updatedAt: Date.now() }, seed), { merge:true });
@@ -1143,6 +1221,12 @@ function startSharedSettings(){
       }
       sharedSettings = next;
       _sharedSettingsReady = true;
+      // Once per page load, fill in any pending reminder that is missing its
+      // salesperson email (cheap; only touches reminders that need it).
+      if(!window._pcReminderRepairDone && !(snap.metadata && snap.metadata.fromCache) && next.salespersonEmails && typeof next.salespersonEmails === 'object' && !Object.keys(_repaired).length){
+        window._pcReminderRepairDone = true;
+        try { _pcRepairReminderEmails(next.salespersonEmails); } catch(_){}
+      }
       // savedLineItems is read via a plain variable elsewhere (not
       // getSharedSetting), so keep it mirrored whenever shared data arrives.
       if(Array.isArray(next.savedLineItems)) savedLineItems = next.savedLineItems;
