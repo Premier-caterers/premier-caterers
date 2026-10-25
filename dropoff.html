@@ -257,6 +257,7 @@ a{color:var(--maroon);text-decoration:none}
       <div style="color:var(--text2);font-size:13.5px;margin-bottom:18px">Just enough to get the order on our board and reach you if we have a question. You'll pick your items next.</div>
       <div class="grid2" style="margin-bottom:14px">
         <div class="field"><label for="igName">Name / occasion <span class="ig-req">*</span></label><input id="igName" type="text" placeholder="e.g. Skolnik Bar Mitzvah kiddush"></div>
+        <div class="field"><label for="igOrg">Organization / company name <span style="font-weight:400;color:var(--text3)">(optional — goes on the order and invoice)</span></label><input id="igOrg" type="text" placeholder="e.g. Congregation Beth Sholom, Acme Corp" autocomplete="organization"></div>
         <div class="field"><label for="igCName">Your name <span class="ig-req">*</span></label><input id="igCName" type="text" placeholder="Full name" autocomplete="name"></div>
         <div class="field"><label for="igCPhone">Cell number <span class="ig-req">*</span></label><input id="igCPhone" type="tel" placeholder="(201) 555-0100" autocomplete="tel"></div>
         <div class="field"><label for="igEmail">Email <span class="ig-req">*</span></label><input id="igEmail" type="email" placeholder="name@email.com" autocomplete="email"></div>
@@ -308,6 +309,7 @@ a{color:var(--maroon);text-decoration:none}
       <div class="section-title">Delivery</div>
       <div class="grid2" style="margin-bottom:14px">
         <div class="field"><label for="coName">Name / occasion</label><input id="coName" type="text" placeholder="e.g. Skolnik Bar Mitzvah kiddush"></div>
+        <div class="field"><label for="coOrg">Organization / company name <span style="font-weight:400;color:var(--text3)">(optional — goes on the order and invoice)</span></label><input id="coOrg" type="text" placeholder="e.g. Congregation Beth Sholom, Acme Corp" autocomplete="organization"></div>
         <div class="field"><label for="coLoc">Location name</label><input id="coLoc" type="text" placeholder="e.g. Congregation Beth Sholom"></div>
         <div class="field"><label for="coDate">Delivery date</label><input id="coDate" type="date"></div>
         <div class="field"><label for="coTime">Delivery time</label><input id="coTime" type="time"></div>
@@ -417,6 +419,7 @@ a{color:var(--maroon);text-decoration:none}
       <div class="section-title">Client &amp; delivery info</div>
       <div class="grid2" style="margin-bottom:14px">
         <div class="field"><label for="eoName">Name / occasion</label><input id="eoName" type="text"></div>
+        <div class="field"><label for="eoOrg">Organization / company name</label><input id="eoOrg" type="text"></div>
         <div class="field"><label for="eoLoc">Location name</label><input id="eoLoc" type="text"></div>
         <div class="field"><label for="eoDate">Delivery date</label><input id="eoDate" type="date"></div>
         <div class="field"><label for="eoTime">Delivery time</label><input id="eoTime" type="time"></div>
@@ -744,7 +747,7 @@ function renderIntroView(){
   const back = document.getElementById('igBackLink');
   if(back) back.style.display = infoCaptured ? '' : 'none';
   if(infoCaptured){
-    _igSet('igName', _igVal('coName')); _igSet('igCName', _igVal('coCName'));
+    _igSet('igName', _igVal('coName')); _igSet('igCName', _igVal('coCName')); _igSet('igOrg', _igVal('coOrg'));
     _igSet('igCPhone', _igVal('coCPhone')); _igSet('igDate', _igVal('coDate'));
     _igSet('igTime', _igVal('coTime')); _igSet('igLoc', _igVal('coLoc'));
     _igSet('igAddr', _igVal('coAddr'));
@@ -778,7 +781,7 @@ async function submitIntroInfo(){
 
   // These are the same fields checkout uses — filling them here means
   // checkout is already complete when they get to it.
-  _igSet('coName', name); _igSet('coCName', cname);
+  _igSet('coName', name); _igSet('coCName', cname); _igSet('coOrg', _igVal('igOrg'));
   _igSet('coCPhone', fmtPhone(phone)); _igSet('coDate', date);
   _igSet('coTime', _igVal('igTime')); _igSet('coLoc', _igVal('igLoc'));
   _igSet('coAddr', _igVal('igAddr'));
@@ -1242,7 +1245,8 @@ function generateOrderPdf(order, orderId, hidePricing){
 
   doc.setFont(undefined,'normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
   const infoLine = (label,val)=>{ if(!val) return; doc.setFont(undefined,'bold'); doc.text(label+':',14,y); doc.setFont(undefined,'normal'); doc.text(String(val),45,y); y+=6; };
-  infoLine('Client', order.contactName);
+  if((order.organization||'').trim()){ infoLine('Client', order.organization.trim()); infoLine('Contact', order.contactName); }
+  else infoLine('Client', order.contactName);
   if(!hidePricing) infoLine('Email', order.contactEmail);
   infoLine('Phone', order.contactPhone);
   const _when = deliveryWhenText(order);
@@ -1418,6 +1422,7 @@ async function saveDraftNow(){
     contactEmail: email,
     contactEmails: coEmails.map(e=>(e||'').trim()).filter(Boolean),
     clientName: _igVal('coName') || _igVal('coCName'),
+    organization: _igVal('coOrg'),
     contactName: _igVal('coCName'),
     contactPhone: _igVal('coCPhone'),
     locationName: _igVal('coLoc'),
@@ -1505,6 +1510,7 @@ async function submitOrder(){
     discountNoCodeApprovedFlag: noCodeApproved,
     total: t.grandTotal,
     clientName: document.getElementById('coName').value.trim(),
+    organization: (document.getElementById('coOrg')||{value:''}).value.trim(),
     locationName: document.getElementById('coLoc').value.trim(),
     deliveryDate: document.getElementById('coDate').value,
     deliveryTime: document.getElementById('coTime').value,
@@ -1690,7 +1696,8 @@ async function sendOrderPlacedEmail(order, orderId){
     + orderNumberBannerHtml(order)
     + pendingApprovalNoticeHtml(order)
     + '<table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:16px">'
-    + infoRow('Client', order.contactName)
+    + infoRow('Client', (order.organization||'').trim() || order.contactName)
+    + ((order.organization||'').trim() ? infoRow('Contact', order.contactName) : '')
     + infoRow('Email', order.contactEmail)
     + infoRow('Phone', order.contactPhone)
     + (deliveryWhenText(order) ? '<tr><td style="padding:5px 12px 5px 0;color:#666;white-space:nowrap;vertical-align:top">Delivery</td><td style="padding:5px 0">'+deliveryWhenHtml(order)+'</td></tr>' : '')
@@ -1920,7 +1927,7 @@ async function reorderFrom(orderId, opts){
     // is reordering doesn't get sent back through the details screen.
     if(!opts.fillDetails){
       const set = (id,v)=>{ const el = document.getElementById(id); if(el && !el.value && v) el.value = v; };
-      set('coName', o.clientName||''); set('coCName', o.contactName||'');
+      set('coName', o.clientName||''); set('coCName', o.contactName||''); set('coOrg', o.organization||'');
       set('coCPhone', o.contactPhone||'');
       if(!coEmails.some(e=>e&&e.trim())) coEmails = [o.contactEmail||o.clientEmail||''];
     }
@@ -1954,6 +1961,7 @@ function continueDraftOrder(orderId){
 function reorderFillDetails(o, date){
   const set = (id, v)=>{ const el = document.getElementById(id); if(el && v!=null) el.value = v; };
   set('coName', o.clientName||'');
+  set('coOrg', o.organization||'');
   set('coLoc', o.locationName||'');
   set('coTime', o.deliveryTime||'');
   set('coAddr', o.address||'');
@@ -2054,7 +2062,7 @@ async function bridgeNewInquiry(order, orderId){
   const inq = {
     id: Date.now()+'',
     firstName, lastName,
-    organization: '',
+    organization: (order.organization||'').trim(),
     eventName: order.clientName || 'Drop-off order',
     eventType: 'Drop off catering',
     eventDate: order.deliveryDate || '',
@@ -2148,10 +2156,13 @@ async function bookDropOffOrder(orderId, quiet){
   if(!num) num = await _doNextEventNumber(wi.weekOf, evId);
 
   const menuUrl = await _doUploadMenuPdf(Object.assign({}, order, {jobNumber:num}), orderId, evId);
-  const name = ((order.contactName||'').trim()) || order.clientName || 'Drop-off order';
+  // An organization / company name, when given, is the name on the board and invoice;
+  // the person is then just the contact.
+  const org = (order.organization||'').trim();
+  const name = org || ((order.contactName||'').trim()) || order.clientName || 'Drop-off order';
   const common = {
     id: evId, inquiryId: inqId, job: num, eventNumber: num,
-    name, contactName: '', organization: '',
+    name, contactName: org ? ((order.contactName||'').trim()) : '', organization: org,
     addr: order.address || '', email: order.contactEmail || '', phone: order.contactPhone || '',
     type: 'dropoff', typeLabel: 'Drop off catering',
     day: wi.day, dayLabel: wi.dayLabel, eventDate: order.deliveryDate, weekOf: wi.weekOf,
@@ -2177,7 +2188,8 @@ async function bookDropOffOrder(orderId, quiet){
   if(menuUrl) menus.unshift({ name:'Drop-off order '+num, url:menuUrl, fileId:'', dropOffMenu:true });
   const inqPatch = {
     stage:'booked', eventDate: order.deliveryDate, eventType:'Drop off catering',
-    venueName: order.locationName||'', venueLocation: order.address||'', menus
+    venueName: order.locationName||'', venueLocation: order.address||'', menus,
+    organization: org
   };
   if(menuUrl) inqPatch.menuLink = menuUrl;
   if(!inq.salesperson && staffUser) inqPatch.salesperson = prettyStaffName(staffUser);
@@ -2403,7 +2415,7 @@ function renderStaffOrders(){
       ? `<button class="btn btn-ghost btn-sm" onclick="openCopyOrderModal('${o.id}')" style="margin-left:6px" title="Build this same order again on a new date"><i class="ti ti-copy"></i> Copy</button>` : '';
     const deleteBtn = `<button class="btn btn-ghost btn-sm" onclick="deleteOrder('${o.id}')" style="margin-left:6px;color:var(--red)">Delete</button>`;
     html += `<tr>
-      <td><b>${esc(o.clientName||o.contactName||'—')}</b><br><span style="color:var(--text3);font-size:11.5px">${esc(o.contactEmail||o.clientEmail||'')}</span></td>
+      <td><b>${esc((o.organization||'').trim()||o.clientName||o.contactName||'—')}</b>${(o.organization||'').trim()&&o.clientName?`<br><span style="font-size:12px">${esc(o.clientName)}</span>`:''}<br><span style="color:var(--text3);font-size:11.5px">${esc(o.contactName?(o.contactName+' · '):'')}${esc(o.contactEmail||o.clientEmail||'')}</span></td>
       <td>${esc(o.deliveryDate||'')} ${esc(o.deliveryTime||'')}<br><span style="color:var(--text3);font-size:11.5px">${esc(o.locationName||'')}</span></td>
       <td>${itemCount} item${itemCount===1?'':'s'}</td>
       <td class="mono">$${money(o.total||0)}</td>
@@ -2788,6 +2800,7 @@ async function openEditOrder(orderId){
     document.getElementById('eoJobNumber').value = o.jobNumber||'';
 
     document.getElementById('eoName').value = o.clientName||'';
+    document.getElementById('eoOrg').value = o.organization||'';
     document.getElementById('eoLoc').value = o.locationName||'';
     document.getElementById('eoDate').value = o.deliveryDate||'';
     document.getElementById('eoTime').value = o.deliveryTime||'';
@@ -2951,6 +2964,7 @@ async function saveEditedOrder(){
     discount: discountAmount,
     total: t.grandTotal,
     clientName: document.getElementById('eoName').value.trim(),
+    organization: document.getElementById('eoOrg').value.trim(),
     locationName: document.getElementById('eoLoc').value.trim(),
     deliveryDate: document.getElementById('eoDate').value,
     deliveryTime: document.getElementById('eoTime').value,
