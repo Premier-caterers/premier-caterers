@@ -724,6 +724,7 @@ function startUnansweredEmailWatcher(){
   }catch(e){ console.warn('Unanswered-email watcher not started:', e); }
 }
 function _rebuildUnansweredFromEmails(list){
+  window._lastUnansweredEmails = list;
   const latest = {};
   (list||[]).forEach(m=>{
     const t = m.date||0; if(!t) return;
@@ -1612,6 +1613,9 @@ function startFirebaseListeners(){
   inquiriesCol.onSnapshot( snap=>{
     inquiries=snap.docs.map(d=>d.data());
     _inqLoadedOnce=true;
+    // Re-check unanswered client emails now that the client list is here
+    // (the email check can finish first and find no clients to match).
+    try{ if(window._lastUnansweredEmails) _rebuildUnansweredFromEmails(window._lastUnansweredEmails); }catch(e){}
     try{ _cleanInquiryMenus(inquiries); }catch(e){}
     try{ _actDetectNewInquiries(inquiries); inquiries.forEach(q=>{ _actPrevInq[q.id]=JSON.parse(JSON.stringify(q)); }); }catch(e){}
     updatePipelineBadge();
