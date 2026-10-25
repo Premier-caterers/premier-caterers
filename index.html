@@ -9364,9 +9364,22 @@ function updatePipelineBadge(){
 // Handled). Opened from the Pipeline tile, the Home tile, or the envelope
 // count next to Pipeline in the sidebar.
 function _unansweredList(){
-  return (inquiries||[]).filter(i=>{ try{ return inquiryHasUnansweredEmail(i); }catch(_){ return false; } })
-    .map(i=>({ inq:i, rec: unansweredMap[(i.email||'').trim().toLowerCase()] || {} }))
-    .sort((a,b)=>(a.rec.lastInboundAt||0)-(b.rec.lastInboundAt||0));
+  // One row per client email address (a client with several events is one row).
+  const byEmail = {};
+  (inquiries||[]).forEach(i=>{
+    let on = false; try{ on = inquiryHasUnansweredEmail(i); }catch(_){}
+    if(!on) return;
+    const em = (i.email||'').trim().toLowerCase();
+    if(!byEmail[em]) byEmail[em] = { inq:i, inqs:[], rec: unansweredMap[em] || {} };
+    byEmail[em].inqs.push(i);
+  });
+  return Object.values(byEmail).map(g=>{
+    // Lead with the soonest upcoming event (else the most recent one).
+    const today = new Date().toISOString().slice(0,10);
+    g.inqs.sort((a,b)=>{ const da=a.eventDate||'', db=b.eventDate||''; const fa=da>=today, fb=db>=today; if(fa!==fb) return fa?-1:1; return fa ? da.localeCompare(db) : db.localeCompare(da); });
+    g.inq = g.inqs[0];
+    return g;
+  }).sort((a,b)=>(a.rec.lastInboundAt||0)-(b.rec.lastInboundAt||0));
 }
 function _updateUnansweredBadge(){
   const n = _unansweredList().length;
@@ -9385,9 +9398,9 @@ function _uaAgo(ts){
 function _unansweredRowsHtml(){
   const list = _unansweredList();
   if(!list.length) return '<div style="padding:28px;text-align:center;color:var(--text2)"><i class="ti ti-circle-check" style="font-size:20px"></i><div style="margin-top:6px">Every client email has been answered.</div></div>';
-  return list.map(({inq,rec})=>{
+  return list.map(({inq,inqs,rec})=>{
     const client = ((inq.firstName||'')+' '+(inq.lastName||'')).trim() || rec.fromName || inq.email;
-    const title = inq.eventName || client;
+    const title = (inq.eventName || client) + (inqs.length>1 ? (' + '+(inqs.length-1)+' more event'+(inqs.length>2?'s':'')) : '');
     const old = rec.lastInboundAt && (Date.now()-rec.lastInboundAt) > 2*86400000;
     return `<div style="display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:0.5px solid var(--border);flex-wrap:wrap">
       <i class="ti ti-mail" style="font-size:16px;color:var(--coral-solid);flex-shrink:0" aria-hidden="true"></i>
@@ -9423,7 +9436,11 @@ window.openUnansweredList = openUnansweredList;
 function _uaClose(){ document.getElementById('ua-overlay')?.remove(); }
 window._uaClose = _uaClose;
 async function _uaHandled(id){
-  await markEmailHandled(id);
+  // Mark every event for this client's email address as handled.
+  const inq = inquiries.find(x=>x.id===id);
+  const em = inq ? (inq.email||'').trim().toLowerCase() : '';
+  const all = em ? inquiries.filter(x=>(x.email||'').trim().toLowerCase()===em && inquiryHasUnansweredEmail(x)) : [];
+  for(const x of (all.length?all:[{id}])) await markEmailHandled(x.id);
   const body = document.getElementById('ua-body'); if(body) body.innerHTML = _unansweredRowsHtml();
   const c = document.getElementById('ua-count'); if(c) c.textContent = '('+_unansweredList().length+')';
   _updateUnansweredBadge();
