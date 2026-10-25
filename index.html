@@ -371,7 +371,7 @@ function _unansweredHubBanner(inq){
       <div style="font-weight:600;color:var(--coral-solid);font-size:13px">Client emailed \u2014 no reply sent yet</div>
       <div style="font-size:11px;color:var(--text2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${when}${subj?(' \u2014 "'+_actEsc(subj)+'"'):''}</div>
     </div>
-    <button onclick="event.stopPropagation();openClientEmail('${inq.id}')" style="padding:6px 10px;border:none;border-radius:var(--radius);background:var(--coral-solid);color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap"><i class="ti ti-send" style="font-size:11px"></i> Reply</button>
+    <button onclick="event.stopPropagation();replyToClientEmail('${inq.id}')" style="padding:6px 10px;border:none;border-radius:var(--radius);background:var(--coral-solid);color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap"><i class="ti ti-send" style="font-size:11px"></i> Reply</button>
     <button onclick="event.stopPropagation();markEmailHandled('${inq.id}')" title="Mark as handled if you replied by phone / text" style="padding:6px 10px;border:0.5px solid var(--coral-solid);border-radius:var(--radius);background:transparent;color:var(--coral-solid);font-size:11px;cursor:pointer;white-space:nowrap"><i class="ti ti-check" style="font-size:11px"></i> Handled</button>
   </div>`;
 }
@@ -718,7 +718,7 @@ function startUnansweredEmailWatcher(){
   try{
     const cutoff = Date.now() - 45*86400000;
     _unansweredTimer = db.collection('eventEmails').where('date','>=',cutoff).onSnapshot(
-      snap=>{ try{ _rebuildUnansweredFromEmails(snap.docs.map(d=>d.data())); }catch(e){ console.warn('unanswered rebuild', e); } },
+      snap=>{ try{ _rebuildUnansweredFromEmails(snap.docs.map(d=>Object.assign({_id:d.id}, d.data()))); }catch(e){ console.warn('unanswered rebuild', e); } },
       err=>console.warn('Unanswered-email listener:', err)
     );
   }catch(e){ console.warn('Unanswered-email watcher not started:', e); }
@@ -730,7 +730,7 @@ function _rebuildUnansweredFromEmails(list){
     if(m.direction==='in'){
       const em = String((m.from&&m.from.email)||'').toLowerCase(); if(!em) return;
       const r = latest[em] = latest[em] || {};
-      if(!r.inAt || t > r.inAt){ r.inAt = t; r.inSubject = m.subject||''; }
+      if(!r.inAt || t > r.inAt){ r.inAt = t; r.inSubject = m.subject||''; r.inId = m._id||''; r.inFromName = (m.from&&m.from.name)||''; r.inFromEmail = (m.from&&m.from.email)||''; }
     }else{
       (m.participants||[]).forEach(a=>{
         const em = String(a||'').toLowerCase(); if(!em) return;
@@ -744,7 +744,7 @@ function _rebuildUnansweredFromEmails(list){
   Object.keys(latest).forEach(em=>{
     if(!clientEmails.has(em)) return;
     const r = latest[em], inAt = r.inAt||0, outAt = r.outAt||0;
-    next[em] = { lastInboundAt:inAt, lastOutboundAt:outAt, subject:r.inSubject||'', unanswered: !!(inAt && inAt > outAt) };
+    next[em] = { lastInboundAt:inAt, lastOutboundAt:outAt, subject:r.inSubject||'', lastInboundId:r.inId||'', fromName:r.inFromName||'', fromEmail:r.inFromEmail||'', unanswered: !!(inAt && inAt > outAt) };
   });
   const changed = JSON.stringify(next) !== JSON.stringify(unansweredMap);
   unansweredMap = next;
@@ -8399,6 +8399,7 @@ function openOtherSlot(eventId, slot){
 }
 
 function openClientEmail(eventId){
+  window._replyCtx = null;
   const e = events.find(x=>x.id===eventId);
   const inq = inquiries.find(x=>'inq_'+x.id===eventId || x.id===eventId);
   const email = inq?.email || e?.email || '';
@@ -8482,6 +8483,7 @@ function openOtherSlot(eventId, slot){
 // client's address pre-filled in the To field. Falls back to Gmail web compose
 // (still "opens to Gmail") if the in-app Gmail account isn't connected.
 function openClientEmail(eventId){
+  window._replyCtx = null;
   const e = events.find(x=>x.id===eventId);
   const inq = inquiries.find(x=>'inq_'+x.id===eventId || x.id===eventId);
   const email = (inq?.email || e?.email || '').trim();
@@ -19160,7 +19162,7 @@ async function renderEmail(){
   const tab = window._emailTab || 'inbox';
   const tabs = [{key:'inbox',label:'Inbox'},{key:'sent',label:'Sent'},{key:'compose',label:'Compose'}];
   h += '<div style="display:flex;gap:4px;margin-bottom:1rem;border-bottom:0.5px solid var(--border);padding-bottom:0">'
-    + tabs.map(t=>'<button onclick="window._emailTab=\''+t.key+'\';render()" class="btn btn--ghost btn--sm">'+t.label+'</button>').join('')
+    + tabs.map(t=>'<button onclick="window._replyCtx=null;window._emailTab=\''+t.key+'\';render()" class="btn btn--ghost btn--sm">'+t.label+'</button>').join('')
     +'</div>';
 
   if(tab==='compose'){
@@ -19176,6 +19178,8 @@ async function renderEmail(){
 }
 
 function renderComposeForm(replyTo, replySubject, replyBody){
+  const rc = window._replyCtx;
+  if(rc){ replyTo = replyTo || rc.to; replySubject = replySubject || rc.subject; }
   const tplOptionsHtml = '<option value="">\u2014 Blank message \u2014</option>'
     + emailTemplates.map(t => '<option value="'+t.id+'">'+_actEsc(t.name)+'</option>').join('');
   return '<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem">'
@@ -19189,7 +19193,8 @@ function renderComposeForm(replyTo, replySubject, replyBody){
       +'<button onclick="openManageTemplates()" title="Add / edit / delete templates" style="padding:6px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;white-space:nowrap"><i class="ti ti-settings" style="font-size:12px"></i> Manage</button>'
     +'</div>'
     +'<div class="modal-row"><label>To</label><input type="email" id="compose-to" value="'+(replyTo||'')+'" placeholder="recipient@email.com"></div>'
-    +'<div class="modal-row"><label>Subject</label><input type="text" id="compose-subject" value="'+(replySubject||'')+'" placeholder="Subject..."></div>'
+    +'<div class="modal-row"><label>Subject</label><input type="text" id="compose-subject" value="'+_actEsc(replySubject||'').replace(/"/g,'&quot;')+'" placeholder="Subject..."></div>'
+    +(rc ? '<div id="compose-replying" style="margin:4px 0 12px">'+_replyCtxHtml()+'</div>' : '')
     +'<div class="modal-row"><label>Message</label><textarea id="compose-body" style="min-height:200px">'+(replyBody||'')+'</textarea></div>'
     +'<div class="modal-row"><label>Attachments</label>'
       +'<input type="file" id="compose-attach" multiple style="display:none" onchange="addComposeAttachments(this.files)">'
@@ -19197,7 +19202,7 @@ function renderComposeForm(replyTo, replySubject, replyBody){
       +'<div id="compose-attach-list" style="margin-top:6px;display:flex;flex-direction:column;gap:4px">'+renderComposeAttachList()+'</div>'
     +'</div>'
     +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:.75rem">'
-    +'<button onclick="window._composeAttachments=[];window._emailTab=\'inbox\';render()" class="btn-cancel">Cancel</button>'
+    +'<button onclick="window._composeAttachments=[];window._replyCtx=null;window._emailTab=\'inbox\';render()" class="btn-cancel">Cancel</button>'
     +'<button onclick="sendComposedEmail()" class="btn-save"><i class="ti ti-send" style="font-size:13px"></i> Send</button>'
     +'</div></div>';
 }
@@ -19365,6 +19370,7 @@ async function openEmailMessage(id){
 }
 
 function openReply(from, subject){
+  window._replyCtx = null;
   from = from || window._replyFrom || '';
   subject = subject || window._replySubj || '';
   window._emailTab = 'compose';
@@ -19377,6 +19383,69 @@ function openReply(from, subject){
   },100);
 }
 
+// ── Reply to a client's unanswered email (Oct 2026) ──
+// Opens Compose with To + "Re:" subject filled, shows the client's email
+// above the message box, and quotes it under the reply when sent.
+function replyToClientEmail(inqId){
+  const inq = inquiries.find(x=>x.id===inqId);
+  const email = (inq?.email||'').trim();
+  const rec = unansweredMap[email.toLowerCase()] || {};
+  if(!email || !rec.lastInboundId || !(typeof isGmailConnected==='function' && isGmailConnected())){ openClientEmail(inqId); return; }
+  const subj = rec.subject || '';
+  window._replyCtx = {
+    inqId: inqId, to: email, id: rec.lastInboundId,
+    subject: /^re:/i.test(subj) ? subj : ('Re: '+subj),
+    fromName: rec.fromName || (((inq.firstName||'')+' '+(inq.lastName||'')).trim()) || email,
+    fromEmail: rec.fromEmail || email, date: rec.lastInboundAt || 0,
+    body: null, open: false
+  };
+  window._emailTab = 'compose';
+  showView('email');
+  _replyCtxLoadBody(window._replyCtx).then(_replyCtxRefresh).catch(_replyCtxRefresh);
+}
+window.replyToClientEmail = replyToClientEmail;
+async function _replyCtxLoadBody(rc){
+  try{
+    const d = await db.collection('eventEmails').doc(rc.id).collection('content').doc('body').get();
+    const b = d.exists ? d.data() : {};
+    let text = String(b.bodyText||'');
+    if(!text.trim() && b.bodyHtml){ const div=document.createElement('div'); div.innerHTML=b.bodyHtml; text = div.innerText||div.textContent||''; }
+    rc.body = text.replace(/\r/g,'').trim();
+  }catch(e){ rc.body = ''; rc.err = true; }
+}
+function _replyCtxRefresh(){
+  const el = document.getElementById('compose-replying');
+  if(el) el.innerHTML = _replyCtxHtml();
+}
+function _replyCtxToggle(){ const rc=window._replyCtx; if(rc){ rc.open=!rc.open; _replyCtxRefresh(); } }
+window._replyCtxToggle = _replyCtxToggle;
+function _replyCtxHtml(){
+  const rc = window._replyCtx; if(!rc) return '';
+  const when = rc.date ? new Date(rc.date).toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+  let bodyHtml;
+  if(rc.body===null) bodyHtml = '<div style="color:var(--text3)"><i class="ti ti-loader"></i> Loading the email\u2026</div>';
+  else if(!rc.body) bodyHtml = '<div style="color:var(--text3)">'+(rc.err?'Couldn\u2019t load this email.':'(No text in this email)')+'</div>';
+  else {
+    const long = rc.body.length > 400 || rc.body.split('\n').length > 8;
+    bodyHtml = '<div style="white-space:pre-wrap;line-height:1.5;color:var(--text);'+((long&&!rc.open)?'max-height:8.5em;overflow:hidden;':'max-height:420px;overflow-y:auto;')+'">'+_actEsc(rc.body)+'</div>'
+      + (long ? '<button type="button" onclick="_replyCtxToggle()" style="margin-top:6px;border:none;background:none;padding:0;color:var(--text2);font-size:12px;cursor:pointer;font-family:inherit"><i class="ti ti-chevron-'+(rc.open?'up':'down')+'"></i> '+(rc.open?'Show less':'Show full email')+'</button>' : '');
+  }
+  return '<div style="border:1.5px dashed var(--coral-solid);background:var(--brass-tint);border-radius:var(--radius);padding:10px 12px;font-size:13px">'
+    + '<div style="font-weight:600;color:var(--coral-solid)"><i class="ti ti-arrow-back-up"></i> Replying to '+_actEsc(rc.fromName)+'</div>'
+    + '<div style="font-size:11px;color:var(--text2);margin-bottom:8px">'+_actEsc(when)+(rc.fromEmail?(' \u00b7 '+_actEsc(rc.fromEmail)):'')+' \u00b7 their email is quoted under your reply</div>'
+    + bodyHtml + '</div>';
+}
+function _replyQuote(rc){
+  if(!rc || !rc.body) return null;
+  const when = rc.date ? new Date(rc.date).toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+  const who = rc.fromName && rc.fromName!==rc.fromEmail ? (rc.fromName+' <'+rc.fromEmail+'>') : rc.fromEmail;
+  const head = 'On '+when+', '+who+' wrote:';
+  const text = '\n\n'+head+'\n'+rc.body.split('\n').map(l=>'> '+l).join('\n');
+  const html = '<div style="font-family:Arial,sans-serif;font-size:13px;color:#555;margin-top:16px">'+_actEsc(head)+'</div>'
+    + '<blockquote style="margin:4px 0 0 4px;padding-left:10px;border-left:2px solid #ccc;color:#555;font-family:Arial,sans-serif;font-size:13px;white-space:pre-wrap">'+_actEsc(rc.body)+'</blockquote>';
+  return { text, html };
+}
+
 async function sendComposedEmail(){
   const to = document.getElementById('compose-to')?.value?.trim();
   const subject = document.getElementById('compose-subject')?.value?.trim();
@@ -19384,11 +19453,18 @@ async function sendComposedEmail(){
   if(!to||!subject){ alert('Please fill in To and Subject fields.'); return; }
   const btn = document.querySelector('#mainArea .btn-save');
   if(btn){ btn.disabled=true; btn.textContent='Sending...'; }
-  const html = '<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap">'+body+'</pre>';
+  let html = '<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap">'+body+'</pre>';
+  let textBody = body;
+  const rc = window._replyCtx;
+  if(rc && rc.to && to.toLowerCase().includes(String(rc.to).toLowerCase())){
+    if(!rc.body){ try{ await _replyCtxLoadBody(rc); }catch(_){} }
+    const q = _replyQuote(rc);
+    if(q){ textBody = body + q.text; html = html + q.html; }
+  }
   const attachments = window._composeAttachments || [];
   const fromChoice = (document.getElementById('compose-from')||{}).value || 'events';
   const sendAs = fromChoice === 'events' ? '' : fromAddressEmail(fromChoice);
-  const ok = await sendGmailEmail(to, subject, body, html, attachments, sendAs);
+  const ok = await sendGmailEmail(to, subject, textBody, html, attachments, sendAs);
   if(ok){
     // If the recipient matches a client we know, log it against their history.
     // Silent no-op if it's a vendor / unknown address — the email still sends.
@@ -19400,12 +19476,12 @@ async function sendComposedEmail(){
         logActivity(matchInq.id, 'email_sent', 'Email to '+to+': '+subject+attBit, { to:to, subject:subject, attachments: attachments.map(a=>({filename:a.filename,size:a.size||0})) });
       }
     } catch(_){}
-    window._composeAttachments=[]; window._emailTab='sent'; render(); setTimeout(refreshInbox, 500);
+    window._composeAttachments=[]; window._replyCtx=null; window._emailTab='sent'; render(); setTimeout(refreshInbox, 500);
   }
   else if(btn){ btn.disabled=false; btn.textContent='Send'; }
 }
 
-function openComposeEmail(){ window._emailTab='compose'; render(); }
+function openComposeEmail(){ window._replyCtx=null; window._emailTab='compose'; render(); }
 
 
 
