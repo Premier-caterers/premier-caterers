@@ -1816,6 +1816,9 @@ function _emErrText(err){
 
 // Redraw only the email parts of the screen — never the whole drawer.
 function _emRefresh(){
+  // Someone is typing a reply: don't redraw under them (try again when they leave the box).
+  if(document.activeElement && document.activeElement.id==='em-reply-text'){ window._emRefreshPending = true; return; }
+  window._emRefreshPending = false;
   const id = _emWatchFor;
   const inq = id ? inquiries.find(x=>x.id===id) : null;
   const card = document.getElementById('emCard');
@@ -1926,6 +1929,7 @@ function _emCardInner(inq){
 
 // One email row (collapsed or open). ctxInq = the event being viewed, or '' in the client inbox.
 function _emRow(m, ctxInq){
+  (window._emMsgs = window._emMsgs || {})[m.id] = m;
   const open = !!_emOpen[m.id];
   const out = m.direction==='out';
   const who = out ? ('To: '+((m.to||[]).map(_emPerson).filter(Boolean).slice(0,2).join(', ')||'—')) : _emPerson(m.from);
@@ -1971,13 +1975,110 @@ function _emOpenHtml(m, ctxInq, asks){
   const attHtml = (atts || m.attachmentsNote) ? `<div class="em-atts">${atts}${m.attachmentsNote?`<div class="em-status em-status--warn"><i class="ti ti-alert-triangle"></i>${pcEsc(m.attachmentsNote)}</div>`:''}</div>` : '';
   const gmail = m.messageId && String(m.messageId).indexOf('gmail:')!==0
     ? `<a class="btn btn--sm" href="${EM_GMAIL_SEARCH+encodeURIComponent(m.messageId)}" target="_blank" rel="noopener" title="Opens in your own Gmail (works when the email is in your mailbox)"><i class="ti ti-brand-gmail"></i>Open in Gmail</a>` : '';
+  const canReply = act && typeof isGmailConnected==='function' && isGmailConnected();
+  const rp = window._emReply;
   const btns = `<div class="em-actions">
+      ${canReply?`<button class="btn btn--sm${rp&&rp.id===m.id&&!rp.all?' btn--pri':''}" onclick="_emStartReply('${m.id}','${ctxInq||''}',false)"><i class="ti ti-arrow-back-up"></i>Reply</button>`:''}
+      ${canReply&&_emReplyAllList(m).length>1?`<button class="btn btn--sm${rp&&rp.id===m.id&&rp.all?' btn--pri':''}" onclick="_emStartReply('${m.id}','${ctxInq||''}',true)"><i class="ti ti-arrow-back-up-double"></i>Reply all</button>`:''}
       ${gmail}
       ${act?`<button class="btn btn--sm" onclick="_emOpenPicker('${m.id}','${ctxInq}','change')"><i class="ti ti-arrows-exchange"></i>${ctxInq?'File on other events / move':'Change events'}</button>`:''}
       ${act&&ctxInq?`<button class="btn btn--sm btn--danger" onclick="_emOpenPicker('${m.id}','${ctxInq}','remove')"><i class="ti ti-x"></i>Remove from this event</button>`:''}
     </div>`;
-  return `<div class="em-open">${meta}${ask}${attHtml}${_emBodyHtml(m)}${btns}</div>`;
+  return `<div class="em-open">${meta}${ask}${attHtml}${_emBodyHtml(m)}${btns}${(rp&&rp.id===m.id)?_emReplyBoxHtml(m):''}</div>`;
 }
+
+// ── Reply from the Emails tab (Oct 2026) ──
+// Reply / Reply all inside an opened email, with attachments; the client's
+// email is quoted underneath when sent. Typed text lives in window._emReply
+// so the list can redraw without losing it.
+function _emIsOurs(addr){ addr=String(addr||'').toLowerCase(); return !addr || /@thepremiercaterer\.com$/.test(addr) || addr==='bnash.premiercaterers@gmail.com'; }
+function _emReplyAllList(m){
+  const out = [];
+  const add = e => { e=String(e||'').trim(); if(e && !_emIsOurs(e) && !out.some(x=>x.toLowerCase()===e.toLowerCase())) out.push(e); };
+  if(m.direction==='out'){ (m.to||[]).forEach(p=>add(p.email)); (m.cc||[]).forEach(p=>add(p.email)); }
+  else { add(m.from&&m.from.email); (m.to||[]).forEach(p=>add(p.email)); (m.cc||[]).forEach(p=>add(p.email)); }
+  return out;
+}
+function _emStartReply(id, ctxInq, all){
+  const m = window._emMsgs && window._emMsgs[id];
+  if(!m){ showToast('Couldn\u2019t open reply'); return; }
+  const list = _emReplyAllList(m);
+  const to = all ? list : (m.direction==='out' ? list.slice(0,1) : [ (m.from&&m.from.email) || list[0] ].filter(Boolean));
+  const prev = window._emReply;
+  window._emReply = { id, ctxInq, all, to, text: (prev&&prev.id===id)?prev.text:'', from: (prev&&prev.from)||defaultFromAddress(), att: (prev&&prev.id===id)?prev.att:[] };
+  if(!_emBody[id]) _emLoadBody(id);
+  _emRefresh();
+  setTimeout(()=>{ const t=document.getElementById('em-reply-text'); if(t){ t.focus(); } }, 60);
+}
+window._emStartReply = _emStartReply;
+function _emCancelReply(){ window._emReply = null; _emRefresh(); }
+window._emCancelReply = _emCancelReply;
+function _emReplyBoxHtml(m){
+  const rp = window._emReply;
+  const atts = (rp.att||[]).map((a,i)=>`<span class="em-att"><i class="ti ti-file"></i>${pcEsc(a.filename)}<button type="button" onclick="_emReplyRemoveAtt(${i})" title="Remove" aria-label="Remove ${pcEsc(a.filename)}" style="border:none;background:none;cursor:pointer;padding:0 0 0 4px;color:var(--text2)"><i class="ti ti-x"></i></button></span>`).join('');
+  return `<div id="em-reply-box" style="margin-top:10px;border:1.5px solid var(--border2);border-radius:var(--radius);padding:10px 12px;background:var(--bg)">
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:6px;flex-wrap:wrap">
+      <span style="color:var(--text2)">From</span>${_fromAddressDropdown('em-reply-from', rp.from).replace('<select ','<select onchange="window._emReply&&(window._emReply.from=this.value)" ')}
+    </div>
+    <div style="font-size:12px;margin-bottom:6px"><span style="color:var(--text2)">To</span> ${pcEsc(rp.to.join(', ')||'\u2014')}</div>
+    <textarea id="em-reply-text" rows="5" placeholder="Type your reply" oninput="window._emReply&&(window._emReply.text=this.value)" onblur="if(window._emRefreshPending)setTimeout(_emRefresh,50)" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical">${pcEsc(rp.text||'')}</textarea>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <input type="file" id="em-reply-file" multiple style="display:none" onchange="_emReplyAddFiles(this.files)">
+      <button type="button" class="btn btn--sm" onclick="document.getElementById('em-reply-file').click()"><i class="ti ti-paperclip"></i>Add attachment</button>
+      ${atts}
+      <span style="flex:1"></span>
+      <button type="button" class="btn btn--sm" onclick="_emCancelReply()">Cancel</button>
+      <button type="button" id="em-reply-send" class="btn btn--pri btn--sm" onclick="_emSendReply()"><i class="ti ti-send"></i>Send</button>
+    </div>
+    <div style="font-size:11px;color:var(--text2);margin-top:6px">Their email is quoted underneath when sent.</div>
+  </div>`;
+}
+function _emReplyAddFiles(files){
+  const rp = window._emReply; if(!rp) return;
+  let pending = (files||[]).length;
+  Array.from(files||[]).forEach(file=>{
+    const r = new FileReader();
+    r.onload = ()=>{ rp.att.push({ filename:file.name, mime:file.type||'application/octet-stream', base64:String(r.result).split(',')[1]||'', size:file.size }); if(--pending<=0) _emRefresh(); };
+    r.onerror = ()=>{ if(--pending<=0) _emRefresh(); };
+    r.readAsDataURL(file);
+  });
+}
+window._emReplyAddFiles = _emReplyAddFiles;
+function _emReplyRemoveAtt(i){ const rp=window._emReply; if(rp){ rp.att.splice(i,1); _emRefresh(); } }
+window._emReplyRemoveAtt = _emReplyRemoveAtt;
+async function _emSendReply(){
+  const rp = window._emReply; if(!rp) return;
+  const m = window._emMsgs && window._emMsgs[rp.id]; if(!m) return;
+  const t = document.getElementById('em-reply-text'); if(t) rp.text = t.value;
+  const body = (rp.text||'').trim();
+  if(!body){ alert('Type a reply first.'); return; }
+  if(!rp.to.length){ alert('No one to send to.'); return; }
+  const btn = document.getElementById('em-reply-send'); if(btn){ btn.disabled=true; btn.innerHTML='Sending\u2026'; }
+  if(!_emBody[rp.id] || _emBody[rp.id]==='loading'){ try{ await _emLoadBody(rp.id); }catch(_){} }
+  const b = _emBody[rp.id] || {};
+  let orig = String(b.bodyText||'');
+  if(!orig.trim() && b.bodyHtml){ const d=document.createElement('div'); d.innerHTML=b.bodyHtml; orig=d.innerText||d.textContent||''; }
+  const subj0 = m.subject||'';
+  const subject = /^re:/i.test(subj0) ? subj0 : ('Re: '+subj0);
+  const esc = x => String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let html = '<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap">'+esc(body)+'</pre>';
+  let text = body;
+  const q = _replyQuote({ fromName:(m.from&&m.from.name)||'', fromEmail:(m.from&&m.from.email)||'', date:m.date||0, body:orig.replace(/\r/g,'').trim() });
+  if(q){ text += q.text; html += q.html; }
+  const sendAs = rp.from==='events' ? '' : fromAddressEmail(rp.from);
+  const ok = await sendGmailEmail(rp.to.join(', '), subject, text, html, rp.att||[], sendAs);
+  if(!ok){ if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-send"></i>Send'; } return; }
+  const inqIds = rp.ctxInq ? [rp.ctxInq] : (m.inquiryIds||[]);
+  inqIds.forEach(iid=>{
+    const inq = inquiries.find(x=>x.id===iid); if(!inq) return;
+    try{ logActivity(inq.id,'email_sent','Reply to '+rp.to.join(', ')+': '+subject+((rp.att||[]).length?(' \u2014 '+rp.att.length+' attachment'+(rp.att.length>1?'s':'')):''),{ to:rp.to, subject }); }catch(_){}
+    // Clear the "client emailed" box right away (the sent copy is filed a little later).
+    try{ inq.emailHandledAt = Date.now(); _saveInquiry(inq); }catch(_){}
+  });
+  window._emReply = null;
+  _emRefresh(); try{ render(); }catch(_){}
+}
+window._emSendReply = _emSendReply;
 
 function _emToggle(id){
   _emOpen[id] = !_emOpen[id];
@@ -19480,6 +19581,7 @@ async function sendComposedEmail(){
         logActivity(matchInq.id, 'email_sent', 'Email to '+to+': '+subject+attBit, { to:to, subject:subject, attachments: attachments.map(a=>({filename:a.filename,size:a.size||0})) });
       }
     } catch(_){}
+    try{ if(rc && rc.inqId){ const iq = inquiries.find(x=>x.id===rc.inqId); if(iq){ iq.emailHandledAt = Date.now(); _saveInquiry(iq); } } }catch(_){}
     window._composeAttachments=[]; window._replyCtx=null; window._emailTab='sent'; render(); setTimeout(refreshInbox, 500);
   }
   else if(btn){ btn.disabled=false; btn.textContent='Send'; }
