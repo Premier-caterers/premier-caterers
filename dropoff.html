@@ -342,6 +342,10 @@ a{color:var(--maroon);text-decoration:none}
         <input type="checkbox" id="coPartOfEvent" style="width:16px;height:16px"> Is this part of an event you're already booked with us for?
       </label>
       <div id="coStaffLinkArea" style="display:none;margin-bottom:12px">
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:13.5px;margin-bottom:10px;cursor:pointer;border:1.5px dashed #C9A227;background:#FFF8E1;border-radius:9px;padding:9px 11px">
+          <input type="checkbox" id="coHold" onchange="coHoldChanged()" style="width:16px;height:16px;margin-top:2px">
+          <span><b>Save only &mdash; don't send yet</b> <span style="color:var(--text3)">(staff only)</span><br><span style="font-size:12px;color:var(--text2)">No email to events@, Barry, the kitchen printer or the client. Use <b>Send now</b> in All orders when it's time.</span></span>
+        </label>
         <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin-bottom:10px;cursor:pointer">
           <input type="checkbox" id="coNoNotify" style="width:16px;height:16px"> Don't send the client a confirmation email or text <span style="color:var(--text3)">(staff only)</span>
         </label>
@@ -394,6 +398,7 @@ a{color:var(--maroon);text-decoration:none}
       <div class="search"><i class="ti ti-search"></i><input type="text" id="staffOrderSearch" placeholder="Search by client name or email..." oninput="renderStaffOrders()"></div>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div id="heldReminder" style="display:none;width:100%"></div>
       <div id="staffOrderFilters" style="display:flex;gap:6px;flex-wrap:wrap"></div>
       <span style="display:flex;gap:6px">
         <button id="repairEvBtn" class="btn btn-sm" onclick="repairMissingEvents()" title="Recreate events that were removed when an order was linked to its own job number">Fix missing events</button>
@@ -1223,6 +1228,17 @@ function generateOrderPdf(order, orderId, hidePricing){
     doc.text(jobLabel, x, 17.5);
   }
   y += 6;
+  if(hidePricing && isFutureWeekOrder(order)){
+    // Big boxed banner — prints clearly in black and white.
+    const label = futureWeekLabel(order);
+    doc.setDrawColor(0,0,0); doc.setLineWidth(1.4); doc.setFillColor(255,224,102);
+    doc.rect(14, y-2, pageW-28, 22, 'FD');
+    doc.setTextColor(0,0,0); doc.setFont(undefined,'bold'); doc.setFontSize(20);
+    doc.text(label, pageW/2, y+8, {align:'center'});
+    doc.setFontSize(10); doc.text('NOT FOR THIS WEEK - DO NOT PREP YET', pageW/2, y+15.5, {align:'center'});
+    doc.setLineWidth(0.2);
+    y += 26;
+  }
 
   doc.setFont(undefined,'normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
   const infoLine = (label,val)=>{ if(!val) return; doc.setFont(undefined,'bold'); doc.text(label+':',14,y); doc.setFont(undefined,'normal'); doc.text(String(val),45,y); y+=6; };
@@ -1466,6 +1482,9 @@ async function submitOrder(){
   // and is ignored for anyone else so a client can never switch off their
   // own confirmation.
   const noNotify = isStaff && !!(document.getElementById('coNoNotify')||{}).checked;
+  // Staff "Save only" — saved and booked like any order, but nothing is
+  // emailed or printed until someone clicks Send now in All orders.
+  const hold = isStaff && !!(document.getElementById('coHold')||{}).checked;
   // Staff-placed orders don't need review — the caterer entered it
   // directly. Client-placed orders wait for staff to approve them.
   const approved = isStaff;
@@ -1497,7 +1516,9 @@ async function submitOrder(){
     clientEmail: primaryEmail,
     notes: document.getElementById('coNotes').value.trim(),
     placedBy: isStaff ? ('staff:'+staffUser) : 'client',
-    clientNotified: !noNotify,
+    clientNotified: hold ? false : !noNotify,
+    held: hold,
+    heldAt: hold ? Date.now() : null,
     submittedAt: Date.now(),
     updatedAt: Date.now()
   };
@@ -1528,23 +1549,43 @@ async function submitOrder(){
         catch(e){ console.error('booking drop-off failed', e); }
       }
     }
-    await sendOrderPlacedEmail(order, currentOrderId);
-    if(!noNotify){
-      await sendClientConfirmationEmail(order, currentOrderId);
-      await sendOrderConfirmationSms(order, currentOrderId);
+    if(!hold){
+      await sendOrderPlacedEmail(order, currentOrderId);
+      if(!noNotify){
+        await sendClientConfirmationEmail(order, currentOrderId);
+        await sendOrderConfirmationSms(order, currentOrderId);
+      }
     }
     renderConfirmation(order);
-    if(noNotify) showToast('Order placed — client was NOT notified');
+    if(hold) showToast('Order saved — NOT sent to anyone yet. Use Send now in All orders.');
+    else if(noNotify) showToast('Order placed — client was NOT notified');
     showView('confirm');
     cart = {}; itemNotes = {}; noteOpen = {};
     coEmails = ['']; coDiscountAmount = 0; coDiscountCodeValid = null; coStagedEvent = null;
     currentOrderId = null; draftStarted = false;
     const nn = document.getElementById('coNoNotify'); if(nn) nn.checked = false;
+    const hh = document.getElementById('coHold'); if(hh){ hh.checked = false; coHoldChanged(); }
   }catch(e){
     console.error('submit failed', e);
     errEl.textContent = 'Something went wrong placing the order — please try again, or call us directly.';
   }
-  btn.disabled = false; btn.textContent = 'Place order';
+  btn.disabled = false; coHoldChanged();
+}
+function coHoldChanged(){
+  const on = !!(document.getElementById('coHold')||{}).checked;
+  const btn = document.getElementById('placeOrderBtn');
+  if(btn && !btn.disabled) btn.textContent = on ? 'Save order (not sent)' : 'Place order';
+}
+// "Future week" = delivery after this Sunday (weeks run Mon–Sun).
+function isFutureWeekOrder(order){
+  const d = order && order.deliveryDate; if(!d) return false;
+  try{ return d > _soRanges().wk[1]; }catch(_){ return false; }
+}
+function futureWeekLabel(order){
+  const p = String(order.deliveryDate||'').split('-').map(Number);
+  if(p.length!==3) return 'FUTURE WEEK';
+  const dt = new Date(p[0], p[1]-1, p[2], 12);
+  return 'FUTURE WEEK - DELIVERY '+dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase();
 }
 function renderConfirmation(order){
   document.getElementById('confirmNumberBanner').innerHTML =
@@ -1645,6 +1686,7 @@ async function sendOrderPlacedEmail(order, orderId){
     + '<div style="background:#7A2E3D;padding:16px 20px;border-radius:6px 6px 0 0">'
     + '<h2 style="color:#fff;margin:0;font-size:18px">New Drop-Off Order</h2></div>'
     + '<div style="background:#fff;border:1px solid #ddd;padding:20px;border-radius:0 0 6px 6px">'
+    + (isFutureWeekOrder(order) ? '<div style="border:4px solid #000;background:#FFE066;color:#000;text-align:center;font-size:26px;font-weight:900;letter-spacing:1px;padding:14px 10px;margin-bottom:16px;border-radius:6px">&#9888; '+esc(futureWeekLabel(order))+'<div style="font-size:13px;font-weight:600;letter-spacing:0;margin-top:4px">Not for this week \u2014 do not prep yet</div></div>' : '')
     + orderNumberBannerHtml(order)
     + pendingApprovalNoticeHtml(order)
     + '<table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:16px">'
@@ -1669,7 +1711,7 @@ async function sendOrderPlacedEmail(order, orderId){
     + '</div></div>';
 
   const itemSummary = order.lines.map(l=> l.qty+'x '+l.itemName+' ('+l.sizeLabel+')'+(l.note?' — note: '+l.note:'')).join('\n');
-  const plainBody = 'A new drop-off order was placed.\n\n'+
+  const plainBody = (isFutureWeekOrder(order) ? ('*** '+futureWeekLabel(order)+' — NOT FOR THIS WEEK ***\n\n') : '')+'A new drop-off order was placed.\n\n'+
     'Order: '+orderDisplayNumber(order)+'\n\n'+
     'Client: '+order.contactName+' ('+order.contactEmail+', '+order.contactPhone+')\n'+
     'Delivery: '+deliveryWhenText(order)+' — '+order.locationName+', '+order.address+'\n\n'+
@@ -1687,7 +1729,7 @@ async function sendOrderPlacedEmail(order, orderId){
       body: JSON.stringify({
         action: 'gmailSend',
         to: 'events@thepremiercaterer.com,bnash.premiercaterers@gmail.com',
-        subject: 'New drop-off order — '+(order.clientName||order.contactName),
+        subject: (isFutureWeekOrder(order) ? '[FUTURE WEEK] ' : '')+'New drop-off order — '+(order.clientName||order.contactName),
         body: plainBody,
         htmlBody: htmlBody
       })
@@ -1704,7 +1746,7 @@ async function sendOrderPlacedEmail(order, orderId){
       body: JSON.stringify({
         action: 'gmailSend',
         to: '47515733707@print.brother.com',
-        subject: 'Order '+orderDisplayNumber(order),
+        subject: (isFutureWeekOrder(order) ? '[FUTURE WEEK] ' : '')+'Order '+orderDisplayNumber(order),
         body: 'Drop-off order attached.',
         attachments: [{base64: pdfBase64, mimeType:'application/pdf', filename:'Order-'+orderDisplayNumber(order).replace(/[^\w-]/g,'')+'.pdf'}]
       })
@@ -2280,12 +2322,13 @@ function _soRanges(){
   return { today:_soYmd(t), wk:[_soYmd(mon),_soYmd(sun)], nwk:[_soYmd(nMon),_soYmd(nSun)], mo:[_soYmd(m1),_soYmd(m2)] };
 }
 const STAFF_ORDER_RANGES = [
-  ['all','All'], ['current','Current'], ['past','Past'], ['thisweek','This week'], ['nextweek','Next week'], ['thismonth','This month']
+  ['all','All'], ['current','Current'], ['past','Past'], ['thisweek','This week'], ['nextweek','Next week'], ['thismonth','This month'], ['held','Not sent']
 ];
 // Orders with no delivery date yet (drafts) count as Current.
 function _soMatch(o, key, R){
   const d = o.deliveryDate || '';
   if(key==='all') return true;
+  if(key==='held') return !!o.held;
   if(key==='current') return !d || d >= R.today;
   if(!d) return false;
   if(key==='past') return d < R.today;
@@ -2308,6 +2351,13 @@ function renderStaffOrders(){
     return `<button class="chip${staffOrderRange===k?' on':''}" onclick="setStaffOrderRange('${k}')">${label} (${n})</button>`;
   }).join('');
   const rows = searched.filter(o=>_soMatch(o, staffOrderRange, R));
+  // Reminder: saved-not-sent orders delivering within the next 7 days (or overdue).
+  const hr = document.getElementById('heldReminder');
+  if(hr){
+    const due = _heldDueSoon();
+    hr.style.display = due.length ? '' : 'none';
+    hr.innerHTML = due.length ? `<div style="border:2px dashed #C9A227;background:#FFF8E1;color:#6B5200;border-radius:9px;padding:10px 12px;font-size:13.5px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span>&#9200; <b>${due.length} saved order${due.length>1?'s are':' is'} coming up within a week and not sent to the kitchen yet:</b> ${due.map(o=>esc((o.clientName||o.contactName||'?')+' ('+(o.deliveryDate||'')+')')).join(', ')}</span><button class="btn btn-pri btn-sm" onclick="setStaffOrderRange('held')">Show them</button></div>` : '';
+  }
   const bab = document.getElementById('bookAllBtn');
   if(bab && !bab.disabled){
     const n = _unbookedUpcoming().length;
@@ -2326,6 +2376,7 @@ function renderStaffOrders(){
     const statusClass = (o.linkedEventId || o.bookedEventId) ? 'linked' : (pendingApproval ? 'draft' : (o.status||'draft'));
     let statusLabel = o.linkedEventId ? ('Linked — '+(o.subLabel||'')) : (o.bookedEventId ? ('Booked — '+(o.jobNumber||'')) : (o.status==='submitted' ? 'Submitted' : 'Draft — in progress'));
     if(pendingApproval) statusLabel = 'Pending approval';
+    const heldPill = o.held ? `<div style="margin-top:4px"><span style="display:inline-block;border:1.5px dashed #C9A227;background:#FFF8E1;color:#6B5200;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;white-space:nowrap">&#10074;&#10074; Saved, not sent</span></div>` : '';
     const bookBtn = (o.status==='submitted' && o.approved && !o.linkedEventId && !o.bookedEventId)
       ? `<button class="btn btn-pri btn-sm" onclick="bookOrderNow('${o.id}')" style="margin-left:6px" title="Add to the weekly board as a drop-off with its own job number">Book</button>` : '';
     const flagNote = (o.partOfExistingEventFlag && !o.linkedEventId)
@@ -2341,8 +2392,9 @@ function renderStaffOrders(){
     // checkout then submits this draft rather than creating a second order.
     const continueBtn = (o.status||'draft')==='draft'
       ? `<button class="btn btn-pri btn-sm" onclick="continueDraftOrder('${o.id}')">Continue</button>` : '';
-    const resendBtn = o.status==='submitted'
-      ? `<button class="btn btn-ghost btn-sm" onclick="resendOrderEmails('${o.id}')" style="margin-left:6px">Resend</button>` : '';
+    const resendBtn = o.status!=='submitted' ? ''
+      : o.held ? `<button class="btn btn-pri btn-sm" onclick="sendHeldOrder('${o.id}')" style="margin-left:6px"><i class="ti ti-send"></i> Send now</button>`
+      : `<button class="btn btn-ghost btn-sm" onclick="resendOrderEmails('${o.id}')" style="margin-left:6px">Resend</button>`;
     // Download — saves the same PDF the client receives, for any order that has items.
     const downloadBtn = (o.lines && o.lines.length)
       ? `<button class="btn btn-ghost btn-sm" onclick="staffDownloadOrder('${o.id}')" style="margin-left:6px"><i class="ti ti-download"></i> Download</button>` : '';
@@ -2355,7 +2407,7 @@ function renderStaffOrders(){
       <td>${esc(o.deliveryDate||'')} ${esc(o.deliveryTime||'')}<br><span style="color:var(--text3);font-size:11.5px">${esc(o.locationName||'')}</span></td>
       <td>${itemCount} item${itemCount===1?'':'s'}</td>
       <td class="mono">$${money(o.total||0)}</td>
-      <td><span class="pill-status ${statusClass}">${statusLabel}</span>${flagNote}</td>
+      <td><span class="pill-status ${statusClass}">${statusLabel}</span>${heldPill}${flagNote}</td>
       <td>${continueBtn}${approveBtn}${bookBtn}${linkBtn}${editBtn}${resendBtn}${copyBtn}${downloadBtn}${deleteBtn}</td>
     </tr>`;
   });
@@ -2641,6 +2693,52 @@ async function staffDownloadOrder(orderId){
     if(!doc.exists){ showToast('Could not find that order.'); return; }
     downloadOrderPdf(doc.data(), orderId);
   }catch(e){ console.error(e); showToast('Download failed — please try again.'); }
+}
+function _heldDueSoon(){
+  const t = new Date(); t.setHours(12,0,0,0);
+  const lim = new Date(t); lim.setDate(t.getDate()+7);
+  const limY = _soYmd(lim);
+  return allStaffOrders.filter(o=>o.held && o.status==='submitted' && o.deliveryDate && o.deliveryDate <= limY);
+}
+// Send a "Save only" order now: staff email + kitchen printer, and the
+// client confirmation if the box is ticked. Orders for a later week get the
+// big FUTURE WEEK banner automatically.
+function sendHeldOrder(orderId){
+  const o = allStaffOrders.find(x=>x.id===orderId) || {};
+  document.getElementById('heldSendOverlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'heldSendOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+  const future = isFutureWeekOrder(o);
+  ov.innerHTML = `<div role="dialog" aria-modal="true" style="background:#fff;border-radius:12px;max-width:420px;width:100%;padding:20px 22px;font-family:inherit">
+    <div style="font-size:17px;font-weight:700;margin-bottom:4px">Send this order now?</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px">${esc(o.clientName||o.contactName||'')} &middot; ${esc(o.deliveryDate||'')} ${esc(o.deliveryTime||'')}</div>
+    <div style="font-size:13px;margin-bottom:10px">Goes to events@, Barry and the kitchen printer.</div>
+    ${future ? `<div style="border:2px solid #000;background:#FFE066;font-weight:800;padding:8px 10px;border-radius:6px;font-size:13px;margin-bottom:10px">&#9888; This is for a future week &mdash; the kitchen copy will say <b>FUTURE WEEK</b> in big letters.</div>` : ''}
+    <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;margin-bottom:16px"><input type="checkbox" id="heldSendClient" checked style="width:16px;height:16px"> Also send the client their confirmation</label>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('heldSendOverlay').remove()">Cancel</button>
+      <button class="btn btn-pri btn-sm" id="heldSendGo" onclick="_doSendHeldOrder('${orderId}')"><i class="ti ti-send"></i> Send now</button>
+    </div></div>`;
+  ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+async function _doSendHeldOrder(orderId){
+  const toClient = !!(document.getElementById('heldSendClient')||{}).checked;
+  const go = document.getElementById('heldSendGo'); if(go){ go.disabled = true; go.textContent = 'Sending\u2026'; }
+  try{
+    const doc = await ordersCol.doc(orderId).get();
+    if(!doc.exists){ alert('Could not find that order.'); return; }
+    const order = doc.data();
+    await sendOrderPlacedEmail(order, orderId);
+    if(toClient){
+      await sendClientConfirmationEmail(order, orderId);
+      await sendOrderConfirmationSms(order, orderId);
+    }
+    await ordersCol.doc(orderId).set({ held:false, sentAt:Date.now(), clientNotified: toClient || !!order.clientNotified, updatedAt:Date.now() }, {merge:true});
+    document.getElementById('heldSendOverlay')?.remove();
+    showToast(toClient ? 'Sent to the kitchen and the client' : 'Sent to the kitchen (client not notified)');
+  }catch(e){ console.error(e); alert('Could not send that order.'); if(go){ go.disabled=false; go.textContent='Send now'; } }
 }
 async function resendOrderEmails(orderId){
   if(!confirm('Resend this order\'s emails (and text, if a phone was given) to the client and to events@/Barry/the printer?')) return;

@@ -1717,7 +1717,7 @@ function startFirebaseListeners(){
   regularsCol = db.collection('regulars');
   regularsCol.onSnapshot( snap=>{ regulars=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='regulars'||currentView==='events') render(); }, err=>console.error('regulars listener', err));
   dropOffOrdersCol = db.collection('dropOffOrders');
-  dropOffOrdersCol.where('status','==','submitted').onSnapshot( snap=>{ dropOffOrders=snap.docs.map(d=>({id:d.id,...d.data()})); _doInvLoaded.orders=true; _doInvSchedule(); if(currentView==='regulars'||currentView==='events'||currentView==='printcenter') render(); }, err=>console.error('dropOffOrders listener', err));
+  dropOffOrdersCol.where('status','==','submitted').onSnapshot( snap=>{ dropOffOrders=snap.docs.map(d=>({id:d.id,...d.data()})); _doInvLoaded.orders=true; _doInvSchedule(); if(currentView==='regulars'||currentView==='events'||currentView==='printcenter'||currentView==='home') render(); }, err=>console.error('dropOffOrders listener', err));
   contractsCol = db.collection('contracts');
   contractsCol.onSnapshot( snap=>{
     const prevContracts = contracts || {};
@@ -4736,11 +4736,26 @@ function renderHome(){
       </div>
     </div>`;
 
+  // Reminder: drop-off orders saved with "Save only" (not sent to the kitchen)
+  // that deliver within the next 7 days.
+  let heldBanner = '';
+  try{
+    const t = new Date(); t.setHours(12,0,0,0); const lim = new Date(t); lim.setDate(t.getDate()+7);
+    const limY = lim.getFullYear()+'-'+String(lim.getMonth()+1).padStart(2,'0')+'-'+String(lim.getDate()).padStart(2,'0');
+    const due = (dropOffOrders||[]).filter(o=>o.held && o.deliveryDate && o.deliveryDate <= limY).sort((a,b)=>(a.deliveryDate||'').localeCompare(b.deliveryDate||''));
+    if(due.length) heldBanner = `<div style="border:2px dashed #C9A227;background:#FFF8E1;color:#6B5200;border-radius:10px;padding:12px 14px;margin:0 0 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:13.5px">
+      <i class="ti ti-alarm" style="font-size:20px" aria-hidden="true"></i>
+      <div style="flex:1;min-width:220px"><b>${due.length} drop-off order${due.length>1?'s':''} saved but not sent to the kitchen yet</b> \u2014 delivering within a week:<br>${due.map(o=>pcEsc((o.clientName||o.contactName||'?')+' ('+o.deliveryDate+')')).join(', ')}</div>
+      <a class="btn btn--sm" href="https://premier-caterers.github.io/premier-caterers/dropoff.html" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Open drop-off app</a>
+    </div>`;
+  }catch(_){}
+
   return `
     <div class="home-header">
       <div class="home-greeting">Premier Caterers</div>
       <div class="home-sub">Operations hub · Week ending ${wLabel}</div>
     </div>
+    ${heldBanner}
     <div class="home-tiles">${tileHtml}</div>
     <div class="home-boxes">${eventsBox}${todoBox}</div>`;
 }
