@@ -87,7 +87,7 @@
     <button class="nav-item" id="nav-changes" onclick="showView('changes')"><i class="ti ti-refresh-alert"></i>Changes log<span class="nav-badge">2</span></button>
     <a class="nav-item" href="https://calendar.google.com" target="_blank" rel="noopener" onclick="closeMobileNav()" style="text-decoration:none"><i class="ti ti-brand-google"></i>Google Calendar<i class="ti ti-external-link" style="font-size:12px;margin-left:auto;opacity:.6;width:auto"></i></a>
     <div class="sidebar-label" id="grpSales">Sales</div>
-    <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span></button>
+    <button class="nav-item" id="nav-pipeline" onclick="showView('pipeline')"><i class="ti ti-layout-kanban"></i>Pipeline<span class="nav-badge" id="pipelineBadge">0</span><span class="nav-badge" id="unansweredBadge" role="button" title="Unanswered client emails \u2014 click to see them" onclick="event.stopPropagation();openUnansweredList()" style="display:none;margin-left:4px;border:1.5px dashed var(--coral-solid);background:var(--brass-tint);color:var(--coral-solid);cursor:pointer"><i class="ti ti-mail" style="font-size:10px;opacity:1;color:inherit"></i> <span id="unansweredBadgeN">0</span></span></button>
     <button class="nav-item" id="nav-clients" onclick="showView('clients')"><i class="ti ti-address-book"></i>Clients</button>
     <button class="nav-item" id="nav-invoices" onclick="showView('invoices')"><i class="ti ti-file-invoice"></i>Quotes / Invoices</button>
     <button class="nav-item" id="nav-email" onclick="showView('email')"><i class="ti ti-mail"></i>Email<span class="nav-badge" id="emailBadge" style="display:none">0</span></button>
@@ -750,6 +750,7 @@ function _rebuildUnansweredFromEmails(list){
   const changed = JSON.stringify(next) !== JSON.stringify(unansweredMap);
   unansweredMap = next;
   _lastUnansweredCheckAt = Date.now();
+  try{ _updateUnansweredBadge(); }catch(_){}
   if(changed){ try { render(); } catch(_){} }
 }
 // Old Gmail-polling version, kept for reference only — no longer called.
@@ -4678,6 +4679,7 @@ function renderHome(){
 
   const tiles = [
     {key:'pipeline',   label:'Pipeline',         icon:'ti-layout-kanban', badge:newInq||''},
+    {key:'unanswered', label:'Unanswered emails',icon:'ti-mail',          badge:_unansweredList().length||''},
     {key:'events',     label:'This Week',        icon:'ti-calendar',      badge:weekEvents.length||''},
     {key:'coversheet', label:'Cover Sheet',      icon:'ti-layout-rows'},
     {key:'schedule',   label:'Staff Schedule',   icon:'ti-users'},
@@ -4692,9 +4694,10 @@ function renderHome(){
   ];
 
   const tileHtml = tiles.map(t=>{
-    const onclick = t.key==='events' ? 'goToThisWeek()' : t.key==='coversheet' ? 'goToCoverSheetThisWeek()' : `showView('${t.key}')`;
+    const onclick = t.key==='events' ? 'goToThisWeek()' : t.key==='coversheet' ? 'goToCoverSheetThisWeek()' : t.key==='unanswered' ? 'openUnansweredList()' : `showView('${t.key}')`;
+    const uaStyle = (t.key==='unanswered' && t.badge) ? ' style="border:1.5px dashed var(--coral-solid);background:var(--brass-tint)"' : '';
     return `
-    <button class="home-tile" onclick="${onclick}">
+    <button class="home-tile" onclick="${onclick}"${uaStyle}>
       <div class="home-tile-icon"><i class="ti ${t.icon}"></i></div>
       <div class="home-tile-label">${t.label}</div>
       ${t.badge?`<span class="home-tile-badge">${t.badge}</span>`:''}
@@ -5505,6 +5508,7 @@ function renderPipeline(){
     <div class="pl-stat pl-stat--amber"><div class="k">Menu sent</div><div class="v">${sMenu}</div></div>
     <div class="pl-stat accent"><div class="k">Booked</div><div class="v">${sBooked}</div></div>
     <div class="pl-stat pl-stat--purple"><div class="k">This week</div><div class="v">${sWeek}</div></div>
+    ${(()=>{ const n=_unansweredList().length; return `<button type="button" class="pl-stat" onclick="openUnansweredList()" title="Client emails with no reply yet \u2014 click to see them" style="text-align:left;cursor:pointer;font-family:inherit;${n?'border:1.5px dashed var(--coral-solid);background:var(--brass-tint)':''}"><div class="k" style="${n?'color:var(--coral-solid)':''}"><i class="ti ti-mail"></i> Unanswered emails</div><div class="v" style="${n?'color:var(--coral-solid)':''}">${n}</div></button>`; })()}
   </div>`;
 
   let h = `
@@ -9352,7 +9356,79 @@ function updatePipelineBadge(){
   const n = inquiries.filter(i=>i.stage==='new').length;
   const b = document.getElementById('pipelineBadge');
   if(b) b.textContent=n;
+  _updateUnansweredBadge();
 }
+
+// ── Unanswered client emails list (Oct 2026) ──
+// Every client whose latest email to us has no reply (and wasn't marked
+// Handled). Opened from the Pipeline tile, the Home tile, or the envelope
+// count next to Pipeline in the sidebar.
+function _unansweredList(){
+  return (inquiries||[]).filter(i=>{ try{ return inquiryHasUnansweredEmail(i); }catch(_){ return false; } })
+    .map(i=>({ inq:i, rec: unansweredMap[(i.email||'').trim().toLowerCase()] || {} }))
+    .sort((a,b)=>(a.rec.lastInboundAt||0)-(b.rec.lastInboundAt||0));
+}
+function _updateUnansweredBadge(){
+  const n = _unansweredList().length;
+  const b = document.getElementById('unansweredBadge');
+  const nEl = document.getElementById('unansweredBadgeN');
+  if(nEl) nEl.textContent = n;
+  if(b) b.style.display = n ? '' : 'none';
+}
+function _uaAgo(ts){
+  if(!ts) return '';
+  const mins = Math.round((Date.now()-ts)/60000);
+  if(mins < 60) return mins<=1 ? 'just now' : mins+' min ago';
+  const h = Math.round(mins/60); if(h < 24) return h+' hour'+(h>1?'s':'')+' ago';
+  const d = Math.round(h/24); return d+' day'+(d>1?'s':'')+' ago';
+}
+function _unansweredRowsHtml(){
+  const list = _unansweredList();
+  if(!list.length) return '<div style="padding:28px;text-align:center;color:var(--text2)"><i class="ti ti-circle-check" style="font-size:20px"></i><div style="margin-top:6px">Every client email has been answered.</div></div>';
+  return list.map(({inq,rec})=>{
+    const client = ((inq.firstName||'')+' '+(inq.lastName||'')).trim() || rec.fromName || inq.email;
+    const title = inq.eventName || client;
+    const old = rec.lastInboundAt && (Date.now()-rec.lastInboundAt) > 2*86400000;
+    return `<div style="display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:0.5px solid var(--border);flex-wrap:wrap">
+      <i class="ti ti-mail" style="font-size:16px;color:var(--coral-solid);flex-shrink:0" aria-hidden="true"></i>
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:13px"><b>${_actEsc(title)}</b> <span style="color:var(--text2)">\u00b7 ${_actEsc(client)}${inq.salesperson?(' \u00b7 '+_actEsc(inq.salesperson)):''}</span></div>
+        <div style="font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:520px">${_actEsc(rec.subject||'(no subject)')}</div>
+        <div style="font-size:11px;${old?'color:var(--coral-solid);font-weight:600':'color:var(--text3)'}">${old?'<i class="ti ti-clock-exclamation" aria-hidden="true"></i> ':''}${_uaAgo(rec.lastInboundAt)}${rec.lastInboundAt?(' \u00b7 '+new Date(rec.lastInboundAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})):''}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn btn--pri btn--sm" onclick="_uaClose();replyToClientEmail('${inq.id}')"><i class="ti ti-arrow-back-up"></i>Reply</button>
+        <button class="btn btn--sm" onclick="_uaClose();_emGoToInq('${inq.id}')"><i class="ti ti-user"></i>Open client</button>
+        <button class="btn btn--sm" title="Mark handled if you answered by phone / text" onclick="_uaHandled('${inq.id}')"><i class="ti ti-check"></i>Handled</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function openUnansweredList(){
+  document.getElementById('ua-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'ua-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px 16px';
+  ov.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="ua-title" style="background:#fff;border-radius:12px;width:100%;max-width:760px;max-height:84vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.25);color:var(--text)">
+    <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:0.5px solid var(--border)">
+      <div id="ua-title" style="font-size:16px;font-weight:700;flex:1">Unanswered client emails <span id="ua-count" style="font-weight:400;color:var(--text2)">(${_unansweredList().length})</span> <span style="font-weight:400;font-size:12px;color:var(--text2)">\u00b7 oldest first</span></div>
+      <button class="icon-btn" onclick="_uaClose()" aria-label="Close" style="border:none;background:none;font-size:20px;cursor:pointer;color:var(--text2)"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="ua-body" style="overflow-y:auto">${_unansweredRowsHtml()}</div>
+  </div>`;
+  ov.addEventListener('click', e=>{ if(e.target===ov) _uaClose(); });
+  document.body.appendChild(ov);
+}
+window.openUnansweredList = openUnansweredList;
+function _uaClose(){ document.getElementById('ua-overlay')?.remove(); }
+window._uaClose = _uaClose;
+async function _uaHandled(id){
+  await markEmailHandled(id);
+  const body = document.getElementById('ua-body'); if(body) body.innerHTML = _unansweredRowsHtml();
+  const c = document.getElementById('ua-count'); if(c) c.textContent = '('+_unansweredList().length+')';
+  _updateUnansweredBadge();
+}
+window._uaHandled = _uaHandled;
 
 // Add inquiry manually
 
