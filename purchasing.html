@@ -328,6 +328,61 @@ tbody tr:hover{background:var(--bg2)}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:11px 18px;border-radius:10px;font-size:13px;z-index:400;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
 @media(max-width:640px){.fld-row{flex-direction:column;gap:0}.wrap{padding:14px}.topbar{padding:10px 14px}.brand small{display:none}}
+
+/* ── Shopping list ── */
+.sl-vendor{padding:9px 12px;border:1px solid var(--border2);border-radius:9px;background:var(--bg);min-width:220px;font-weight:600}
+.sl-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.sl-sort{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap}
+.sl-sort button{padding:6px 11px;border:1px solid var(--border2);background:var(--bg);border-radius:20px;font-size:12.5px;cursor:pointer;color:var(--text2);display:inline-flex;align-items:center;gap:4px}
+.sl-sort button.on{border:2px solid var(--maroon);color:var(--maroon);font-weight:600;padding:5px 10px}
+.sl-only{font-size:13px;color:var(--text2);display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.sl-totals{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;font-size:13px}
+.sl-totals .sl-total{margin-left:auto}
+.sl-totals .sl-saved{font-size:11.5px;width:100%}
+.sl-head,.sl-row{display:grid;grid-template-columns:44px minmax(0,2.2fr) 110px 90px minmax(0,2.2fr);gap:10px;align-items:center}
+.sl-head{padding:6px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3)}
+.sl-sec{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:12px;overflow:hidden;box-shadow:var(--shadow)}
+.sl-cat{padding:10px 14px;background:var(--bg2);border-bottom:1px solid var(--border);font-family:'Fraunces',Georgia,serif;font-size:15px;font-weight:600}
+.sl-cat span{font-family:'Inter',sans-serif;font-size:12px;font-weight:400;color:var(--text3)}
+.sl-row{padding:10px 14px;border-bottom:1px solid var(--border);border-left:4px solid transparent}
+.sl-row:last-child{border-bottom:none}
+.sl-row.on{border-left:4px solid var(--maroon);background:#FFFCF8}
+.sl-row.got .sl-name b{text-decoration:line-through;color:var(--text3)}
+.sl-got{display:flex;justify-content:center;cursor:pointer}
+.sl-got input{width:22px;height:22px;cursor:pointer;accent-color:var(--green)}
+.sl-name .sub,.sl-price .sub{font-size:11.5px;color:var(--text3)}
+.sl-price{font-size:13px;font-weight:600}
+.sl-qty input{width:100%;padding:9px 8px;border:1px solid var(--border2);border-radius:8px;font-size:16px;text-align:center}
+.sl-tag{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:14px;font-size:12px;font-weight:600;line-height:1.35}
+.sl-tag.cheap{border:2px solid var(--green);color:var(--green-text);background:var(--green-bg)}
+.sl-tag.pricier{border:2px dashed #A32020;color:#A32020;background:#FBEAEA}
+.sl-tag.only{color:var(--text3);font-weight:500;padding-left:0}
+.sl-old{font-size:11.5px;color:var(--text3);display:block;margin-top:2px}
+@media(max-width:700px){
+  .sl-head{display:none}
+  .sl-row{grid-template-columns:40px minmax(0,1fr) 84px;grid-template-areas:'got name qty' 'got price price' 'got cmp cmp';row-gap:4px}
+  .sl-got{grid-area:got;align-self:start;padding-top:4px}.sl-name{grid-area:name}.sl-qty{grid-area:qty}.sl-price{grid-area:price}.sl-cmp{grid-area:cmp}
+  .sl-vendor{min-width:0;flex:1 1 100%}
+  .sl-totals .sl-total{margin-left:0}
+}
+#slPrintArea{display:none}
+@media print{
+  body.sl-printing > *:not(#slPrintArea){display:none !important}
+  body.sl-printing{background:#fff}
+  body.sl-printing #slPrintArea{display:block;color:#000;font-size:11.5px}
+  .slp-head{margin-bottom:10px}.slp-title{font-family:'Fraunces',Georgia,serif;font-size:20px;font-weight:700}.slp-sub{font-size:12px;margin-top:4px}
+  table.slp{width:100%;border-collapse:collapse}
+  table.slp th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid #000;padding:5px 6px}
+  table.slp td{border-bottom:1px solid #999;padding:7px 6px;vertical-align:middle}
+  table.slp tr{page-break-inside:avoid}
+  .slp-cat td{font-weight:700;font-size:12.5px;background:#eee;border-bottom:1px solid #000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .c-box{width:34px;text-align:center}.c-num{text-align:right;white-space:nowrap}.c-qty{width:70px;text-align:center}
+  .box{display:inline-block;width:16px;height:16px;border:1.5px solid #000;line-height:14px;text-align:center}
+  .line{display:block;border-bottom:1px solid #000;height:18px;margin-top:6px}
+  .slp-code{font-size:10px;color:#444}.slp-cmp{font-size:10.5px}
+  .slp-total{margin-top:10px;text-align:right;font-size:13px}.slp-notes{margin-top:14px;font-size:12px}
+  .slp-key{margin-top:10px;font-size:10px;color:#444}
+}
 </style>
 </head>
 <body>
@@ -348,6 +403,7 @@ tbody tr:hover{background:var(--bg2)}
     <button class="tab active" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
     <button class="tab" data-view="alerts" onclick="showView('alerts')"><i class="ti ti-bell"></i> Alerts <span class="tab-badge" id="alertsBadge"></span></button>
     <button class="tab" data-view="orders" onclick="showView('orders')"><i class="ti ti-shopping-cart-plus"></i> Place Orders</button>
+    <button class="tab" data-view="shopping" onclick="showView('shopping')"><i class="ti ti-list-check"></i> Shopping List</button>
     <button class="tab" data-view="compare" onclick="showView('compare')">Compare Vendors</button>
     <button class="tab" data-view="items" onclick="showView('items')">All Items</button>
     <button class="tab" data-view="products" onclick="showView('products')">Our Products</button>
@@ -429,6 +485,28 @@ tbody tr:hover{background:var(--bg2)}
         <div class="orders-list" id="ordersList"></div>
         <aside class="orders-cart" id="ordersCart"></aside>
       </div>
+    </div>
+
+    <div class="view" id="view-shopping">
+      <div class="row-head"><div class="title">Shopping List</div>
+        <select id="slVendor" class="sl-vendor" onchange="slPickVendor(this.value)" aria-label="Vendor"></select>
+        <div class="search"><i class="ti ti-search"></i><input id="slSearch" placeholder="Search this vendor’s items…" oninput="renderShopping()"></div>
+      </div>
+      <div class="sl-bar">
+        <div class="sl-sort" role="group" aria-label="Sort"><span class="muted">Sort:</span>
+          <button data-sort="type" onclick="slSetSort('type')"><i class="ti ti-category"></i> Product type</button>
+          <button data-sort="az" onclick="slSetSort('az')"><i class="ti ti-sort-a-z"></i> A–Z</button>
+          <button data-sort="onlist" onclick="slSetSort('onlist')"><i class="ti ti-list-check"></i> On list first</button>
+        </div>
+        <label class="sl-only"><input type="checkbox" id="slOnly" onchange="slToggleOnly(this.checked)"> Only show what’s on the list</label>
+        <span style="flex:1"></span>
+        <button class="btn ghost" onclick="slPrint('list')"><i class="ti ti-printer"></i> Print list</button>
+        <button class="btn ghost" onclick="slPrint('blank')" title="Every item with empty boxes to fill in by hand"><i class="ti ti-file-pencil"></i> Print blank</button>
+        <button class="btn ghost" onclick="slClear()"><i class="ti ti-eraser"></i> Clear list</button>
+      </div>
+      <div class="sl-totals" id="slTotals"></div>
+      <div class="sl-head"><span>Got</span><span>Item</span><span>Price</span><span>Qty</span><span>Compared with other vendors</span></div>
+      <div id="slBody"></div>
     </div>
 
     <div class="view" id="view-orderhist">
@@ -638,10 +716,11 @@ async function startData(){
   db.collection('pendingInvoiceScans').where('status','==','needs_review').onSnapshot(s=>{ reviewInvoiceScans=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.receivedAt||0)-(a.receivedAt||0)); renderScan(); }, err=>{ console.warn('reviewInvoiceScans listener error:', err); });
   db.collection('settings').doc('app').onSnapshot(d=>{ const data=d.data()||{}; customCategories = data.customCategories||[]; renderAll(); }, err=>{ console.warn('settings listener error:', err); });
   startOrdersCollection();
+  startShoppingLists();
   startRepliesData();
   startRepliesPolling();
 }
-function renderAll(){ backfillLastPurchaseIdsOnce(); renderDashboard(); renderAlerts(); renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); renderOrderPicker(); renderOrderHistory(); renderReplies(); renderScan(); renderJobCosts(); }
+function renderAll(){ backfillLastPurchaseIdsOnce(); renderDashboard(); renderAlerts(); renderVendors(); renderItems(); renderProducts(); fillProductPicker(); fillOurNameList(); renderCompare(); renderOrderPicker(); renderOrderHistory(); renderReplies(); renderScan(); renderJobCosts(); renderShopping(true); }
 // One-time backfill: items priced before the lastPurchaseId link existed
 // have no invoice to point their "View invoice" link at. This matches each
 // such item to the eventPurchases record for the same vendor + product name
@@ -3625,11 +3704,229 @@ async function deleteVendor(id){
 }
 
 let _toastT=null;
+
+// ════════ SHOPPING LIST (by vendor) ════════
+// Pick a vendor, see every item we buy from them, type quantities. Each row
+// says whether this vendor is the cheapest for that item, whether it's cheaper
+// somewhere else (and by how much), or whether only this vendor carries it.
+// One live list per vendor, saved in Firestore (shoppingLists/{vendorId}) so a
+// list started on the laptop is the same list on the phone or iPad.
+//   { vendorId, lines:{ <vendorItemId>:{ qty, got } }, updatedAt, updatedBy }
+// "Print blank" prints every item with empty boxes for writing by hand.
+let shoppingLists = {};                 // vendorId -> doc data
+let _slVendor = '';
+let _slSort = 'type';                   // 'type' | 'az' | 'onlist'
+let _slOnlyList = false;
+const _slSaveT = {};
+function startShoppingLists(){
+  try{
+    db.collection('shoppingLists').onSnapshot(s=>{
+      const next={}; s.docs.forEach(d=>{ next[d.id]=d.data()||{}; });
+      shoppingLists=next; renderShopping(true);
+    }, err=>console.warn('shoppingLists listener error:', err));
+  }catch(e){}
+}
+function _slLines(){ return ((shoppingLists[_slVendor]||{}).lines)||{}; }
+function _slLine(id){ return _slLines()[id]||{}; }
+function _slVendorOptions(){
+  const counts={}; items.forEach(x=>{ if(x.vendorId) counts[x.vendorId]=(counts[x.vendorId]||0)+1; });
+  return vendors.filter(v=>counts[v.id]).map(v=>({ id:v.id, name:v.name||'(vendor)', n:counts[v.id] })).sort((a,b)=>a.name.localeCompare(b.name));
+}
+// Cost each for comparing; an item saved without a count per unit counts as 1.
+function _slUc(x){ const ps=parseFloat(x.packSize); return unitCost(x.price, (isFinite(ps)&&ps>0)?ps:1); }
+function _slCategoryOf(x, g){ return (x.category || (g&&g.category) || 'Uncategorized'); }
+
+// How this vendor's item stacks up against the same product elsewhere.
+function _slCompare(x, groupOf){
+  const g = groupOf[x.id];
+  const uc = _slUc(x);
+  const others = g ? g.items.filter(o=>o.vendorId!==x.vendorId) : [];
+  if(!others.length) return { kind:'only' };
+  const otherVendorNames = Array.from(new Set(others.map(o=>vendorName(o.vendorId))));
+  const priced = others.map(o=>({ o, uc:_slUc(o) })).filter(p=>p.uc!=null).sort((a,b)=>a.uc-b.uc);
+  if(uc==null || !priced.length) return { kind:'unknown', others:otherVendorNames };
+  const best = priced[0];
+  if(uc <= best.uc + 1e-9) return { kind:'cheapest', others:otherVendorNames };
+  const age = daysSince(lastQuoteDateOf(best.o));
+  return { kind:'cheaper', vendor:vendorName(best.o.vendorId), diff:uc-best.uc, item:best.o, age, pct: uc>0 ? Math.round((uc-best.uc)/uc*100) : 0 };
+}
+function _slTagHtml(c, x){
+  if(c.kind==='only') return '<span class="sl-tag only"><i class="ti ti-point"></i>Only from this vendor</span>';
+  if(c.kind==='unknown') return '<span class="sl-tag only"><i class="ti ti-help-circle"></i>Also at '+esc(c.others.join(', '))+' — no price to compare</span>';
+  if(c.kind==='cheapest') return '<span class="sl-tag cheap"><i class="ti ti-star"></i>Cheapest here · also at '+esc(c.others.join(', '))+'</span>';
+  const per = ucSuffix(c.item).replace(/<[^>]+>/g,'').trim();
+  const old = (c.age!=null && c.age>30) ? ' <span class="sl-old">(their price is '+c.age+' days old)</span>' : '';
+  return '<span class="sl-tag pricier"><i class="ti ti-arrow-big-down-lines"></i>'+fmtMoney(c.diff)+(per?' '+esc(per):'')+' cheaper at '+esc(c.vendor)+'</span>'+old;
+}
+function _slTagText(c){
+  if(c.kind==='only') return 'Only here';
+  if(c.kind==='unknown') return 'Also at '+c.others.join(', ');
+  if(c.kind==='cheapest') return '★ Cheapest here';
+  return '↓ '+fmtMoney(c.diff)+' cheaper at '+c.vendor+((c.age!=null&&c.age>30)?' ('+c.age+'d old)':'');
+}
+
+function _slRows(){
+  const groupOf={}; ourProducts().forEach(g=>g.items.forEach(i=>{ groupOf[i.id]=g; }));
+  const lines=_slLines();
+  const q=((document.getElementById('slSearch')||{}).value||'').toLowerCase().trim();
+  let rows = items.filter(x=>x.vendorId===_slVendor).map(x=>{
+    const g=groupOf[x.id];
+    const ln=lines[x.id]||{};
+    return { x, g, name:(x.ourName||x.vendorItemName||'(item)'), cat:_slCategoryOf(x,g), qty:ln.qty||'', got:!!ln.got, cmp:_slCompare(x,groupOf) };
+  });
+  if(q) rows=rows.filter(r=>r.name.toLowerCase().includes(q) || String(r.x.vendorItemName||'').toLowerCase().includes(q) || r.cat.toLowerCase().includes(q) || String(r.x.vendorCode||'').toLowerCase().includes(q));
+  return rows;
+}
+function _slSorted(rows){
+  const byName=(a,b)=>a.name.localeCompare(b.name);
+  if(_slSort==='az') return [{ cat:'', rows:rows.slice().sort(byName) }];
+  if(_slSort==='onlist'){
+    const on=rows.filter(r=>parseFloat(r.qty)>0).sort(byName), off=rows.filter(r=>!(parseFloat(r.qty)>0)).sort(byName);
+    return [{cat:'On the list', rows:on},{cat:'Everything else', rows:off}].filter(s=>s.rows.length);
+  }
+  const by={}; rows.forEach(r=>{ (by[r.cat]=by[r.cat]||[]).push(r); });
+  return Object.keys(by).sort((a,b)=> a==='Uncategorized'?1 : b==='Uncategorized'?-1 : a.localeCompare(b)).map(c=>({ cat:c, rows:by[c].sort(byName) }));
+}
+
+function renderShopping(fromData){
+  const body=document.getElementById('slBody'); if(!body) return;
+  // Don't rebuild under someone's fingers — a save echo or a data refresh
+  // while a quantity box is focused only refreshes the totals.
+  if(fromData && document.activeElement && document.activeElement.closest && document.activeElement.closest('#slBody')){ _slTotals(); return; }
+  const sel=document.getElementById('slVendor');
+  const opts=_slVendorOptions();
+  if(!_slVendor){ try{ _slVendor=localStorage.getItem('slVendor')||''; }catch(_){} }
+  if(_slVendor && !opts.some(o=>o.id===_slVendor)) _slVendor='';
+  if(sel){
+    sel.innerHTML='<option value="">Choose a vendor…</option>'+opts.map(o=>{
+      const n=Object.values(((shoppingLists[o.id]||{}).lines)||{}).filter(l=>parseFloat(l.qty)>0).length;
+      return '<option value="'+esc(o.id)+'"'+(o.id===_slVendor?' selected':'')+'>'+esc(o.name)+(n?' — '+n+' on list':'')+'</option>';
+    }).join('');
+  }
+  document.querySelectorAll('.sl-sort button').forEach(b=>b.classList.toggle('on', b.dataset.sort===_slSort));
+  const only=document.getElementById('slOnly'); if(only) only.checked=_slOnlyList;
+  if(!_slVendor){ body.innerHTML='<div class="dash-empty">Choose a vendor to start a shopping list. You’ll see every item you buy from them, with a note when it’s cheaper somewhere else.</div>'; _slTotals(); return; }
+  let rows=_slRows();
+  if(_slOnlyList) rows=rows.filter(r=>parseFloat(r.qty)>0);
+  if(!rows.length){ body.innerHTML='<div class="dash-empty">'+(_slOnlyList?'Nothing on this list yet — untick “Only show what’s on the list” and type quantities.':'No items match.')+'</div>'; _slTotals(); return; }
+  body.innerHTML = _slSorted(rows).map(sec=>
+    '<div class="sl-sec">'+(sec.cat?'<div class="sl-cat">'+esc(sec.cat)+' <span>· '+sec.rows.length+'</span></div>':'')+
+    sec.rows.map(r=>{
+      const uc=unitCost(r.x.price,r.x.packSize);
+      const on=parseFloat(r.qty)>0;
+      return '<div class="sl-row'+(on?' on':'')+(r.got?' got':'')+'" data-id="'+esc(r.x.id)+'">'+
+        '<label class="sl-got" title="Tick when you have it"><input type="checkbox" '+(r.got?'checked':'')+' onchange="slSetGot(\''+escJs(r.x.id)+'\',this.checked)" aria-label="Got '+esc(r.name)+'"></label>'+
+        '<div class="sl-name"><b>'+esc(r.name)+'</b><div class="sub">'+packLabel(r.x)+(r.x.vendorItemName&&r.x.vendorItemName!==r.name?' · '+esc(r.x.vendorItemName):'')+(r.x.vendorCode?' · #'+esc(r.x.vendorCode):'')+'</div></div>'+
+        '<div class="sl-price">'+fmtMoney(r.x.price)+(soldByOf(r.x)?'<span class="muted">/'+esc(soldByOf(r.x))+'</span>':'')+(uc!=null&&parseFloat(r.x.packSize)>1?'<div class="sub">'+fmtMoney(uc)+ucSuffix(r.x)+'</div>':'')+'</div>'+
+        '<div class="sl-qty"><input type="number" inputmode="decimal" min="0" step="any" value="'+esc(r.qty)+'" placeholder="qty" oninput="slSetQty(\''+escJs(r.x.id)+'\',this.value)" aria-label="Quantity of '+esc(r.name)+'"></div>'+
+        '<div class="sl-cmp">'+_slTagHtml(r.cmp, r.x)+'</div>'+
+      '</div>';
+    }).join('')+'</div>'
+  ).join('');
+  _slTotals();
+}
+
+function _slTotals(){
+  const el=document.getElementById('slTotals'); if(!el) return;
+  if(!_slVendor){ el.innerHTML=''; return; }
+  let n=0, got=0, total=0, cheaperElsewhere=0;
+  const groupOf={}; ourProducts().forEach(g=>g.items.forEach(i=>{ groupOf[i.id]=g; }));
+  Object.entries(_slLines()).forEach(([id,l])=>{
+    const q=parseFloat(l.qty); if(!(q>0)) return;
+    const x=items.find(i=>i.id===id); if(!x||x.vendorId!==_slVendor) return;
+    n++; if(l.got) got++;
+    total += q*(parseFloat(x.price)||0);
+    if(_slCompare(x,groupOf).kind==='cheaper') cheaperElsewhere++;
+  });
+  const who=(shoppingLists[_slVendor]||{}).updatedBy, when=(shoppingLists[_slVendor]||{}).updatedAt;
+  el.innerHTML = '<span><b>'+n+'</b> item'+(n===1?'':'s')+' on the list'+(n?' · <b>'+got+'</b> ticked':'')+'</span>'+
+    (cheaperElsewhere?'<span class="sl-tag pricier"><i class="ti ti-arrow-big-down-lines"></i>'+cheaperElsewhere+' cheaper elsewhere</span>':'')+
+    '<span class="sl-total">Estimated total <b>'+fmtMoney(total)+'</b></span>'+
+    (when?'<span class="muted sl-saved">Saved '+new Date(when).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+(who?' by '+esc(who):'')+'</span>':'');
+}
+
+function _slSave(id, patch){
+  if(!_slVendor) return;
+  const vid=_slVendor;
+  const cur=Object.assign({}, ((shoppingLists[vid]||{}).lines||{})[id]||{}, patch);
+  shoppingLists[vid]=shoppingLists[vid]||{ vendorId:vid, lines:{} };
+  shoppingLists[vid].lines=shoppingLists[vid].lines||{};
+  shoppingLists[vid].lines[id]=cur;
+  shoppingLists[vid].updatedAt=Date.now(); shoppingLists[vid].updatedBy=userLabel();
+  _slTotals();
+  clearTimeout(_slSaveT[vid+id]);
+  _slSaveT[vid+id]=setTimeout(async()=>{
+    try{
+      await db.collection('shoppingLists').doc(vid).set({ vendorId:vid, vendorName:vendorName(vid), lines:{ [id]:cur }, updatedAt:Date.now(), updatedBy:userLabel() }, { merge:true });
+    }catch(e){ toast('Could not save — check your connection'); console.warn('shopping list save failed', e); }
+  }, 400);
+}
+function slSetQty(id, v){
+  const n=parseFloat(v);
+  _slSave(id, { qty: (v===''||isNaN(n)||n<=0) ? '' : n });
+  const row=document.querySelector('.sl-row[data-id="'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'"]');
+  if(row) row.classList.toggle('on', n>0);
+}
+function slSetGot(id, on){
+  _slSave(id, { got: !!on });
+  const row=document.querySelector('.sl-row[data-id="'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'"]');
+  if(row) row.classList.toggle('got', !!on);
+}
+function slPickVendor(v){ _slVendor=v||''; try{ localStorage.setItem('slVendor',_slVendor); }catch(_){} renderShopping(); }
+function slSetSort(s){ _slSort=s; renderShopping(); }
+function slToggleOnly(on){ _slOnlyList=!!on; renderShopping(); }
+async function slClear(){
+  if(!_slVendor) return;
+  const n=Object.values(_slLines()).filter(l=>parseFloat(l.qty)>0||l.got).length;
+  if(!n){ toast('This list is already empty'); return; }
+  if(!confirm('Clear the '+vendorName(_slVendor)+' list?\n\nThis removes all quantities and ticks, on every device.')) return;
+  try{
+    await db.collection('shoppingLists').doc(_slVendor).set({ vendorId:_slVendor, vendorName:vendorName(_slVendor), lines:{}, updatedAt:Date.now(), updatedBy:userLabel() });
+    toast('List cleared');
+  }catch(e){ alert('Could not clear: '+e.message); }
+}
+
+// Print. 'list' = only what's on the list; 'blank' = every item, empty boxes.
+function slPrint(mode){
+  if(!_slVendor){ toast('Choose a vendor first'); return; }
+  let rows=_slRows();
+  if(mode==='list'){ rows=rows.filter(r=>parseFloat(r.qty)>0); if(!rows.length){ toast('Nothing on the list yet — type quantities, or use Print blank'); return; } }
+  const blank = mode==='blank';
+  const secs=_slSorted(rows);
+  const today=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+  let total=0;
+  const html =
+    '<div class="slp-head"><div><div class="slp-title">Shopping list — '+esc(vendorName(_slVendor))+'</div><div class="slp-sub">Premier Caterers · '+(blank?'Date: ________________':esc(today))+' · Name: ________________</div></div></div>'+
+    '<table class="slp"><thead><tr><th class="c-box">Got</th><th>Item</th><th>Pack</th><th class="c-num">Price</th><th class="c-qty">Qty</th><th>Compare</th></tr></thead><tbody>'+
+    secs.map(sec=>(sec.cat?'<tr class="slp-cat"><td colspan="6">'+esc(sec.cat)+'</td></tr>':'')+
+      sec.rows.map(r=>{
+        const q=parseFloat(r.qty); if(!blank && q>0) total+=q*(parseFloat(r.x.price)||0);
+        return '<tr><td class="c-box"><span class="box">'+(!blank&&r.got?'✓':'')+'</span></td>'+
+          '<td><b>'+esc(r.name)+'</b>'+(r.x.vendorCode?' <span class="slp-code">#'+esc(r.x.vendorCode)+'</span>':'')+'</td>'+
+          '<td>'+packLabel(r.x)+'</td>'+
+          '<td class="c-num">'+fmtMoney(r.x.price)+'</td>'+
+          '<td class="c-qty">'+(blank?'<span class="line"></span>':esc(r.qty))+'</td>'+
+          '<td class="slp-cmp">'+esc(_slTagText(r.cmp))+'</td></tr>';
+      }).join('')).join('')+
+    '</tbody></table>'+
+    (blank?'<div class="slp-notes">Notes:<div class="line"></div><div class="line"></div></div>':'<div class="slp-total">Estimated total: <b>'+fmtMoney(total)+'</b></div>')+
+    '<div class="slp-key">★ = cheapest at this vendor · ↓ = cheaper at another vendor · prices as of the last quote on file</div>';
+  const host=document.getElementById('slPrintArea'); host.innerHTML=html;
+  document.body.classList.add('sl-printing');
+  const done=()=>{ document.body.classList.remove('sl-printing'); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  // iPad/iPhone don't always fire afterprint — put the page back on the next tap
+  setTimeout(()=>{ document.addEventListener('pointerdown', done, { once:true }); }, 800);
+  setTimeout(()=>{ window.print(); }, 50);
+}
+window.slSetQty=slSetQty; window.slSetGot=slSetGot; window.slPickVendor=slPickVendor; window.slSetSort=slSetSort; window.slToggleOnly=slToggleOnly; window.slClear=slClear; window.slPrint=slPrint;
+
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(_toastT); _toastT=setTimeout(()=>t.classList.remove('show'),2200); }
 window.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
 document.getElementById('modalBg').addEventListener('click',e=>{ if(e.target.id==='modalBg') closeModal(); });
 
 if(!tryResumeSession()) showLogin();
 </script>
+<div id="slPrintArea"></div>
 </body>
 </html>
