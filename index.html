@@ -1470,6 +1470,7 @@ function _mergeFileLists(rec, stored){
   });
 }
 async function _saveEvent(e){ 
+  try{ const _gi=_inqForEventRec(e); if(_gi && !(await ownerGuard(_gi,'edit'))){ await _ownRevert('events', e); return; } }catch(_){}
   try{ 
     if(!db) throw new Error('Database not connected yet');
     _actOnSaveEvent(e);
@@ -1483,6 +1484,7 @@ async function _saveEvent(e){
 }
 async function _saveChange(c){ try{ await db.collection('changes').doc(c.id).set(c); }catch(err){ console.error(err); } }
 async function _saveInquiry(i){
+  try{ if(i && !(await ownerGuard(i,'edit'))){ await _ownRevert('inquiries', i); return; } }catch(_){}
   try{
     _actOnSaveInquiry(i);
     i.updatedAt = Date.now();   // for the pipeline "last updated" sort
@@ -3457,68 +3459,313 @@ function coverWeekNumberingOff(weekStr){
   return false;
 }
 
-// Re-sequence a week to 01..N, preserving the events' current order. Shows a
-// before→after summary and asks for confirmation; updates both `job` (what the
-// screens show) and `eventNumber` (what paperwork shows). No-op if clean.
-async function renumberWeek(weekStr){
-  if(!db) return;
-  const list = _weekEventsFor(weekStr)
-    .slice()
-    .sort((a,b)=>{ const na=_evSeqNum(a), nb=_evSeqNum(b); return na!==nb?na-nb:String(a.id).localeCompare(String(b.id)); });
-  if(!list.length){ showToast('No events to renumber this week'); return; }
-  const changes = [];
-  list.forEach((e,i)=>{
-    const want = makeEventNumber(weekStr, String(i+1));
-    if(want && (String(e.eventNumber||'') !== want || String(e.job||'') !== want)){
-      changes.push({ e, from: shortEventNumber(e.eventNumber||e.job) || '(none)', to: shortEventNumber(want), full: want });
-    }
-  });
-  if(!changes.length){ showToast('Numbers already in order \u2713'); return; }
-  const summary = changes.map(c => '\u2022 ' + (c.e.name||'(unnamed)') + ':   ' + c.from + '  \u2192  ' + c.to).join('\n');
-  if(!confirm('Renumber this week to 01\u2013' + String(list.length).padStart(2,'0') + '?\n\nThis will change:\n\n' + summary)) return;
-  try {
-    const batch = db.batch();
-    changes.forEach(c => { c.e.job = c.full; c.e.eventNumber = c.full; batch.set(db.collection('events').doc(c.e.id), c.e); });
-    await batch.commit();
-    console.log('[renumberWeek '+weekStr+'] '+changes.length+' changed:\n'+changes.map(c=>c.from+' -> '+c.full+' ('+(c.e.name||'')+')').join('\n'));
-    showToast('Renumbered '+changes.length+' event'+(changes.length>1?'s':'')+' \u2713', 4000);
-    render();
-  } catch(err){
-    console.error('renumberWeek failed:', err);
-    showToast('Renumber failed \u2014 see console');
-  }
-}
+// ── CHANGE JOB NUMBERS (manual) ──
+// One screen listing every event and drop-off in the week with its current
+// number. Kenny types the number he wants (3, 3a, 3b …). If two jobs end up
+// on the same number the row is flagged: change yours, or keep yours — and
+// keeping yours means the other job must get a new number before saving.
+// Nothing is renumbered automatically. Updates `job` (screens) and
+// `eventNumber` (paperwork) on the jobs that actually changed.
+let _jn = null; // { weekStr, rows:[{e, cur, val, editedAt, kept}] , err }
 
-// Click the pencil / number on a cover-sheet row to set THIS event's number.
-// Type just a number (2) or a number+letter for a sub-meal base (2a); it's
-// stored in the canonical YY-MMDD-NN form for the event's week. Updates both
-// `job` (screens) and `eventNumber` (paperwork). Warns on a duplicate but lets
-// you proceed if you mean it.
+function _jnTok(v){
+  const t = parseSeqToken(String(v==null?'':v).trim().replace(/^#/,''));
+  return t ? { num:t.num, letter:t.letter, key:t.num+t.letter } : null;
+}
+function _jnLabel(v){ const t=_jnTok(v); return t ? ('#'+String(t.num).padStart(2,'0')+t.letter) : '#?'; }
+function _jnIsDrop(e){ return /drop/i.test(String((e&&(e.type||e.typeLabel))||'')); }
+
+function renumberWeek(weekStr){ openJobNumEditor(weekStr, null); }
 function editJobNum(id){
   const e = events.find(x => x.id === id);
   if(!e) return;
   if(!e.weekOf){ alert('Set an event date first — the app numbers events within their week, so it needs to know the date.'); return; }
-  const cur = parseSeqToken(seqFromAny(e.eventNumber || e.job));
-  const curStr = cur ? (cur.num + cur.letter) : '';
-  const input = prompt('Number for "' + (e.name || 'this event') + '"\n\nEnter just the number (e.g. 2). For a sub-meal base you can add a letter (e.g. 2a).', curStr);
-  if(input === null) return;                 // cancelled
-  const t = parseSeqToken(String(input).trim());
-  if(!t){ alert('Please enter a number like 2, or 2a.'); return; }
-  // Heads-up if another event the same week already uses this number.
-  const clash = events.find(x => {
-    if(x.id === id || (x.weekOf || '') !== e.weekOf) return false;
-    const tt = parseSeqToken(seqFromAny(x.eventNumber || x.job));
-    return tt && tt.num === t.num && tt.letter === t.letter;
-  });
-  if(clash && !confirm('Another event this week (' + (clash.name || 'unnamed') + ') already uses #' + String(t.num).padStart(2,'0') + t.letter + '.\n\nUse this number anyway?')) return;
-  const full = makeEventNumber(e.weekOf, t.num + t.letter);
-  if(!full){ alert('Could not build the number — is the event date valid?'); return; }
-  e.job = full; e.eventNumber = full;
-  _saveEvent(e);
-  render();
-  showToast('Event number set to ' + shortEventNumber(full) + ' \u2713');
+  openJobNumEditor(e.weekOf, id);
 }
 window.editJobNum = editJobNum;
+window.renumberWeek = renumberWeek;
+
+function openJobNumEditor(weekStr, focusId){
+  const list = _weekEventsFor(weekStr).slice().sort((a,b)=>{
+    const ta=_jnTok(seqFromAny(a.eventNumber||a.job)), tb=_jnTok(seqFromAny(b.eventNumber||b.job));
+    const na=ta?ta.num:999, nb=tb?tb.num:999;
+    if(na!==nb) return na-nb;
+    const la=ta?ta.letter:'', lb=tb?tb.letter:'';
+    return la!==lb ? la.localeCompare(lb) : String(a.id).localeCompare(String(b.id));
+  });
+  if(!list.length){ showToast('No events or drop-offs this week'); return; }
+  _jn = { weekStr, err:'', rows: list.map(e=>{
+    const t=_jnTok(seqFromAny(e.eventNumber||e.job));
+    const cur = t ? (t.num+t.letter) : '';
+    return { e, cur, val:cur, editedAt:0, kept:false };
+  })};
+  let wrap = document.getElementById('jobNumModal');
+  if(!wrap){
+    wrap = document.createElement('div');
+    wrap.id='jobNumModal'; wrap.className='modal-wrap';
+    wrap.addEventListener('click', ev=>{ if(ev.target===wrap) closeJobNumEditor(); });
+    document.body.appendChild(wrap);
+  }
+  const we = weDateParts(weekStr);
+  const weLabel = we ? (parseInt(we.mm,10)+'/'+parseInt(we.dd,10)) : weekStr;
+  wrap.innerHTML = `<div class="modal" style="max-width:760px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px">
+      <div class="modal-title" style="margin:0"><i class="ti ti-list-numbers"></i> Change job numbers — W/E ${pcEsc(weLabel)}</div>
+      <button class="icon-btn" onclick="closeJobNumEditor()" aria-label="Close"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5">Type the number you want for each job. Use letters for meals of the same job: 3a, 3b. Only jobs you change are updated.</div>
+    <div style="display:grid;grid-template-columns:minmax(0,2.4fr) 80px 70px 84px minmax(0,2fr);gap:8px;padding:6px 8px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)">
+      <span>Job</span><span>Day</span><span>Now</span><span>New #</span><span></span>
+    </div>
+    <div id="jnRows">${_jn.rows.map((r,i)=>`
+      <div class="jn-row" id="jnRow${i}" style="display:grid;grid-template-columns:minmax(0,2.4fr) 80px 70px 84px minmax(0,2fr);gap:8px;padding:8px;align-items:center;border:2px solid transparent;border-radius:var(--radius);margin-top:4px">
+        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">${pcEsc(r.e.name||'(unnamed)')} ${_jnIsDrop(r.e)?'<span style="font-size:10.5px;color:var(--text3);border:1px dashed var(--border2,var(--border));border-radius:9px;padding:1px 6px;margin-left:4px"><i class="ti ti-truck-delivery" style="font-size:10px"></i> drop-off</span>':''}</span>
+        <span style="font-size:12.5px;color:var(--text2)">${pcEsc(formatEventDay(r.e)||'—')}</span>
+        <span style="font-size:12.5px;color:var(--text2)">${r.cur?_jnLabel(r.cur):'none'}</span>
+        <input id="jnIn${i}" value="${pcEsc(r.val)}" oninput="_jnInput(${i},this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();saveJobNumEditor();}" style="height:32px;padding:0 8px;font-size:13px;width:100%" aria-label="New number for ${pcEsc(r.e.name||'job')}">
+        <span id="jnStat${i}" style="font-size:12px;min-width:0"></span>
+      </div>`).join('')}
+    </div>
+    <div style="margin-top:14px;padding:10px 12px;border:1px dashed var(--border);border-radius:var(--radius);font-size:11.5px;color:var(--text2);line-height:1.5"><i class="ti ti-printer" style="font-size:12px"></i> Changing a number doesn't change paper you've already printed. Reprint pan labels, the BEO and the cover sheet for any job you renumber.</div>
+    <div id="jnErr" style="display:none;margin-top:10px;font-size:12.5px;color:var(--red-solid,#A32D2D);font-weight:600"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="btn" onclick="closeJobNumEditor()">Cancel</button>
+      <button class="btn btn--pri" onclick="saveJobNumEditor()"><i class="ti ti-check"></i> Save numbers</button>
+    </div>
+  </div>`;
+  wrap.classList.add('open');
+  _jnRefresh();
+  const fi = focusId ? _jn.rows.findIndex(r=>r.e.id===focusId) : -1;
+  setTimeout(()=>{ const inp=document.getElementById('jnIn'+(fi>=0?fi:0)); if(inp){ inp.focus(); inp.select(); } }, 30);
+}
+window.openJobNumEditor = openJobNumEditor;
+
+function closeJobNumEditor(){ const w=document.getElementById('jobNumModal'); if(w) w.classList.remove('open'); _jn=null; }
+window.closeJobNumEditor = closeJobNumEditor;
+
+function _jnInput(i, v){
+  if(!_jn) return;
+  const r=_jn.rows[i]; r.val=String(v||'').trim(); r.editedAt=Date.now(); r.kept=false;
+  _jn.err=''; _jnRefresh();
+}
+window._jnInput = _jnInput;
+
+// Work out every row's state: ok / bad format / clash (yours) / needs a new #.
+function _jnAnalyse(){
+  const rows=_jn.rows, groups={};
+  rows.forEach((r,i)=>{ r.state='ok'; r.other=null; const t=_jnTok(r.val); if(!r.val){ r.state='empty'; return; } if(!t){ r.state='bad'; return; } (groups[t.key]=groups[t.key]||[]).push(i); });
+  Object.values(groups).forEach(ix=>{
+    if(ix.length<2) return;
+    const kept = ix.filter(i=>rows[i].kept);
+    let winner;
+    if(kept.length) winner = kept[kept.length-1];
+    else { const ed = ix.filter(i=>rows[i].editedAt).sort((a,b)=>rows[b].editedAt-rows[a].editedAt); winner = ed.length?ed[0]:null; }
+    ix.forEach(i=>{
+      const others = ix.filter(j=>j!==i).map(j=>rows[j].e.name||'another job');
+      rows[i].other = others.join(', ');
+      if(winner===null) rows[i].state='dup';
+      else if(i===winner) rows[i].state = rows[i].kept ? 'kept' : 'clash';
+      else rows[i].state = kept.length ? 'move' : 'clashOther';
+    });
+  });
+}
+
+function _jnRefresh(){
+  if(!_jn) return;
+  _jnAnalyse();
+  _jn.rows.forEach((r,i)=>{
+    const row=document.getElementById('jnRow'+i), st=document.getElementById('jnStat'+i);
+    if(!row||!st) return;
+    const changed = r.val!==r.cur;
+    let border='transparent', bg='', html='';
+    const nm = pcEsc(r.other||'');
+    switch(r.state){
+      case 'ok':
+        html = changed ? `<span style="color:var(--teal-solid,#0F6E56)"><i class="ti ti-check"></i> ${r.cur?_jnLabel(r.cur):'none'} → ${_jnLabel(r.val)}</span>` : '';
+        break;
+      case 'empty':
+        border='var(--red-solid,#A32D2D)'; html='<span style="color:var(--red-solid,#A32D2D)"><i class="ti ti-alert-octagon"></i> Needs a number</span>'; break;
+      case 'bad':
+        border='var(--red-solid,#A32D2D)'; html='<span style="color:var(--red-solid,#A32D2D)"><i class="ti ti-alert-octagon"></i> Use a number like 3 or 3a</span>'; break;
+      case 'clash':
+        border='var(--red-solid,#A32D2D)';
+        html=`<div style="color:var(--red-solid,#A32D2D);font-weight:600"><i class="ti ti-alert-octagon"></i> Clash with ${nm}</div>
+          <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap"><button class="btn btn--sm" onclick="_jnChangeMine(${i})">Change mine</button><button class="btn btn--sm" onclick="_jnKeepMine(${i})" title="Keep this number and give ${nm} a new one">Allow — keep mine</button></div>`;
+        break;
+      case 'clashOther':
+        border='var(--red-solid,#A32D2D)'; html=`<span style="color:var(--red-solid,#A32D2D)"><i class="ti ti-alert-octagon"></i> Same # as ${nm}</span>`; break;
+      case 'dup':
+        border='var(--red-solid,#A32D2D)'; html=`<span style="color:var(--red-solid,#A32D2D)"><i class="ti ti-alert-octagon"></i> Same # as ${nm} — change one</span>`; break;
+      case 'kept':
+        html=`<span style="color:var(--teal-solid,#0F6E56)"><i class="ti ti-lock"></i> Keeping ${_jnLabel(r.val)}</span> <button class="btn btn--sm" style="margin-left:4px" onclick="_jnUndoKeep(${i})">Undo</button>`; break;
+      case 'move':
+        bg='var(--brass-tint,#FAEEDA)'; border='var(--brass,#BA7517)';
+        html=`<span style="color:var(--brass-text,#633806);font-weight:600"><i class="ti ti-arrow-back-up"></i> Pick a new # — ${nm} is using ${_jnLabel(r.val)}</span>`; break;
+    }
+    row.style.borderColor=border;
+    row.style.borderStyle = (r.state==='move') ? 'solid' : 'dashed';
+    row.style.background=bg;
+    st.innerHTML=html;
+  });
+  const er=document.getElementById('jnErr');
+  if(er){ er.style.display=_jn.err?'block':'none'; er.textContent=_jn.err||''; }
+}
+
+function _jnChangeMine(i){ const inp=document.getElementById('jnIn'+i); if(inp){ inp.focus(); inp.select(); } }
+function _jnKeepMine(i){
+  if(!_jn) return;
+  _jn.rows[i].kept=true; _jn.err=''; _jnRefresh();
+  const mv=_jn.rows.findIndex(r=>r.state==='move');
+  if(mv>=0){ const inp=document.getElementById('jnIn'+mv); if(inp){ inp.focus(); inp.select(); } }
+}
+function _jnUndoKeep(i){ if(!_jn) return; _jn.rows[i].kept=false; _jnRefresh(); }
+window._jnChangeMine=_jnChangeMine; window._jnKeepMine=_jnKeepMine; window._jnUndoKeep=_jnUndoKeep;
+
+async function saveJobNumEditor(){
+  if(!_jn || !db) return;
+  _jnAnalyse();
+  const problem = _jn.rows.findIndex(r=>r.state!=='ok' && r.state!=='kept');
+  if(problem>=0){
+    const r=_jn.rows[problem];
+    _jn.err = r.state==='move' ? ('Give '+(r.e.name||'the highlighted job')+' a new number before saving.')
+            : (r.state==='bad'||r.state==='empty') ? 'Fix the highlighted number before saving.'
+            : 'Two jobs have the same number. Change one, or click "Allow — keep mine" and give the other job a new number.';
+    _jnRefresh();
+    const inp=document.getElementById('jnIn'+problem); if(inp){ inp.scrollIntoView({block:'center'}); inp.focus(); }
+    return;
+  }
+  const changes=[];
+  _jn.rows.forEach(r=>{
+    const full = makeEventNumber(_jn.weekStr, r.val);
+    if(!full) return;
+    if(String(r.e.eventNumber||'')!==full || String(r.e.job||'')!==full) changes.push({ e:r.e, from:shortEventNumber(r.e.eventNumber||r.e.job)||'(none)', full });
+  });
+  if(!changes.length){ closeJobNumEditor(); showToast('No numbers changed'); return; }
+  try{
+    const batch=db.batch();
+    changes.forEach(c=>{ c.e.job=c.full; c.e.eventNumber=c.full; batch.set(db.collection('events').doc(c.e.id), c.e); });
+    await batch.commit();
+    console.log('[job numbers '+_jn.weekStr+'] '+changes.map(c=>c.from+' -> '+c.full+' ('+(c.e.name||'')+')').join('\n'));
+    closeJobNumEditor();
+    render();
+    showToast('Updated '+changes.length+' job number'+(changes.length>1?'s':'')+' ✓ — reprint any labels already printed', 6000);
+  }catch(err){
+    console.error('job number save failed:', err);
+    _jn.err='Could not save — check your connection and try again.'; _jnRefresh();
+  }
+}
+window.saveJobNumEditor = saveJobNumEditor;
+
+// ── SALESPERSON OWNERSHIP WARNING ──
+// When a client is assigned to a salesperson and someone else sends them an
+// email/text or changes their client or event, show a warning first. It's a
+// warning, not a block: "Continue anyway" goes ahead (and is logged), "Ask
+// <name> first" drops a to-do on that salesperson's My Day instead. Asked once
+// per client per kind (send / change) until the page is reloaded. Background
+// saves the app makes on its own never trigger it — only things a person did
+// in the last few seconds.
+const _ownAck = {};            // 'send:<inqId>' | 'edit:<inqId>' -> true
+const _ownPending = {};        // same keys -> Promise while the box is open
+let _lastUserActAt = 0;
+['pointerdown','keydown'].forEach(t=>document.addEventListener(t, ()=>{ _lastUserActAt=Date.now(); }, true));
+function _userJustActed(){ return Date.now()-_lastUserActAt < 15000; }
+
+function _ownerOf(inq){ return String((inq&&inq.salesperson)||'').trim(); }
+function _isMyClient(inq){
+  const sp=_ownerOf(inq); if(!sp) return true;
+  return sp.toLowerCase() === String(initiatorName()||'').toLowerCase();
+}
+function _inqForEventRec(e){
+  if(!e) return null;
+  const id=String(e.id||'');
+  if(id.indexOf('inq_')===0){ const q=inquiries.find(x=>x.id===id.slice(4)); if(q) return q; }
+  try{ const b=baseEventIdOf(id); if(b && String(b).indexOf('inq_')===0){ const q=inquiries.find(x=>x.id===String(b).slice(4)); if(q) return q; } }catch(_){}
+  if(e.inquiryId){ const q=inquiries.find(x=>x.id===e.inquiryId); if(q) return q; }
+  return null;
+}
+// Client(s) an outgoing email/text is going to. Texts sent through the carrier
+// gateway look like 2015551234@vtext.com, so match those by phone number.
+function _inqForRecipients(to){
+  const addrs=String(to||'').toLowerCase().split(/[,;\s]+/).map(a=>a.replace(/^.*</,'').replace(/>.*$/,'').trim()).filter(Boolean);
+  const phones=[], emails=[];
+  addrs.forEach(a=>{ const m=a.match(/^\+?(\d{10,11})(@|$)/); if(m) phones.push(m[1].slice(-10)); else if(a.includes('@')) emails.push(a); });
+  if(!phones.length && !emails.length) return null;
+  const hits=inquiries.filter(q=>{
+    if(!q || q.stage==='lost') return false;
+    const em=String(q.email||'').trim().toLowerCase();
+    const ph=String(q.phone||'').replace(/\D/g,'').slice(-10);
+    return (em && emails.includes(em)) || (ph.length===10 && phones.includes(ph));
+  });
+  if(!hits.length) return null;
+  hits.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  return hits[0];   // the client's most recent file
+}
+function _spUserKey(name){
+  const em=((sharedSettings&&sharedSettings.salespersonEmails)||{})[name];
+  const k = em ? pcUserForEmail(em) : null;
+  if(k) return k;
+  const n=String(name||'').toLowerCase();
+  return n==='kenny' ? 'owner' : n;
+}
+
+function ownerGuard(inq, kind){
+  if(!inq || _isMyClient(inq)) return Promise.resolve(true);
+  if(kind==='edit' && !_userJustActed()) return Promise.resolve(true);
+  const key=kind+':'+inq.id;
+  if(_ownAck[key]) return Promise.resolve(true);
+  if(_ownPending[key]) return _ownPending[key];
+  const sp=_ownerOf(inq), me=initiatorName(), who=pcEsc(clientPrimary(inq)||inq.eventName||'This client');
+  const what = kind==='send' ? 'send them a message' : 'make a change';
+  const p = new Promise(resolve=>{
+    const wrap=document.createElement('div');
+    wrap.className='modal-wrap open'; wrap.style.zIndex='2000';
+    wrap.innerHTML=`<div class="modal" style="max-width:460px;border:2px dashed var(--brass,#BA7517)">
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <i class="ti ti-alert-triangle" style="font-size:24px;color:var(--brass,#BA7517);flex-shrink:0"></i>
+        <div><div style="font-weight:700;font-size:15px">This client belongs to ${pcEsc(sp)}</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:6px;line-height:1.5">${who} is assigned to ${pcEsc(sp)}. You're about to ${what} as ${pcEsc(me)}. It will be noted in the Activity log.</div></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">
+        <button class="btn" data-a="cancel">Cancel</button>
+        <button class="btn" data-a="ask"><i class="ti ti-user-question"></i> Ask ${pcEsc(sp)} first</button>
+        <button class="btn btn--pri" data-a="go"><i class="ti ${kind==='send'?'ti-send':'ti-pencil'}"></i> ${kind==='send'?'Send anyway':'Change anyway'}</button>
+      </div></div>`;
+    const done=async (a)=>{
+      wrap.remove(); delete _ownPending[key];
+      if(a==='go'){
+        _ownAck[key]=true;
+        if(kind==='send') _ownAck['edit:'+inq.id]=true;  // the save that follows a send shouldn't ask again
+        try{ logActivity(inq.id,'note',me+' '+(kind==='send'?'messaged':'changed')+' '+sp+"'s client (warned, continued)"); }catch(_){}
+        return resolve(true);
+      }
+      if(a==='ask'){
+        try{
+          if(myDayCol) await myDayCol.add({ owner:_spUserKey(sp), type:'todo',
+            text: me+' wants to '+(kind==='send'?'contact':'make a change for')+' '+(clientPrimary(inq)||inq.eventName||'your client')+' — please check with '+me,
+            status:'pending', createdAt:Date.now(), source:'Salesperson check', inquiryId:inq.id });
+          showToast('Added to '+sp+"'s My Day ✓");
+        }catch(e){ showToast("Couldn't add it to "+sp+"'s My Day"); }
+      }
+      resolve(false);
+    };
+    wrap.querySelectorAll('button[data-a]').forEach(b=>b.onclick=()=>done(b.dataset.a));
+    document.body.appendChild(wrap);
+  });
+  _ownPending[key]=p;
+  return p;
+}
+window.ownerGuard = ownerGuard;
+
+// Put a record back the way Firestore has it (used when a change is cancelled).
+async function _ownRevert(coll, obj){
+  try{
+    const snap=await db.collection(coll).doc(obj.id).get();
+    if(snap.exists){ const d=snap.data()||{}; Object.keys(obj).forEach(k=>{ if(k!=='id' && !(k in d)) delete obj[k]; }); Object.assign(obj, d); }
+  }catch(_){}
+  try{ render(); }catch(_){}
+  showToast('Change cancelled — nothing saved');
+}
+
 
 const roles = {
   admin:   {canEdit:true, showStaff:true, showLinks:true, canViewInvoices:true,  canViewReports:true},
@@ -4546,7 +4793,7 @@ function renderCoverSheet(){
         <button onclick="coverView==='table'?printCoverSheet():printCoverBoxes()" class="btn btn--pri btn--block cs-act"><i class="ti ti-printer"></i> Print / Save PDF</button>
         <button onclick="coverAddNewRow()" class="btn btn--block cs-act"><i class="ti ti-plus"></i> New event</button>
         <button onclick="coverCreateDropOff()" class="btn btn--block cs-act"><i class="ti ti-truck-delivery"></i> New drop off</button>
-        ${coverWeekNumberingOff(weekStr) ? `<button onclick="renumberWeek('${weekStr}')" title="This week's event numbers are out of order \u2014 click to fix" class="btn btn--dashed btn--block cs-act"><i class="ti ti-list-numbers"></i> Renumber</button>` : ''}
+        <button onclick="openJobNumEditor('${weekStr}')" title="${coverWeekNumberingOff(weekStr)?'This week\u2019s job numbers are out of order \u2014 click to fix':'Change job numbers for this week'}" class="btn ${coverWeekNumberingOff(weekStr)?'btn--dashed ':''}btn--block cs-act"><i class="ti ti-list-numbers"></i> Change job #s${coverWeekNumberingOff(weekStr)?' <i class="ti ti-alert-triangle" aria-label="out of order"></i>':''}</button>
       </section>
     </div>
     ${sortBar}
@@ -19051,6 +19298,7 @@ async function fetchMessageBody(id){
 // honor the sendAs field. Until the Apps Script is updated, sendAs is silently
 // ignored by the relay (emails still send from events@).
 async function sendGmailEmail(to, subject, body, htmlBody, attachments, sendAs){
+  try{ const _gi=_inqForRecipients(to); if(_gi && !(await ownerGuard(_gi,'send'))){ showToast('Not sent'); return false; } }catch(_){}
   if(gmailViaScript()){
     try{
       const payload = {
@@ -19776,6 +20024,7 @@ async function sendTextViaEmail(number, carrier, body){
 
 // Send a real text via Twilio, through the Apps Script relay (token stays server-side).
 async function sendTextViaTwilio(number, body){
+  try{ const _gi=_inqForRecipients(String(number||'').replace(/\D/g,'')); if(_gi && !(await ownerGuard(_gi,'send'))){ showToast('Not sent'); return false; } }catch(_){}
   const base = getSharedSetting('scriptUrl');
   if(!base) return false;
   let digits = String(number||'').replace(/[^0-9]/g,'');

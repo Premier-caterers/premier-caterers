@@ -39,6 +39,8 @@
   .status.confirm{border:2px solid var(--maroon);background:#fff}
   .status.ok{border:2px solid var(--ok);background:var(--ok-bg)}
   .status.neutral{border:2px dashed var(--brass);background:#FAF4E7}
+  .status.owner{border:2px dashed var(--warn);background:var(--warn-bg)}
+  .status.owner .badge{border:2px dashed var(--warn)}
   .status.stop{border:2px dashed var(--stop);background:var(--stop-bg)}
   .badge{width:40px;height:40px;flex:0 0 40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff}
   .status.loading .badge{border:2px dotted var(--warn)}
@@ -185,6 +187,53 @@ async function doSkip(status, msg, logMsg, r){
   }
 }
 
+
+// ── Salesperson check ──
+// If the client is assigned to someone other than the person tapping the
+// button, show a warning first. The person is known when they're signed in to
+// the app in this browser; otherwise we ask once and remember on this device.
+const STAFF_EMAILS = { 'kenny@thepremiercaterer.com':'Kenny', 'shelley@thepremiercaterer.com':'Shelley',
+  'joshg@thepremiercaterer.com':'Josh', 'bnash.premiercaterers@gmail.com':'Barry' };
+let signedInName = '';
+function whoAmI(){
+  if(signedInName) return signedInName;
+  try{ return localStorage.getItem('pcApproverName') || ''; }catch(e){ return ''; }
+}
+function rememberMe(name){ try{ localStorage.setItem('pcApproverName', name); }catch(e){} }
+async function assignedSalesperson(r){
+  try{
+    if(r.inquiryId){
+      const d = await db.collection('inquiries').doc(String(r.inquiryId)).get();
+      if(d.exists && d.data().salesperson) return String(d.data().salesperson).trim();
+    }
+  }catch(e){ /* fall back to the reminder */ }
+  return String(r.salesperson||'').trim();
+}
+function same(a,b){ return String(a||'').trim().toLowerCase() === String(b||'').trim().toLowerCase(); }
+const WHAT = { send:'approve this follow-up', skip_in:'skip this follow-up', skip_not:'skip this follow-up' };
+
+function renderOwnerWarn(r, sp, me, proceed){
+  const known = !!me;
+  const msg = known
+    ? 'This client is assigned to <strong>'+esc(sp)+'</strong>. You’re '+esc(me)+'. Are you sure you want to '+WHAT[c]+'?'
+    : 'This client is assigned to <strong>'+esc(sp)+'</strong>. If you’re not '+esc(sp)+', check with them before you '+WHAT[c]+'.';
+  $body.innerHTML = statusBlock('owner', ICON.alert, 'This client belongs to '+sp, msg) + detailsBlock(r) +
+    '<div class="actions">' +
+      (known ? '' : '<button class="btn-primary" id="isme">I’m '+esc(sp)+' — continue</button>') +
+      '<button class="'+(known?'btn-primary':'btn-ghost')+'" id="anyway">'+(known?'Continue anyway':'I’m someone else — continue anyway')+'</button>' +
+      '<button class="btn-ghost" id="leave">Leave it for '+esc(sp)+'</button>' +
+    '</div>';
+  const isme = document.getElementById('isme');
+  if(isme) isme.onclick = function(){ rememberMe(sp); proceed(''); };
+  document.getElementById('anyway').onclick = function(){
+    logActivity(r.inquiryId, (me||'Someone other than '+sp)+' acted on '+sp+'’s follow-up (warned, continued)');
+    proceed(me||('not '+sp));
+  };
+  document.getElementById('leave').onclick = function(){
+    $body.innerHTML = statusBlock('neutral', ICON.belloff, 'Left for '+sp, 'Nothing was changed. The reminder is still waiting for '+esc(sp)+'.');
+  };
+}
+
 function alreadyHandled(status){
   const s = String(status||'done');
   const nice = s === 'sent' ? 'already sent' :
@@ -223,7 +272,7 @@ async function start(){
 authReady = new Promise(function(resolve){
   var off = firebase.auth().onAuthStateChanged(function(u){
     off();
-    if(u) return resolve(u);   // already signed in (staff) — leave it be
+    if(u){ if(!u.isAnonymous && u.email) signedInName = STAFF_EMAILS[String(u.email).toLowerCase()] || ''; return resolve(u); }   // already signed in (staff) — leave it be
     firebase.auth().signInAnonymously().then(function(c){ resolve(c && c.user); })
       .catch(function(e){ console.error('Anonymous sign-in failed:', e && e.code); resolve(null); });
   }, function(e){ console.error('Auth listener failed:', e && e.code); resolve(null); });
@@ -250,20 +299,28 @@ authReady = new Promise(function(resolve){
 
   if(r.status !== 'pending'){ alreadyHandled(r.status); return; }
 
-  if(c === 'send'){
-    renderConfirm(r);
-  } else if(c === 'edit'){
-    const dir = location.pathname.replace(/followup-action\.html.*$/, '');
-    location.href = location.origin + dir + '?followup=' + encodeURIComponent(id);
-  } else if(c === 'skip_in'){
-    doSkip('skipped_in_contact', 'Marked as already in contact \u2014 no follow-up will be sent.',
-      'Follow-up skipped: already in contact with client', r);
-  } else if(c === 'skip_not'){
-    doSkip('skipped_not_needed', 'Marked as not needed \u2014 no follow-up will be sent.',
-      'Follow-up skipped: not needed', r);
-  } else {
-    renderStop('Unknown action', 'This link\u2019s action wasn\u2019t recognized.');
-  }
+  const run = function(){
+    if(c === 'send'){
+      renderConfirm(r);
+    } else if(c === 'edit'){
+      const dir = location.pathname.replace(/followup-action\.html.*$/, '');
+      location.href = location.origin + dir + '?followup=' + encodeURIComponent(id);
+    } else if(c === 'skip_in'){
+      doSkip('skipped_in_contact', 'Marked as already in contact \u2014 no follow-up will be sent.',
+        'Follow-up skipped: already in contact with client', r);
+    } else if(c === 'skip_not'){
+      doSkip('skipped_not_needed', 'Marked as not needed \u2014 no follow-up will be sent.',
+        'Follow-up skipped: not needed', r);
+    } else {
+      renderStop('Unknown action', 'This link\u2019s action wasn\u2019t recognized.');
+    }
+};
+  if(c === 'edit'){ run(); return; }   // the app shows its own warning when editing
+  renderLoading('Checking who this client belongs to\u2026');
+  const sp = await assignedSalesperson(r);
+  const me = whoAmI();
+  if(sp && !same(me, sp)){ renderOwnerWarn(r, sp, me, function(){ run(); }); return; }
+  run();
 }
 
 start();
