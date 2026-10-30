@@ -384,6 +384,20 @@ function refreshPanels(){
   }
 }
 
+// Photos tab: the public event-photo gallery, shown inside the portal. It's
+// loaded only when the client opens this tab, and grows to fit its content.
+function renderPhotos(){
+  var el=document.getElementById('panel-photos'); if(!el || el.dataset.loaded) return;
+  el.dataset.loaded='1';
+  el.innerHTML='<div style="font-family:Fraunces,serif;font-size:19px;font-weight:600;margin:4px 0 4px">Photos from our events</div>'
+    +'<div style="font-size:13px;color:var(--text2,#6B6058);margin-bottom:12px">Buffets, plated dinners and more. <a href="gallery.html" target="_blank" rel="noopener">Open full screen</a></div>'
+    +'<iframe id="photosFrame" src="gallery.html?embed=1" title="Event photos" style="width:100%;height:900px;border:0;display:block" loading="lazy"></iframe>';
+}
+window.addEventListener('message', function(e){
+  if(e.origin!==location.origin || !e.data || !e.data.pcGalleryHeight) return;
+  var f=document.getElementById('photosFrame'); if(f) f.style.height=Math.max(400, e.data.pcGalleryHeight+20)+'px';
+});
+
 function renderShell(){
   root.innerHTML =
     '<div class="frame">'
@@ -398,6 +412,7 @@ function renderShell(){
         + '<button class="tab'+(activeTab==='documents'?' active':'')+'" data-tab="documents">Documents</button>'
         + (_hasContract()?('<button class="tab'+(activeTab==='contract'?' active':'')+'" data-tab="contract">Contract</button>'):'')
         + '<button class="tab'+(activeTab==='questions'?' active':'')+'" data-tab="questions">Questions</button>'
+        + '<button class="tab'+(activeTab==='photos'?' active':'')+'" data-tab="photos">Photos</button>'
       + '</div>'
     + '</div>'
     + '<div class="panel'+(activeTab==='overview'?' active':'')+'" id="panel-overview"></div>'
@@ -406,6 +421,7 @@ function renderShell(){
     + '<div class="panel'+(activeTab==='documents'?' active':'')+'" id="panel-documents"></div>'
     + '<div class="panel'+(activeTab==='contract'?' active':'')+'" id="panel-contract"></div>'
     + '<div class="panel'+(activeTab==='questions'?' active':'')+'" id="panel-questions"></div>'
+    + '<div class="panel'+(activeTab==='photos'?' active':'')+'" id="panel-photos"></div>'
     + '</div>';
 
   document.querySelectorAll('.tab[data-tab]').forEach(function(btn){
@@ -415,8 +431,10 @@ function renderShell(){
       document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab==='photos') renderPhotos();
     });
   });
+  if(activeTab==='photos') renderPhotos();
 
   renderOverview();
   renderInvoice();

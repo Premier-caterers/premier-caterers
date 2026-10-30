@@ -3657,6 +3657,51 @@ async function saveJobNumEditor(){
 }
 window.saveJobNumEditor = saveJobNumEditor;
 
+// ── "Insert photos link" on client emails ──
+// Adds a small button above every client-email message box. It drops a line
+// with the client photo gallery link (gallery.html) where the cursor is. The
+// gallery only shows albums set to "Clients can see" on the Photos page.
+const PC_GALLERY_URL = 'https://premier-caterers.github.io/premier-caterers/gallery.html';
+const _PHOTO_LINK_BOXES = ['cem_body','compose-body','email-body','menu-email-body','pmt-email-body','em-reply-text','tpl-body'];
+function insertPhotosLink(id){
+  const ta=document.getElementById(id); if(!ta) return;
+  if(ta.value.indexOf(PC_GALLERY_URL)>=0){ showToast('The photos link is already in this message'); return; }
+  const line='See photos from some of our recent events:\n'+PC_GALLERY_URL+'\n';
+  const st=(typeof ta.selectionStart==='number' && document.activeElement===ta) ? ta.selectionStart : null;
+  let v=ta.value, pos;
+  if(st!=null) pos=st;
+  else {
+    // no cursor in the box: put it just before the sign-off, else at the end
+    // sign-off = a line that is ONLY "—", "Best,", "Thanks," etc. (not "Thanks for…")
+    const re=/\n(—|--|Warm regards|Kind regards|Best regards|Best|Sincerely|Thanks|Thank you)[,!]?[ \t]*(?=\n|$)/ig;
+    let m, last=null; while((m=re.exec(v))) last=m;
+    pos = last ? last.index : v.length;
+  }
+  const before=v.slice(0,pos), after=v.slice(pos);
+  const pre = before && !/\n\n$/.test(before) ? (/\n$/.test(before)?'\n':'\n\n') : '';
+  ta.value = before + pre + line + (after && !/^\n/.test(after) ? '\n' : '') + after;
+  ta.dispatchEvent(new Event('input',{bubbles:true}));
+  ta.focus(); const caret=(before+pre+line).length; try{ ta.setSelectionRange(caret,caret); }catch(_){}
+  showToast('Photos link added ✓');
+}
+window.insertPhotosLink = insertPhotosLink;
+function _addPhotoLinkButtons(){
+  _PHOTO_LINK_BOXES.forEach(id=>{
+    const ta=document.getElementById(id);
+    if(!ta || ta.dataset.photoBtn) return;
+    ta.dataset.photoBtn='1';
+    const b=document.createElement('button');
+    b.type='button'; b.className='btn btn--sm'; b.style.cssText='margin:0 0 6px;display:inline-flex;align-items:center;gap:5px';
+    b.innerHTML='<i class="ti ti-photo"></i> Insert photos link';
+    b.title='Add a link to the client photo gallery';
+    b.addEventListener('mousedown', e=>e.preventDefault());   // keep the cursor where it is in the message
+    b.addEventListener('click', ()=>insertPhotosLink(id));
+    ta.parentNode.insertBefore(b, ta);
+  });
+}
+try{ new MutationObserver(()=>_addPhotoLinkButtons()).observe(document.body,{childList:true,subtree:true}); }catch(_){}
+
+
 // ── SALESPERSON OWNERSHIP WARNING ──
 // When a client is assigned to a salesperson and someone else sends them an
 // email/text or changes their client or event, show a warning first. It's a

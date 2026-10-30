@@ -72,7 +72,13 @@ button,input,select{font-family:inherit;font-size:14px}
 .ph{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;position:relative}
 .ph.hidden{border:2px dashed var(--text3)}
 .ph.hidden img{opacity:.45}
-.ph img{display:block;width:100%;aspect-ratio:1;object-fit:cover;cursor:zoom-in;background:var(--bg3)}
+.ph .frame{aspect-ratio:1;overflow:hidden;background:var(--bg3)}
+.ph img{display:block;width:100%;height:100%;object-fit:cover;cursor:zoom-in;transition:transform .2s}
+.r90{transform:rotate(90deg)}.r180{transform:rotate(180deg)}.r270{transform:rotate(270deg)}
+.album .cover{overflow:hidden}.album .cover img{width:100%;height:100%;object-fit:cover;display:block}
+.ed-prev{display:flex;align-items:center;justify-content:center;height:340px;background:var(--bg3);border-radius:var(--radius);overflow:hidden;margin-bottom:12px}
+.ed-prev img{max-width:300px;max-height:300px;transition:transform .2s}
+.lb img.r90,.lb img.r270{max-width:84vh;max-height:94vw}
 .ph .hid-lbl{position:absolute;top:6px;left:6px;background:#fff;border:1.5px dashed var(--text2);color:var(--text2);font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;display:inline-flex;gap:3px;align-items:center}
 .ph .cov-lbl{position:absolute;top:6px;right:6px;background:var(--maroon);color:#fff;font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;display:inline-flex;gap:3px;align-items:center}
 .ph .tools{display:flex;flex-wrap:wrap;gap:4px;padding:7px}
@@ -200,6 +206,7 @@ function start(){
   unsub = db.collection('photoAlbums').onSnapshot(s=>{
     albums = s.docs.map(d=>({id:d.id, ...d.data()}));
     render();
+    albums.forEach(a=>{ if((a.updatedAt||0)!==(a.publishedAt==null?-1:a.publishedAt)) publishSoon(a.id); });
   }, e=>{ document.getElementById('main').innerHTML='<div class="empty">Could not load albums: '+esc(e.message)+'</div>'; });
   const h=decodeURIComponent((location.hash||'').replace(/^#a=/,''));
   if(h && location.hash.indexOf('#a=')===0) openId=h;
@@ -207,7 +214,9 @@ function start(){
 function render(){ if(openId && albums.some(a=>a.id===openId)) renderAlbum(); else { openId=null; renderList(); } }
 
 // ── Album list ───────────────────────────────────────────────
-function coverOf(a){ const ps=a.photos||[]; const c=ps.find(p=>p.id===a.coverId)||ps.find(p=>!p.hidden)||ps[0]; return c?c.thumb:''; }
+function coverPhoto(a){ const ps=a.photos||[]; return ps.find(p=>p.id===a.coverId)||ps.find(p=>!p.hidden)||ps[0]||null; }
+function coverOf(a){ const c=coverPhoto(a); return c?c.thumb:''; }
+function rotCls(p){ const r=((p&&p.rot)||0)%360; return r?(' r'+r):''; }
 function groupKey(a){
   if(sortBy==='type') return a.type||'No event type';
   if(sortBy==='venue') return a.venue||'No venue';
@@ -228,6 +237,8 @@ function renderList(){
   const qv=esc((document.getElementById('aSearch')||{}).value||'');
   document.getElementById('main').innerHTML = `
     <div class="row-head"><div class="title">Event photos</div><span class="muted">${albums.length} album${albums.length===1?'':'s'} · ${total} photo${total===1?'':'s'}</span><span class="spacer"></span>
+      <button class="btn ghost" onclick="copyGalleryLink()" title="Link to every album clients can see"><i class="ti ti-link"></i> Copy gallery link</button>
+      <a class="btn ghost" href="gallery.html" target="_blank"><i class="ti ti-eye"></i> See what clients see</a>
       <button class="btn" onclick="pickFiles(null)"><i class="ti ti-upload"></i> Upload album</button></div>
     <div class="row-head">
       <div class="search"><i class="ti ti-search"></i><input id="aSearch" value="${qv}" placeholder="Search albums…" oninput="renderList();const i=document.getElementById('aSearch');i.focus();i.setSelectionRange(i.value.length,i.value.length)"></div>
@@ -241,10 +252,10 @@ function renderList(){
   wireDrop(document.getElementById('dropZone'), null);
 }
 function albumCard(a){
-  const c=coverOf(a), n=(a.photos||[]).length, hid=(a.photos||[]).filter(p=>p.hidden).length;
+  const cp=coverPhoto(a), c=cp?cp.thumb:'', n=(a.photos||[]).length, hid=(a.photos||[]).filter(p=>p.hidden).length;
   const sub=[fmtDate(a.date), a.venue, a.town].filter(Boolean).map(esc).join(' · ');
   return `<div class="album" onclick="openAlbum('${escJs(a.id)}')">
-    <div class="cover" style="${c?`background-image:url('${esc(c)}')`:''}">${c?'':'<i class="ti ti-photo"></i>'}</div>
+    <div class="cover">${c?`<img loading="lazy" src="${esc(c)}" alt="" class="${rotCls(cp).trim()}">`:'<i class="ti ti-photo"></i>'}</div>
     <div class="meta"><div class="t">${esc(a.type||a.title||'Album')}</div><div class="s">${sub||'&nbsp;'}</div>
     ${a.clientVisible?`<span class="vis on"><i class="ti ti-world"></i> Clients can see · ${n-hid}</span>`:`<span class="vis off"><i class="ti ti-lock"></i> Staff only · ${n}</span>`}</div></div>`;
 }
@@ -265,6 +276,7 @@ function renderAlbum(){
         <label class="check" style="margin-top:8px"><input type="checkbox" ${a.clientVisible?'checked':''} onchange="setVisible(this.checked)">
           <span>${a.clientVisible?'<b><i class="ti ti-world"></i> Clients can see this album</b>':'<b><i class="ti ti-lock"></i> Staff only</b>'} <span class="muted">· ${ps.length} photo${ps.length===1?'':'s'}${hid?`, ${hid} hidden from clients`:''}</span></span></label>
       </div>
+      <button class="btn ghost sm" onclick="copyAlbumLink()"><i class="ti ti-link"></i> Copy album link</button>
       <button class="btn ghost sm" onclick="editAlbum()"><i class="ti ti-pencil"></i> Edit details</button>
       <button class="btn ghost sm" onclick="pickFiles('${escJs(a.id)}')"><i class="ti ti-plus"></i> Add photos</button>
       <button class="btn danger sm" onclick="deleteAlbum()"><i class="ti ti-trash"></i> Delete album</button>
@@ -274,9 +286,11 @@ function renderAlbum(){
       <div class="ph${p.hidden?' hidden':''}">
         ${p.hidden?'<span class="hid-lbl"><i class="ti ti-eye-off"></i> Hidden</span>':''}
         ${a.coverId===p.id?'<span class="cov-lbl"><i class="ti ti-star"></i> Cover</span>':''}
-        <img loading="lazy" src="${esc(p.thumb)}" alt="${esc(p.name||'photo')}" onclick="openLb(${i})">
+        <div class="frame"><img loading="lazy" src="${esc(p.thumb)}" alt="${esc(p.name||'photo')}" class="${rotCls(p).trim()}" onclick="openLb(${i})"></div>
         <div class="tools">${TAGS.map(t=>`<button class="chip${(p.tags||[]).includes(t)?' on':''}" onclick="toggleTag('${escJs(p.id)}','${escJs(t)}')">${(p.tags||[]).includes(t)?'<i class="ti ti-check"></i>':''}${esc(t)}</button>`).join('')}</div>
         <div class="icons">
+          <button class="icon-btn" title="Edit photo (turn it)" onclick="editPhoto('${escJs(p.id)}')"><i class="ti ti-pencil"></i></button>
+          <button class="icon-btn" title="Turn right 90°" onclick="rotatePhoto('${escJs(p.id)}',90)"><i class="ti ti-rotate-clockwise-2"></i></button>
           <button class="icon-btn" title="${p.hidden?'Show to clients':'Hide from clients'}" onclick="toggleHidden('${escJs(p.id)}')"><i class="ti ${p.hidden?'ti-eye':'ti-eye-off'}"></i></button>
           <button class="icon-btn" title="Use as album cover" onclick="setCover('${escJs(p.id)}')"><i class="ti ti-star"></i></button>
           <button class="icon-btn" title="Delete photo" onclick="deletePhoto('${escJs(p.id)}')"><i class="ti ti-trash"></i></button>
@@ -285,13 +299,13 @@ function renderAlbum(){
 }
 async function savePhotos(a, photos, extra){
   a.photos=photos; renderAlbum();
-  try{ await db.collection('photoAlbums').doc(a.id).set(Object.assign({ photos, updatedAt:Date.now() }, extra||{}), {merge:true}); }
+  try{ await db.collection('photoAlbums').doc(a.id).set(Object.assign({ photos, updatedAt:Date.now() }, extra||{}), {merge:true}); publishSoon(a.id); }
   catch(e){ toast('Could not save — '+e.message); }
 }
 function toggleTag(pid, t){ const a=curAlbum(); const photos=(a.photos||[]).map(p=>p.id!==pid?p:Object.assign({},p,{tags:(p.tags||[]).includes(t)?(p.tags||[]).filter(x=>x!==t):[...(p.tags||[]),t]})); savePhotos(a, photos); }
 function toggleHidden(pid){ const a=curAlbum(); const photos=(a.photos||[]).map(p=>p.id!==pid?p:Object.assign({},p,{hidden:!p.hidden})); savePhotos(a, photos); }
 function setCover(pid){ const a=curAlbum(); a.coverId=pid; savePhotos(a, a.photos||[], {coverId:pid}); toast('Cover set'); }
-async function setVisible(on){ const a=curAlbum(); a.clientVisible=!!on; renderAlbum(); try{ await db.collection('photoAlbums').doc(a.id).set({clientVisible:!!on, updatedAt:Date.now()},{merge:true}); toast(on?'Clients can now see this album':'Album is staff only'); }catch(e){ toast('Could not save'); } }
+async function setVisible(on){ const a=curAlbum(); a.clientVisible=!!on; renderAlbum(); try{ await db.collection('photoAlbums').doc(a.id).set({clientVisible:!!on, updatedAt:Date.now()},{merge:true}); publishSoon(a.id); toast(on?'Clients can now see this album':'Album is staff only'); }catch(e){ toast('Could not save'); } }
 async function deletePhoto(pid){
   if(!confirm('Delete this photo? This can’t be undone.')) return;
   const a=curAlbum(); const p=(a.photos||[]).find(x=>x.id===pid);
@@ -304,7 +318,7 @@ function removeFiles(albumId, pid){
 async function deleteAlbum(){
   const a=curAlbum(); if(!a) return;
   if(!confirm('Delete the album "'+(a.type||a.title)+'" and all '+(a.photos||[]).length+' photos?\n\nThis can’t be undone. The photos stay in Google Photos.')) return;
-  try{ await db.collection('photoAlbums').doc(a.id).delete(); (a.photos||[]).forEach(p=>removeFiles(a.id,p.id)); toast('Album deleted'); backToList(); }
+  try{ await db.collection('photoAlbums').doc(a.id).delete(); db.collection('galleryAlbums').doc(a.id).delete().catch(()=>{}); (a.photos||[]).forEach(p=>removeFiles(a.id,p.id)); toast('Album deleted'); backToList(); }
   catch(e){ alert('Could not delete: '+e.message); }
 }
 
@@ -355,7 +369,7 @@ function editAlbum(){
 async function saveDetails(){
   const a=curAlbum(), d=readForm();
   if(!d.type){ toast('Add an event type'); return; }
-  try{ await db.collection('photoAlbums').doc(a.id).set(Object.assign(d,{ title:[d.type, d.date?fmtDate(d.date):'', d.venue, d.town].filter(Boolean).join(' - '), updatedAt:Date.now() }),{merge:true}); closeModal(); toast('Saved'); }
+  try{ await db.collection('photoAlbums').doc(a.id).set(Object.assign(d,{ title:[d.type, d.date?fmtDate(d.date):'', d.venue, d.town].filter(Boolean).join(' - '), updatedAt:Date.now() }),{merge:true}); publishSoon(a.id); closeModal(); toast('Saved'); }
   catch(e){ toast('Could not save — '+e.message); }
 }
 
@@ -469,6 +483,7 @@ async function uploadInto(albumId, files, skipped){
         if(s.exists && !s.data().coverId && batch.length) upd.coverId=batch[0].id;
         t.set(r, upd, {merge:true});
       });
+      publishSoon(albumId);
     }catch(e){ failed.push(...batch.map(p=>p.name)); console.error(e); }
   };
   let i=0;
@@ -496,9 +511,77 @@ async function uploadInto(albumId, files, skipped){
   openId=albumId; render();
 }
 
+
+// ── Client copy + links ─────────────────────────────────────
+// Clients never read photoAlbums. Each album clients may see is copied to
+// galleryAlbums/{id} with ONLY its visible photos (no hidden ones, no staff
+// details), and removed from there when it's switched to staff only. The
+// client gallery page (gallery.html) reads only galleryAlbums.
+const GALLERY_URL = 'https://premier-caterers.github.io/premier-caterers/gallery.html';
+const _pubT = {};
+function publishSoon(id){ clearTimeout(_pubT[id]); _pubT[id]=setTimeout(()=>publishAlbum(id), 1200); }
+async function publishAlbum(id){
+  try{
+    const snap=await db.collection('photoAlbums').doc(id).get();
+    const ref=db.collection('galleryAlbums').doc(id);
+    if(!snap.exists){ await ref.delete().catch(()=>{}); return; }
+    const a=snap.data()||{};
+    const shown=(a.photos||[]).filter(p=>!p.hidden && p.url);
+    if(!a.clientVisible || !shown.length){ await ref.delete().catch(()=>{}); }
+    else {
+      const cover=shown.find(p=>p.id===a.coverId)||shown[0];
+      await ref.set({ type:a.type||'', date:a.date||'', venue:a.venue||'', town:a.town||'',
+        coverThumb:cover.thumb, coverRot:cover.rot||0,
+        photos: shown.map(p=>({ id:p.id, url:p.url, thumb:p.thumb, rot:p.rot||0, tags:p.tags||[] })),
+        updatedAt:Date.now() });
+    }
+    await db.collection('photoAlbums').doc(id).update({ publishedAt:a.updatedAt||0 });
+  }catch(e){ console.warn('publish failed', id, e); }
+}
+async function copyText(t, msg){
+  try{ await navigator.clipboard.writeText(t); toast(msg); }
+  catch(_){ prompt('Copy this link:', t); }
+}
+function copyGalleryLink(){
+  if(!albums.some(a=>a.clientVisible)){ toast('No albums are set to “Clients can see” yet'); return; }
+  copyText(GALLERY_URL, 'Gallery link copied — paste it into an email or text');
+}
+function copyAlbumLink(){
+  const a=curAlbum(); if(!a) return;
+  if(!a.clientVisible){ alert('This album is Staff only.\n\nTick “Clients can see this album” first, then copy the link.'); return; }
+  copyText(GALLERY_URL+'?a='+encodeURIComponent(a.id), 'Album link copied');
+}
+
+// ── Turn photos ─────────────────────────────────────────────
+// The photo file itself isn't changed; we store which way to turn it (0, 90,
+// 180 or 270) and every screen — here and the client gallery — shows it turned.
+function rotatePhoto(pid, deg){
+  const a=curAlbum();
+  const photos=(a.photos||[]).map(p=>p.id!==pid?p:Object.assign({},p,{rot:((((p.rot||0)+deg)%360)+360)%360}));
+  savePhotos(a, photos);
+}
+let _edRot=0, _edId='';
+function editPhoto(pid){
+  const p=(curAlbum().photos||[]).find(x=>x.id===pid); if(!p) return;
+  _edId=pid; _edRot=p.rot||0;
+  openModal(`<h3>Edit photo</h3>
+    <div class="ed-prev"><img id="edImg" src="${esc(p.url)}" alt="" class="${rotCls(p).trim()}"></div>
+    <div class="acts" style="justify-content:center;margin-top:0">
+      <button class="btn ghost" onclick="edTurn(-90)"><i class="ti ti-rotate-2"></i> Turn left</button>
+      <button class="btn ghost" onclick="edTurn(90)"><i class="ti ti-rotate-clockwise-2"></i> Turn right</button>
+    </div>
+    <div class="acts"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" onclick="edSave()"><i class="ti ti-check"></i> Save</button></div>`);
+}
+function edTurn(d){ _edRot=(((_edRot+d)%360)+360)%360; const im=document.getElementById('edImg'); if(im) im.className=_edRot?('r'+_edRot):''; }
+function edSave(){
+  const a=curAlbum();
+  const photos=(a.photos||[]).map(p=>p.id!==_edId?p:Object.assign({},p,{rot:_edRot}));
+  closeModal(); savePhotos(a, photos); toast('Photo saved');
+}
+
 // ── Full-size viewer ────────────────────────────────────────
 function openLb(i){ const a=curAlbum(); lbList=(a&&a.photos)||[]; lbIdx=i; showLb(); document.getElementById('lb').classList.add('open'); }
-function showLb(){ const p=lbList[lbIdx]; if(!p) return; document.getElementById('lbImg').src=p.url; document.getElementById('lbCap').textContent=(lbIdx+1)+' / '+lbList.length+(p.hidden?' · hidden from clients':''); }
+function showLb(){ const p=lbList[lbIdx]; if(!p) return; const im=document.getElementById('lbImg'); im.className=rotCls(p).trim(); im.src=p.url; document.getElementById('lbCap').textContent=(lbIdx+1)+' / '+lbList.length+(p.hidden?' · hidden from clients':''); }
 function stepLb(d){ if(!lbList.length) return; lbIdx=(lbIdx+d+lbList.length)%lbList.length; showLb(); }
 function closeLb(){ document.getElementById('lb').classList.remove('open'); document.getElementById('lbImg').src=''; }
 document.addEventListener('keydown', e=>{ if(!document.getElementById('lb').classList.contains('open')) return; if(e.key==='Escape') closeLb(); if(e.key==='ArrowLeft') stepLb(-1); if(e.key==='ArrowRight') stepLb(1); });

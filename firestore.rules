@@ -61,7 +61,9 @@ service cloud.firestore {
         // internal-only data no public page uses
         'changes', 'equipment', 'checklists', 'venues', 'trash',
         'groceryStations', 'groceryLists', 'activity', 'roadmap',
-        'regulars', 'followupSuggestions', 'checklistEmailLog'
+        'regulars', 'followupSuggestions', 'checklistEmailLog',
+        // staff photo albums (clients read the separate galleryAlbums copy)
+        'photoAlbums'
       ];
     }
 

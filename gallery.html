@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Premier Caterers — Event Photos</title>
+<meta name="description" content="Photos from events catered by Premier Caterers">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#FFFFFF;--bg2:#FCFAF6;--bg3:#F7F3EC;--text:#2B2420;--text2:#6B6058;--text3:#9A8E84;--border:#EAE2D6;--border2:#DDD3C4;--maroon:#8B1A1A;--brass:#B0894B;--radius:10px}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg3);color:var(--text);font-size:15px;line-height:1.5}
+button{font-family:inherit}
+.hero{background:#20262A;color:#fff;padding:34px 20px 26px;text-align:center}
+.hero .brand{font-family:'Fraunces',Georgia,serif;font-size:14px;letter-spacing:.06em;color:var(--brass);margin-bottom:8px;text-transform:uppercase}
+.hero h1{font-family:'Fraunces',Georgia,serif;font-size:30px;font-weight:600}
+.hero p{color:#B9BEC0;font-size:14px;margin-top:6px}
+body.embed .hero{display:none}
+body.embed{background:transparent}
+.wrap{max-width:1180px;margin:0 auto;padding:20px}
+.filters{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chips .lbl{font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-right:4px}
+.chip{padding:7px 14px;border:1px solid var(--border2);background:var(--bg);border-radius:20px;font-size:13.5px;cursor:pointer;color:var(--text2)}
+.chip.on{border:2px solid var(--maroon);color:var(--maroon);font-weight:600;padding:6px 13px}
+.albums{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px}
+.album{background:var(--bg);border:1px solid var(--border);border-radius:14px;overflow:hidden;cursor:pointer;transition:transform .12s}
+.album:hover{transform:translateY(-2px)}
+.album .cover{aspect-ratio:4/3;overflow:hidden;background:var(--bg3)}
+.album .cover img{width:100%;height:100%;object-fit:cover;display:block}
+.album .meta{padding:12px 14px}
+.album .t{font-family:'Fraunces',Georgia,serif;font-size:17px;font-weight:600}
+.album .s{font-size:13px;color:var(--text2);margin-top:2px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.cell{aspect-ratio:1;overflow:hidden;border-radius:8px;background:var(--border);cursor:zoom-in}
+.cell img{width:100%;height:100%;object-fit:cover;display:block}
+.r90{transform:rotate(90deg)}.r180{transform:rotate(180deg)}.r270{transform:rotate(270deg)}
+.ahead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.ahead .t{font-family:'Fraunces',Georgia,serif;font-size:24px;font-weight:600}
+.ahead .s{font-size:13.5px;color:var(--text2)}
+.back{padding:8px 14px;border:1px solid var(--border2);background:var(--bg);border-radius:9px;cursor:pointer;font-size:13.5px;color:var(--text2);display:inline-flex;align-items:center;gap:6px}
+.empty{padding:50px 20px;text-align:center;color:var(--text2);background:var(--bg);border:1px dashed var(--border2);border-radius:14px}
+.foot{text-align:center;color:var(--text3);font-size:12.5px;padding:26px 20px 34px}
+.foot a{color:var(--maroon);text-decoration:none;font-weight:600}
+body.embed .foot{display:none}
+.lb{display:none;position:fixed;inset:0;z-index:300;background:rgba(10,8,6,.95);align-items:center;justify-content:center}
+.lb.open{display:flex}
+.lb img{max-width:94vw;max-height:84vh;object-fit:contain;border-radius:4px}
+.lb img.r90,.lb img.r270{max-width:84vh;max-height:94vw}
+.lb .x,.lb .nav{position:absolute;background:rgba(255,255,255,.14);border:none;color:#fff;font-size:26px;cursor:pointer;border-radius:50%;width:48px;height:48px;display:flex;align-items:center;justify-content:center}
+.lb .x{top:14px;right:14px}.lb .prev{left:12px;top:50%}.lb .next{right:12px;top:50%}
+.lb .cap{position:absolute;bottom:16px;left:0;right:0;text-align:center;color:#ddd;font-size:13px;padding:0 60px}
+body.embed .lb{position:absolute;inset:auto 0 auto 0;height:640px;border-radius:12px}
+body.embed .lb img{max-height:560px}
+body.embed .lb img.r90,body.embed .lb img.r270{max-width:560px}
+@media(max-width:640px){.hero h1{font-size:24px}.wrap{padding:14px}.albums{grid-template-columns:1fr 1fr;gap:10px}.album .t{font-size:15px}.grid{grid-template-columns:repeat(3,1fr);gap:4px}.lb .nav{display:none}}
+</style>
+</head>
+<body>
+<div class="hero"><div class="brand">Premier Caterers</div><h1>Photos from our events</h1><p>Buffets, plated dinners and more — tap any photo to see it full size</p></div>
+<div class="wrap" id="main"><div class="empty">Loading photos…</div></div>
+<div class="foot">Like what you see? Call or text <a href="tel:+12012509487">201-250-9487</a> or email <a href="mailto:events@thepremiercaterer.com">events@thepremiercaterer.com</a></div>
+<div class="lb" id="lb">
+  <button class="x" onclick="closeLb()" aria-label="Close"><i class="ti ti-x"></i></button>
+  <button class="nav prev" onclick="stepLb(-1)" aria-label="Previous photo"><i class="ti ti-chevron-left"></i></button>
+  <img id="lbImg" alt="">
+  <button class="nav next" onclick="stepLb(1)" aria-label="Next photo"><i class="ti ti-chevron-right"></i></button>
+  <div class="cap" id="lbCap"></div>
+</div>
+<script>
+// Premier Caterers — client photo gallery (public, no login).
+// Reads ONLY galleryAlbums, which the staff Photos page fills with albums set
+// to "Clients can see" minus any hidden photos. Links:
+//   gallery.html            every shareable album
+//   gallery.html?a=ID       one album (or ?a=ID1,ID2 for a few)
+//   gallery.html?embed=1    no header/footer (used inside the client portal)
+const firebaseConfig = {
+  apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
+  authDomain: "premier-caterers-internal-app.firebaseapp.com",
+  projectId: "premier-caterers-internal-app",
+  storageBucket: "premier-caterers-internal-app.firebasestorage.app",
+  messagingSenderId: "471701398759",
+  appId: "1:471701398759:web:559a7bee3b645ce545ee42"
+};
+if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const qs = new URLSearchParams(location.search);
+const ONLY = (qs.get('a')||'').split(',').map(s=>s.trim()).filter(Boolean);
+if(qs.get('embed')==='1') document.body.classList.add('embed');
+const TAG_ORDER = ['Buffet','Plated','Décor','Dessert','Tables'];
+
+let albums=[], typeF='', tagF='', openId=null, lbList=[], lbIdx=0;
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escJs(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function rot(r){ r=(r||0)%360; return r?('r'+r):''; }
+function fmtDate(d){ if(!d) return ''; const x=new Date(d+'T12:00:00'); return isNaN(x)?d:x.toLocaleDateString('en-US',{month:'long',year:'numeric'}); }
+function sub(a){ return [fmtDate(a.date), a.venue, a.town].filter(Boolean).map(esc).join(' · '); }
+function tellParentHeight(){ if(window.parent!==window){ try{ parent.postMessage({ pcGalleryHeight: document.documentElement.scrollHeight }, '*'); }catch(_){} } }
+
+// Anonymous sign-in, same as the other public pages (the database requires
+// some identity; this one can only read the gallery copy).
+const authReady = new Promise(res=>{
+  const off=firebase.auth().onAuthStateChanged(u=>{ off(); if(u) return res(u); firebase.auth().signInAnonymously().then(c=>res(c&&c.user)).catch(()=>res(null)); }, ()=>res(null));
+});
+(async()=>{
+  await authReady;
+  try{
+    const s=await db.collection('galleryAlbums').get();
+    albums=s.docs.map(d=>({id:d.id, ...d.data()})).filter(a=>(a.photos||[]).length && (!ONLY.length || ONLY.includes(a.id)));
+    albums.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+    if(ONLY.length===1 && albums.length===1) openId=albums[0].id;
+    render();
+  }catch(e){
+    document.getElementById('main').innerHTML='<div class="empty">Photos aren’t available right now. Please try again in a moment.</div>';
+  }
+})();
+
+function render(){ openId ? renderAlbum() : renderHome(); setTimeout(tellParentHeight, 60); }
+function renderHome(){
+  const types=Array.from(new Set(albums.map(a=>a.type).filter(Boolean))).sort();
+  const tagsPresent=new Set(); albums.forEach(a=>(a.photos||[]).forEach(p=>(p.tags||[]).forEach(t=>tagsPresent.add(t))));
+  const tags=TAG_ORDER.filter(t=>tagsPresent.has(t)).concat([...tagsPresent].filter(t=>!TAG_ORDER.includes(t)));
+  const inType=albums.filter(a=>!typeF || a.type===typeF);
+  if(!albums.length){ document.getElementById('main').innerHTML='<div class="empty">'+(ONLY.length?'This album isn’t available.':'No photos yet — check back soon.')+'</div>'; return; }
+  let body;
+  if(tagF){
+    lbList=[]; inType.forEach(a=>(a.photos||[]).forEach(p=>{ if((p.tags||[]).includes(tagF)) lbList.push(Object.assign({_a:a},p)); }));
+    body = lbList.length ? '<div class="grid">'+lbList.map((p,i)=>`<div class="cell" onclick="openLb(${i})"><img loading="lazy" src="${esc(p.thumb)}" alt="${esc(tagF)} — ${esc(p._a.type||'')}" class="${rot(p.rot)}"></div>`).join('')+'</div>'
+                         : '<div class="empty">No '+esc(tagF.toLowerCase())+' photos'+(typeF?' for '+esc(typeF.toLowerCase())+'s':'')+' yet.</div>';
+  } else {
+    body = '<div class="albums">'+inType.map(a=>`<div class="album" onclick="openAlbum('${escJs(a.id)}')">
+      <div class="cover"><img loading="lazy" src="${esc(a.coverThumb||(a.photos[0]||{}).thumb||'')}" alt="" class="${rot(a.coverRot)}"></div>
+      <div class="meta"><div class="t">${esc(a.type||'Event')}</div><div class="s">${sub(a)||'&nbsp;'}</div><div class="s">${(a.photos||[]).length} photos</div></div></div>`).join('')+'</div>';
+  }
+  document.getElementById('main').innerHTML =
+    '<div class="filters">'+
+      (types.length>1?'<div class="chips" role="group" aria-label="Event type"><span class="lbl">Event</span><button class="chip'+(typeF?'':' on')+'" onclick="setType(\'\')">All events</button>'+types.map(t=>`<button class="chip${typeF===t?' on':''}" onclick="setType('${escJs(t)}')">${esc(t)}</button>`).join('')+'</div>':'')+
+      (tags.length?'<div class="chips" role="group" aria-label="Photo type"><span class="lbl">Show</span><button class="chip'+(tagF?'':' on')+'" onclick="setTag(\'\')">Albums</button>'+tags.map(t=>`<button class="chip${tagF===t?' on':''}" onclick="setTag('${escJs(t)}')">${esc(t)}</button>`).join('')+'</div>':'')+
+    '</div>'+body;
+}
+function setType(t){ typeF=t; render(); }
+function setTag(t){ tagF=t; render(); }
+function openAlbum(id){ openId=id; render(); window.scrollTo(0,0); }
+function backHome(){ openId=null; render(); }
+function renderAlbum(){
+  const a=albums.find(x=>x.id===openId); if(!a){ openId=null; renderHome(); return; }
+  lbList=(a.photos||[]).map(p=>Object.assign({_a:a},p));
+  document.getElementById('main').innerHTML =
+    '<div class="ahead">'+(albums.length>1?'<button class="back" onclick="backHome()"><i class="ti ti-arrow-left"></i> All albums</button>':'')+
+    `<div><div class="t">${esc(a.type||'Event')}</div><div class="s">${sub(a)}</div></div></div>`+
+    '<div class="grid">'+lbList.map((p,i)=>`<div class="cell" onclick="openLb(${i})"><img loading="lazy" src="${esc(p.thumb)}" alt="Photo ${i+1}" class="${rot(p.rot)}"></div>`).join('')+'</div>';
+}
+function openLb(i){
+  lbIdx=i; showLb();
+  const lb=document.getElementById('lb');
+  // Inside the portal the page is as tall as its photos, so open the viewer
+  // next to the photo that was tapped instead of in the middle of the page.
+  if(document.body.classList.contains('embed')){
+    const cell=document.querySelectorAll('.cell')[i];
+    const y=cell ? cell.getBoundingClientRect().top + window.scrollY : 0;
+    lb.style.top=Math.max(0, Math.min(y-200, document.documentElement.scrollHeight-640))+'px';
+  }
+  lb.classList.add('open');
+}
+function showLb(){ const p=lbList[lbIdx]; if(!p) return; const im=document.getElementById('lbImg'); im.className=rot(p.rot); im.src=p.url; document.getElementById('lbCap').textContent=[p._a.type, sub(p._a).replace(/&amp;/g,'&')].filter(Boolean).join(' — ')+'   ·   '+(lbIdx+1)+' / '+lbList.length; }
+function stepLb(d){ if(!lbList.length) return; lbIdx=(lbIdx+d+lbList.length)%lbList.length; showLb(); }
+function closeLb(){ document.getElementById('lb').classList.remove('open'); document.getElementById('lbImg').src=''; }
+document.addEventListener('keydown', e=>{ if(!document.getElementById('lb').classList.contains('open')) return; if(e.key==='Escape') closeLb(); if(e.key==='ArrowLeft') stepLb(-1); if(e.key==='ArrowRight') stepLb(1); });
+let _tx=null; const _lb=document.getElementById('lb');
+_lb.addEventListener('touchstart', e=>{ _tx=e.touches[0].clientX; }, {passive:true});
+_lb.addEventListener('touchend', e=>{ if(_tx==null) return; const dx=e.changedTouches[0].clientX-_tx; if(Math.abs(dx)>50) stepLb(dx<0?1:-1); _tx=null; });
+_lb.addEventListener('click', e=>{ if(e.target===_lb) closeLb(); });
+window.addEventListener('resize', tellParentHeight);
+</script>
+</body>
+</html>
