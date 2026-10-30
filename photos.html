@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Premier Caterers — Photos</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#FFFFFF;--bg2:#FCFAF6;--bg3:#F7F3EC;
+  --text:#2B2420;--text2:#6B6058;--text3:#9A8E84;
+  --border:#EAE2D6;--border2:#DDD3C4;
+  --maroon:#8B1A1A;--maroon-deep:#6E1414;--maroon-tint:#F3E4E2;
+  --brass:#B0894B;--brass-deep:#8C6B36;--brass-tint:#F6EEDF;
+  --green:#2E7D5B;--green-bg:#E4F1EA;--green-text:#216B47;
+  --radius:9px;--radius-lg:14px;
+  --shadow:0 1px 2px rgba(43,36,32,.04),0 4px 14px rgba(43,36,32,.06);
+}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg3);color:var(--text);font-size:14px;line-height:1.5}
+button,input,select{font-family:inherit;font-size:14px}
+.topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:12px;padding:12px 20px;background:rgba(247,243,236,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+.brand{font-family:'Fraunces',Georgia,serif;font-size:19px;font-weight:600;color:var(--maroon);display:flex;align-items:center;gap:9px}
+.brand small{display:block;font-family:'Inter',sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--text3)}
+.spacer{flex:1}
+.who{font-size:12.5px;color:var(--text2)}
+.wrap{padding:20px;max-width:1200px;margin:0 auto}
+.btn{padding:9px 15px;border:none;border-radius:9px;background:var(--maroon);color:#fff;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+.btn:hover{background:var(--maroon-deep)}
+.btn.ghost{background:var(--bg2);color:var(--text2);border:1px solid var(--border2)}
+.btn.ghost:hover{background:var(--bg3);color:var(--text)}
+.btn.sm{padding:6px 10px;font-size:12px}
+.btn.danger{background:#fff;color:#A32020;border:1px solid #E7B3B3}
+.row-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.title{font-family:'Fraunces',Georgia,serif;font-size:22px;font-weight:600}
+.search{flex:1;min-width:180px;max-width:320px;position:relative}
+.search input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border);border-radius:9px;background:var(--bg)}
+.search i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:16px}
+.sorts{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap}
+.sorts button{padding:6px 11px;border:1px solid var(--border2);background:var(--bg);border-radius:20px;font-size:12.5px;cursor:pointer;color:var(--text2)}
+.sorts button.on{border:2px solid var(--maroon);color:var(--maroon);font-weight:600;padding:5px 10px}
+.muted{color:var(--text3)}
+.grp-title{font-family:'Fraunces',Georgia,serif;font-size:16px;font-weight:600;margin:18px 0 10px;display:flex;align-items:center;gap:8px}
+.grp-title span{font-family:'Inter';font-size:12px;font-weight:400;color:var(--text3)}
+.albums{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
+.album{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;cursor:pointer;box-shadow:var(--shadow);transition:transform .12s}
+.album:hover{transform:translateY(-2px)}
+.album .cover{aspect-ratio:4/3;background:var(--bg3) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:28px}
+.album .meta{padding:10px 12px}
+.album .t{font-weight:600;font-size:14px}
+.album .s{font-size:12px;color:var(--text2);margin-top:2px}
+.vis{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;margin-top:6px;padding:2px 8px;border-radius:12px}
+.vis.on{color:var(--green-text);background:var(--green-bg);border:1.5px solid var(--green)}
+.vis.off{color:var(--text2);background:var(--bg3);border:1.5px dashed var(--text3)}
+.empty{padding:40px 20px;text-align:center;color:var(--text2);background:var(--bg);border:1px dashed var(--border2);border-radius:var(--radius-lg)}
+.drop{border:2px dashed var(--border2);border-radius:var(--radius-lg);background:var(--bg);padding:26px;text-align:center;color:var(--text2);cursor:pointer}
+.drop.over{border-color:var(--maroon);background:var(--maroon-tint)}
+.drop b{color:var(--text)}
+/* album page */
+.ahead{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:14px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.ahead .info{flex:1;min-width:220px}
+.ahead .t{font-family:'Fraunces',Georgia,serif;font-size:20px;font-weight:600}
+.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
+.ph{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;position:relative}
+.ph.hidden{border:2px dashed var(--text3)}
+.ph.hidden img{opacity:.45}
+.ph img{display:block;width:100%;aspect-ratio:1;object-fit:cover;cursor:zoom-in;background:var(--bg3)}
+.ph .hid-lbl{position:absolute;top:6px;left:6px;background:#fff;border:1.5px dashed var(--text2);color:var(--text2);font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;display:inline-flex;gap:3px;align-items:center}
+.ph .cov-lbl{position:absolute;top:6px;right:6px;background:var(--maroon);color:#fff;font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;display:inline-flex;gap:3px;align-items:center}
+.ph .tools{display:flex;flex-wrap:wrap;gap:4px;padding:7px}
+.chip{padding:3px 8px;border-radius:12px;border:1px solid var(--border2);background:#fff;font-size:11.5px;cursor:pointer;color:var(--text2);display:inline-flex;align-items:center;gap:3px}
+.chip.on{border:2px solid var(--maroon);color:var(--maroon);font-weight:600;padding:2px 7px}
+.icons{display:flex;justify-content:flex-end;gap:2px;padding:0 6px 6px}
+.icon-btn{border:none;background:transparent;color:var(--text3);cursor:pointer;font-size:17px;padding:4px;border-radius:6px}
+.icon-btn:hover{background:var(--bg3);color:var(--maroon)}
+/* modal */
+.modal-wrap{display:none;position:fixed;inset:0;z-index:200;background:rgba(24,24,27,.45);align-items:center;justify-content:center;padding:16px}
+.modal-wrap.open{display:flex}
+.modal{background:var(--bg);border-radius:var(--radius-lg);padding:20px;width:100%;max-width:520px;max-height:92vh;overflow:auto;box-shadow:var(--shadow)}
+.modal h3{font-family:'Fraunces',Georgia,serif;font-size:19px;margin-bottom:12px}
+.fld{margin-bottom:10px}
+.fld label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px}
+.fld input,.fld select{width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:8px;background:#fff}
+.fld-row{display:flex;gap:10px}.fld-row .fld{flex:1}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:8px 0;cursor:pointer}
+.check input{width:18px;height:18px;margin-top:1px}
+.acts{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
+.prog{height:10px;background:var(--bg3);border-radius:6px;overflow:hidden;border:1px solid var(--border)}
+.prog div{height:100%;background:repeating-linear-gradient(45deg,var(--maroon),var(--maroon) 8px,var(--maroon-deep) 8px,var(--maroon-deep) 16px);width:0;transition:width .2s}
+.err{color:#A32020;font-size:12.5px;font-weight:600;margin-top:6px}
+/* lightbox */
+.lb{display:none;position:fixed;inset:0;z-index:300;background:rgba(10,8,6,.94);align-items:center;justify-content:center}
+.lb.open{display:flex}
+.lb img{max-width:94vw;max-height:84vh;object-fit:contain;border-radius:4px}
+.lb .x,.lb .nav{position:absolute;background:rgba(255,255,255,.12);border:none;color:#fff;font-size:26px;cursor:pointer;border-radius:50%;width:46px;height:46px;display:flex;align-items:center;justify-content:center}
+.lb .x{top:14px;right:14px}.lb .prev{left:12px;top:50%}.lb .next{right:12px;top:50%}
+.lb .cap{position:absolute;bottom:14px;left:0;right:0;text-align:center;color:#ddd;font-size:13px}
+/* login */
+.login{max-width:360px;margin:60px auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;box-shadow:var(--shadow)}
+.login h2{font-family:'Fraunces',Georgia,serif;font-size:20px;margin-bottom:12px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:10px 16px;border-radius:9px;font-size:13px;transition:transform .2s;z-index:400}
+.toast.show{transform:translateX(-50%) translateY(0)}
+@media(max-width:640px){.wrap{padding:14px}.topbar{padding:10px 14px}.brand small{display:none}.albums{grid-template-columns:repeat(2,1fr);gap:10px}.photos{grid-template-columns:repeat(2,1fr);gap:8px}.fld-row{flex-direction:column;gap:0}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand"><i class="ti ti-photo"></i><div>Photos<small>Premier Caterers</small></div></div>
+  <div class="spacer"></div>
+  <span class="who" id="who"></span>
+  <a class="btn ghost sm" href="index.html"><i class="ti ti-arrow-left"></i> Back to the app</a>
+</div>
+<div class="wrap" id="main"><div class="empty">Loading…</div></div>
+
+<input type="file" id="filePick" accept=".zip,image/*,.heic,.heif" multiple style="display:none">
+
+<div class="modal-wrap" id="modal"><div class="modal" id="modalBody"></div></div>
+<div class="lb" id="lb">
+  <button class="x" onclick="closeLb()" aria-label="Close"><i class="ti ti-x"></i></button>
+  <button class="nav prev" onclick="stepLb(-1)" aria-label="Previous"><i class="ti ti-chevron-left"></i></button>
+  <img id="lbImg" alt="">
+  <button class="nav next" onclick="stepLb(1)" aria-label="Next"><i class="ti ti-chevron-right"></i></button>
+  <div class="cap" id="lbCap"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// Premier Caterers — Photos (staff).
+// Event photo albums live here, in the app's own storage, so nobody has to be
+// sent to a personal Google account. Upload a Google Photos "Download all" zip
+// (or loose photos); each photo is shrunk on this device to a web-friendly
+// size plus a small thumbnail, then stored under photos/<albumId>/.
+//
+// Firestore: photoAlbums/{albumId}
+//   { title, type, date:'YYYY-MM-DD', venue, town, clientVisible:bool, coverId,
+//     photos:[{ id, url, thumb, w, h, name, tags:[], hidden:bool }],
+//     createdAt, updatedAt, createdBy }
+// clientVisible + photo.hidden decide what the client gallery page shows.
+const firebaseConfig = {
+  apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
+  authDomain: "premier-caterers-internal-app.firebaseapp.com",
+  projectId: "premier-caterers-internal-app",
+  storageBucket: "premier-caterers-internal-app.firebasestorage.app",
+  messagingSenderId: "471701398759",
+  appId: "1:471701398759:web:559a7bee3b645ce545ee42"
+};
+if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const storage = firebase.storage();
+
+const STAFF = {
+  'kenny@thepremiercaterer.com':'Kenny', 'shelley@thepremiercaterer.com':'Shelley',
+  'joshg@thepremiercaterer.com':'Josh', 'bnash.premiercaterers@gmail.com':'Barry',
+  'kitchen@thepremiercaterer.com':'Kitchen'
+};
+const SIGN_IN = [['owner','Kenny','kenny@thepremiercaterer.com'],['shelley','Shelley','shelley@thepremiercaterer.com'],['josh','Josh','joshg@thepremiercaterer.com'],['barry','Barry','bnash.premiercaterers@gmail.com']];
+const TAGS = ['Buffet','Plated','Décor','Dessert','Tables'];
+const FULL_PX = 1800, THUMB_PX = 480;
+
+let me = '', albums = [], sortBy = 'newest', openId = null, unsub = null;
+let lbList = [], lbIdx = 0;
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escJs(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+let _tt; function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2600); }
+function rid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function fmtDate(d){ if(!d) return ''; const x=new Date(d+'T12:00:00'); return isNaN(x)?d:x.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+
+// ── Sign-in: staff only. If you're signed in to the main app in this browser
+// you're already in; otherwise pick your name and type your app password.
+firebase.auth().onAuthStateChanged(u=>{
+  const name = (u && !u.isAnonymous && u.email) ? STAFF[String(u.email).toLowerCase()] : '';
+  if(name){ me=name; document.getElementById('who').textContent='Signed in as '+name; start(); }
+  else { me=''; if(unsub){ unsub(); unsub=null; } showLogin(); }
+});
+function showLogin(){
+  document.getElementById('who').textContent='';
+  document.getElementById('main').innerHTML = `<div class="login"><h2>Sign in to Photos</h2>
+    <div class="fld"><label>Who are you?</label><select id="lgWho">${SIGN_IN.map(s=>`<option value="${s[2]}">${s[1]}</option>`).join('')}</select></div>
+    <div class="fld"><label>Password (same as the app)</label><input id="lgPw" type="password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div class="err" id="lgErr"></div>
+    <div class="acts"><button class="btn" onclick="doLogin()">Sign in</button></div></div>`;
+}
+async function doLogin(){
+  const err=document.getElementById('lgErr'); err.textContent='';
+  try{ await firebase.auth().signInWithEmailAndPassword(document.getElementById('lgWho').value, document.getElementById('lgPw').value); }
+  catch(e){ const c=e&&e.code; err.textContent=(c==='auth/wrong-password'||c==='auth/invalid-credential'||c==='auth/invalid-login-credentials')?'Incorrect password.':'Could not sign in: '+((e&&e.message)||c); }
+}
+
+function start(){
+  if(unsub) return;
+  unsub = db.collection('photoAlbums').onSnapshot(s=>{
+    albums = s.docs.map(d=>({id:d.id, ...d.data()}));
+    render();
+  }, e=>{ document.getElementById('main').innerHTML='<div class="empty">Could not load albums: '+esc(e.message)+'</div>'; });
+  const h=decodeURIComponent((location.hash||'').replace(/^#a=/,''));
+  if(h && location.hash.indexOf('#a=')===0) openId=h;
+}
+function render(){ if(openId && albums.some(a=>a.id===openId)) renderAlbum(); else { openId=null; renderList(); } }
+
+// ── Album list ───────────────────────────────────────────────
+function coverOf(a){ const ps=a.photos||[]; const c=ps.find(p=>p.id===a.coverId)||ps.find(p=>!p.hidden)||ps[0]; return c?c.thumb:''; }
+function groupKey(a){
+  if(sortBy==='type') return a.type||'No event type';
+  if(sortBy==='venue') return a.venue||'No venue';
+  if(sortBy==='town') return a.town||'No town';
+  return '';
+}
+function renderList(){
+  location.hash='';
+  const q=((document.getElementById('aSearch')||{}).value||'').toLowerCase().trim();
+  let list = albums.filter(a=>!q || [a.title,a.type,a.venue,a.town,a.date].join(' ').toLowerCase().includes(q));
+  list.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')) || String(a.title||'').localeCompare(String(b.title||'')));
+  let groups=[{k:'',items:list}];
+  if(sortBy!=='newest'){
+    const m={}; list.forEach(a=>{ const k=groupKey(a); (m[k]=m[k]||[]).push(a); });
+    groups=Object.keys(m).sort((x,y)=>(/^No /.test(x)?1:0)-(/^No /.test(y)?1:0) || x.localeCompare(y)).map(k=>({k,items:m[k]}));
+  }
+  const total=albums.reduce((n,a)=>n+(a.photos||[]).length,0);
+  const qv=esc((document.getElementById('aSearch')||{}).value||'');
+  document.getElementById('main').innerHTML = `
+    <div class="row-head"><div class="title">Event photos</div><span class="muted">${albums.length} album${albums.length===1?'':'s'} · ${total} photo${total===1?'':'s'}</span><span class="spacer"></span>
+      <button class="btn" onclick="pickFiles(null)"><i class="ti ti-upload"></i> Upload album</button></div>
+    <div class="row-head">
+      <div class="search"><i class="ti ti-search"></i><input id="aSearch" value="${qv}" placeholder="Search albums…" oninput="renderList();const i=document.getElementById('aSearch');i.focus();i.setSelectionRange(i.value.length,i.value.length)"></div>
+      <div class="sorts" role="group" aria-label="Sort"><span class="muted">Sort:</span>
+        ${[['newest','ti-calendar','Newest'],['type','ti-category','Event type'],['venue','ti-building','Venue'],['town','ti-map-pin','Town']].map(s=>`<button class="${sortBy===s[0]?'on':''}" onclick="setSort('${s[0]}')"><i class="ti ${s[1]}"></i> ${s[2]}</button>`).join('')}
+      </div>
+    </div>
+    <div class="drop" id="dropZone" onclick="pickFiles(null)"><i class="ti ti-cloud-upload" style="font-size:26px"></i><div><b>Drag a Google Photos zip here</b>, or click to choose one</div><div class="muted" style="font-size:12px;margin-top:4px">In Google Photos: open the album → ⋮ (top right) → Download all</div></div>
+    ${!list.length ? `<div class="empty" style="margin-top:16px">${albums.length?'No albums match.':'No albums yet. Upload your first one above.'}</div>` :
+      groups.map(g=>`${g.k?`<div class="grp-title">${esc(g.k)} <span>· ${g.items.length}</span></div>`:'<div style="height:16px"></div>'}<div class="albums">${g.items.map(albumCard).join('')}</div>`).join('')}`;
+  wireDrop(document.getElementById('dropZone'), null);
+}
+function albumCard(a){
+  const c=coverOf(a), n=(a.photos||[]).length, hid=(a.photos||[]).filter(p=>p.hidden).length;
+  const sub=[fmtDate(a.date), a.venue, a.town].filter(Boolean).map(esc).join(' · ');
+  return `<div class="album" onclick="openAlbum('${escJs(a.id)}')">
+    <div class="cover" style="${c?`background-image:url('${esc(c)}')`:''}">${c?'':'<i class="ti ti-photo"></i>'}</div>
+    <div class="meta"><div class="t">${esc(a.type||a.title||'Album')}</div><div class="s">${sub||'&nbsp;'}</div>
+    ${a.clientVisible?`<span class="vis on"><i class="ti ti-world"></i> Clients can see · ${n-hid}</span>`:`<span class="vis off"><i class="ti ti-lock"></i> Staff only · ${n}</span>`}</div></div>`;
+}
+function setSort(s){ sortBy=s; renderList(); }
+function openAlbum(id){ openId=id; location.hash='a='+encodeURIComponent(id); renderAlbum(); window.scrollTo(0,0); }
+function backToList(){ openId=null; renderList(); }
+
+// ── One album ────────────────────────────────────────────────
+function curAlbum(){ return albums.find(a=>a.id===openId); }
+function renderAlbum(){
+  const a=curAlbum(); if(!a){ backToList(); return; }
+  const ps=a.photos||[], hid=ps.filter(p=>p.hidden).length;
+  const sub=[fmtDate(a.date), a.venue, a.town].filter(Boolean).map(esc).join(' · ');
+  document.getElementById('main').innerHTML = `
+    <div class="row-head"><button class="btn ghost sm" onclick="backToList()"><i class="ti ti-arrow-left"></i> All albums</button></div>
+    <div class="ahead">
+      <div class="info"><div class="t">${esc(a.type||a.title||'Album')}</div><div class="muted" style="font-size:13px">${sub}</div>
+        <label class="check" style="margin-top:8px"><input type="checkbox" ${a.clientVisible?'checked':''} onchange="setVisible(this.checked)">
+          <span>${a.clientVisible?'<b><i class="ti ti-world"></i> Clients can see this album</b>':'<b><i class="ti ti-lock"></i> Staff only</b>'} <span class="muted">· ${ps.length} photo${ps.length===1?'':'s'}${hid?`, ${hid} hidden from clients`:''}</span></span></label>
+      </div>
+      <button class="btn ghost sm" onclick="editAlbum()"><i class="ti ti-pencil"></i> Edit details</button>
+      <button class="btn ghost sm" onclick="pickFiles('${escJs(a.id)}')"><i class="ti ti-plus"></i> Add photos</button>
+      <button class="btn danger sm" onclick="deleteAlbum()"><i class="ti ti-trash"></i> Delete album</button>
+    </div>
+    <div class="drop" id="dropZone" style="padding:14px;margin-bottom:14px" onclick="pickFiles('${escJs(a.id)}')"><i class="ti ti-cloud-upload"></i> Drag more photos here to add them</div>
+    ${ps.length?`<div class="photos">${ps.map((p,i)=>`
+      <div class="ph${p.hidden?' hidden':''}">
+        ${p.hidden?'<span class="hid-lbl"><i class="ti ti-eye-off"></i> Hidden</span>':''}
+        ${a.coverId===p.id?'<span class="cov-lbl"><i class="ti ti-star"></i> Cover</span>':''}
+        <img loading="lazy" src="${esc(p.thumb)}" alt="${esc(p.name||'photo')}" onclick="openLb(${i})">
+        <div class="tools">${TAGS.map(t=>`<button class="chip${(p.tags||[]).includes(t)?' on':''}" onclick="toggleTag('${escJs(p.id)}','${escJs(t)}')">${(p.tags||[]).includes(t)?'<i class="ti ti-check"></i>':''}${esc(t)}</button>`).join('')}</div>
+        <div class="icons">
+          <button class="icon-btn" title="${p.hidden?'Show to clients':'Hide from clients'}" onclick="toggleHidden('${escJs(p.id)}')"><i class="ti ${p.hidden?'ti-eye':'ti-eye-off'}"></i></button>
+          <button class="icon-btn" title="Use as album cover" onclick="setCover('${escJs(p.id)}')"><i class="ti ti-star"></i></button>
+          <button class="icon-btn" title="Delete photo" onclick="deletePhoto('${escJs(p.id)}')"><i class="ti ti-trash"></i></button>
+        </div></div>`).join('')}</div>` : '<div class="empty">No photos in this album yet.</div>'}`;
+  wireDrop(document.getElementById('dropZone'), a.id);
+}
+async function savePhotos(a, photos, extra){
+  a.photos=photos; renderAlbum();
+  try{ await db.collection('photoAlbums').doc(a.id).set(Object.assign({ photos, updatedAt:Date.now() }, extra||{}), {merge:true}); }
+  catch(e){ toast('Could not save — '+e.message); }
+}
+function toggleTag(pid, t){ const a=curAlbum(); const photos=(a.photos||[]).map(p=>p.id!==pid?p:Object.assign({},p,{tags:(p.tags||[]).includes(t)?(p.tags||[]).filter(x=>x!==t):[...(p.tags||[]),t]})); savePhotos(a, photos); }
+function toggleHidden(pid){ const a=curAlbum(); const photos=(a.photos||[]).map(p=>p.id!==pid?p:Object.assign({},p,{hidden:!p.hidden})); savePhotos(a, photos); }
+function setCover(pid){ const a=curAlbum(); a.coverId=pid; savePhotos(a, a.photos||[], {coverId:pid}); toast('Cover set'); }
+async function setVisible(on){ const a=curAlbum(); a.clientVisible=!!on; renderAlbum(); try{ await db.collection('photoAlbums').doc(a.id).set({clientVisible:!!on, updatedAt:Date.now()},{merge:true}); toast(on?'Clients can now see this album':'Album is staff only'); }catch(e){ toast('Could not save'); } }
+async function deletePhoto(pid){
+  if(!confirm('Delete this photo? This can’t be undone.')) return;
+  const a=curAlbum(); const p=(a.photos||[]).find(x=>x.id===pid);
+  await savePhotos(a, (a.photos||[]).filter(x=>x.id!==pid), a.coverId===pid?{coverId:''}:null);
+  if(p){ removeFiles(a.id, p.id); }
+}
+function removeFiles(albumId, pid){
+  ['', '_t'].forEach(s=>{ storage.ref('photos/'+albumId+'/'+pid+s+'.jpg').delete().catch(()=>{}); });
+}
+async function deleteAlbum(){
+  const a=curAlbum(); if(!a) return;
+  if(!confirm('Delete the album "'+(a.type||a.title)+'" and all '+(a.photos||[]).length+' photos?\n\nThis can’t be undone. The photos stay in Google Photos.')) return;
+  try{ await db.collection('photoAlbums').doc(a.id).delete(); (a.photos||[]).forEach(p=>removeFiles(a.id,p.id)); toast('Album deleted'); backToList(); }
+  catch(e){ alert('Could not delete: '+e.message); }
+}
+
+// ── Album details (read from the Google Photos name) ─────────
+// "Wedding - March 19, 2026 - Keter Torah, Teaneck" → type / date / venue / town.
+// Also handles "Shul dinner - Dec 31, 2026 - Brookhaven ballroom - Passaic NJ"
+// and "Event - March 22, 2026". A trailing state ("NJ") is dropped from the town.
+function parseAlbumName(raw){
+  const out={ title:'', type:'', date:'', venue:'', town:'' };
+  let name=String(raw||'').replace(/\.zip$/i,'').replace(/[_]+/g,' ').replace(/\s*-\s*\d{3}$/,'').trim();
+  if(/^(photos|images|download|album)$/i.test(name)) return out;   // generic zip name — nothing to read
+  out.title=name;
+  const parts=name.split(/\s+[-–—]\s+/).map(s=>s.trim()).filter(Boolean);
+  if(!parts.length) return out;
+  out.type=parts[0];
+  let rest=parts.slice(1);
+  const di=rest.findIndex(p=>!isNaN(Date.parse(p)) && /\d{4}/.test(p));
+  if(di>=0){ const d=new Date(Date.parse(rest[di])); out.date=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); rest.splice(di,1); }
+  const stripState=s=>s.replace(/,?\s+(NJ|NY|CT|PA|FL)\.?$/i,'').trim();
+  if(rest.length>=2){ out.venue=rest[0]; out.town=stripState(rest.slice(1).join(', ')); }
+  else if(rest.length===1){
+    const p=rest[0]; const ci=p.lastIndexOf(',');
+    if(ci>0){ out.venue=p.slice(0,ci).trim(); out.town=stripState(p.slice(ci+1)); }
+    else out.venue=stripState(p);
+  }
+  return out;
+}
+function detailsForm(d, okLabel){
+  const types=Array.from(new Set(albums.map(a=>a.type).filter(Boolean))).sort();
+  const venues=Array.from(new Set(albums.map(a=>a.venue).filter(Boolean))).sort();
+  const towns=Array.from(new Set(albums.map(a=>a.town).filter(Boolean))).sort();
+  return `<div class="fld"><label>Event type</label><input id="fType" list="dlTypes" value="${esc(d.type)}" placeholder="Wedding"></div>
+    <div class="fld-row"><div class="fld"><label>Date</label><input id="fDate" type="date" value="${esc(d.date)}"></div>
+    <div class="fld"><label>Town</label><input id="fTown" list="dlTowns" value="${esc(d.town)}" placeholder="Teaneck"></div></div>
+    <div class="fld"><label>Venue</label><input id="fVenue" list="dlVenues" value="${esc(d.venue)}" placeholder="Keter Torah"></div>
+    <label class="check"><input type="checkbox" id="fVis" ${d.clientVisible!==false?'checked':''}><span><b>Clients can see this album</b><br><span class="muted">Untick to keep it staff only. You can also hide single photos later.</span></span></label>
+    <datalist id="dlTypes">${types.map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
+    <datalist id="dlVenues">${venues.map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
+    <datalist id="dlTowns">${towns.map(t=>`<option value="${esc(t)}">`).join('')}</datalist>`;
+}
+function readForm(){ return { type:document.getElementById('fType').value.trim(), date:document.getElementById('fDate').value, venue:document.getElementById('fVenue').value.trim(), town:document.getElementById('fTown').value.trim(), clientVisible:document.getElementById('fVis').checked }; }
+function openModal(html){ document.getElementById('modalBody').innerHTML=html; document.getElementById('modal').classList.add('open'); }
+function closeModal(){ document.getElementById('modal').classList.remove('open'); }
+function editAlbum(){
+  const a=curAlbum();
+  openModal(`<h3>Edit album details</h3>${detailsForm(a)}<div class="acts"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveDetails()">Save</button></div>`);
+}
+async function saveDetails(){
+  const a=curAlbum(), d=readForm();
+  if(!d.type){ toast('Add an event type'); return; }
+  try{ await db.collection('photoAlbums').doc(a.id).set(Object.assign(d,{ title:[d.type, d.date?fmtDate(d.date):'', d.venue, d.town].filter(Boolean).join(' - '), updatedAt:Date.now() }),{merge:true}); closeModal(); toast('Saved'); }
+  catch(e){ toast('Could not save — '+e.message); }
+}
+
+// ── Upload ───────────────────────────────────────────────────
+let _pickTarget=null;
+function pickFiles(albumId){ _pickTarget=albumId; const f=document.getElementById('filePick'); f.value=''; f.click(); }
+document.getElementById('filePick').addEventListener('change', e=>{ if(e.target.files.length) handleFiles([...e.target.files], _pickTarget); });
+function wireDrop(el, albumId){
+  if(!el) return;
+  ['dragenter','dragover'].forEach(t=>el.addEventListener(t, e=>{ e.preventDefault(); el.classList.add('over'); }));
+  ['dragleave','drop'].forEach(t=>el.addEventListener(t, e=>{ e.preventDefault(); el.classList.remove('over'); }));
+  el.addEventListener('drop', e=>{ const fs=[...(e.dataTransfer.files||[])]; if(fs.length) handleFiles(fs, albumId); });
+}
+// Dropping a zip anywhere on the page works too.
+document.addEventListener('dragover', e=>e.preventDefault());
+document.addEventListener('drop', e=>{ if(e.target.closest && e.target.closest('.drop')) return; e.preventDefault(); const fs=[...(e.dataTransfer.files||[])]; if(fs.length && me) handleFiles(fs, openId); });
+
+const IMG_RE=/\.(jpe?g|png|webp|gif|heic|heif)$/i, HEIC_RE=/\.(heic|heif)$/i;
+async function handleFiles(files, albumId){
+  let photos=[], zipName='', skipped=0;
+  try{
+    for(const f of files){
+      if(/\.zip$/i.test(f.name)){
+        zipName = zipName || f.name;
+        const zip = await JSZip.loadAsync(f);
+        const folders=new Set();
+        const entries=Object.values(zip.files).filter(z=>!z.dir && !/(^|\/)(__MACOSX|\.)/.test(z.name));
+        for(const z of entries){
+          if(!IMG_RE.test(z.name)){ skipped++; continue; }
+          const parts=z.name.split('/'); if(parts.length>1) folders.add(parts[0]);
+          const blob=await z.async('blob');
+          photos.push(new File([blob], parts[parts.length-1]));
+        }
+        if(folders.size===1) zipName=[...folders][0];   // Google Photos puts the album name on the folder
+      } else if(IMG_RE.test(f.name) || /^image\//.test(f.type)) photos.push(f);
+      else skipped++;
+    }
+  }catch(e){ alert('Could not open that file: '+e.message); return; }
+  if(!photos.length){ alert('No photos found'+(skipped?' (videos and other files are skipped)':'')+'.'); return; }
+  photos.sort((a,b)=>a.name.localeCompare(b.name, undefined, {numeric:true}));
+  if(albumId){ uploadInto(albumId, photos, skipped); return; }
+  const d=parseAlbumName(zipName);
+  openModal(`<h3>New album — ${photos.length} photo${photos.length===1?'':'s'}</h3>
+    ${zipName?`<div class="muted" style="font-size:12px;margin-bottom:10px">Read from: ${esc(zipName)}. Fix anything that’s wrong.</div>`:''}
+    ${skipped?`<div class="muted" style="font-size:12px;margin-bottom:10px">${skipped} video${skipped===1?'':'s'} or other file${skipped===1?'':'s'} will be skipped.</div>`:''}
+    ${detailsForm(d)}
+    <div class="acts"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" id="goUp"><i class="ti ti-upload"></i> Upload ${photos.length} photo${photos.length===1?'':'s'}</button></div>`);
+  document.getElementById('goUp').onclick=async()=>{
+    const f=readForm(); if(!f.type){ toast('Add an event type'); return; }
+    const ref=db.collection('photoAlbums').doc();
+    const rec=Object.assign(f,{ title:[f.type, f.date?fmtDate(f.date):'', f.venue, f.town].filter(Boolean).join(' - '), photos:[], coverId:'', createdAt:Date.now(), updatedAt:Date.now(), createdBy:me, source:zipName||'' });
+    try{ await ref.set(rec); }catch(e){ alert('Could not create the album: '+e.message); return; }
+    openId=ref.id; location.hash='a='+ref.id;
+    uploadInto(ref.id, photos, 0);
+  };
+}
+
+let _heicLoad=null;
+function loadHeic(){ return _heicLoad || (_heicLoad=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js'; s.onload=()=>res(window.heic2any); s.onerror=()=>rej(new Error('could not load the iPhone photo converter')); document.head.appendChild(s); })); }
+async function decode(file){
+  let blob=file;
+  if(HEIC_RE.test(file.name) || /heic|heif/i.test(file.type)){
+    try{ const conv=await loadHeic(); const r=await conv({ blob:file, toType:'image/jpeg', quality:0.9 }); blob=Array.isArray(r)?r[0]:r; }
+    catch(e){ /* some browsers (Safari) can read HEIC directly — try anyway */ }
+  }
+  const url=URL.createObjectURL(blob);
+  try{
+    const img=new Image(); img.decoding='async'; img.src=url;   // <img> applies the phone's rotation
+    await img.decode();
+    return img;
+  } finally { setTimeout(()=>URL.revokeObjectURL(url), 2000); }
+}
+function shrink(img, max, q){
+  const w=img.naturalWidth, h=img.naturalHeight, s=Math.min(1, max/Math.max(w,h));
+  const c=document.createElement('canvas'); c.width=Math.round(w*s); c.height=Math.round(h*s);
+  const x=c.getContext('2d'); x.imageSmoothingQuality='high'; x.drawImage(img,0,0,c.width,c.height);
+  return new Promise(r=>c.toBlob(b=>r({blob:b, w:c.width, h:c.height}),'image/jpeg',q));
+}
+async function uploadOne(albumId, file){
+  const img=await decode(file);
+  const full=await shrink(img, FULL_PX, 0.82), th=await shrink(img, THUMB_PX, 0.74);
+  const id=rid(), base='photos/'+albumId+'/'+id;
+  const meta={ contentType:'image/jpeg', cacheControl:'public,max-age=31536000' };
+  const [u1,u2]=await Promise.all([
+    storage.ref(base+'.jpg').put(full.blob, meta).then(s=>s.ref.getDownloadURL()),
+    storage.ref(base+'_t.jpg').put(th.blob, meta).then(s=>s.ref.getDownloadURL())
+  ]);
+  return { id, url:u1, thumb:u2, w:full.w, h:full.h, name:file.name, tags:[], hidden:false };
+}
+async function uploadInto(albumId, files, skipped){
+  let done=0, failed=[], added=[], stop=false;
+  openModal(`<h3>Uploading…</h3><div class="muted" id="upTxt" style="margin-bottom:8px">Getting started</div><div class="prog"><div id="upBar"></div></div>
+    <div class="muted" style="font-size:12px;margin-top:8px">Keep this page open until it finishes. Photos are shrunk on this device first, so it takes a moment.</div>
+    <div class="acts"><button class="btn ghost" id="upStop">Stop</button></div>`);
+  document.getElementById('upStop').onclick=()=>{ stop=true; };
+  const flush=async()=>{
+    if(!added.length) return;
+    const batch=added.splice(0);
+    try{
+      await db.runTransaction(async t=>{
+        const r=db.collection('photoAlbums').doc(albumId); const s=await t.get(r);
+        const cur=(s.exists&&s.data().photos)||[];
+        const upd={ photos:cur.concat(batch), updatedAt:Date.now() };
+        if(s.exists && !s.data().coverId && batch.length) upd.coverId=batch[0].id;
+        t.set(r, upd, {merge:true});
+      });
+    }catch(e){ failed.push(...batch.map(p=>p.name)); console.error(e); }
+  };
+  let i=0;
+  const worker=async()=>{
+    while(!stop && i<files.length){
+      const f=files[i++];
+      try{ added.push(await uploadOne(albumId, f)); }
+      catch(e){ failed.push(f.name); console.warn('upload failed', f.name, e); }
+      done++;
+      const t=document.getElementById('upTxt'), b=document.getElementById('upBar');
+      if(t) t.textContent=done+' of '+files.length+' photos'+(failed.length?' · '+failed.length+' failed':'');
+      if(b) b.style.width=Math.round(done/files.length*100)+'%';
+      if(added.length>=6) await flush();
+    }
+  };
+  await Promise.all([worker(),worker(),worker()]);
+  await flush();
+  const ok=done-failed.length;
+  openModal(`<h3>${stop?'Stopped':'Done'}</h3>
+    <p style="margin-bottom:8px"><i class="ti ti-check"></i> ${ok} photo${ok===1?'':'s'} added.</p>
+    ${failed.length?`<p class="err">${failed.length} couldn’t be added: ${esc(failed.slice(0,6).join(', '))}${failed.length>6?'…':''}</p>`:''}
+    ${skipped?`<p class="muted">${skipped} video${skipped===1?'':'s'} or other file${skipped===1?'':'s'} skipped.</p>`:''}
+    <div class="acts"><button class="btn" onclick="closeModal()">OK</button></div>`);
+  openId=albumId; render();
+}
+
+// ── Full-size viewer ────────────────────────────────────────
+function openLb(i){ const a=curAlbum(); lbList=(a&&a.photos)||[]; lbIdx=i; showLb(); document.getElementById('lb').classList.add('open'); }
+function showLb(){ const p=lbList[lbIdx]; if(!p) return; document.getElementById('lbImg').src=p.url; document.getElementById('lbCap').textContent=(lbIdx+1)+' / '+lbList.length+(p.hidden?' · hidden from clients':''); }
+function stepLb(d){ if(!lbList.length) return; lbIdx=(lbIdx+d+lbList.length)%lbList.length; showLb(); }
+function closeLb(){ document.getElementById('lb').classList.remove('open'); document.getElementById('lbImg').src=''; }
+document.addEventListener('keydown', e=>{ if(!document.getElementById('lb').classList.contains('open')) return; if(e.key==='Escape') closeLb(); if(e.key==='ArrowLeft') stepLb(-1); if(e.key==='ArrowRight') stepLb(1); });
+let _tx=null; const _lb=document.getElementById('lb');
+_lb.addEventListener('touchstart', e=>{ _tx=e.touches[0].clientX; }, {passive:true});
+_lb.addEventListener('touchend', e=>{ if(_tx==null) return; const dx=e.changedTouches[0].clientX-_tx; if(Math.abs(dx)>50) stepLb(dx<0?1:-1); _tx=null; });
+document.getElementById('modal').addEventListener('click', e=>{ if(e.target.id==='modal' && !document.getElementById('upBar')) closeModal(); });
+</script>
+</body>
+</html>
