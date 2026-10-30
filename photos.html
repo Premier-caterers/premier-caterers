@@ -413,20 +413,27 @@ async function handleFiles(files, albumId){
   };
 }
 
+// iPhone photos (HEIC). Safari reads them natively; Chrome/Edge on Windows
+// don't, so we convert with heic-to (libheif 1.23), kept in this repo next to
+// this page (heic-to.js) rather than loaded from an outside site. It's only
+// downloaded the first time an iPhone photo needs converting.
 let _heicLoad=null;
-function loadHeic(){ return _heicLoad || (_heicLoad=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js'; s.onload=()=>res(window.heic2any); s.onerror=()=>rej(new Error('could not load the iPhone photo converter')); document.head.appendChild(s); })); }
-async function decode(file){
-  let blob=file;
-  if(HEIC_RE.test(file.name) || /heic|heif/i.test(file.type)){
-    try{ const conv=await loadHeic(); const r=await conv({ blob:file, toType:'image/jpeg', quality:0.9 }); blob=Array.isArray(r)?r[0]:r; }
-    catch(e){ /* some browsers (Safari) can read HEIC directly — try anyway */ }
-  }
+function loadHeic(){ return _heicLoad || (_heicLoad=new Promise((res,rej)=>{ if(window.HeicTo) return res(window.HeicTo); const s=document.createElement('script'); s.src='heic-to.js?v=1.6.7'; s.onload=()=>window.HeicTo?res(window.HeicTo):rej(new Error('iPhone photo converter did not start')); s.onerror=()=>{ _heicLoad=null; rej(new Error('could not load the iPhone photo converter')); }; document.head.appendChild(s); })); }
+function imgFrom(blob){
   const url=URL.createObjectURL(blob);
-  try{
-    const img=new Image(); img.decoding='async'; img.src=url;   // <img> applies the phone's rotation
-    await img.decode();
-    return img;
-  } finally { setTimeout(()=>URL.revokeObjectURL(url), 2000); }
+  const img=new Image(); img.decoding='async'; img.src=url;   // <img> applies the phone's rotation
+  return img.decode().then(()=>img).finally(()=>setTimeout(()=>URL.revokeObjectURL(url), 2000));
+}
+async function decode(file){
+  const isHeic = HEIC_RE.test(file.name) || /heic|heif/i.test(file.type);
+  if(!isHeic) return imgFrom(file);
+  try{ return await imgFrom(new Blob([file],{type:'image/heic'})); }   // Safari / iPad / Mac
+  catch(_){ /* this browser can't read HEIC itself — convert it */ }
+  const HeicTo=await loadHeic();
+  let jpg;
+  try{ jpg=await HeicTo({ blob:file, type:'image/jpeg', quality:0.92 }); }
+  catch(e){ throw new Error('iPhone photo could not be converted ('+(e&&e.message||e)+')'); }
+  return imgFrom(jpg);
 }
 function shrink(img, max, q){
   const w=img.naturalWidth, h=img.naturalHeight, s=Math.min(1, max/Math.max(w,h));
@@ -446,7 +453,7 @@ async function uploadOne(albumId, file){
   return { id, url:u1, thumb:u2, w:full.w, h:full.h, name:file.name, tags:[], hidden:false };
 }
 async function uploadInto(albumId, files, skipped){
-  let done=0, failed=[], added=[], stop=false;
+  let done=0, failed=[], added=[], stop=false, firstErr='';
   openModal(`<h3>Uploading…</h3><div class="muted" id="upTxt" style="margin-bottom:8px">Getting started</div><div class="prog"><div id="upBar"></div></div>
     <div class="muted" style="font-size:12px;margin-top:8px">Keep this page open until it finishes. Photos are shrunk on this device first, so it takes a moment.</div>
     <div class="acts"><button class="btn ghost" id="upStop">Stop</button></div>`);
@@ -469,7 +476,7 @@ async function uploadInto(albumId, files, skipped){
     while(!stop && i<files.length){
       const f=files[i++];
       try{ added.push(await uploadOne(albumId, f)); }
-      catch(e){ failed.push(f.name); console.warn('upload failed', f.name, e); }
+      catch(e){ failed.push(f.name); if(!firstErr) firstErr=(e&&(e.code||e.message))||String(e); console.warn('upload failed', f.name, e); }
       done++;
       const t=document.getElementById('upTxt'), b=document.getElementById('upBar');
       if(t) t.textContent=done+' of '+files.length+' photos'+(failed.length?' · '+failed.length+' failed':'');
@@ -483,6 +490,7 @@ async function uploadInto(albumId, files, skipped){
   openModal(`<h3>${stop?'Stopped':'Done'}</h3>
     <p style="margin-bottom:8px"><i class="ti ti-check"></i> ${ok} photo${ok===1?'':'s'} added.</p>
     ${failed.length?`<p class="err">${failed.length} couldn’t be added: ${esc(failed.slice(0,6).join(', '))}${failed.length>6?'…':''}</p>`:''}
+    ${firstErr?`<p class="muted" style="font-size:12px">Reason: ${esc(firstErr)}</p>`:''}
     ${skipped?`<p class="muted">${skipped} video${skipped===1?'':'s'} or other file${skipped===1?'':'s'} skipped.</p>`:''}
     <div class="acts"><button class="btn" onclick="closeModal()">OK</button></div>`);
   openId=albumId; render();
