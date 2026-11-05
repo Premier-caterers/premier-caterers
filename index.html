@@ -9898,14 +9898,14 @@ function _signatureHtmlFor(authUserKey){
     '— ',
     sender,
     'Premier Caterers',
-    '(201) 836-7700',
+    '(201) 250-9487',
     'thepremiercaterer.com'
   ].join('\n');
 }
 function _signatureHtmlBlock(authUserKey){
   const map = { owner:'Kenny', kenny:'Kenny', shelley:'Shelley', josh:'Josh', barry:'Barry', kitchen:'Kitchen Team', admin:'Premier Caterers' };
   const sender = map[authUserKey] || 'Premier Caterers';
-  return '<br><br>—<br>'+sender+'<br>Premier Caterers<br>(201) 836-7700<br><a href="https://thepremiercaterer.com">thepremiercaterer.com</a>';
+  return '<br><br>—<br>'+sender+'<br>Premier Caterers<br>(201) 250-9487<br><a href="https://thepremiercaterer.com">thepremiercaterer.com</a>';
 }
 function _eventNameForSubject(inq){
   // Prefer the event name; else "<client> <event type>"; else just client.
