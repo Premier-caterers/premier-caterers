@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Premier Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --ground:#F5F5F2; --card:#FFFFFF; --ink:#1A1A1A; --ink2:#3F3F3B; --muted:#5F5F5A;
+    --line:#E4E4DF; --line2:#C9C9C2; --wine:#7A1C33; --wine-dark:#5A1426; --soft:#EDEDE8; --live:#1F6B4F;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:Inter,system-ui,sans-serif;-webkit-text-size-adjust:100%}
+  a{color:var(--wine)} a:hover{color:var(--wine-dark)}
+  button{font-family:inherit;cursor:pointer}
+  .hidden{display:none !important}
+
+  header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:16px 28px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  .brand{display:flex;align-items:center;gap:14px}
+  .brand .name{font-family:Fraunces,Georgia,serif;font-size:24px;font-weight:600;color:var(--wine)}
+  .brand .date{font-size:14px;color:var(--muted)}
+  .status{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--ink2)}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:var(--card)}
+  .chip.soon{border-style:dashed;color:var(--muted)}
+  .live{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+  .live.off{color:var(--wine);font-weight:600}
+  .toplinks{display:flex;gap:14px;font-size:14px;align-items:center}
+  .toplinks button{background:none;border:none;color:var(--muted);font-size:14px;padding:8px 0;min-height:44px}
+
+  main.wrap{display:flex;flex-wrap:wrap;gap:28px;padding:28px;max-width:1440px;margin:0 auto}
+  .col-main{flex:999 1 600px;min-width:0;display:flex;flex-direction:column;gap:22px}
+  .col-side{flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:20px}
+
+  h1.sect{margin:0;font-family:Fraunces,Georgia,serif;font-size:30px;font-weight:600}
+  h2{margin:0;font-size:16px;font-weight:600}
+  .row-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+  .count{font-size:14px;color:var(--muted)}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+  .focus{padding:28px;display:flex;flex-direction:column;gap:16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .meta{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:14px;color:var(--ink2)}
+  .meta .kind{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+  .meta .due{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-weight:600}
+  .meta .due.over{color:var(--wine)}
+  .focus .text{margin:0;font-size:24px;line-height:1.4;overflow-wrap:anywhere}
+  .btns{display:flex;flex-wrap:wrap;gap:10px}
+  .btn{min-height:48px;padding:0 18px;border:1px solid var(--line2);border-radius:10px;background:var(--card);color:var(--ink);font-size:15px;font-weight:500;display:inline-flex;align-items:center;gap:8px}
+  .btn.pri{border:none;background:var(--wine);color:#fff;font-weight:600;font-size:16px;padding:0 22px}
+  .btn.pri:hover{background:var(--wine-dark)}
+  .btn:disabled{opacity:.5;cursor:default}
+  .empty{padding:28px;text-align:center;color:var(--muted);font-size:16px;line-height:1.5}
+  .empty strong{display:block;color:var(--ink);font-size:20px;margin-bottom:4px}
+
+  .next-item{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;min-height:56px}
+  .next-item .what{flex:1;min-width:0}
+  .next-item .t{font-size:15px;font-weight:500;overflow-wrap:anywhere}
+  .next-item .s{font-size:13px;color:var(--muted)}
+  .next-item .s.over{color:var(--wine);font-weight:600}
+  .icon-btn{width:44px;height:44px;flex:none;border:1px solid var(--line2);border-radius:10px;background:var(--card);display:inline-flex;align-items:center;justify-content:center;color:var(--ink)}
+  .list{display:flex;flex-direction:column;gap:8px}
+  .more{background:none;border:none;color:var(--wine);font-size:14px;font-weight:600;padding:8px 0;min-height:44px;text-align:left}
+
+  .coming{border:1px dashed var(--line2);border-radius:12px;padding:14px 16px;font-size:14px;color:var(--muted);line-height:1.5;background:transparent}
+
+  .cap label.lbl{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .cap textarea{width:100%;min-height:120px;border:1px solid var(--line2);border-radius:10px;padding:12px;font:17px Inter,sans-serif;resize:vertical;color:var(--ink)}
+  .cap .when{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+  .pill{min-height:40px;padding:0 14px;border:1px solid var(--line2);border-radius:999px;background:var(--card);font-size:14px;color:var(--ink)}
+  .pill[aria-pressed="true"]{border:2px solid var(--ink);background:var(--ink);color:#fff;font-weight:600}
+  .cap .hint{font-size:13px;color:var(--muted);margin-top:8px}
+
+  .bar{height:8px;background:var(--soft);border-radius:999px;overflow:hidden;margin:10px 0 6px}
+  .bar i{display:block;height:100%;background:var(--wine);width:0;transition:width .3s}
+  .task{display:flex;align-items:center;gap:12px;min-height:48px;font-size:15px;border-top:1px solid var(--soft)}
+  .task:first-of-type{border-top:none}
+  .task input{width:22px;height:22px;accent-color:var(--wine);flex:none;margin:0}
+  .task .tx{flex:1;min-width:0;overflow-wrap:anywhere}
+  .task.done .tx{text-decoration:line-through;color:var(--muted)}
+  .task .tm{font-size:13px;color:var(--muted);flex:none}
+  .task .tm.over{color:var(--wine);font-weight:600}
+
+  .sched{display:flex;gap:14px;font-size:15px;padding:8px 0;border-top:1px solid var(--soft)}
+  .sched:first-of-type{border-top:none}
+  .sched .tm{width:72px;flex:none;font-weight:600}
+  .sched .what{flex:1;min-width:0}
+  .sched .sub{display:block;font-size:13px;color:var(--muted)}
+
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:10px;font-size:15px;display:flex;gap:14px;align-items:center;z-index:20;max-width:calc(100% - 32px)}
+  .toast button{background:none;border:none;color:#fff;font-weight:600;text-decoration:underline;font-size:15px;min-height:36px}
+
+  /* sign in */
+  .login{max-width:380px;margin:12vh auto;padding:0 16px}
+  .login .card{padding:28px;display:flex;flex-direction:column;gap:14px}
+  .login h1{margin:0;font-family:Fraunces,Georgia,serif;font-size:28px;color:var(--wine)}
+  .login label{font-size:14px;font-weight:600}
+  .login input{min-height:48px;border:1px solid var(--line2);border-radius:10px;padding:0 12px;font:16px Inter,sans-serif}
+  .err{color:var(--wine);font-size:14px;font-weight:600;min-height:20px}
+
+  @media (max-width:640px){
+    header.top{padding:12px 16px}
+    .brand .name{font-size:21px}
+    main.wrap{padding:16px;gap:20px}
+    h1.sect{font-size:24px}
+    .focus{padding:18px}
+    .focus .text{font-size:20px}
+    .btn{flex:1 1 auto;justify-content:center}
+    .status .chip{display:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== Sign in ===== -->
+<div id="loginView" class="login hidden">
+  <div class="card">
+    <h1>Premier Hub</h1>
+    <div style="font-size:15px;color:var(--muted)">Sign in with your Operations Hub password.</div>
+    <label for="pw">Password for kenny@thepremiercaterer.com</label>
+    <input id="pw" type="password" autocomplete="current-password">
+    <div id="loginErr" class="err" role="alert"></div>
+    <button id="loginBtn" class="btn pri" type="button">Sign in</button>
+  </div>
+</div>
+
+<!-- ===== Hub ===== -->
+<div id="hubView" class="hidden">
+  <header class="top">
+    <div class="brand">
+      <div class="name">Premier Hub</div>
+      <div class="date" id="todayLabel"></div>
+    </div>
+    <div class="status">
+      <span class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>My Day</span>
+      <span class="chip soon" title="Coming in step 2">Email · next</span>
+      <span class="chip soon" title="Coming in step 3">WhatsApp · soon</span>
+      <span class="chip soon" title="Coming in step 4">Calls · soon</span>
+      <span class="live" id="liveBadge"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="none" stroke="currentColor" stroke-width="2"></circle><circle cx="5" cy="5" r="1.6" fill="currentColor"></circle></svg><span id="liveText">Connecting…</span></span>
+    </div>
+    <div class="toplinks">
+      <a href="index.html">Operations Hub</a>
+      <button type="button" id="logoutBtn">Sign out</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="col-main" aria-labelledby="rnHead">
+      <div class="row-head">
+        <h1 class="sect" id="rnHead">Right now</h1>
+        <div class="count" id="rnCount"></div>
+      </div>
+
+      <article class="card focus" id="focusCard" aria-live="polite"></article>
+
+      <div>
+        <div class="row-head" style="margin-bottom:10px">
+          <h2>Up next</h2>
+          <div class="count" id="nextCount"></div>
+        </div>
+        <div class="list" id="nextList"></div>
+        <button type="button" class="more hidden" id="moreBtn"></button>
+      </div>
+
+      <div class="coming">
+        <strong style="color:var(--ink2)">Coming next:</strong> emails from all 3 inboxes will show up here, mixed in with your to-dos — then WhatsApp, then calls and voicemail.
+      </div>
+    </section>
+
+    <aside class="col-side">
+      <div class="card cap">
+        <label class="lbl" for="capText"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"></path></svg>Write it down</label>
+        <textarea id="capText" placeholder="Type, or write with your pen — it turns into a to-do"></textarea>
+        <div class="when" role="group" aria-label="When">
+          <button type="button" class="pill" data-when="today" aria-pressed="true">Today</button>
+          <button type="button" class="pill" data-when="tomorrow" aria-pressed="false">Tomorrow</button>
+          <button type="button" class="pill" data-when="none" aria-pressed="false">No date</button>
+        </div>
+        <button type="button" class="btn pri" id="capSave" style="width:100%;justify-content:center">Save to My Day</button>
+        <div class="hint">On iPad, write right in the box with your Apple Pencil.</div>
+      </div>
+
+      <div class="card">
+        <div class="row-head"><h2>My Day</h2><div class="count" id="dayCount"></div></div>
+        <div class="bar" aria-hidden="true"><i id="dayBar"></i></div>
+        <div id="taskList"></div>
+        <div class="count" id="laterCount" style="margin-top:8px"></div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-bottom:6px">Today’s schedule</h2>
+        <div id="schedList"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<div id="toast" class="toast hidden" role="status"><span id="toastMsg"></span><button type="button" id="toastUndo">Undo</button></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script>
+/* Premier Hub — step 1: My Day, write-it-down, today's schedule.
+   Same Firebase project and the same login as the Operations Hub (index.html).
+   Reads and writes the same "myDayItems" records, so anything done here shows
+   up in My Day in the Operations Hub and the other way round. */
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
+  authDomain: "premier-caterers-internal-app.firebaseapp.com",
+  projectId: "premier-caterers-internal-app",
+  storageBucket: "premier-caterers-internal-app.firebasestorage.app",
+  messagingSenderId: "471701398759",
+  appId: "1:471701398759:web:559a7bee3b645ce545ee42"
+};
+const HUB_EMAIL = 'kenny@thepremiercaterer.com';
+const OWNER_KEY = 'owner';            // how the Operations Hub stores Kenny's My Day items
+const SNOOZE_MS = 2 * 60 * 60 * 1000; // "Later" = 2 hours
+const NEXT_SHOWN = 4;                 // keep the list short on purpose
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const myDayCol = db.collection('myDayItems');
+const eventsCol = db.collection('events');
+
+let items = [];          // all of Kenny's My Day records
+let todaysEvents = [];   // events happening today
+let skipped = new Set(); // "Skip" only hides an item from Right now for this session
+let showAllNext = false;
+let unsubs = [];
+let whenChoice = 'today';
+let lastUndo = null;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------- dates ---------- */
+function startOfDay(d){ const x = new Date(d); x.setHours(0,0,0,0); return x.getTime(); }
+function endOfDay(d){ const x = new Date(d); x.setHours(23,59,59,999); return x.getTime(); }
+function ymd(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function weekEndingSunday(d){ const x = new Date(d); x.setDate(x.getDate() + ((7 - x.getDay()) % 7)); return ymd(x); }
+const BACK_FROM_SUN = {sun:0, sat:1, fri:2, thu:3, wed:4, tue:5, mon:6};
+function eventYmd(e){
+  if(e.eventDate) return String(e.eventDate).slice(0,10);
+  const back = BACK_FROM_SUN[String(e.day || '').slice(0,3).toLowerCase()];
+  if(!e.weekOf || back == null) return '';
+  const sun = new Date(e.weekOf + 'T12:00:00');
+  if(isNaN(sun)) return '';
+  sun.setDate(sun.getDate() - back);
+  return ymd(sun);
+}
+function fmtTime(ts){ return new Date(ts).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}); }
+function fmtHHMM(t){
+  if(!t || !/^\d{1,2}:\d{2}/.test(t)) return t || '';
+  const [h, m] = t.split(':').map(Number);
+  const d = new Date(); d.setHours(h, m, 0, 0); return fmtTime(d);
+}
+function dueLabel(it){
+  if(!it.dueAtTs) return {text:'', over:false};
+  const now = Date.now();
+  if(it.dueAtTs < now) return {text:'Overdue · ' + (it.dueAtTs < startOfDay(now) ? new Date(it.dueAtTs).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : fmtTime(it.dueAtTs)), over:true};
+  if(it.dueAtTs <= endOfDay(now)) return {text: it.time ? 'Today ' + fmtTime(it.dueAtTs) : 'Today', over:false};
+  return {text: new Date(it.dueAtTs).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}), over:false};
+}
+const KIND = {todo:'To-do', followup:'Follow-up', schedule:'Schedule'};
+
+/* ---------- what counts as "today" ---------- */
+function isActionable(it){ return it.type === 'todo' || it.type === 'followup'; }
+function isTodayOrEarlier(it){ return !it.dueAtTs || it.dueAtTs <= endOfDay(Date.now()); }
+function sortForFocus(a, b){
+  const now = Date.now();
+  const ao = a.dueAtTs && a.dueAtTs < now, bo = b.dueAtTs && b.dueAtTs < now;
+  if(ao !== bo) return ao ? -1 : 1;                 // overdue first
+  const ad = a.dueAtTs || Infinity, bd = b.dueAtTs || Infinity;
+  if(ad !== bd) return ad - bd;                     // then soonest due
+  return (a.createdAt || 0) - (b.createdAt || 0);   // then oldest
+}
+function pendingToday(){
+  return items.filter(it => isActionable(it) && it.status !== 'done' && isTodayOrEarlier(it)).sort(sortForFocus);
+}
+function doneToday(){
+  const sod = startOfDay(Date.now());
+  return items.filter(it => isActionable(it) && it.status === 'done' && (it.doneAt || 0) >= sod);
+}
+
+/* ---------- render ---------- */
+const ICON_CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>';
+const ICON_CLOCK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>';
+const ICON_TASK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 12l3 3 5-6"></path></svg>';
+const ICON_FOLLOW = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14l-5-5 5-5"></path><path d="M4 9h11a5 5 0 0 1 0 10h-2"></path></svg>';
+
+function render(){
+  const pend = pendingToday();
+  const focusList = pend.filter(it => !skipped.has(it.id));
+  const focus = focusList[0] || null;
+
+  // Right now
+  $('rnCount').textContent = pend.length ? (pend.length === 1 ? '1 thing today' : pend.length + ' things today') : '';
+  const fc = $('focusCard');
+  if(!focus){
+    fc.innerHTML = pend.length
+      ? '<div class="empty"><strong>You skipped the rest.</strong>Nothing else is waiting. <button type="button" class="more" id="unskip">Show skipped items again</button></div>'
+      : '<div class="empty"><strong>You’re clear for today.</strong>Write something down on the right, or enjoy the quiet.</div>';
+    const u = $('unskip'); if(u) u.onclick = () => { skipped.clear(); render(); };
+  } else {
+    const d = dueLabel(focus);
+    fc.innerHTML =
+      '<div class="meta"><span class="kind">' + (focus.type === 'followup' ? ICON_FOLLOW : ICON_TASK) + esc(KIND[focus.type] || 'To-do') + '</span>' +
+      (focus.method ? '<span>· ' + esc(focus.method) + '</span>' : '') +
+      (d.text ? '<span class="due' + (d.over ? ' over' : '') + '">' + ICON_CLOCK + esc(d.text) + '</span>' : '') + '</div>' +
+      '<p class="text">' + esc(focus.text) + '</p>' +
+      '<div class="btns">' +
+        '<button type="button" class="btn pri" data-act="done" data-id="' + esc(focus.id) + '">' + ICON_CHECK + 'Done</button>' +
+        '<button type="button" class="btn" data-act="later" data-id="' + esc(focus.id) + '">Later (2 hrs)</button>' +
+        '<button type="button" class="btn" data-act="tomorrow" data-id="' + esc(focus.id) + '">Tomorrow</button>' +
+        '<button type="button" class="btn" data-act="skip" data-id="' + esc(focus.id) + '">Skip for now</button>' +
+      '</div>';
+  }
+
+  // Up next
+  const rest = focusList.slice(1);
+  const shown = showAllNext ? rest : rest.slice(0, NEXT_SHOWN);
+  $('nextCount').textContent = rest.length ? rest.length + ' more' : '';
+  $('nextList').innerHTML = rest.length ? shown.map(it => {
+    const d = dueLabel(it);
+    return '<div class="next-item"><div class="what"><div class="t">' + esc(it.text) + '</div>' +
+      '<div class="s' + (d.over ? ' over' : '') + '">' + esc(KIND[it.type] || 'To-do') + (d.text ? ' · ' + esc(d.text) : '') + '</div></div>' +
+      '<button type="button" class="icon-btn" data-act="done" data-id="' + esc(it.id) + '" aria-label="Mark done: ' + esc(it.text) + '">' + ICON_CHECK + '</button></div>';
+  }).join('') : '<div class="count" style="padding:4px 2px">Nothing else lined up.</div>';
+  const mb = $('moreBtn');
+  if(rest.length > NEXT_SHOWN){ mb.classList.remove('hidden'); mb.textContent = showAllNext ? 'Show fewer' : 'See all ' + rest.length; }
+  else mb.classList.add('hidden');
+
+  // My Day checklist (today + earlier, plus what you finished today)
+  const done = doneToday();
+  const total = pend.length + done.length;
+  $('dayCount').textContent = total ? done.length + ' of ' + total + ' done' : '';
+  $('dayBar').style.width = total ? Math.round(done.length / total * 100) + '%' : '0%';
+  const list = pend.concat(done.sort((a,b) => (a.doneAt||0) - (b.doneAt||0)));
+  $('taskList').innerHTML = list.length ? list.map(it => {
+    const isDone = it.status === 'done';
+    const d = dueLabel(it);
+    return '<label class="task' + (isDone ? ' done' : '') + '"><input type="checkbox" data-act="toggle" data-id="' + esc(it.id) + '"' + (isDone ? ' checked' : '') + '>' +
+      '<span class="tx">' + esc(it.text) + '</span>' +
+      (!isDone && d.text ? '<span class="tm' + (d.over ? ' over' : '') + '">' + (d.over ? 'Overdue' : esc(d.text.replace(/^Today ?/, '') || 'Today')) + '</span>' : '') + '</label>';
+  }).join('') : '<div class="count">Nothing on My Day yet.</div>';
+  const later = items.filter(it => isActionable(it) && it.status !== 'done' && !isTodayOrEarlier(it)).length;
+  $('laterCount').textContent = later ? later + ' more scheduled for later days' : '';
+
+  // Today's schedule = My Day schedule items for today + today's events
+  const sod = startOfDay(Date.now()), eod = endOfDay(Date.now());
+  const sched = items.filter(it => it.type === 'schedule' && it.status !== 'done' && it.dueAtTs && it.dueAtTs >= sod && it.dueAtTs <= eod)
+    .map(it => ({ts: it.dueAtTs, tm: it.time ? fmtTime(it.dueAtTs) : 'Any time', what: it.text, sub: ''}));
+  todaysEvents.forEach(e => {
+    const t = e.startTime || e.time || '';
+    let ts = eod;
+    if(/^\d{1,2}:\d{2}/.test(t)){ const [h,m] = t.split(':').map(Number); const x = new Date(); x.setHours(h,m,0,0); ts = x.getTime(); }
+    const name = e.name || e.client || 'Event';
+    const sub = [e.type, e.eventNumber ? 'Job ' + e.eventNumber : (e.job ? 'Job ' + e.job : ''), e.addr].filter(Boolean).join(' · ');
+    sched.push({ts, tm: t ? fmtHHMM(t) : 'Event', what: name, sub});
+  });
+  sched.sort((a,b) => a.ts - b.ts);
+  $('schedList').innerHTML = sched.length ? sched.map(s =>
+    '<div class="sched"><span class="tm">' + esc(s.tm) + '</span><span class="what">' + esc(s.what) + (s.sub ? '<span class="sub">' + esc(s.sub) + '</span>' : '') + '</span></div>'
+  ).join('') : '<div class="count">Nothing scheduled today.</div>';
+}
+
+/* ---------- actions ---------- */
+async function setDone(id, done){
+  const it = items.find(x => x.id === id); if(!it) return;
+  const before = {status: it.status || 'pending', doneAt: it.doneAt || null};
+  const patch = {status: done ? 'done' : 'pending', doneAt: done ? Date.now() : null};
+  await myDayCol.doc(id).update(patch);
+  if(it.linkedId){ try{ await myDayCol.doc(it.linkedId).update(patch); }catch(e){} } // same as the Operations Hub: linked copies move together
+  if(done) toast('Done: ' + it.text, async () => {
+    await myDayCol.doc(id).update(before);
+    if(it.linkedId){ try{ await myDayCol.doc(it.linkedId).update(before); }catch(e){} }
+  });
+}
+async function moveTo(id, ts, label){
+  const it = items.find(x => x.id === id); if(!it) return;
+  const before = {dueAtTs: it.dueAtTs || null, dueDateLabel: it.dueDateLabel || null, time: it.time || null, notifiedAt: it.notifiedAt || null};
+  const d = new Date(ts);
+  await myDayCol.doc(id).update({
+    dueAtTs: ts,
+    dueDateLabel: d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),
+    time: String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'),
+    notifiedAt: null
+  });
+  toast(label + ': ' + it.text, () => myDayCol.doc(id).update(before));
+}
+function tomorrowMorning(){ const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9,0,0,0); return d.getTime(); }
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if(!b || b.tagName === 'INPUT') return;
+  const id = b.dataset.id, act = b.dataset.act;
+  if(act === 'done') setDone(id, true).catch(fail);
+  else if(act === 'later') moveTo(id, Date.now() + SNOOZE_MS, 'Moved 2 hours').catch(fail);
+  else if(act === 'tomorrow') moveTo(id, tomorrowMorning(), 'Moved to tomorrow 9 AM').catch(fail);
+  else if(act === 'skip'){ skipped.add(id); render(); }
+});
+document.addEventListener('change', e => {
+  const c = e.target; if(c.dataset.act !== 'toggle') return;
+  setDone(c.dataset.id, c.checked).catch(fail);
+});
+$('moreBtn').onclick = () => { showAllNext = !showAllNext; render(); };
+
+document.querySelectorAll('.when .pill').forEach(p => p.onclick = () => {
+  whenChoice = p.dataset.when;
+  document.querySelectorAll('.when .pill').forEach(q => q.setAttribute('aria-pressed', q === p ? 'true' : 'false'));
+});
+async function saveCapture(){
+  const ta = $('capText'); const text = ta.value.trim();
+  if(!text){ ta.focus(); return; }
+  const rec = {owner: OWNER_KEY, type: 'todo', text, status: 'pending', createdAt: Date.now(), source: 'Hub'};
+  if(whenChoice === 'tomorrow'){
+    const ts = tomorrowMorning(); const d = new Date(ts);
+    rec.dueAtTs = ts; rec.dueDateLabel = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  }
+  // "Today" = no due time, so it sits in today's list without nagging at a set hour.
+  $('capSave').disabled = true;
+  try{ await myDayCol.add(rec); ta.value = ''; toast('Saved to My Day', null); }
+  catch(err){ fail(err); }
+  finally{ $('capSave').disabled = false; }
+}
+$('capSave').onclick = saveCapture;
+$('capText').addEventListener('keydown', e => { if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveCapture(); });
+
+/* ---------- toast with undo ---------- */
+let toastTimer = null;
+function toast(msg, undo){
+  lastUndo = undo;
+  $('toastMsg').textContent = msg.length > 70 ? msg.slice(0, 67) + '…' : msg;
+  $('toastUndo').classList.toggle('hidden', !undo);
+  $('toast').classList.remove('hidden');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.add('hidden'), 6000);
+}
+$('toastUndo').onclick = async () => { $('toast').classList.add('hidden'); if(lastUndo){ try{ await lastUndo(); }catch(e){ fail(e); } } lastUndo = null; };
+function fail(err){ console.error(err); toast('That didn’t save — check your connection and try again.', null); }
+
+/* ---------- live connection ---------- */
+function setLive(ok, text){
+  const b = $('liveBadge'); b.classList.toggle('off', !ok);
+  b.style.color = ok ? 'var(--live)' : '';
+  $('liveText').textContent = text;
+}
+function startData(){
+  unsubs.forEach(u => u()); unsubs = [];
+  setLive(true, 'Connecting…');
+  unsubs.push(myDayCol.where('owner', '==', OWNER_KEY).onSnapshot(snap => {
+    items = snap.docs.map(d => Object.assign({id: d.id}, d.data()));
+    setLive(!snap.metadata.fromCache, snap.metadata.fromCache ? 'Offline — showing last saved' : 'Live');
+    render();
+  }, err => { console.error(err); setLive(false, 'Not connected — reload the page'); }));
+  const today = ymd(new Date());
+  unsubs.push(eventsCol.where('weekOf', '==', weekEndingSunday(new Date())).onSnapshot(snap => {
+    todaysEvents = snap.docs.map(d => Object.assign({id: d.id}, d.data())).filter(e => eventYmd(e) === today && !e.deleted);
+    render();
+  }, err => console.warn('Events not loaded:', err)));
+}
+// Re-draw every minute so "Overdue" and the date stay right if the page is left open.
+setInterval(() => { $('todayLabel').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'}); if(items.length) render(); }, 60000);
+
+/* ---------- sign in ---------- */
+firebase.auth().onAuthStateChanged(user => {
+  if(user && String(user.email || '').toLowerCase() === HUB_EMAIL){
+    $('loginView').classList.add('hidden'); $('hubView').classList.remove('hidden');
+    $('todayLabel').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+    startData();
+  } else {
+    if(user) firebase.auth().signOut();
+    unsubs.forEach(u => u()); unsubs = [];
+    $('hubView').classList.add('hidden'); $('loginView').classList.remove('hidden');
+    if(user) $('loginErr').textContent = 'The hub is set up for Kenny’s login only.';
+  }
+});
+async function signIn(){
+  $('loginErr').textContent = '';
+  $('loginBtn').disabled = true; $('loginBtn').textContent = 'Signing in…';
+  try{ await firebase.auth().signInWithEmailAndPassword(HUB_EMAIL, $('pw').value); }
+  catch(e){
+    const c = e && e.code;
+    $('loginErr').textContent = (c === 'auth/wrong-password' || c === 'auth/invalid-credential' || c === 'auth/invalid-login-credentials') ? 'Incorrect password.'
+      : c === 'auth/too-many-requests' ? 'Too many tries — wait a minute and try again.'
+      : c === 'auth/network-request-failed' ? 'No connection — check your internet.' : 'Sign-in problem: ' + ((e && e.message) || 'unknown');
+  }
+  finally{ $('loginBtn').disabled = false; $('loginBtn').textContent = 'Sign in'; }
+}
+$('loginBtn').onclick = signIn;
+$('pw').addEventListener('keydown', e => { if(e.key === 'Enter') signIn(); });
+$('logoutBtn').onclick = () => firebase.auth().signOut();
+</script>
+</body>
+</html>
