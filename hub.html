@@ -409,8 +409,9 @@ const myDayCol = db.collection('myDayItems');
 const eventsCol = db.collection('events');
 const inboxCol = db.collection('hubInbox');
 const outboxCol = db.collection('hubOutbox');
-const GMAIL = id => 'https://mail.google.com/mail/?authuser=kenny@thepremiercaterer.com#all/' + encodeURIComponent(id);
-let emails = [], emailStatus = undefined, failedSends = [], composerFor = null, pinnedKey = null, cardPending = false;
+const GMAIL = (id, mailbox) => 'https://mail.google.com/mail/?authuser=' + encodeURIComponent((mailbox || 'kenny') + '@thepremiercaterer.com') + '#all/' + encodeURIComponent(id);
+const GMAILem = em => GMAIL(em.threadId || em.id, em.mailbox);
+let emails = [], emailStatus = undefined, ordersStatus = undefined, failedSends = [], composerFor = null, pinnedKey = null, cardPending = false;
 const drafts = {};
 
 let items = [], todaysEvents = [], skipped = new Set(), unsubs = [];
@@ -620,7 +621,7 @@ function emailCardHtml(em, pos, n){
     '<p class="rn-snip">' + esc(em.body || em.snippet || '') + '</p>';
   if(em.replyToSelf){
     h += '<div class="self-note">This email came from your own <strong>' + esc(em.fromEmail) + '</strong> mailbox, so a reply here would go back to yourself, not the client. Open it in Gmail or the Operations Hub to answer.</div>' +
-      '<div class="rn-btns"><a class="b-main" href="' + GMAIL(em.threadId || em.id) + '" target="_blank" rel="noopener">OPEN IN GMAIL</a>' +
+      '<div class="rn-btns"><a class="b-main" href="' + GMAILem(em) + '" target="_blank" rel="noopener">OPEN IN GMAIL</a>' +
       '<button type="button" class="b" data-act="edone" data-id="' + id + '">Done</button>' +
       '<button type="button" class="b" data-act="elater" data-id="' + id + '">Later (2 hrs)</button>' +
       '<button type="button" class="b" data-act="skip" data-key="e:' + id + '">Skip</button></div>';
@@ -631,16 +632,16 @@ function emailCardHtml(em, pos, n){
       '<textarea class="reply-ta" id="rt-' + id + '" data-id="' + id + '" placeholder="Type, or write with your pen"></textarea>' +
       '<div class="rn-btns"><button type="button" class="b-main" data-act="esend" data-id="' + id + '">SEND REPLY</button>' +
       '<button type="button" class="b" data-act="ecancel" data-id="' + id + '">Cancel</button>' +
-      '<span class="note">Sends from kenny@ as a reply in the same email thread, within a minute.</span></div></div>' +
+      '<span class="note">Sends from ' + esc(em.mailbox || 'kenny') + '@ as a reply in the same email thread, within a minute.</span></div></div>' +
       '<div class="rn-btns"><button type="button" class="b" data-act="edone" data-id="' + id + '">Done</button>' +
       '<button type="button" class="b" data-act="elater" data-id="' + id + '">Later (2 hrs)</button>' +
-      '<a class="b" href="' + GMAIL(em.threadId || em.id) + '" target="_blank" rel="noopener">Open in Gmail</a></div>';
+      '<a class="b" href="' + GMAILem(em) + '" target="_blank" rel="noopener">Open in Gmail</a></div>';
   } else {
     h += '<div class="rn-btns"><button type="button" class="b-main" data-act="ereply" data-id="' + id + '">REPLY</button>' +
       '<button type="button" class="b" data-act="edone" data-id="' + id + '">Done</button>' +
       '<button type="button" class="b" data-act="elater" data-id="' + id + '">Later (2 hrs)</button>' +
       '<button type="button" class="b" data-act="skip" data-key="e:' + id + '">Skip</button>' +
-      '<a class="b" href="' + GMAIL(em.threadId || em.id) + '" target="_blank" rel="noopener">Open in Gmail</a></div>';
+      '<a class="b" href="' + GMAILem(em) + '" target="_blank" rel="noopener">Open in Gmail</a></div>';
   }
   return h;
 }
@@ -652,10 +653,10 @@ function mailRow(em, withActs){
       '<div class="w2">' + esc(em.snippet || '') + '</div></div>' +
     '<span class="tm">' + esc(whenLabel(em.theirAt || em.lastAt)) + '</span>' +
     (withActs ? '<span class="acts" style="display:flex;gap:8px">' +
-      (em.replyToSelf ? '<a class="sm pri" style="display:inline-flex;align-items:center;text-decoration:none;color:var(--ink)" href="' + GMAIL(em.threadId || em.id) + '" target="_blank" rel="noopener">GMAIL</a>'
+      (em.replyToSelf ? '<a class="sm pri" style="display:inline-flex;align-items:center;text-decoration:none;color:var(--ink)" href="' + GMAILem(em) + '" target="_blank" rel="noopener">GMAIL</a>'
                       : '<button type="button" class="sm pri" data-act="eopen" data-id="' + esc(em.id) + '">REPLY</button>') +
       '<button type="button" class="sm" data-act="edone" data-id="' + esc(em.id) + '">Done</button></span>'
-    : '<span class="acts" style="display:flex;gap:8px"><a class="sm" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink)" href="' + GMAIL(em.threadId || em.id) + '" target="_blank" rel="noopener">Open in Gmail</a></span>') +
+    : '<span class="acts" style="display:flex;gap:8px"><a class="sm" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink)" href="' + GMAILem(em) + '" target="_blank" rel="noopener">Open in Gmail</a></span>') +
     '</div>';
 }
 function miniMail(em){
@@ -666,6 +667,12 @@ function emailState(){
   if(emailStatus === null) return 'off';
   if(!emailStatus.ok) return 'error';
   return (Date.now() - (emailStatus.lastRun || 0) > 5 * 60000) ? 'stale' : 'ok';
+}
+function ordersState(){
+  if(ordersStatus === undefined) return 'loading';
+  if(ordersStatus === null) return 'off';
+  if(!ordersStatus.ok) return 'error';
+  return (Date.now() - (ordersStatus.lastRun || 0) > 5 * 60000) ? 'stale' : 'ok';
 }
 function renderEmail(head){
   const waiting = waitingEmails(), snoozed = snoozedEmails();
@@ -687,9 +694,15 @@ function renderEmail(head){
   if(st === 'off') notice = '<div class="warn-box"><strong>Email isn’t connected yet.</strong>Finish the one-time setup of the “Premier Hub Sync” script (signed in as kenny@), and your emails will show up here within a minute.</div>';
   else if(st === 'stale') notice = '<div class="warn-box"><strong>Email stopped updating.</strong>The sync last ran ' + esc(ago(emailStatus.lastRun)) + ' ago. Open the Premier Hub Sync script and run HS_setup again.</div>';
   else if(st === 'error') notice = '<div class="warn-box"><strong>Email sync hit a problem.</strong>' + esc(emailStatus.error || '') + '</div>';
+  const ost = ordersState();
+  if(st !== 'off'){
+    if(ost === 'off') notice += '<div class="warn-box" style="margin-top:8px"><strong>orders@ isn’t connected yet.</strong>Set up the same “Premier Hub Sync” script once more, signed in as orders@.</div>';
+    else if(ost === 'stale') notice += '<div class="warn-box" style="margin-top:8px"><strong>orders@ stopped updating.</strong>Last ran ' + esc(ago(ordersStatus.lastRun)) + ' ago. Open the orders@ Premier Hub Sync script and run HS_setup again.</div>';
+    else if(ost === 'error') notice += '<div class="warn-box" style="margin-top:8px"><strong>orders@ sync hit a problem.</strong>' + esc(ordersStatus.error || '') + '</div>';
+  }
   failedSends.forEach(f => {
     notice += '<div class="warn-box" style="margin-top:8px"><strong>A reply didn’t send.</strong>' + esc(f.subject || '') + ' — ' + esc(f.error || '') +
-      '<span><a href="' + GMAIL(f.threadId) + '" target="_blank" rel="noopener">Open in Gmail</a> · <button type="button" class="link-btn" style="display:inline;min-height:0;padding:0" data-act="eclearfail" data-id="' + esc(f.id) + '">Dismiss</button></span></div>';
+      '<span><a href="' + GMAIL(f.threadId, f.mailbox) + '" target="_blank" rel="noopener">Open in Gmail</a> · <button type="button" class="link-btn" style="display:inline;min-height:0;padding:0" data-act="eclearfail" data-id="' + esc(f.id) + '">Dismiss</button></span></div>';
   });
   $('inboxNotice').innerHTML = notice;
   $('inboxCount').textContent = waiting.length ? waiting.length + ' WAITING' : '';
@@ -702,8 +715,9 @@ function renderEmail(head){
 }
 function renderLive(){
   const st = emailState(), phone = window.matchMedia('(max-width:760px)').matches;
-  const mailBad = st === 'stale' || st === 'error';
-  const mail = st === 'ok' ? 'EMAIL ✓' : st === 'off' ? 'EMAIL · SET UP' : st === 'loading' ? 'EMAIL …' : 'EMAIL ✗';
+  const ost = ordersState();
+  const mailBad = st === 'stale' || st === 'error' || ost === 'stale' || ost === 'error';
+  const mail = mailBad ? 'EMAIL ✗' : st === 'ok' ? 'EMAIL ✓' : st === 'off' ? 'EMAIL · SET UP' : st === 'loading' ? 'EMAIL …' : 'EMAIL ✗';
   const base = $('livePill').dataset.base || 'CONNECTING';
   const ok = base === 'LIVE' && !mailBad;
   $('livePill').classList.toggle('off', !ok);
@@ -875,7 +889,7 @@ async function sendReply(id){
   if(!body){ toast('Write your reply first.', null); focusReply(id); return; }
   const btns = document.querySelectorAll('[data-act="esend"][data-id="' + CSS.escape(id) + '"]'); btns.forEach(b => b.disabled = true);
   try{
-    await outboxCol.add({type: 'reply', threadId: em.threadId || id, body, to: em.replyTo || em.fromEmail, subject: em.subject || '',
+    await outboxCol.add({type: 'reply', mailbox: em.mailbox || 'kenny', threadId: em.threadId || id, body, to: em.replyTo || em.fromEmail, subject: em.subject || '',
       status: 'queued', createdAt: Date.now(), by: HUB_EMAIL});
     await emailPatch(id, {replyQueuedAt: Date.now()});
     delete drafts[id]; composerFor = null;
@@ -932,6 +946,8 @@ function startData(){
   }, err => { console.warn('Email not loaded:', err); }));
   unsubs.push(db.collection('hubSyncStatus').doc('email').onSnapshot(d => { emailStatus = d.exists ? d.data() : null; render(); },
     err => { console.warn('Email status not loaded:', err); emailStatus = null; render(); }));
+  unsubs.push(db.collection('hubSyncStatus').doc('email_orders').onSnapshot(d => { ordersStatus = d.exists ? d.data() : null; render(); },
+    err => { console.warn('orders@ status not loaded:', err); ordersStatus = null; render(); }));
   unsubs.push(outboxCol.where('status', '==', 'failed').onSnapshot(snap => {
     const before = new Set(failedSends.map(f => f.id));
     failedSends = snap.docs.map(d => Object.assign({id: d.id}, d.data())).filter(f => !f.dismissed);
