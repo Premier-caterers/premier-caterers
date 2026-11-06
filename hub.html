@@ -3,110 +3,165 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#7A1C33">
 <title>Premier Hub</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800;900&family=Inter:wght@400;500;600;700&family=Caveat:wght@600;700&display=swap">
 <style>
   :root{
-    --ground:#F5F5F2; --card:#FFFFFF; --ink:#1A1A1A; --ink2:#3F3F3B; --muted:#5F5F5A;
-    --line:#E4E4DF; --line2:#C9C9C2; --wine:#7A1C33; --wine-dark:#5A1426; --soft:#EDEDE8; --live:#1F6B4F;
+    --cover:#7A1C33; --ink:#1A1A1A; --paper:#FFFFFF; --muted:#5F5F5A; --rule:#D9D9D4; --soft:#FAFAF7;
+    --cyan:#8BE8F5; --yellow:#FFE45C; --pink:#FFB3CF; --sand:#E8E2D6; --live:#1F6B4F;
+    --head: Archivo, 'Arial Black', sans-serif; --hand: Caveat, 'Comic Sans MS', cursive;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--ground);color:var(--ink);font-family:Inter,system-ui,sans-serif;-webkit-text-size-adjust:100%}
-  a{color:var(--wine)} a:hover{color:var(--wine-dark)}
-  button{font-family:inherit;cursor:pointer}
+  html,body{margin:0;background:var(--cover)}
+  body{color:var(--ink);font-family:Inter,system-ui,sans-serif;-webkit-text-size-adjust:100%}
+  a{color:var(--ink)} a:hover{color:var(--cover)}
+  button{font-family:inherit;cursor:pointer;color:var(--ink)}
   .hidden{display:none !important}
+  .hl-c{background:linear-gradient(transparent 18%,var(--cyan) 18%,var(--cyan) 88%,transparent 88%)}
+  .hl-p{background:linear-gradient(transparent 18%,var(--pink) 18%,var(--pink) 88%,transparent 88%)}
+  .hl-y{background:linear-gradient(transparent 18%,var(--yellow) 18%,var(--yellow) 88%,transparent 88%)}
+  .lbl{font:900 13px var(--head);letter-spacing:.12em;text-transform:uppercase}
+  .date .short{display:none}
 
-  header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:16px 28px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
-  .brand{display:flex;align-items:center;gap:14px}
-  .brand .name{font-family:Fraunces,Georgia,serif;font-size:24px;font-weight:600;color:var(--wine)}
-  .brand .date{font-size:14px;color:var(--muted)}
-  .status{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--ink2)}
-  .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:var(--card)}
-  .chip.soon{border-style:dashed;color:var(--muted)}
-  .live{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
-  .live.off{color:var(--wine);font-weight:600}
-  .toplinks{display:flex;gap:14px;font-size:14px;align-items:center}
-  .toplinks button{background:none;border:none;color:var(--muted);font-size:14px;padding:8px 0;min-height:44px}
+  /* ---------- planner frame ---------- */
+  .frame{min-height:100vh;padding:28px 20px 28px 28px;display:flex}
+  .page{flex:1;min-width:0;background:var(--paper);border-radius:22px 0 0 22px;box-shadow:0 18px 50px rgba(0,0,0,.35);padding:30px 40px 40px;display:flex;flex-direction:column;gap:34px}
+  .page-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;border-bottom:3px solid var(--ink);padding-bottom:14px}
+  .date{font:900 32px var(--head);letter-spacing:-.01em}
+  .head-right{display:flex;flex-wrap:wrap;align-items:center;gap:14px;font-size:14px}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:2px solid var(--ink);border-radius:999px;font:800 12px var(--head);letter-spacing:.08em;text-transform:uppercase}
+  .pill.off{border-style:dashed;color:var(--cover)}
+  .head-right a,.head-right button{font-weight:600;font-size:14px;background:none;border:none;padding:8px 0;min-height:44px;display:inline-flex;align-items:center}
+  .head-right button{color:var(--muted)}
 
-  main.wrap{display:flex;flex-wrap:wrap;gap:28px;padding:28px;max-width:1440px;margin:0 auto}
-  .col-main{flex:999 1 600px;min-width:0;display:flex;flex-direction:column;gap:22px}
-  .col-side{flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:20px}
+  /* ---------- side tabs ---------- */
+  .tabs{width:62px;flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding-top:30px}
+  .tab{writing-mode:vertical-rl;border:none;color:var(--ink);font:900 13px var(--head);letter-spacing:.14em;padding:18px 0;border-radius:0 12px 12px 0;text-align:center;min-height:96px;text-transform:uppercase;width:54px}
+  .tab[aria-selected="true"]{width:62px;box-shadow:3px 3px 0 rgba(0,0,0,.25)}
+  .tab.t-today{background:var(--paper)} .tab.t-inbox{background:var(--cyan)} .tab.t-todo{background:var(--yellow)}
+  .tab.t-sched{background:var(--pink)} .tab.t-people{background:var(--sand)}
 
-  h1.sect{margin:0;font-family:Fraunces,Georgia,serif;font-size:30px;font-weight:600}
-  h2{margin:0;font-size:16px;font-weight:600}
-  .row-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
-  .count{font-size:14px;color:var(--muted)}
+  /* ---------- focus (today) ---------- */
+  .today{flex:1;display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start;align-content:flex-start}
+  .col-main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:26px}
+  .col-side{flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:30px}
 
-  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
-  .focus{padding:28px;display:flex;flex-direction:column;gap:16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
-  .meta{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:14px;color:var(--ink2)}
-  .meta .kind{display:inline-flex;align-items:center;gap:6px;font-weight:600}
-  .meta .due{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-weight:600}
-  .meta .due.over{color:var(--wine)}
-  .focus .text{margin:0;font-size:24px;line-height:1.4;overflow-wrap:anywhere}
-  .btns{display:flex;flex-wrap:wrap;gap:10px}
-  .btn{min-height:48px;padding:0 18px;border:1px solid var(--line2);border-radius:10px;background:var(--card);color:var(--ink);font-size:15px;font-weight:500;display:inline-flex;align-items:center;gap:8px}
-  .btn.pri{border:none;background:var(--wine);color:#fff;font-weight:600;font-size:16px;padding:0 22px}
-  .btn.pri:hover{background:var(--wine-dark)}
-  .btn:disabled{opacity:.5;cursor:default}
-  .empty{padding:28px;text-align:center;color:var(--muted);font-size:16px;line-height:1.5}
-  .empty strong{display:block;color:var(--ink);font-size:20px;margin-bottom:4px}
+  .rn{border:3px solid var(--ink);border-radius:18px;padding:32px;display:flex;flex-direction:column;gap:18px;box-shadow:8px 8px 0 var(--ink);background:var(--paper)}
+  .rn-top{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+  .rn-title{margin:0;font:900 26px var(--head);letter-spacing:.04em}
+  .rn-count{font-size:14px;color:var(--muted)}
+  .rn-due{margin-left:auto;font-size:14px;font-weight:800;display:inline-flex;align-items:center;gap:6px;text-transform:uppercase}
+  .rn-kind{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .rn-text{margin:0;font-size:28px;line-height:1.35;font-weight:600;overflow-wrap:anywhere}
+  .rn-btns{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  .b-main{min-height:56px;padding:0 26px;border:3px solid var(--ink);border-radius:14px;background:var(--cyan);font:800 17px var(--head);letter-spacing:.03em;box-shadow:3px 3px 0 var(--ink);display:inline-flex;align-items:center;gap:8px}
+  .b-main:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+  .b{min-height:56px;padding:0 20px;border:2px solid var(--ink);border-radius:14px;background:var(--paper);font:600 16px Inter,sans-serif}
+  .b:disabled,.b-main:disabled{opacity:.5;cursor:default}
+  .rn-empty{display:flex;flex-direction:column;gap:8px}
+  .rn-empty .big{font:900 26px var(--head)}
+  .rn-empty .sub{font-size:17px;color:var(--muted);line-height:1.5}
+  .link-btn{background:none;border:none;padding:8px 0;min-height:44px;font-weight:700;font-size:15px;text-decoration:underline;text-align:left}
 
-  .next-item{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;min-height:56px}
-  .next-item .what{flex:1;min-width:0}
-  .next-item .t{font-size:15px;font-weight:500;overflow-wrap:anywhere}
-  .next-item .s{font-size:13px;color:var(--muted)}
-  .next-item .s.over{color:var(--wine);font-weight:600}
-  .icon-btn{width:44px;height:44px;flex:none;border:1px solid var(--line2);border-radius:10px;background:var(--card);display:inline-flex;align-items:center;justify-content:center;color:var(--ink)}
-  .list{display:flex;flex-direction:column;gap:8px}
-  .more{background:none;border:none;color:var(--wine);font-size:14px;font-weight:600;padding:8px 0;min-height:44px;text-align:left}
+  .progress{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+  .dots{display:flex;flex-wrap:wrap;gap:8px}
+  .dot{width:22px;height:22px;border-radius:999px;border:2.5px solid var(--ink);background:var(--paper)}
+  .dot.on{background:var(--cyan)}
+  .progress .txt{font-size:14px;font-weight:700}
 
-  .coming{border:1px dashed var(--line2);border-radius:12px;padding:14px 16px;font-size:14px;color:var(--muted);line-height:1.5;background:transparent}
+  .ruled-list .row{display:flex;gap:14px;min-height:52px;align-items:center;border-bottom:1px solid var(--rule);font-size:16px}
+  .ruled-list .tm{width:86px;flex:none;font-weight:800}
+  .ruled-list .tm small{font-size:11px;font-weight:700;margin-left:3px}
+  .ruled-list .what{flex:1;min-width:0;overflow-wrap:anywhere}
+  .ruled-list .sub{display:block;font-size:13px;color:var(--muted)}
+  .sect-head{display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--ink);padding-bottom:6px}
+  .empty-line{font-size:15px;color:var(--muted);padding:14px 0}
 
-  .cap label.lbl{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:10px}
-  .cap textarea{width:100%;min-height:120px;border:1px solid var(--line2);border-radius:10px;padding:12px;font:17px Inter,sans-serif;resize:vertical;color:var(--ink)}
-  .cap .when{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
-  .pill{min-height:40px;padding:0 14px;border:1px solid var(--line2);border-radius:999px;background:var(--card);font-size:14px;color:var(--ink)}
-  .pill[aria-pressed="true"]{border:2px solid var(--ink);background:var(--ink);color:#fff;font-weight:600}
-  .cap .hint{font-size:13px;color:var(--muted);margin-top:8px}
+  /* sticky note */
+  .sticky{background:var(--yellow);padding:20px;transform:rotate(-1.5deg);box-shadow:3px 6px 14px rgba(0,0,0,.18);display:flex;flex-direction:column;gap:8px}
+  .sticky label{font:700 28px var(--hand)}
+  .sticky textarea{min-height:100px;border:none;background:transparent;font:600 23px var(--hand);color:var(--ink);resize:none;line-height:32px;
+    background-image:repeating-linear-gradient(to bottom,transparent 0,transparent 31px,rgba(0,0,0,.18) 31px,rgba(0,0,0,.18) 32px);outline:none;width:100%}
+  .sticky .when{display:flex;gap:8px}
+  .sticky .when button{min-height:44px;flex:1;border:2px solid var(--ink);border-radius:10px;background:transparent;font:800 12px var(--head);letter-spacing:.04em;padding:0 4px;white-space:nowrap}
+  .sticky .when button[aria-pressed="true"]{background:var(--paper)}
+  .sticky .save{min-height:48px;border:3px solid var(--ink);border-radius:12px;background:var(--ink);color:#fff;font:800 15px var(--head);letter-spacing:.06em}
+  .sticky .hint{font-size:12px;color:#5a4f12}
 
-  .bar{height:8px;background:var(--soft);border-radius:999px;overflow:hidden;margin:10px 0 6px}
-  .bar i{display:block;height:100%;background:var(--wine);width:0;transition:width .3s}
-  .task{display:flex;align-items:center;gap:12px;min-height:48px;font-size:15px;border-top:1px solid var(--soft)}
-  .task:first-of-type{border-top:none}
-  .task input{width:22px;height:22px;accent-color:var(--wine);flex:none;margin:0}
-  .task .tx{flex:1;min-width:0;overflow-wrap:anywhere}
-  .task.done .tx{text-decoration:line-through;color:var(--muted)}
-  .task .tm{font-size:13px;color:var(--muted);flex:none}
-  .task .tm.over{color:var(--wine);font-weight:600}
+  /* to-do view */
+  .todo-row{display:flex;align-items:center;gap:12px;min-height:52px;border-bottom:1px solid var(--rule);font-size:16px}
+  .todo-row .tx{flex:1;min-width:0;overflow-wrap:anywhere}
+  .todo-row.done .tx{text-decoration:line-through;color:#8A8A84}
+  .todo-row .tag{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;flex:none}
+  .ring{appearance:none;-webkit-appearance:none;width:22px;height:22px;border:2px solid var(--ink);border-radius:999px;margin:0;flex:none;background:var(--paper);cursor:pointer}
+  .ring:checked{background:var(--ink);box-shadow:inset 0 0 0 3px var(--paper)}
+  .ring:focus-visible{outline:3px solid var(--cyan);outline-offset:2px}
 
-  .sched{display:flex;gap:14px;font-size:15px;padding:8px 0;border-top:1px solid var(--soft)}
-  .sched:first-of-type{border-top:none}
-  .sched .tm{width:72px;flex:none;font-weight:600}
-  .sched .what{flex:1;min-width:0}
-  .sched .sub{display:block;font-size:13px;color:var(--muted)}
+  .soon{border:2px dashed var(--ink);border-radius:14px;padding:26px;display:flex;flex-direction:column;gap:8px;max-width:640px}
+  .soon .big{font:900 24px var(--head)}
+  .soon p{margin:0;font-size:16px;line-height:1.5;color:var(--muted)}
 
-  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:10px;font-size:15px;display:flex;gap:14px;align-items:center;z-index:20;max-width:calc(100% - 32px)}
-  .toast button{background:none;border:none;color:#fff;font-weight:600;text-decoration:underline;font-size:15px;min-height:36px}
+  .view-wrap{flex:1;display:flex;flex-direction:column;gap:20px;max-width:900px}
+  .view-title{margin:0;font:900 26px var(--head);letter-spacing:.04em}
 
-  /* sign in */
-  .login{max-width:380px;margin:12vh auto;padding:0 16px}
-  .login .card{padding:28px;display:flex;flex-direction:column;gap:14px}
-  .login h1{margin:0;font-family:Fraunces,Georgia,serif;font-size:28px;color:var(--wine)}
-  .login label{font-size:14px;font-weight:600}
-  .login input{min-height:48px;border:1px solid var(--line2);border-radius:10px;padding:0 12px;font:16px Inter,sans-serif}
-  .err{color:var(--wine);font-size:14px;font-weight:600;min-height:20px}
+  /* toast */
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:12px;font-size:15px;display:flex;gap:14px;align-items:center;z-index:30;max-width:calc(100% - 32px);box-shadow:0 6px 18px rgba(0,0,0,.3)}
+  .toast button{background:none;border:none;color:var(--cyan);font-weight:800;text-decoration:underline;font-size:15px;min-height:36px}
 
-  @media (max-width:640px){
-    header.top{padding:12px 16px}
-    .brand .name{font-size:21px}
-    main.wrap{padding:16px;gap:20px}
-    h1.sect{font-size:24px}
-    .focus{padding:18px}
-    .focus .text{font-size:20px}
-    .btn{flex:1 1 auto;justify-content:center}
-    .status .chip{display:none}
+  /* phone-only pieces */
+  .mini-todo,.fab,.bottom-tabs,.sheet{display:none}
+
+  /* ---------- sign in ---------- */
+  .login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+  .login .card{background:var(--paper);border:3px solid var(--ink);border-radius:18px;box-shadow:8px 8px 0 var(--ink);padding:30px;width:100%;max-width:400px;display:flex;flex-direction:column;gap:14px}
+  .login h1{margin:0;font:900 30px var(--head)}
+  .login label{font-size:14px;font-weight:700}
+  .login input{min-height:50px;border:2px solid var(--ink);border-radius:12px;padding:0 12px;font:16px Inter,sans-serif}
+  .err{color:var(--cover);font-size:14px;font-weight:700;min-height:20px}
+
+  /* ---------- phone ---------- */
+  @media (max-width:760px){
+    .frame{padding:14px 10px 0;min-height:100vh}
+    .page{border-radius:18px 18px 0 0;padding:16px 16px 120px;gap:16px}
+    .tabs{display:none}
+    .page-head{flex-wrap:nowrap}
+    .date{font-size:20px;white-space:nowrap}
+    .date .long{display:none}
+    .date .short{display:inline}
+    .head-right a,.head-right button{display:none}
+    .today{gap:16px}
+    .col-main,.col-side{flex-basis:100%}
+    .rn{padding:14px;border-radius:14px;box-shadow:4px 4px 0 var(--ink);gap:10px}
+    .rn-title{font-size:15px}
+    .rn-due{font-size:11px}
+    .rn-kind{font-size:12px}
+    .rn-text{font-size:18px}
+    .rn-btns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+    .rn-btns .b-main{grid-column:1/-1;justify-content:center;min-height:50px;font-size:15px}
+    .rn-btns .b{min-height:44px;padding:0 6px;font-size:13px;border-radius:10px}
+    .progress{display:none}
+    .mini-todo{display:block}
+    .col-side .sticky{display:none}
+    .ruled-list .row{min-height:42px;font-size:14px}
+    .ruled-list .tm{width:74px}
+    .ruled-list .sub{display:none}
+    .col-main{gap:14px}
+    .col-side{gap:14px}
+    .pill{padding:4px 9px;font-size:11px}
+    .lbl{font-size:12px}
+    .fab{display:block;position:fixed;right:22px;bottom:96px;width:76px;height:76px;border:none;background:var(--yellow);transform:rotate(-4deg);box-shadow:2px 5px 12px rgba(0,0,0,.3);font:700 19px var(--hand);line-height:1;z-index:15}
+    .bottom-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;position:fixed;left:10px;right:10px;bottom:0;background:var(--paper);padding:8px 6px calc(10px + env(safe-area-inset-bottom));border-top:3px solid var(--ink);z-index:14}
+    .bottom-tabs button{min-height:44px;border:none;border-radius:10px;font:900 12px var(--head);letter-spacing:.06em;text-transform:uppercase}
+    .bottom-tabs .bt-today{background:var(--paper);border:2px solid var(--ink)}
+    .bottom-tabs .bt-today[aria-selected="true"]{background:var(--ink);color:#fff}
+    .bottom-tabs .bt-inbox{background:var(--cyan)} .bottom-tabs .bt-todo{background:var(--yellow)} .bottom-tabs .bt-sched{background:var(--pink)}
+    .bottom-tabs button[aria-selected="true"]{box-shadow:inset 0 -4px 0 var(--ink)}
+    .sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:25;align-items:flex-end;justify-content:center;padding:16px}
+    .sheet.open{display:flex}
+    .sheet .sticky{display:flex;width:calc(100% - 20px);max-width:400px;transform:rotate(-1deg);margin-bottom:24px}
+    .toast{bottom:90px}
   }
 </style>
 </head>
@@ -115,85 +170,98 @@
 <!-- ===== Sign in ===== -->
 <div id="loginView" class="login hidden">
   <div class="card">
-    <h1>Premier Hub</h1>
+    <h1><span class="hl-c">PREMIER HUB</span></h1>
     <div style="font-size:15px;color:var(--muted)">Sign in with your Operations Hub password.</div>
     <label for="pw">Password for kenny@thepremiercaterer.com</label>
     <input id="pw" type="password" autocomplete="current-password">
     <div id="loginErr" class="err" role="alert"></div>
-    <button id="loginBtn" class="btn pri" type="button">Sign in</button>
+    <button id="loginBtn" class="b-main" type="button" style="justify-content:center">SIGN IN</button>
   </div>
 </div>
 
 <!-- ===== Hub ===== -->
-<div id="hubView" class="hidden">
-  <header class="top">
-    <div class="brand">
-      <div class="name">Premier Hub</div>
-      <div class="date" id="todayLabel"></div>
-    </div>
-    <div class="status">
-      <span class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>My Day</span>
-      <span class="chip soon" title="Coming in step 2">Email · next</span>
-      <span class="chip soon" title="Coming in step 3">WhatsApp · soon</span>
-      <span class="chip soon" title="Coming in step 4">Calls · soon</span>
-      <span class="live" id="liveBadge"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="none" stroke="currentColor" stroke-width="2"></circle><circle cx="5" cy="5" r="1.6" fill="currentColor"></circle></svg><span id="liveText">Connecting…</span></span>
-    </div>
-    <div class="toplinks">
-      <a href="index.html">Operations Hub</a>
-      <button type="button" id="logoutBtn">Sign out</button>
-    </div>
-  </header>
-
-  <main class="wrap">
-    <section class="col-main" aria-labelledby="rnHead">
-      <div class="row-head">
-        <h1 class="sect" id="rnHead">Right now</h1>
-        <div class="count" id="rnCount"></div>
+<div id="hubView" class="frame hidden">
+  <div class="page">
+    <header class="page-head">
+      <div class="date" id="dateLabel"></div>
+      <div class="head-right">
+        <span class="pill" id="livePill"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="none" stroke="currentColor" stroke-width="2"></circle><circle cx="5" cy="5" r="1.6" fill="currentColor"></circle></svg><span id="liveText">CONNECTING</span></span>
+        <a href="index.html">Operations Hub</a>
+        <button type="button" id="logoutBtn">Sign out</button>
       </div>
+    </header>
 
-      <article class="card focus" id="focusCard" aria-live="polite"></article>
+    <!-- TODAY (focus) -->
+    <div id="v-today" class="today">
+      <section class="col-main">
+        <article class="rn" id="focusCard" aria-live="polite"></article>
 
-      <div>
-        <div class="row-head" style="margin-bottom:10px">
-          <h2>Up next</h2>
-          <div class="count" id="nextCount"></div>
+        <div class="progress" id="progressRow">
+          <span class="lbl">Today’s progress</span>
+          <span class="dots" id="dots"></span>
+          <span class="txt" id="progressTxt"></span>
         </div>
-        <div class="list" id="nextList"></div>
-        <button type="button" class="more hidden" id="moreBtn"></button>
-      </div>
 
-      <div class="coming">
-        <strong style="color:var(--ink2)">Coming next:</strong> emails from all 3 inboxes will show up here, mixed in with your to-dos — then WhatsApp, then calls and voicemail.
-      </div>
-    </section>
-
-    <aside class="col-side">
-      <div class="card cap">
-        <label class="lbl" for="capText"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"></path></svg>Write it down</label>
-        <textarea id="capText" placeholder="Type, or write with your pen — it turns into a to-do"></textarea>
-        <div class="when" role="group" aria-label="When">
-          <button type="button" class="pill" data-when="today" aria-pressed="true">Today</button>
-          <button type="button" class="pill" data-when="tomorrow" aria-pressed="false">Tomorrow</button>
-          <button type="button" class="pill" data-when="none" aria-pressed="false">No date</button>
+        <div class="mini-todo">
+          <div class="sect-head"><span class="lbl" id="miniTodoHead">To do</span><span class="dots" id="miniDots" style="gap:4px"></span></div>
+          <div id="miniTodo"></div>
         </div>
-        <button type="button" class="btn pri" id="capSave" style="width:100%;justify-content:center">Save to My Day</button>
-        <div class="hint">On iPad, write right in the box with your Apple Pencil.</div>
-      </div>
+      </section>
 
-      <div class="card">
-        <div class="row-head"><h2>My Day</h2><div class="count" id="dayCount"></div></div>
-        <div class="bar" aria-hidden="true"><i id="dayBar"></i></div>
-        <div id="taskList"></div>
-        <div class="count" id="laterCount" style="margin-top:8px"></div>
-      </div>
+      <aside class="col-side">
+        <div class="ruled-list">
+          <div class="sect-head"><span class="lbl" id="comingHead">Coming up</span></div>
+          <div id="comingList"></div>
+        </div>
+        <div class="sticky" id="stickyDesk"></div>
+      </aside>
+    </div>
 
-      <div class="card">
-        <h2 style="margin-bottom:6px">Today’s schedule</h2>
-        <div id="schedList"></div>
-      </div>
-    </aside>
-  </main>
+    <!-- TO DO -->
+    <div id="v-todo" class="view-wrap hidden">
+      <div class="sect-head"><h1 class="view-title"><span class="hl-y">MY TO DO LIST</span></h1><span class="lbl" id="todoCount"></span></div>
+      <div id="todoList"></div>
+      <div class="lbl" style="margin-top:14px" id="laterHead"></div>
+      <div id="laterList"></div>
+    </div>
+
+    <!-- SCHEDULE -->
+    <div id="v-sched" class="view-wrap hidden">
+      <div class="sect-head"><h1 class="view-title"><span class="hl-p">TODAY’S SCHEDULE</span></h1></div>
+      <div class="ruled-list" id="schedList"></div>
+    </div>
+
+    <!-- INBOX (next step) -->
+    <div id="v-inbox" class="view-wrap hidden">
+      <div class="sect-head"><h1 class="view-title"><span class="hl-c">INBOX</span></h1></div>
+      <div class="soon"><div class="big">Coming next</div><p>Emails from kenny@, events@ and orders@ will land here, then WhatsApp, then calls and voicemail. Anything that needs you will also show up in Right now.</p></div>
+    </div>
+
+    <!-- PEOPLE (later) -->
+    <div id="v-people" class="view-wrap hidden">
+      <div class="sect-head"><h1 class="view-title">PEOPLE</h1></div>
+      <div class="soon"><div class="big">Coming later</div><p>Every email, WhatsApp and call from one person in one conversation.</p></div>
+    </div>
+  </div>
+
+  <nav class="tabs" aria-label="Planner tabs" role="tablist">
+    <button type="button" class="tab t-today" role="tab" data-view="today" aria-selected="true">Today</button>
+    <button type="button" class="tab t-inbox" role="tab" data-view="inbox" aria-selected="false">Inbox</button>
+    <button type="button" class="tab t-todo" role="tab" data-view="todo" aria-selected="false" id="tabTodo">To do</button>
+    <button type="button" class="tab t-sched" role="tab" data-view="sched" aria-selected="false">Schedule</button>
+    <button type="button" class="tab t-people" role="tab" data-view="people" aria-selected="false">People</button>
+  </nav>
 </div>
+
+<!-- phone pieces -->
+<button type="button" class="fab hidden" id="fab" aria-label="Write it down">Write it down</button>
+<nav class="bottom-tabs hidden" id="bottomTabs" aria-label="Planner tabs" role="tablist">
+  <button type="button" class="bt-today" role="tab" data-view="today" aria-selected="true">Today</button>
+  <button type="button" class="bt-inbox" role="tab" data-view="inbox" aria-selected="false">Inbox</button>
+  <button type="button" class="bt-todo" role="tab" data-view="todo" aria-selected="false" id="btTodo">To do</button>
+  <button type="button" class="bt-sched" role="tab" data-view="sched" aria-selected="false">Schedule</button>
+</nav>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Write it down"><div class="sticky" id="stickyPhone"></div></div>
 
 <div id="toast" class="toast hidden" role="status"><span id="toastMsg"></span><button type="button" id="toastUndo">Undo</button></div>
 
@@ -201,10 +269,9 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script>
-/* Premier Hub — step 1: My Day, write-it-down, today's schedule.
-   Same Firebase project and the same login as the Operations Hub (index.html).
-   Reads and writes the same "myDayItems" records, so anything done here shows
-   up in My Day in the Operations Hub and the other way round. */
+/* Premier Hub — planner look, Focus view.
+   Same Firebase project and login as the Operations Hub (index.html), and the
+   same "myDayItems" records, so anything done here shows in My Day there too. */
 
 const firebaseConfig = {
   apiKey: "AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc",
@@ -217,20 +284,15 @@ const firebaseConfig = {
 const HUB_EMAIL = 'kenny@thepremiercaterer.com';
 const OWNER_KEY = 'owner';            // how the Operations Hub stores Kenny's My Day items
 const SNOOZE_MS = 2 * 60 * 60 * 1000; // "Later" = 2 hours
-const NEXT_SHOWN = 4;                 // keep the list short on purpose
+const MAX_DOTS = 12;
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const myDayCol = db.collection('myDayItems');
 const eventsCol = db.collection('events');
 
-let items = [];          // all of Kenny's My Day records
-let todaysEvents = [];   // events happening today
-let skipped = new Set(); // "Skip" only hides an item from Right now for this session
-let showAllNext = false;
-let unsubs = [];
-let whenChoice = 'today';
-let lastUndo = null;
+let items = [], todaysEvents = [], skipped = new Set(), unsubs = [];
+let whenChoice = 'today', lastUndo = null, currentView = 'today';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -245,18 +307,13 @@ function eventYmd(e){
   if(e.eventDate) return String(e.eventDate).slice(0,10);
   const back = BACK_FROM_SUN[String(e.day || '').slice(0,3).toLowerCase()];
   if(!e.weekOf || back == null) return '';
-  const sun = new Date(e.weekOf + 'T12:00:00');
-  if(isNaN(sun)) return '';
-  sun.setDate(sun.getDate() - back);
-  return ymd(sun);
+  const sun = new Date(e.weekOf + 'T12:00:00'); if(isNaN(sun)) return '';
+  sun.setDate(sun.getDate() - back); return ymd(sun);
 }
 function fmtTime(ts){ return new Date(ts).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}); }
-function fmtHHMM(t){
-  if(!t || !/^\d{1,2}:\d{2}/.test(t)) return t || '';
-  const [h, m] = t.split(':').map(Number);
-  const d = new Date(); d.setHours(h, m, 0, 0); return fmtTime(d);
-}
-function dueLabel(it){
+function shortTime(ts){ const t = fmtTime(ts), m = t.match(/^(.*?)\s?(AM|PM)$/i); return m ? esc(m[1]) + '<small>' + m[2].toUpperCase() + '</small>' : esc(t); }
+function hhmmToTs(t){ if(!/^\d{1,2}:\d{2}/.test(t || '')) return null; const [h,m] = t.split(':').map(Number); const x = new Date(); x.setHours(h,m,0,0); return x.getTime(); }
+function dueInfo(it){
   if(!it.dueAtTs) return {text:'', over:false};
   const now = Date.now();
   if(it.dueAtTs < now) return {text:'Overdue · ' + (it.dueAtTs < startOfDay(now) ? new Date(it.dueAtTs).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : fmtTime(it.dueAtTs)), over:true};
@@ -265,106 +322,138 @@ function dueLabel(it){
 }
 const KIND = {todo:'To-do', followup:'Follow-up', schedule:'Schedule'};
 
-/* ---------- what counts as "today" ---------- */
-function isActionable(it){ return it.type === 'todo' || it.type === 'followup'; }
-function isTodayOrEarlier(it){ return !it.dueAtTs || it.dueAtTs <= endOfDay(Date.now()); }
+/* ---------- what counts as today ---------- */
+const isActionable = it => it.type === 'todo' || it.type === 'followup';
+const isTodayOrEarlier = it => !it.dueAtTs || it.dueAtTs <= endOfDay(Date.now());
 function sortForFocus(a, b){
-  const now = Date.now();
-  const ao = a.dueAtTs && a.dueAtTs < now, bo = b.dueAtTs && b.dueAtTs < now;
-  if(ao !== bo) return ao ? -1 : 1;                 // overdue first
+  const now = Date.now(), ao = a.dueAtTs && a.dueAtTs < now, bo = b.dueAtTs && b.dueAtTs < now;
+  if(ao !== bo) return ao ? -1 : 1;
   const ad = a.dueAtTs || Infinity, bd = b.dueAtTs || Infinity;
-  if(ad !== bd) return ad - bd;                     // then soonest due
-  return (a.createdAt || 0) - (b.createdAt || 0);   // then oldest
+  if(ad !== bd) return ad - bd;
+  return (a.createdAt || 0) - (b.createdAt || 0);
 }
-function pendingToday(){
-  return items.filter(it => isActionable(it) && it.status !== 'done' && isTodayOrEarlier(it)).sort(sortForFocus);
+const pendingToday = () => items.filter(it => isActionable(it) && it.status !== 'done' && isTodayOrEarlier(it)).sort(sortForFocus);
+const doneToday = () => { const sod = startOfDay(Date.now()); return items.filter(it => isActionable(it) && it.status === 'done' && (it.doneAt || 0) >= sod); };
+const laterItems = () => items.filter(it => isActionable(it) && it.status !== 'done' && !isTodayOrEarlier(it)).sort(sortForFocus);
+function scheduleToday(){
+  const sod = startOfDay(Date.now()), eod = endOfDay(Date.now());
+  const out = items.filter(it => it.type === 'schedule' && it.status !== 'done' && it.dueAtTs && it.dueAtTs >= sod && it.dueAtTs <= eod)
+    .map(it => ({ts: it.dueAtTs, timed: !!it.time, what: it.text, sub: ''}));
+  todaysEvents.forEach(e => {
+    const t = e.startTime || e.time || '', ts = hhmmToTs(t);
+    const sub = [e.type, e.eventNumber ? 'Job ' + e.eventNumber : (e.job ? 'Job ' + e.job : ''), e.addr].filter(Boolean).join(' · ');
+    out.push({ts: ts || eod, timed: !!ts, what: e.name || e.client || 'Event', sub});
+  });
+  return out.sort((a,b) => a.ts - b.ts);
 }
-function doneToday(){
-  const sod = startOfDay(Date.now());
-  return items.filter(it => isActionable(it) && it.status === 'done' && (it.doneAt || 0) >= sod);
+
+/* ---------- icons ---------- */
+const I = {
+  clock:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>',
+  task:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 12l3 3 5-6"></path></svg>',
+  follow:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14l-5-5 5-5"></path><path d="M4 9h11a5 5 0 0 1 0 10h-2"></path></svg>',
+  check:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>'
+};
+
+/* ---------- sticky note (desktop + phone share one builder) ---------- */
+function buildSticky(el, suffix){
+  el.innerHTML =
+    '<label for="cap' + suffix + '">Write it down…</label>' +
+    '<textarea id="cap' + suffix + '" placeholder="Pen or keyboard" title="Becomes a to-do. On iPad, write right on the note with your Apple Pencil."></textarea>' +
+    '<div class="when" role="group" aria-label="When">' +
+      '<button type="button" data-when="today" aria-pressed="true">TODAY</button>' +
+      '<button type="button" data-when="tomorrow" aria-pressed="false">TOMORROW</button>' +
+      '<button type="button" data-when="none" aria-pressed="false">NO DATE</button>' +
+    '</div>' +
+    '<button type="button" class="save" data-save="' + suffix + '">SAVE TO MY DAY</button>';
 }
+buildSticky($('stickyDesk'), 'D');
+buildSticky($('stickyPhone'), 'P');
 
 /* ---------- render ---------- */
-const ICON_CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>';
-const ICON_CLOCK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>';
-const ICON_TASK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 12l3 3 5-6"></path></svg>';
-const ICON_FOLLOW = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14l-5-5 5-5"></path><path d="M4 9h11a5 5 0 0 1 0 10h-2"></path></svg>';
-
 function render(){
-  const pend = pendingToday();
+  const now = new Date();
+  const up = o => esc(now.toLocaleDateString('en-US', o).toUpperCase());
+  $('dateLabel').innerHTML =
+    '<span class="long">' + up({month:'long'}) + ' <span class="hl-c">' + now.getDate() + ' ' + up({weekday:'long'}) + '</span></span>' +
+    '<span class="short">' + up({month:'short'}) + ' <span class="hl-c">' + now.getDate() + ' ' + up({weekday:'short'}) + '</span></span>';
+
+  const pend = pendingToday(), done = doneToday();
   const focusList = pend.filter(it => !skipped.has(it.id));
   const focus = focusList[0] || null;
+  const total = pend.length + done.length;
 
-  // Right now
-  $('rnCount').textContent = pend.length ? (pend.length === 1 ? '1 thing today' : pend.length + ' things today') : '';
+  // Right now card
   const fc = $('focusCard');
   if(!focus){
-    fc.innerHTML = pend.length
-      ? '<div class="empty"><strong>You skipped the rest.</strong>Nothing else is waiting. <button type="button" class="more" id="unskip">Show skipped items again</button></div>'
-      : '<div class="empty"><strong>You’re clear for today.</strong>Write something down on the right, or enjoy the quiet.</div>';
+    fc.innerHTML = '<div class="rn-top"><h1 class="rn-title"><span class="hl-c">RIGHT NOW</span></h1></div>' +
+      '<div class="rn-empty">' + (pend.length
+        ? '<div class="big">You skipped the rest.</div><div class="sub">Nothing else is waiting right now.</div><button type="button" class="link-btn" id="unskip">Show skipped items again</button>'
+        : '<div class="big">You’re clear for today.</div><div class="sub">Write something down on the sticky note, or enjoy the quiet.</div>') + '</div>';
     const u = $('unskip'); if(u) u.onclick = () => { skipped.clear(); render(); };
   } else {
-    const d = dueLabel(focus);
+    const d = dueInfo(focus);
     fc.innerHTML =
-      '<div class="meta"><span class="kind">' + (focus.type === 'followup' ? ICON_FOLLOW : ICON_TASK) + esc(KIND[focus.type] || 'To-do') + '</span>' +
-      (focus.method ? '<span>· ' + esc(focus.method) + '</span>' : '') +
-      (d.text ? '<span class="due' + (d.over ? ' over' : '') + '">' + ICON_CLOCK + esc(d.text) + '</span>' : '') + '</div>' +
-      '<p class="text">' + esc(focus.text) + '</p>' +
-      '<div class="btns">' +
-        '<button type="button" class="btn pri" data-act="done" data-id="' + esc(focus.id) + '">' + ICON_CHECK + 'Done</button>' +
-        '<button type="button" class="btn" data-act="later" data-id="' + esc(focus.id) + '">Later (2 hrs)</button>' +
-        '<button type="button" class="btn" data-act="tomorrow" data-id="' + esc(focus.id) + '">Tomorrow</button>' +
-        '<button type="button" class="btn" data-act="skip" data-id="' + esc(focus.id) + '">Skip for now</button>' +
+      '<div class="rn-top"><h1 class="rn-title"><span class="hl-c">RIGHT NOW</span></h1>' +
+      '<span class="rn-count">' + (pend.indexOf(focus) + 1) + ' of ' + pend.length + '</span>' +
+      (d.text ? '<span class="rn-due' + (d.over ? ' hl-p' : '') + '">' + I.clock + esc(d.text) + '</span>' : '') + '</div>' +
+      '<div class="rn-kind">' + (focus.type === 'followup' ? I.follow : I.task) + esc(KIND[focus.type] || 'To-do') + (focus.method ? ' · ' + esc(focus.method) : '') + '</div>' +
+      '<p class="rn-text">' + esc(focus.text) + '</p>' +
+      '<div class="rn-btns">' +
+        '<button type="button" class="b-main" data-act="done" data-id="' + esc(focus.id) + '">' + I.check + 'DONE</button>' +
+        '<button type="button" class="b" data-act="later" data-id="' + esc(focus.id) + '">Later (2 hrs)</button>' +
+        '<button type="button" class="b" data-act="tomorrow" data-id="' + esc(focus.id) + '">Tomorrow</button>' +
+        '<button type="button" class="b" data-act="skip" data-id="' + esc(focus.id) + '">Skip</button>' +
       '</div>';
   }
 
-  // Up next
-  const rest = focusList.slice(1);
-  const shown = showAllNext ? rest : rest.slice(0, NEXT_SHOWN);
-  $('nextCount').textContent = rest.length ? rest.length + ' more' : '';
-  $('nextList').innerHTML = rest.length ? shown.map(it => {
-    const d = dueLabel(it);
-    return '<div class="next-item"><div class="what"><div class="t">' + esc(it.text) + '</div>' +
-      '<div class="s' + (d.over ? ' over' : '') + '">' + esc(KIND[it.type] || 'To-do') + (d.text ? ' · ' + esc(d.text) : '') + '</div></div>' +
-      '<button type="button" class="icon-btn" data-act="done" data-id="' + esc(it.id) + '" aria-label="Mark done: ' + esc(it.text) + '">' + ICON_CHECK + '</button></div>';
-  }).join('') : '<div class="count" style="padding:4px 2px">Nothing else lined up.</div>';
-  const mb = $('moreBtn');
-  if(rest.length > NEXT_SHOWN){ mb.classList.remove('hidden'); mb.textContent = showAllNext ? 'Show fewer' : 'See all ' + rest.length; }
-  else mb.classList.add('hidden');
+  // progress dots
+  const dotsHtml = (n, on) => { const shown = Math.min(n, MAX_DOTS), filled = Math.min(on, shown); let h = ''; for(let i = 0; i < shown; i++) h += '<span class="dot' + (i < filled ? ' on' : '') + '"></span>'; return h; };
+  $('dots').innerHTML = dotsHtml(total, done.length);
+  $('progressTxt').textContent = total ? done.length + ' of ' + total + ' done' : 'Nothing on today’s list yet';
+  $('miniDots').innerHTML = dotsHtml(total, done.length).replace(/class="dot/g, 'style="width:12px;height:12px;border-width:2px" class="dot');
+  $('miniTodoHead').textContent = total ? 'TO DO · ' + done.length + ' OF ' + total : 'TO DO';
+  const mini = pend.filter(it => it !== focus).slice(0, 2);
+  $('miniTodo').innerHTML = mini.length ? mini.map(todoRow).join('') : '<div class="empty-line">Nothing else on the list.</div>';
 
-  // My Day checklist (today + earlier, plus what you finished today)
-  const done = doneToday();
-  const total = pend.length + done.length;
-  $('dayCount').textContent = total ? done.length + ' of ' + total + ' done' : '';
-  $('dayBar').style.width = total ? Math.round(done.length / total * 100) + '%' : '0%';
-  const list = pend.concat(done.sort((a,b) => (a.doneAt||0) - (b.doneAt||0)));
-  $('taskList').innerHTML = list.length ? list.map(it => {
-    const isDone = it.status === 'done';
-    const d = dueLabel(it);
-    return '<label class="task' + (isDone ? ' done' : '') + '"><input type="checkbox" data-act="toggle" data-id="' + esc(it.id) + '"' + (isDone ? ' checked' : '') + '>' +
-      '<span class="tx">' + esc(it.text) + '</span>' +
-      (!isDone && d.text ? '<span class="tm' + (d.over ? ' over' : '') + '">' + (d.over ? 'Overdue' : esc(d.text.replace(/^Today ?/, '') || 'Today')) + '</span>' : '') + '</label>';
-  }).join('') : '<div class="count">Nothing on My Day yet.</div>';
-  const later = items.filter(it => isActionable(it) && it.status !== 'done' && !isTodayOrEarlier(it)).length;
-  $('laterCount').textContent = later ? later + ' more scheduled for later days' : '';
+  // coming up (next 2 still ahead) + full schedule
+  const sched = scheduleToday(), nowTs = Date.now();
+  const upcoming = sched.filter(s => !s.timed || s.ts >= nowTs - 30 * 60000).slice(0, 2);
+  $('comingHead').textContent = window.matchMedia('(max-width:760px)').matches ? 'NEXT ON THE SCHEDULE' : 'COMING UP';
+  $('comingList').innerHTML = upcoming.length ? upcoming.map(schedRow).join('') : '<div class="empty-line">Nothing else scheduled today.</div>';
+  $('schedList').innerHTML = sched.length ? sched.map(schedRow).join('') : '<div class="empty-line">Nothing scheduled today.</div>';
 
-  // Today's schedule = My Day schedule items for today + today's events
-  const sod = startOfDay(Date.now()), eod = endOfDay(Date.now());
-  const sched = items.filter(it => it.type === 'schedule' && it.status !== 'done' && it.dueAtTs && it.dueAtTs >= sod && it.dueAtTs <= eod)
-    .map(it => ({ts: it.dueAtTs, tm: it.time ? fmtTime(it.dueAtTs) : 'Any time', what: it.text, sub: ''}));
-  todaysEvents.forEach(e => {
-    const t = e.startTime || e.time || '';
-    let ts = eod;
-    if(/^\d{1,2}:\d{2}/.test(t)){ const [h,m] = t.split(':').map(Number); const x = new Date(); x.setHours(h,m,0,0); ts = x.getTime(); }
-    const name = e.name || e.client || 'Event';
-    const sub = [e.type, e.eventNumber ? 'Job ' + e.eventNumber : (e.job ? 'Job ' + e.job : ''), e.addr].filter(Boolean).join(' · ');
-    sched.push({ts, tm: t ? fmtHHMM(t) : 'Event', what: name, sub});
-  });
-  sched.sort((a,b) => a.ts - b.ts);
-  $('schedList').innerHTML = sched.length ? sched.map(s =>
-    '<div class="sched"><span class="tm">' + esc(s.tm) + '</span><span class="what">' + esc(s.what) + (s.sub ? '<span class="sub">' + esc(s.sub) + '</span>' : '') + '</span></div>'
-  ).join('') : '<div class="count">Nothing scheduled today.</div>';
+  // to-do view
+  const list = pend.concat(done.slice().sort((a,b) => (a.doneAt||0) - (b.doneAt||0)));
+  $('todoList').innerHTML = list.length ? list.map(todoRow).join('') : '<div class="empty-line">Nothing on My Day yet.</div>';
+  $('todoCount').textContent = total ? done.length + ' OF ' + total + ' DONE' : '';
+  const later = laterItems();
+  $('laterHead').textContent = later.length ? 'LATER DAYS · ' + later.length : '';
+  $('laterList').innerHTML = later.map(todoRow).join('');
+
+  // tab counts
+  $('tabTodo').textContent = pend.length ? 'To do · ' + pend.length : 'To do';
+  $('btTodo').textContent = pend.length ? 'To do ' + pend.length : 'To do';
 }
+function todoRow(it){
+  const isDone = it.status === 'done', d = dueInfo(it);
+  const tag = isDone ? '' : (d.over ? '<span class="tag hl-p">OVERDUE</span>' : (d.text ? '<span class="tag">' + esc(d.text) + '</span>' : ''));
+  return '<label class="todo-row' + (isDone ? ' done' : '') + '"><input type="checkbox" class="ring" data-act="toggle" data-id="' + esc(it.id) + '"' + (isDone ? ' checked' : '') + ' aria-label="Done: ' + esc(it.text) + '">' +
+    '<span class="tx">' + esc(it.text) + '</span>' + tag + '</label>';
+}
+function schedRow(s){
+  return '<div class="row"><span class="tm">' + (s.timed ? shortTime(s.ts) : 'Event') + '</span><span class="what">' + esc(s.what) + (s.sub ? '<span class="sub">' + esc(s.sub) + '</span>' : '') + '</span></div>';
+}
+
+/* ---------- views / tabs ---------- */
+function showView(v){
+  currentView = v;
+  ['today','todo','sched','inbox','people'].forEach(n => $('v-' + n).classList.toggle('hidden', n !== v));
+  document.querySelectorAll('[role="tab"]').forEach(t => t.setAttribute('aria-selected', t.dataset.view === v ? 'true' : 'false'));
+  try{ localStorage.setItem('hubView', v); }catch(e){}
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('[role="tab"]').forEach(t => t.addEventListener('click', () => showView(t.dataset.view)));
 
 /* ---------- actions ---------- */
 async function setDone(id, done){
@@ -372,7 +461,7 @@ async function setDone(id, done){
   const before = {status: it.status || 'pending', doneAt: it.doneAt || null};
   const patch = {status: done ? 'done' : 'pending', doneAt: done ? Date.now() : null};
   await myDayCol.doc(id).update(patch);
-  if(it.linkedId){ try{ await myDayCol.doc(it.linkedId).update(patch); }catch(e){} } // same as the Operations Hub: linked copies move together
+  if(it.linkedId){ try{ await myDayCol.doc(it.linkedId).update(patch); }catch(e){} }
   if(done) toast('Done: ' + it.text, async () => {
     await myDayCol.doc(id).update(before);
     if(it.linkedId){ try{ await myDayCol.doc(it.linkedId).update(before); }catch(e){} }
@@ -383,16 +472,17 @@ async function moveTo(id, ts, label){
   const before = {dueAtTs: it.dueAtTs || null, dueDateLabel: it.dueDateLabel || null, time: it.time || null, notifiedAt: it.notifiedAt || null};
   const d = new Date(ts);
   await myDayCol.doc(id).update({
-    dueAtTs: ts,
-    dueDateLabel: d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),
-    time: String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'),
-    notifiedAt: null
+    dueAtTs: ts, dueDateLabel: d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),
+    time: String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'), notifiedAt: null
   });
   toast(label + ': ' + it.text, () => myDayCol.doc(id).update(before));
 }
 function tomorrowMorning(){ const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9,0,0,0); return d.getTime(); }
 
 document.addEventListener('click', e => {
+  const w = e.target.closest('.when button');
+  if(w){ whenChoice = w.dataset.when; document.querySelectorAll('.when button').forEach(q => q.setAttribute('aria-pressed', q.dataset.when === whenChoice ? 'true' : 'false')); return; }
+  const s = e.target.closest('[data-save]'); if(s){ saveCapture(s.dataset.save); return; }
   const b = e.target.closest('[data-act]'); if(!b || b.tagName === 'INPUT') return;
   const id = b.dataset.id, act = b.dataset.act;
   if(act === 'done') setDone(id, true).catch(fail);
@@ -400,32 +490,27 @@ document.addEventListener('click', e => {
   else if(act === 'tomorrow') moveTo(id, tomorrowMorning(), 'Moved to tomorrow 9 AM').catch(fail);
   else if(act === 'skip'){ skipped.add(id); render(); }
 });
-document.addEventListener('change', e => {
-  const c = e.target; if(c.dataset.act !== 'toggle') return;
-  setDone(c.dataset.id, c.checked).catch(fail);
-});
-$('moreBtn').onclick = () => { showAllNext = !showAllNext; render(); };
+document.addEventListener('change', e => { const c = e.target; if(c.dataset.act === 'toggle') setDone(c.dataset.id, c.checked).catch(fail); });
 
-document.querySelectorAll('.when .pill').forEach(p => p.onclick = () => {
-  whenChoice = p.dataset.when;
-  document.querySelectorAll('.when .pill').forEach(q => q.setAttribute('aria-pressed', q === p ? 'true' : 'false'));
-});
-async function saveCapture(){
-  const ta = $('capText'); const text = ta.value.trim();
+async function saveCapture(suffix){
+  const ta = $('cap' + suffix); const text = ta.value.trim();
   if(!text){ ta.focus(); return; }
   const rec = {owner: OWNER_KEY, type: 'todo', text, status: 'pending', createdAt: Date.now(), source: 'Hub'};
-  if(whenChoice === 'tomorrow'){
-    const ts = tomorrowMorning(); const d = new Date(ts);
-    rec.dueAtTs = ts; rec.dueDateLabel = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-  }
-  // "Today" = no due time, so it sits in today's list without nagging at a set hour.
-  $('capSave').disabled = true;
-  try{ await myDayCol.add(rec); ta.value = ''; toast('Saved to My Day', null); }
+  if(whenChoice === 'tomorrow'){ const ts = tomorrowMorning(); rec.dueAtTs = ts; rec.dueDateLabel = new Date(ts).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+  else if(whenChoice === 'none'){ rec.noDate = true; }
+  const btn = document.querySelector('[data-save="' + suffix + '"]'); btn.disabled = true;
+  try{ await myDayCol.add(rec); ta.value = ''; closeSheet(); toast('Saved to My Day', null); }
   catch(err){ fail(err); }
-  finally{ $('capSave').disabled = false; }
+  finally{ btn.disabled = false; }
 }
-$('capSave').onclick = saveCapture;
-$('capText').addEventListener('keydown', e => { if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveCapture(); });
+['capD','capP'].forEach(id => $(id).addEventListener('keydown', e => { if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveCapture(id.slice(3)); }));
+
+// phone sticky sheet
+function openSheet(){ $('sheet').classList.add('open'); $('fab').style.visibility = 'hidden'; setTimeout(() => $('capP').focus(), 50); }
+function closeSheet(){ $('sheet').classList.remove('open'); $('fab').style.visibility = ''; }
+$('fab').onclick = openSheet;
+$('sheet').addEventListener('click', e => { if(e.target.id === 'sheet') closeSheet(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeSheet(); });
 
 /* ---------- toast with undo ---------- */
 let toastTimer = null;
@@ -439,45 +524,43 @@ function toast(msg, undo){
 $('toastUndo').onclick = async () => { $('toast').classList.add('hidden'); if(lastUndo){ try{ await lastUndo(); }catch(e){ fail(e); } } lastUndo = null; };
 function fail(err){ console.error(err); toast('That didn’t save — check your connection and try again.', null); }
 
-/* ---------- live connection ---------- */
-function setLive(ok, text){
-  const b = $('liveBadge'); b.classList.toggle('off', !ok);
-  b.style.color = ok ? 'var(--live)' : '';
-  $('liveText').textContent = text;
-}
+/* ---------- live data ---------- */
+function setLive(ok, text){ $('livePill').classList.toggle('off', !ok); $('livePill').style.color = ok ? 'var(--live)' : ''; $('liveText').textContent = text; }
 function startData(){
   unsubs.forEach(u => u()); unsubs = [];
-  setLive(true, 'Connecting…');
+  setLive(true, 'CONNECTING');
   unsubs.push(myDayCol.where('owner', '==', OWNER_KEY).onSnapshot(snap => {
     items = snap.docs.map(d => Object.assign({id: d.id}, d.data()));
-    setLive(!snap.metadata.fromCache, snap.metadata.fromCache ? 'Offline — showing last saved' : 'Live');
+    setLive(!snap.metadata.fromCache, snap.metadata.fromCache ? 'OFFLINE' : 'LIVE');
     render();
-  }, err => { console.error(err); setLive(false, 'Not connected — reload the page'); }));
+  }, err => { console.error(err); setLive(false, 'NOT CONNECTED'); }));
   const today = ymd(new Date());
   unsubs.push(eventsCol.where('weekOf', '==', weekEndingSunday(new Date())).onSnapshot(snap => {
     todaysEvents = snap.docs.map(d => Object.assign({id: d.id}, d.data())).filter(e => eventYmd(e) === today && !e.deleted);
     render();
   }, err => console.warn('Events not loaded:', err)));
 }
-// Re-draw every minute so "Overdue" and the date stay right if the page is left open.
-setInterval(() => { $('todayLabel').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'}); if(items.length) render(); }, 60000);
+setInterval(() => { if(!$('hubView').classList.contains('hidden')) render(); }, 60000);
+window.matchMedia('(max-width:760px)').addEventListener('change', () => render());
 
 /* ---------- sign in ---------- */
 firebase.auth().onAuthStateChanged(user => {
   if(user && String(user.email || '').toLowerCase() === HUB_EMAIL){
-    $('loginView').classList.add('hidden'); $('hubView').classList.remove('hidden');
-    $('todayLabel').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
-    startData();
+    $('loginView').classList.add('hidden');
+    ['hubView','fab','bottomTabs'].forEach(id => $(id).classList.remove('hidden'));
+    let v = 'today'; try{ v = localStorage.getItem('hubView') || 'today'; }catch(e){}
+    showView(v === 'people' || v === 'inbox' ? 'today' : v);
+    render(); startData();
   } else {
     if(user) firebase.auth().signOut();
     unsubs.forEach(u => u()); unsubs = [];
-    $('hubView').classList.add('hidden'); $('loginView').classList.remove('hidden');
+    ['hubView','fab','bottomTabs'].forEach(id => $(id).classList.add('hidden'));
+    $('loginView').classList.remove('hidden');
     if(user) $('loginErr').textContent = 'The hub is set up for Kenny’s login only.';
   }
 });
 async function signIn(){
-  $('loginErr').textContent = '';
-  $('loginBtn').disabled = true; $('loginBtn').textContent = 'Signing in…';
+  $('loginErr').textContent = ''; $('loginBtn').disabled = true; $('loginBtn').textContent = 'SIGNING IN…';
   try{ await firebase.auth().signInWithEmailAndPassword(HUB_EMAIL, $('pw').value); }
   catch(e){
     const c = e && e.code;
@@ -485,7 +568,7 @@ async function signIn(){
       : c === 'auth/too-many-requests' ? 'Too many tries — wait a minute and try again.'
       : c === 'auth/network-request-failed' ? 'No connection — check your internet.' : 'Sign-in problem: ' + ((e && e.message) || 'unknown');
   }
-  finally{ $('loginBtn').disabled = false; $('loginBtn').textContent = 'Sign in'; }
+  finally{ $('loginBtn').disabled = false; $('loginBtn').textContent = 'SIGN IN'; }
 }
 $('loginBtn').onclick = signIn;
 $('pw').addEventListener('keydown', e => { if(e.key === 'Enter') signIn(); });
