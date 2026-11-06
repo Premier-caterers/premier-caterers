@@ -132,6 +132,20 @@
   .mini-mail .w{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .mini-mail .tm{font-size:12px;color:var(--muted);flex:none;width:auto;font-weight:500}
   .warn-box{border:2.5px solid var(--ink);border-radius:12px;padding:14px 16px;background:var(--yellow);font-size:15px;line-height:1.45;display:flex;flex-direction:column;gap:6px}
+  /* ---------- WhatsApp ---------- */
+  .bubbles{display:flex;flex-direction:column;gap:8px}
+  .bubbles .lbl2{font:800 11px var(--head);letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .bub{max-width:78%;padding:10px 14px;font-size:16px;line-height:1.45;overflow-wrap:anywhere;white-space:pre-line}
+  .bub.them{background:#F2EFE8;border:2px solid var(--ink);border-radius:4px 14px 14px 14px;align-self:flex-start}
+  .bub.me{background:var(--paper);border:2px dashed var(--ink);border-radius:14px 4px 14px 14px;align-self:flex-end}
+  .bub .who{font:800 12px var(--head);letter-spacing:.04em;margin-bottom:2px}
+  .bub .t{font-size:11px;color:var(--muted);margin-top:4px;text-align:right;white-space:normal}
+  .bub .att{display:inline-flex;align-items:center;gap:6px;font-weight:700}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 6px}
+  .chips button{min-height:40px;padding:0 16px;border:2px solid var(--ink);border-radius:999px;background:var(--paper);font:800 12px var(--head);letter-spacing:.08em;display:inline-flex;align-items:center;gap:6px;color:var(--ink)}
+  .chips button[aria-pressed="true"]{background:var(--ink);color:#fff}
+  .b.todo-add{background:var(--yellow)}
+  @media (max-width:760px){ .bub{max-width:92%;font-size:15px;padding:8px 10px} .wa-ph{display:none} .chips{gap:6px} .chips button{padding:0 10px;font-size:11px;letter-spacing:.04em} }
   details.other summary{font:900 13px var(--head);letter-spacing:.12em;min-height:44px;display:flex;align-items:center;gap:10px;cursor:pointer;text-transform:uppercase;list-style:none}
   details.other summary::-webkit-details-marker{display:none}
   details.other summary::before{content:'';width:0;height:0;border-left:8px solid var(--ink);border-top:6px solid transparent;border-bottom:6px solid transparent;transition:transform .15s;flex:none}
@@ -293,7 +307,7 @@
 
       <aside class="col-side">
         <div class="ruled-list" id="mailMiniWrap">
-          <div class="sect-head"><span class="lbl" id="mailMiniHead">Emails waiting</span></div>
+          <div class="sect-head"><span class="lbl" id="mailMiniHead">Waiting on you</span></div>
           <div id="mailMini"></div>
         </div>
         <div class="ruled-list">
@@ -350,8 +364,9 @@
     <div id="v-inbox" class="view-wrap hidden" style="max-width:1000px">
       <div class="sect-head"><h1 class="view-title"><span class="hl-c">INBOX — NEEDS YOU</span></h1><span class="lbl" id="inboxCount" style="font-size:12px"></span></div>
       <div id="inboxNotice"></div>
+      <div class="chips" id="inboxChips" role="group" aria-label="Show"></div>
       <div id="inboxList"></div>
-      <details class="other" id="otherWrap"><summary id="otherHead">Other emails</summary><div id="otherList"></div></details>
+      <details class="other" id="otherWrap"><summary id="otherHead">Everything else</summary><div id="otherList"></div></details>
     </div>
 
     <!-- PEOPLE (later) -->
@@ -411,6 +426,9 @@ const inboxCol = db.collection('hubInbox');
 const outboxCol = db.collection('hubOutbox');
 const GMAIL = (id, mailbox) => 'https://mail.google.com/mail/?authuser=' + encodeURIComponent((mailbox || 'kenny') + '@thepremiercaterer.com') + '#all/' + encodeURIComponent(id);
 const GMAILem = em => GMAIL(em.threadId || em.id, em.mailbox);
+const waChatsCol = db.collection('hubWaChats'), waMsgsCol = db.collection('hubWaMsgs'), waOutCol = db.collection('hubWaOutbox');
+let waChats = [], waMsgs = [], waStatus = undefined, waFailed = [], inboxFilter = 'all';
+try{ inboxFilter = localStorage.getItem('hubInboxFilter') || 'all'; }catch(e){}
 let emails = [], emailStatus = undefined, ordersStatus = undefined, failedSends = [], composerFor = null, pinnedKey = null, cardPending = false;
 const drafts = {};
 
@@ -462,6 +480,19 @@ function waitingEmails(){
   return emails.filter(em => em.needsYou && !em.handled && !(em.snoozedUntil > now) && !(em.replyQueuedAt && em.replyQueuedAt >= (em.theirAt || 0)))
     .sort((a, b) => (b.theirAt || b.lastAt || 0) - (a.theirAt || a.lastAt || 0));
 }
+function waitingChats(){
+  const now = Date.now();
+  return waChats.filter(c => c.needsYou && !((c.handledAt || 0) >= (c.lastInAt || 0)) && !(c.snoozedUntil > now) && !((c.replyQueuedAt || 0) >= (c.lastInAt || 0)))
+    .sort((a, b) => (b.lastInAt || b.lastAt || 0) - (a.lastInAt || a.lastAt || 0));
+}
+const snoozedChats = () => waChats.filter(c => c.needsYou && !((c.handledAt || 0) >= (c.lastInAt || 0)) && c.snoozedUntil > Date.now());
+const chatsHandledToday = () => { const sod = startOfDay(Date.now()); return waChats.filter(c => (c.handledAt || 0) >= sod || (c.replyQueuedAt || 0) >= sod).length; };
+// Emails and WhatsApp chats waiting on Kenny, newest first, as one list.
+function waitingAll(){
+  return waitingEmails().map(em => ({key: 'e:' + em.id, email: em, ts: em.theirAt || em.lastAt || 0}))
+    .concat(waitingChats().map(c => ({key: 'w:' + c.id, wa: c, ts: c.lastInAt || c.lastAt || 0})))
+    .sort((a, b) => b.ts - a.ts);
+}
 const snoozedEmails = () => emails.filter(em => em.needsYou && !em.handled && em.snoozedUntil > Date.now());
 function emailsHandledToday(){
   const sod = startOfDay(Date.now());
@@ -479,7 +510,7 @@ function buildQueue(pend){
   const now = Date.now();
   const over = pend.filter(it => it.dueAtTs && it.dueAtTs < now).map(it => ({key: 't:' + it.id, task: it}));
   const rest = pend.filter(it => !(it.dueAtTs && it.dueAtTs < now)).map(it => ({key: 't:' + it.id, task: it}));
-  const mails = waitingEmails().map(em => ({key: 'e:' + em.id, email: em}));
+  const mails = waitingAll();
   let q = over.concat(mails, rest);
   if(pinnedKey){ const i = q.findIndex(x => x.key === pinnedKey); if(i > 0){ const [x] = q.splice(i, 1); q.unshift(x); } else if(i < 0) pinnedKey = null; }
   return q;
@@ -534,7 +565,7 @@ function render(){
   const visible = queue.filter(x => !skipped.has(x.key) || x.key === pinnedKey);
   const head = visible[0] || null;
   const focus = head && head.task ? head.task : null;
-  const doneCount = done.length + emailsHandledToday();
+  const doneCount = done.length + emailsHandledToday() + chatsHandledToday();
   const total = queue.length + doneCount;
 
   // Right now card (same card in Focus and Full day). While Kenny is typing a
@@ -543,7 +574,8 @@ function render(){
   if(typing){ cardPending = true; }
   else {
     cardPending = false;
-    const card = head && head.email ? emailCardHtml(head.email, queue.indexOf(head) + 1, queue.length) : focusCardHtml(focus, queue, head);
+    const card = head && head.email ? emailCardHtml(head.email, queue.indexOf(head) + 1, queue.length)
+      : head && head.wa ? waCardHtml(head.wa, queue.indexOf(head) + 1, queue.length) : focusCardHtml(focus, queue, head);
     ['focusCard','focusCardFull'].forEach(id => {
       if($(id).dataset.html !== card){
         $(id).innerHTML = card; $(id).dataset.html = card;
@@ -580,7 +612,7 @@ function render(){
   renderEmail(head);
 
   // tab counts
-  const nMail = waitingEmails().length;
+  const nMail = waitingEmails().length + waitingChats().length;
   $('tabTodo').textContent = pend.length ? 'To do · ' + pend.length : 'To do';
   $('btTodo').textContent = pend.length ? 'To do ' + pend.length : 'To do';
   $('tabInbox').textContent = nMail ? 'Inbox · ' + nMail : 'Inbox';
@@ -660,7 +692,91 @@ function mailRow(em, withActs){
     '</div>';
 }
 function miniMail(em){
-  return '<button type="button" class="mini-mail" data-act="eopen" data-id="' + esc(em.id) + '"><span class="w"><strong>' + esc(em.fromName || em.fromEmail) + '</strong> — ' + esc(em.subject || '') + '</span><span class="tm">' + esc(whenLabel(em.theirAt || em.lastAt)) + '</span></button>';
+  return '<button type="button" class="mini-mail" data-act="eopen" data-id="' + esc(em.id) + '"><span style="flex:none;display:inline-flex">' + I_MAIL + '</span><span class="w"><strong>' + esc(em.fromName || em.fromEmail) + '</strong> — ' + esc(em.subject || '') + '</span><span class="tm">' + esc(whenLabel(em.theirAt || em.lastAt)) + '</span></button>';
+}
+/* ---------- WhatsApp ---------- */
+const I_WA = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z"></path></svg>';
+const I_PLAY = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7,5 19,12 7,19"></polygon></svg>';
+const waDraftId = c => 'wa:' + c.id;
+function fmtPhone(p){ const d = String(p || '').replace(/\D/g, ''); return (d.length === 11 && d[0] === '1') ? '(' + d.slice(1,4) + ') ' + d.slice(4,7) + '-' + d.slice(7) : (p || ''); }
+const ATT_NAMES = {ptt:'Voice note', audio:'Voice note', image:'Photo', video:'Video', sticker:'Sticker', document:'File', file:'File'};
+function prettyLast(t){ const m = String(t || '').match(/^\[([a-z]+)\]$/i); return m ? (ATT_NAMES[m[1].toLowerCase()] || 'File') : (t || ''); }
+const waLink = c => { const d = String(c.phone || '').replace(/\D/g, ''); return d ? 'https://wa.me/' + d : ''; };
+function waAttach(m){
+  const a = String(m.attachment || '').toLowerCase(), t = String(m.type || '').toLowerCase();
+  if(t === 'ptt' || t === 'audio' || a === 'ptt' || a === 'audio') return I_PLAY + 'Voice note';
+  if(t === 'image' || a === 'image') return 'Photo';
+  if(t === 'video' || a === 'video') return 'Video';
+  if(t === 'sticker' || a === 'sticker') return 'Sticker';
+  if(t === 'call') return '';
+  if(a) return 'File · ' + esc(m.attachment);
+  return '';
+}
+function chatMsgs(c, n){ return waMsgs.filter(m => m.chatKey === c.chatKey).sort((a, b) => (a.at || 0) - (b.at || 0)).slice(-n); }
+function bubbleHtml(m, c){
+  const att = waAttach(m);
+  return '<div class="bub ' + (m.fromMe ? 'me' : 'them') + '">' +
+    (c.isGroup && !m.fromMe ? '<div class="who">' + esc(m.sender || '') + '</div>' : '') +
+    (att ? '<div class="att">' + att + (att.indexOf('Voice note') >= 0 ? '</div><div class="t" style="text-align:left;margin-top:2px">Listen in WhatsApp for now' : '') + '</div>' : '') +
+    (m.text ? '<div>' + esc(m.text) + '</div>' : (att ? '' : '<div>' + esc('[no text]') + '</div>')) +
+    '<div class="t">' + esc(whenLabel(m.at || 0)) + (m.fromMe ? ' · You' : '') + '</div></div>';
+}
+function waCardHtml(c, pos, n){
+  const id = esc(c.id), did = esc(waDraftId(c)), open = composerFor === waDraftId(c);
+  const waited = Date.now() - (c.lastInAt || c.lastAt || Date.now());
+  const msgs = chatMsgs(c, 6), link = waLink(c);
+  const canSend = !waStatus || waStatus.canSend !== false;
+  let h = '<div class="rn-top"><h1 class="rn-title"><span class="hl-c">RIGHT NOW</span></h1>' +
+    '<span class="rn-count">' + pos + ' of ' + n + '</span>' +
+    '<span class="rn-due' + (waited > 4 * 3600000 ? ' hl-p' : '') + '">' + I.clock + 'WAITING ' + esc(ago(c.lastInAt || c.lastAt).toUpperCase()) + '</span></div>' +
+    '<div class="rn-kind" style="flex-wrap:wrap">' + I_WA + 'WHATSAPP' + (c.isGroup ? ' · GROUP' : '') + ' · ' + esc(fmtPhone(c.name || c.phone) || 'Unknown') +
+      ' <span style="font-weight:500;color:var(--muted)">' + (c.phone && !c.isGroup && c.phone !== c.name ? '<span class="wa-ph">· ' + esc(fmtPhone(c.phone)) + ' </span>' : '') + '· ' + esc(whenLabel(c.lastInAt || c.lastAt)) + '</span></div>' +
+    '<div class="bubbles">' + (msgs.length > 1 ? '<div class="lbl2">Latest in this chat</div>' : '') +
+      (msgs.length ? msgs.map(m => bubbleHtml(m, c)).join('') : '<div class="bub them"><div>' + esc(c.lastText || '') + '</div></div>') + '</div>';
+  const rest = '<button type="button" class="b" data-act="wdone" data-id="' + id + '">Done</button>' +
+    '<button type="button" class="b" data-act="wlater" data-id="' + id + '">Later (2 hrs)</button>' +
+    (open ? '' : '<button type="button" class="b" data-act="skip" data-key="w:' + id + '">Skip</button>') +
+    (link ? '<a class="b" href="' + esc(link) + '" target="_blank" rel="noopener">Open in WhatsApp</a>' : '') +
+    '<button type="button" class="b todo-add" data-act="wtodo" data-id="' + id + '">+ To do</button>';
+  if(open){
+    h += '<div class="composer"><label for="rt-' + did + '">Your WhatsApp reply — goes to ' + (c.isGroup ? 'the group ' : '') + esc(c.name || c.phone || 'this chat') + '</label>' +
+      '<textarea class="reply-ta" id="rt-' + did + '" data-id="' + did + '" placeholder="Type, or write with your pen"></textarea>' +
+      (canSend
+        ? '<div class="rn-btns"><button type="button" class="b-main" data-act="wsend" data-id="' + id + '">SEND ON WHATSAPP</button>' +
+          '<button type="button" class="b" data-act="ecancel" data-id="' + id + '">Cancel</button>' +
+          '<span class="note">Sends from your WhatsApp (201-250-9487), within a minute.</span></div>'
+        : '<div class="self-note">Sending from the hub isn’t switched on yet — add your WaAPI key to the WhatsApp script (see the setup steps). Until then, answer in WhatsApp.</div>' +
+          '<div class="rn-btns"><button type="button" class="b" data-act="ecancel" data-id="' + id + '">Cancel</button></div>') +
+      '</div><div class="rn-btns">' + rest + '</div>';
+  } else {
+    h += '<div class="rn-btns"><button type="button" class="b-main" data-act="wreply" data-id="' + id + '">REPLY</button>' + rest + '</div>';
+  }
+  return h;
+}
+function waRow(c, withActs){
+  const snoozed = c.snoozedUntil > Date.now();
+  const nIn = waMsgs.filter(m => m.chatKey === c.chatKey && !m.fromMe && (m.at || 0) > Math.max(c.handledAt || 0, c.lastOutAt || 0)).length;
+  const sub = c.isGroup ? 'group' + (nIn ? ' · ' + nIn + ' new' : '') : (nIn > 1 ? nIn + ' messages' : (nIn === 1 ? '1 message' : 'chat'));
+  return '<div class="mail-row"><span class="box">' + I_WA + 'WHATSAPP</span>' +
+    '<div class="what"><div class="w1"><strong>' + esc(fmtPhone(c.name || c.phone) || 'Unknown') + '</strong> — ' + esc(sub) +
+      (snoozed ? ' <span class="tag hl-y">LATER · ' + esc(fmtTime(c.snoozedUntil)) + '</span>' : '') + '</div>' +
+      '<div class="w2">' + esc((c.isGroup && !c.lastFromMe && c.lastSender ? c.lastSender + ': ' : '') + prettyLast(c.lastText)) + '</div></div>' +
+    '<span class="tm">' + esc(whenLabel(c.lastInAt || c.lastAt || 0)) + '</span>' +
+    (withActs ? '<span class="acts" style="display:flex;gap:8px"><button type="button" class="sm pri" data-act="wopen" data-id="' + esc(c.id) + '">REPLY</button>' +
+      '<button type="button" class="sm" data-act="wdone" data-id="' + esc(c.id) + '">Done</button></span>'
+    : '<span class="acts" style="display:flex;gap:8px"><button type="button" class="sm" data-act="wopen" data-id="' + esc(c.id) + '">Open</button></span>') +
+    '</div>';
+}
+function miniWa(c){
+  return '<button type="button" class="mini-mail" data-act="wopen" data-id="' + esc(c.id) + '"><span style="flex:none;display:inline-flex">' + I_WA + '</span><span class="w"><strong>' + esc(fmtPhone(c.name || c.phone)) + '</strong> — ' + esc(prettyLast(c.lastText)) + '</span><span class="tm">' + esc(whenLabel(c.lastInAt || c.lastAt || 0)) + '</span></button>';
+}
+const miniAny = x => x.wa ? miniWa(x.wa) : miniMail(x.email);
+function waState(){
+  if(waStatus === undefined) return 'loading';
+  if(waStatus === null || !waStatus.lastRun) return 'off';
+  if(waStatus.connected === false) return 'disconnected';
+  if(!waStatus.ok) return 'error';
+  return (Date.now() - (waStatus.lastRun || 0) > 5 * 60000) ? 'stale' : 'ok';
 }
 function emailState(){
   if(emailStatus === undefined) return 'loading';
@@ -676,19 +792,20 @@ function ordersState(){
 }
 function renderEmail(head){
   const waiting = waitingEmails(), snoozed = snoozedEmails();
-  const headId = head && head.email ? head.email.id : null;
-  const st = emailState();
+  const all = waitingAll();
+  const headKey = head ? head.key : null;
+  const st = emailState(), wst = waState();
   // focus side list (skip the one already in Right now)
-  const side = waiting.filter(em => em.id !== headId).slice(0, 3);
+  const side = all.filter(x => x.key !== headKey).slice(0, 3);
   $('mailMiniWrap').classList.toggle('hidden', !side.length);
-  $('mailMiniHead').textContent = 'EMAILS WAITING · ' + waiting.length;
-  $('mailMini').innerHTML = side.map(miniMail).join('');
+  $('mailMiniHead').textContent = 'WAITING ON YOU · ' + all.length;
+  $('mailMini').innerHTML = side.map(miniAny).join('');
   // full day list
-  $('fInboxHead').textContent = 'INBOX — NEEDS YOU' + (waiting.length ? ' · ' + waiting.length : '');
-  $('fInbox').innerHTML = st === 'off'
-    ? '<div class="placeholder-box">Email isn’t connected yet — finish the one-time setup (the HubSync script).</div>'
-    : (waiting.length ? waiting.slice(0, 5).map(miniMail).join('') + (waiting.length > 5 ? '<button type="button" class="link-btn" data-act="goinbox">See all ' + waiting.length + '</button>' : '')
-                      : '<div class="empty-line">No emails waiting on you.</div>');
+  $('fInboxHead').textContent = 'INBOX — NEEDS YOU' + (all.length ? ' · ' + all.length : '');
+  $('fInbox').innerHTML = (st === 'off' && wst === 'off')
+    ? '<div class="placeholder-box">Email and WhatsApp aren’t connected yet — finish the one-time setup.</div>'
+    : (all.length ? all.slice(0, 5).map(miniAny).join('') + (all.length > 5 ? '<button type="button" class="link-btn" data-act="goinbox">See all ' + all.length + '</button>' : '')
+                  : '<div class="empty-line">Nothing waiting on you.</div>');
   // inbox tab
   let notice = '';
   if(st === 'off') notice = '<div class="warn-box"><strong>Email isn’t connected yet.</strong>Finish the one-time setup of the “Premier Hub Sync” script (signed in as kenny@), and your emails will show up here within a minute.</div>';
@@ -700,29 +817,49 @@ function renderEmail(head){
     else if(ost === 'stale') notice += '<div class="warn-box" style="margin-top:8px"><strong>orders@ stopped updating.</strong>Last ran ' + esc(ago(ordersStatus.lastRun)) + ' ago. Open the orders@ Premier Hub Sync script and run HS_setup again.</div>';
     else if(ost === 'error') notice += '<div class="warn-box" style="margin-top:8px"><strong>orders@ sync hit a problem.</strong>' + esc(ordersStatus.error || '') + '</div>';
   }
+  if(wst === 'off') notice += '<div class="warn-box" style="margin-top:8px"><strong>WhatsApp isn’t connected to the hub yet.</strong>Finish the WhatsApp setup steps (the WhatsApp Bridge script, signed in as kenny@).</div>';
+  else if(wst === 'disconnected') notice += '<div class="warn-box" style="margin-top:8px"><strong>WhatsApp is disconnected.</strong>Open waapi.app and scan the QR code again from WhatsApp on your iPhone (Settings → Linked Devices → Link a Device). Messages that arrive while it’s disconnected are lost.</div>';
+  else if(wst === 'stale') notice += '<div class="warn-box" style="margin-top:8px"><strong>WhatsApp replies stopped going out.</strong>The WhatsApp script last checked in ' + esc(ago(waStatus.lastRun)) + ' ago. Open the WhatsApp Bridge script and run WH_setup again.</div>';
+  else if(wst === 'error') notice += '<div class="warn-box" style="margin-top:8px"><strong>WhatsApp hit a problem.</strong>' + esc(waStatus.error || '') + '</div>';
+  waFailed.forEach(f => {
+    const c = waChats.find(x => x.chatKey === f.chatKey);
+    notice += '<div class="warn-box" style="margin-top:8px"><strong>A WhatsApp reply didn’t send.</strong>' + esc(c ? c.name : '') + ' — ' + esc(f.error || '') +
+      '<span><button type="button" class="link-btn" style="display:inline;min-height:0;padding:0" data-act="wclearfail" data-id="' + esc(f.id) + '">Dismiss</button></span></div>';
+  });
   failedSends.forEach(f => {
     notice += '<div class="warn-box" style="margin-top:8px"><strong>A reply didn’t send.</strong>' + esc(f.subject || '') + ' — ' + esc(f.error || '') +
       '<span><a href="' + GMAIL(f.threadId, f.mailbox) + '" target="_blank" rel="noopener">Open in Gmail</a> · <button type="button" class="link-btn" style="display:inline;min-height:0;padding:0" data-act="eclearfail" data-id="' + esc(f.id) + '">Dismiss</button></span></div>';
   });
   $('inboxNotice').innerHTML = notice;
-  $('inboxCount').textContent = waiting.length ? waiting.length + ' WAITING' : '';
-  const list = waiting.concat(snoozed);
-  $('inboxList').innerHTML = st === 'off' ? '' : (list.length ? list.map(em => mailRow(em, true)).join('') : '<div class="empty-line">No emails waiting on you.</div>');
-  const others = emails.filter(em => !em.needsYou && !em.handled).sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));
+  $('inboxCount').textContent = all.length ? all.length + ' WAITING' : '';
+  const nE = waiting.length, nW = all.length - nE;
+  const chip = (k, label, icon) => '<button type="button" data-act="ifilter" data-id="' + k + '" aria-pressed="' + (inboxFilter === k) + '">' + icon + label + '</button>';
+  $('inboxChips').innerHTML = chip('all', 'ALL · ' + all.length, '') + chip('email', 'EMAIL · ' + nE, I_MAIL) + chip('wa', 'WHATSAPP · ' + nW, I_WA);
+  const list = all.concat(snoozed.map(em => ({key: 'e:' + em.id, email: em})), snoozedChats().map(c => ({key: 'w:' + c.id, wa: c})))
+    .filter(x => inboxFilter === 'all' || (inboxFilter === 'wa' ? !!x.wa : !!x.email));
+  $('inboxList').innerHTML = (st === 'off' && wst === 'off') ? '' : (list.length ? list.map(x => x.wa ? waRow(x.wa, true) : mailRow(x.email, true)).join('')
+    : '<div class="empty-line">' + (inboxFilter === 'wa' ? 'No WhatsApp chats waiting on you.' : inboxFilter === 'email' ? 'No emails waiting on you.' : 'Nothing waiting on you.') + '</div>');
+  const waitingKeys = new Set(list.map(x => x.key));
+  const recent = Date.now() - 3 * 86400000;
+  const others = (inboxFilter === 'wa' ? [] : emails.filter(em => !em.needsYou && !em.handled).map(em => ({email: em, ts: em.lastAt || 0})))
+    .concat(inboxFilter === 'email' ? [] : waChats.filter(c => !waitingKeys.has('w:' + c.id) && (c.lastAt || 0) > recent).map(c => ({wa: c, ts: c.lastAt || 0})))
+    .sort((a, b) => b.ts - a.ts);
   $('otherWrap').classList.toggle('hidden', !others.length);
-  $('otherHead').textContent = 'Other emails · ' + others.length + ' (receipts, notices, ones you already answered)';
-  $('otherList').innerHTML = others.slice(0, 60).map(em => mailRow(em, false)).join('');
+  $('otherHead').textContent = 'Everything else · ' + others.length + ' (receipts, notices, chats you already answered)';
+  $('otherList').innerHTML = others.slice(0, 60).map(x => x.wa ? waRow(x.wa, false) : mailRow(x.email, false)).join('');
 }
 function renderLive(){
   const st = emailState(), phone = window.matchMedia('(max-width:760px)').matches;
   const ost = ordersState();
   const mailBad = st === 'stale' || st === 'error' || ost === 'stale' || ost === 'error';
   const mail = mailBad ? 'EMAIL ✗' : st === 'ok' ? 'EMAIL ✓' : st === 'off' ? 'EMAIL · SET UP' : st === 'loading' ? 'EMAIL …' : 'EMAIL ✗';
+  const wst = waState(), waBad = wst === 'stale' || wst === 'error' || wst === 'disconnected';
+  const wa = wst === 'ok' ? 'WHATSAPP ✓' : wst === 'off' ? 'WHATSAPP · SET UP' : wst === 'loading' ? 'WHATSAPP …' : 'WHATSAPP ✗';
   const base = $('livePill').dataset.base || 'CONNECTING';
-  const ok = base === 'LIVE' && !mailBad;
+  const ok = base === 'LIVE' && !mailBad && !waBad;
   $('livePill').classList.toggle('off', !ok);
   $('livePill').style.color = ok ? 'var(--live)' : '';
-  $('liveText').textContent = phone ? (mailBad ? 'EMAIL ✗' : base) : base + ' · MY DAY ✓ · ' + mail;
+  $('liveText').textContent = phone ? (mailBad ? 'EMAIL ✗' : waBad ? 'WHATSAPP ✗' : base) : base + ' · MY DAY ✓ · ' + mail + ' · ' + wa;
 }
 function todoRow(it){
   const isDone = it.status === 'done', d = dueInfo(it);
@@ -855,6 +992,14 @@ document.addEventListener('click', e => {
   else if(act === 'edone') emailDone(id).catch(fail);
   else if(act === 'elater') emailLater(id).catch(fail);
   else if(act === 'goinbox') showView('inbox');
+  else if(act === 'ifilter'){ inboxFilter = id; try{ localStorage.setItem('hubInboxFilter', id); }catch(e){} render(); }
+  else if(act === 'wreply'){ composerFor = 'wa:' + id; render(); focusReply('wa:' + id); }
+  else if(act === 'wopen'){ pinnedKey = 'w:' + id; skipped.delete(pinnedKey); composerFor = 'wa:' + id; const c = waChats.find(x => x.id === id); if(c && c.snoozedUntil > Date.now()) waPatch(id, {snoozedUntil: null}).catch(fail); showView('today'); render(); focusReply('wa:' + id); }
+  else if(act === 'wsend') sendWa(id).catch(fail);
+  else if(act === 'wdone') waDone(id).catch(fail);
+  else if(act === 'wlater') waLater(id).catch(fail);
+  else if(act === 'wtodo') waTodo(id).catch(fail);
+  else if(act === 'wclearfail') waOutCol.doc(id).update({dismissed: true}).catch(fail);
   else if(act === 'eclearfail') outboxCol.doc(id).update({dismissed: true}).catch(fail);
 });
 document.addEventListener('change', e => { const c = e.target; if(c.dataset.act === 'toggle') setDone(c.dataset.id, c.checked).catch(fail); });
@@ -882,6 +1027,42 @@ async function emailLater(id){
   if(composerFor === id) composerFor = null;
   if(pinnedKey === 'e:' + id) pinnedKey = null;
   toast('Back in 2 hours: ' + (em.subject || 'email'), () => emailPatch(id, {snoozedUntil: null}));
+}
+/* ---------- WhatsApp actions ---------- */
+const waPatch = (id, p) => waChatsCol.doc(id).update(p);
+async function waDone(id){
+  const c = waChats.find(x => x.id === id); if(!c) return;
+  const before = {handledAt: c.handledAt || null};
+  await waPatch(id, {handledAt: Date.now()});
+  if(composerFor === 'wa:' + id) composerFor = null;
+  if(pinnedKey === 'w:' + id) pinnedKey = null;
+  toast('Done: ' + (c.name || 'WhatsApp chat'), () => waPatch(id, before));
+}
+async function waLater(id){
+  const c = waChats.find(x => x.id === id); if(!c) return;
+  await waPatch(id, {snoozedUntil: Date.now() + SNOOZE_MS});
+  if(composerFor === 'wa:' + id) composerFor = null;
+  if(pinnedKey === 'w:' + id) pinnedKey = null;
+  toast('Back in 2 hours: ' + (c.name || 'WhatsApp chat'), () => waPatch(id, {snoozedUntil: null}));
+}
+async function waTodo(id){
+  const c = waChats.find(x => x.id === id); if(!c) return;
+  const text = 'WhatsApp ' + (c.name || c.phone || '') + ': ' + String(c.lastText || '').slice(0, 140);
+  const ref = await myDayCol.add({owner: OWNER_KEY, type: 'todo', text, status: 'pending', createdAt: Date.now(), source: 'Hub'});
+  toast('Added to My Day', ref && ref.id ? () => myDayCol.doc(ref.id).update({status: 'done', doneAt: Date.now()}) : null);
+}
+async function sendWa(id){
+  const c = waChats.find(x => x.id === id); if(!c) return;
+  const did = 'wa:' + id, body = (drafts[did] || '').trim();
+  if(!body){ toast('Write your message first.', null); focusReply(did); return; }
+  const btns = document.querySelectorAll('[data-act="wsend"][data-id="' + CSS.escape(id) + '"]'); btns.forEach(b => b.disabled = true);
+  try{
+    await waOutCol.add({chatJid: c.chatJid || '', chatKey: c.chatKey || id, body, status: 'queued', createdAt: Date.now(), by: HUB_EMAIL});
+    await waPatch(id, {replyQueuedAt: Date.now()});
+    delete drafts[did]; composerFor = null;
+    if(pinnedKey === 'w:' + id) pinnedKey = null;
+    toast('WhatsApp to ' + (c.name || 'chat') + ' is on its way — it sends within a minute.', null);
+  } finally { btns.forEach(b => b.disabled = false); }
 }
 async function sendReply(id){
   const em = emails.find(x => x.id === id); if(!em) return;
@@ -946,6 +1127,14 @@ function startData(){
   }, err => { console.warn('Email not loaded:', err); }));
   unsubs.push(db.collection('hubSyncStatus').doc('email').onSnapshot(d => { emailStatus = d.exists ? d.data() : null; render(); },
     err => { console.warn('Email status not loaded:', err); emailStatus = null; render(); }));
+  unsubs.push(waChatsCol.onSnapshot(snap => { waChats = snap.docs.map(d => Object.assign({id: d.id}, d.data())); render(); },
+    err => console.warn('WhatsApp chats not loaded:', err)));
+  unsubs.push(waMsgsCol.where('at', '>=', Date.now() - 4 * 86400000).onSnapshot(snap => { waMsgs = snap.docs.map(d => Object.assign({id: d.id}, d.data())); render(); },
+    err => console.warn('WhatsApp messages not loaded:', err)));
+  unsubs.push(db.collection('hubSyncStatus').doc('whatsapp').onSnapshot(d => { waStatus = d.exists ? d.data() : null; render(); },
+    err => { console.warn('WhatsApp status not loaded:', err); waStatus = null; render(); }));
+  unsubs.push(waOutCol.where('status', '==', 'failed').onSnapshot(snap => { waFailed = snap.docs.map(d => Object.assign({id: d.id}, d.data())).filter(f => !f.dismissed); render(); },
+    err => console.warn('WhatsApp outbox not loaded:', err)));
   unsubs.push(db.collection('hubSyncStatus').doc('email_orders').onSnapshot(d => { ordersStatus = d.exists ? d.data() : null; render(); },
     err => { console.warn('orders@ status not loaded:', err); ordersStatus = null; render(); }));
   unsubs.push(outboxCol.where('status', '==', 'failed').onSnapshot(snap => {
