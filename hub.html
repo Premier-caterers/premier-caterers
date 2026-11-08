@@ -145,6 +145,9 @@
   .chips button{min-height:40px;padding:0 16px;border:2px solid var(--ink);border-radius:999px;background:var(--paper);font:800 12px var(--head);letter-spacing:.08em;display:inline-flex;align-items:center;gap:6px;color:var(--ink)}
   .chips button[aria-pressed="true"]{background:var(--ink);color:#fff}
   .b.todo-add{background:var(--yellow)}
+  .vplay{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border:2px solid var(--ink);border-radius:999px;background:var(--cyan);font:800 12px var(--head);letter-spacing:.06em;color:var(--ink);margin-right:4px}
+  .vplay[aria-pressed="true"]{background:var(--ink);color:#fff}
+  .vtext{font-style:italic;margin-top:6px}
   @media (max-width:760px){ .bub{max-width:92%;font-size:15px;padding:8px 10px} .wa-ph{display:none} .chips{gap:6px} .chips button{padding:0 10px;font-size:11px;letter-spacing:.04em} }
   details.other summary{font:900 13px var(--head);letter-spacing:.12em;min-height:44px;display:flex;align-items:center;gap:10px;cursor:pointer;text-transform:uppercase;list-style:none}
   details.other summary::-webkit-details-marker{display:none}
@@ -713,12 +716,24 @@ function waAttach(m){
   return '';
 }
 function chatMsgs(c, n){ return waMsgs.filter(m => m.chatKey === c.chatKey).sort((a, b) => (a.at || 0) - (b.at || 0)).slice(-n); }
+function voiceHtml(m){
+  const play = m.hasAudio
+    ? '<button type="button" class="vplay" data-act="wplay" data-id="' + esc(m.id) + '" aria-label="Play voice note">' + I_PLAY + '<span>PLAY</span></button>'
+    : '';
+  const st = m.mediaState;
+  const words = m.transcript
+    ? '<div class="vtext">“' + esc(m.transcript) + '”</div>'
+    : (st === 'pending' || st === 'transcribing') ? '<div class="t" style="text-align:left">Typing it out…</div>'
+    : st === 'failed' ? '<div class="t" style="text-align:left">Couldn’t type this one out — listen in WhatsApp.</div>'
+    : '<div class="t" style="text-align:left">Listen in WhatsApp.</div>';
+  return '<div class="att">' + (play || I_PLAY) + 'Voice note</div>' + words;
+}
 function bubbleHtml(m, c){
-  const att = waAttach(m);
+  const att = waAttach(m), isVoice = att.indexOf('Voice note') >= 0;
   return '<div class="bub ' + (m.fromMe ? 'me' : 'them') + '">' +
     (c.isGroup && !m.fromMe ? '<div class="who">' + esc(m.sender || '') + '</div>' : '') +
-    (att ? '<div class="att">' + att + (att.indexOf('Voice note') >= 0 ? '</div><div class="t" style="text-align:left;margin-top:2px">Listen in WhatsApp for now' : '') + '</div>' : '') +
-    (m.text ? '<div>' + esc(m.text) + '</div>' : (att ? '' : '<div>' + esc('[no text]') + '</div>')) +
+    (isVoice ? voiceHtml(m) : att ? '<div class="att">' + att + '</div>' : '') +
+    (m.text && !isVoice ? '<div>' + esc(m.text) + '</div>' : (att ? '' : '<div>' + esc('[no text]') + '</div>')) +
     '<div class="t">' + esc(whenLabel(m.at || 0)) + (m.fromMe ? ' · You' : '') + '</div></div>';
 }
 function waCardHtml(c, pos, n){
@@ -996,6 +1011,7 @@ document.addEventListener('click', e => {
   else if(act === 'wreply'){ composerFor = 'wa:' + id; render(); focusReply('wa:' + id); }
   else if(act === 'wopen'){ pinnedKey = 'w:' + id; skipped.delete(pinnedKey); composerFor = 'wa:' + id; const c = waChats.find(x => x.id === id); if(c && c.snoozedUntil > Date.now()) waPatch(id, {snoozedUntil: null}).catch(fail); showView('today'); render(); focusReply('wa:' + id); }
   else if(act === 'wsend') sendWa(id).catch(fail);
+  else if(act === 'wplay') playVoice(b, id);
   else if(act === 'wdone') waDone(id).catch(fail);
   else if(act === 'wlater') waLater(id).catch(fail);
   else if(act === 'wtodo') waTodo(id).catch(fail);
@@ -1029,6 +1045,28 @@ async function emailLater(id){
   toast('Back in 2 hours: ' + (em.subject || 'email'), () => emailPatch(id, {snoozedUntil: null}));
 }
 /* ---------- WhatsApp actions ---------- */
+let voiceAudio = null, voiceBtn = null;
+async function playVoice(btn, id){
+  if(voiceAudio && voiceBtn === btn){ voiceAudio.pause(); voiceAudio = null; btn.setAttribute('aria-pressed', 'false'); btn.querySelector('span').textContent = 'PLAY'; return; }
+  if(voiceAudio){ voiceAudio.pause(); if(voiceBtn){ voiceBtn.setAttribute('aria-pressed', 'false'); voiceBtn.querySelector('span').textContent = 'PLAY'; } }
+  btn.querySelector('span').textContent = 'LOADING…';
+  try{
+    const d = await db.collection('hubWaMedia').doc(id).get();
+    if(!d.exists) throw new Error('missing');
+    const m = d.data(), bin = atob(m.b64), bytes = new Uint8Array(bin.length);
+    for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes], {type: String(m.mimetype || 'audio/ogg').split(';')[0]}));
+    const a = new Audio(url); voiceAudio = a; voiceBtn = btn;
+    const reset = () => { btn.setAttribute('aria-pressed', 'false'); btn.querySelector('span').textContent = 'PLAY'; if(voiceAudio === a) voiceAudio = null; };
+    a.onended = reset;
+    a.onerror = () => { reset(); toast('This device can’t play it — open it in WhatsApp.', null); };
+    await a.play();
+    btn.setAttribute('aria-pressed', 'true'); btn.querySelector('span').textContent = 'STOP';
+  }catch(e){
+    btn.querySelector('span').textContent = 'PLAY';
+    toast(e && e.name === 'NotSupportedError' ? 'This device can’t play it — open it in WhatsApp.' : 'Couldn’t load that voice note.', null);
+  }
+}
 const waPatch = (id, p) => waChatsCol.doc(id).update(p);
 async function waDone(id){
   const c = waChats.find(x => x.id === id); if(!c) return;
