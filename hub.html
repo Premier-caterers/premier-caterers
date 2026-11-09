@@ -133,6 +133,27 @@
   .mini-mail .w{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .mini-mail .tm{font-size:12px;color:var(--muted);flex:none;width:auto;font-weight:500}
   .warn-box{border:2.5px solid var(--ink);border-radius:12px;padding:14px 16px;background:var(--yellow);font-size:15px;line-height:1.45;display:flex;flex-direction:column;gap:6px}
+  /* ---------- add / edit + reminders ---------- */
+  .add-btn{min-height:48px;padding:0 18px;border:3px solid var(--ink);border-radius:12px;background:var(--cyan);font:800 14px var(--head);letter-spacing:.04em;box-shadow:3px 3px 0 var(--ink);flex:none}
+  .add-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+  .pen{width:44px;height:44px;border:2px solid var(--ink);border-radius:10px;background:var(--paper);display:inline-flex;align-items:center;justify-content:center;flex:none}
+  .bell-tag{display:inline-flex;align-items:center;gap:4px;font:800 11px var(--head);letter-spacing:.05em;flex:none}
+  .ed-wrap{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:40;display:flex;align-items:center;justify-content:center;padding:16px}
+  .ed{background:var(--paper);border:3px solid var(--ink);border-radius:18px;box-shadow:8px 8px 0 var(--ink);padding:24px;width:100%;max-width:460px;max-height:calc(100vh - 32px);overflow:auto;display:flex;flex-direction:column;gap:12px}
+  .ed h2{margin:0;font:900 18px var(--head);letter-spacing:.06em}
+  .ed .fl{font:800 11px var(--head);letter-spacing:.1em;text-transform:uppercase;margin-top:4px}
+  .ed input[type=text],.ed input[type=date],.ed input[type=time]{border:2px solid var(--ink);border-radius:10px;padding:11px 12px;font:17px Inter,sans-serif;min-height:48px;background:var(--paper);color:var(--ink)}
+  .ed .chips{margin:0}
+  .ed .chips button[disabled]{opacity:.4;cursor:not-allowed}
+  .ed .remind{border:2px dashed var(--ink);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;background:#FFFBE0}
+  .ed .chk{display:flex;gap:10px;align-items:center;font-size:15px;min-height:36px}
+  .ed .chk input{width:22px;height:22px;accent-color:#1A1A1A;flex:none}
+  .ed .row-btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+  .ed .row-btns .del{margin-left:auto;border-style:dashed}
+  .ed .note{font-size:13px;color:var(--muted)}
+  .alarm{background:var(--paper);border:3px solid var(--ink);border-radius:18px;box-shadow:10px 10px 0 var(--ink);padding:26px;width:100%;max-width:520px;display:flex;flex-direction:column;gap:14px}
+  .alarm .what{font:800 24px var(--head);line-height:1.25;overflow-wrap:anywhere}
+  @media (max-width:760px){ .ed-wrap{align-items:flex-end;padding:0} .ed{border-radius:18px 18px 0 0;max-height:92vh;box-shadow:none} .alarm .what{font-size:20px} }
   /* ---------- WhatsApp ---------- */
   .bubbles{display:flex;flex-direction:column;gap:8px}
   .bubbles .lbl2{font:800 11px var(--head);letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
@@ -352,7 +373,7 @@
 
     <!-- TO DO -->
     <div id="v-todo" class="view-wrap hidden">
-      <div class="sect-head"><h1 class="view-title"><span class="hl-y">MY TO DO LIST</span></h1><span class="lbl" id="todoCount"></span></div>
+      <div class="sect-head"><h1 class="view-title"><span class="hl-y">MY TO DO LIST</span></h1><span style="display:flex;gap:12px;align-items:center"><span class="lbl" id="todoCount"></span><button type="button" class="add-btn" data-act="addtodo">+ ADD TO-DO</button></span></div>
       <div id="todoList"></div>
       <div class="lbl" style="margin-top:14px" id="laterHead"></div>
       <div id="laterList"></div>
@@ -360,7 +381,7 @@
 
     <!-- SCHEDULE -->
     <div id="v-sched" class="view-wrap hidden">
-      <div class="sect-head"><h1 class="view-title"><span class="hl-p">TODAY’S SCHEDULE</span></h1></div>
+      <div class="sect-head"><h1 class="view-title"><span class="hl-p">TODAY’S SCHEDULE</span></h1><button type="button" class="add-btn" data-act="addsched">+ ADD TO SCHEDULE</button></div>
       <div class="ruled-list" id="schedList"></div>
     </div>
 
@@ -399,6 +420,8 @@
 </nav>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Write it down"><div class="sticky" id="stickyPhone"></div></div>
 
+<div class="ed-wrap hidden" id="edWrap" role="dialog" aria-modal="true" aria-labelledby="edTitle"><div class="ed" id="ed"></div></div>
+<div class="ed-wrap hidden" id="alarmWrap" role="alertdialog" aria-modal="true" aria-labelledby="alarmWhat"><div class="alarm" id="alarm"></div></div>
 <div id="toast" class="toast hidden" role="status"><span id="toastMsg"></span><button type="button" id="toastUndo">Undo</button></div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -536,7 +559,7 @@ const laterItems = () => items.filter(it => isActionable(it) && it.status !== 'd
 function scheduleToday(){
   const sod = startOfDay(Date.now()), eod = endOfDay(Date.now());
   const out = items.filter(it => it.type === 'schedule' && it.status !== 'done' && it.dueAtTs && it.dueAtTs >= sod && it.dueAtTs <= eod)
-    .map(it => ({ts: it.dueAtTs, timed: !!it.time, what: it.text, sub: '', dur: 60, isEvent: false}));
+    .map(it => ({ts: it.dueAtTs, timed: !!it.time, what: it.text, sub: '', dur: 60, isEvent: false, item: it}));
   todaysEvents.forEach(e => {
     const t = e.startTime || e.time || '', ts = hhmmToTs(t);
     const sub = [e.type, e.eventNumber ? 'Job ' + e.eventNumber : (e.job ? 'Job ' + e.job : ''), e.addr].filter(Boolean).join(' · ');
@@ -615,15 +638,15 @@ function render(){
   const upcoming = sched.filter(s => !s.timed || s.ts >= nowTs - 30 * 60000).slice(0, 2);
   $('comingHead').textContent = window.matchMedia('(max-width:760px)').matches ? 'NEXT ON THE SCHEDULE' : 'COMING UP';
   $('comingList').innerHTML = upcoming.length ? upcoming.map(schedRow).join('') : '<div class="empty-line">Nothing else scheduled today.</div>';
-  $('schedList').innerHTML = sched.length ? sched.map(schedRow).join('') : '<div class="empty-line">Nothing scheduled today.</div>';
+  $('schedList').innerHTML = sched.length ? sched.map(schedRowEd).join('') : '<div class="empty-line">Nothing scheduled today.</div>';
 
   // to-do view
   const list = pend.concat(done.slice().sort((a,b) => (a.doneAt||0) - (b.doneAt||0)));
-  $('todoList').innerHTML = list.length ? list.map(todoRow).join('') : '<div class="empty-line">Nothing on My Day yet.</div>';
+  $('todoList').innerHTML = list.length ? list.map(todoRowEd).join('') : '<div class="empty-line">Nothing on My Day yet.</div>';
   $('todoCount').textContent = total ? done.length + ' OF ' + total + ' DONE' : '';
   const later = laterItems();
   $('laterHead').textContent = later.length ? 'LATER DAYS · ' + later.length : '';
-  $('laterList').innerHTML = later.map(todoRow).join('');
+  $('laterList').innerHTML = later.map(todoRowEd).join('');
 
   renderFull(pend, done, pend.length + done.length, sched);
   renderEmail(head);
@@ -655,6 +678,7 @@ function focusCardHtml(focus, queue, head){
       '<button type="button" class="b" data-act="later" data-id="' + esc(focus.id) + '">Later (2 hrs)</button>' +
       '<button type="button" class="b" data-act="tomorrow" data-id="' + esc(focus.id) + '">Tomorrow</button>' +
       '<button type="button" class="b" data-act="skip" data-key="t:' + esc(focus.id) + '">Skip</button>' +
+      '<button type="button" class="b" data-act="edit" data-id="' + esc(focus.id) + '" aria-label="Edit">' + I_PEN + '</button>' +
     '</div>';
 }
 const I_MAIL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path></svg>';
@@ -897,15 +921,23 @@ function renderLive(){
   $('livePill').style.color = ok ? 'var(--live)' : '';
   $('liveText').textContent = phone ? (mailBad ? 'EMAIL ✗' : waBad ? 'WHATSAPP ✗' : base) : base + ' · MY DAY ✓ · ' + mail + ' · ' + wa;
 }
-function todoRow(it){
+const I_PEN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"></path><path d="M14 6l4 4"></path></svg>';
+const I_BELL = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2z"></path><path d="M10 20a2 2 0 0 0 4 0"></path></svg>';
+const REMIND_LABEL = {at:'AT TIME', 10:'10 MIN', 30:'30 MIN', 60:'1 HR', day:'DAY BEFORE'};
+const bellTag = it => (it.remindOpt && (it.remindAtTs || 0) > Date.now() && (it.remindHow || []).length) ? '<span class="bell-tag" title="Reminder set">' + I_BELL + esc(REMIND_LABEL[it.remindOpt] || '') + '</span>' : '';
+const penBtn = id => '<button type="button" class="pen" data-act="edit" data-id="' + esc(id) + '" aria-label="Edit">' + I_PEN + '</button>';
+function todoRow(it, editable){
   const isDone = it.status === 'done', d = dueInfo(it);
   const tag = isDone ? '' : (d.over ? '<span class="tag hl-p">OVERDUE</span>' : (d.text ? '<span class="tag">' + esc(d.text) + '</span>' : ''));
   return '<label class="todo-row' + (isDone ? ' done' : '') + '"><input type="checkbox" class="ring" data-act="toggle" data-id="' + esc(it.id) + '"' + (isDone ? ' checked' : '') + ' aria-label="Done: ' + esc(it.text) + '">' +
-    '<span class="tx">' + esc(it.text) + '</span>' + tag + '</label>';
+    '<span class="tx">' + esc(it.text) + '</span>' + (isDone ? '' : bellTag(it)) + tag + (editable === true ? penBtn(it.id) : '') + '</label>';
 }
-function schedRow(s){
-  return '<div class="row"><span class="tm">' + (s.timed ? shortTime(s.ts) : 'Event') + '</span><span class="what">' + esc(s.what) + (s.sub ? '<span class="sub">' + esc(s.sub) + '</span>' : '') + '</span></div>';
+const todoRowEd = it => todoRow(it, true);
+function schedRow(s, editable){
+  return '<div class="row"><span class="tm">' + (s.timed ? shortTime(s.ts) : s.isEvent ? 'Event' : 'All day') + '</span><span class="what">' + esc(s.what) + (s.sub ? '<span class="sub">' + esc(s.sub) + '</span>' : '') + '</span>' +
+    (s.item ? bellTag(s.item) : '') + (editable === true && s.item ? penBtn(s.item.id) : '') + '</div>';
 }
+const schedRowEd = s => schedRow(s, true);
 
 /* ---------- Full day rendering ---------- */
 const DAY_START = 7, DAY_END = 22, HOUR_PX = 44;
@@ -951,7 +983,7 @@ function renderFull(pend, done, total, sched){
 
   // to-do list with round checkboxes + done dots
   const list = pend.concat(done.slice().sort((a,b) => (a.doneAt||0) - (b.doneAt||0)));
-  $('fTodo').innerHTML = list.length ? list.map(todoRow).join('') : '<div class="empty-line">Nothing on My Day yet.</div>';
+  $('fTodo').innerHTML = list.length ? list.map(todoRowEd).join('') : '<div class="empty-line">Nothing on My Day yet.</div>';
   $('fTodoCount').textContent = total ? done.length + ' OF ' + total : '';
   let dh = ''; const shown = Math.min(total, MAX_DOTS);
   for(let i = 0; i < shown; i++) dh += '<span class="dot' + (i < Math.min(done.length, shown) ? ' on' : '') + '" style="width:18px;height:18px;border-width:2px"></span>';
@@ -1028,6 +1060,11 @@ document.addEventListener('click', e => {
   else if(act === 'edone') emailDone(id).catch(fail);
   else if(act === 'elater') emailLater(id).catch(fail);
   else if(act === 'goinbox') showView('inbox');
+  else if(act === 'addtodo') openEditor(null, 'todo');
+  else if(act === 'addsched') openEditor(null, 'schedule');
+  else if(act === 'edit'){ e.preventDefault(); openEditor(id); }
+  else if(act === 'ed') edAction(b);
+  else if(act === 'alarm') alarmAction(b.dataset.id, b.dataset.do);
   else if(act === 'ifilter'){ inboxFilter = id; try{ localStorage.setItem('hubInboxFilter', id); }catch(e){} render(); }
   else if(act === 'wreply'){ composerFor = 'wa:' + id; render(); focusReply('wa:' + id); }
   else if(act === 'wopen'){ pinnedKey = 'w:' + id; skipped.delete(pinnedKey); composerFor = 'wa:' + id; const c = waChats.find(x => x.id === id); if(c && c.snoozedUntil > Date.now()) waPatch(id, {snoozedUntil: null}).catch(fail); showView('today'); render(); focusReply('wa:' + id); }
@@ -1066,6 +1103,218 @@ async function emailLater(id){
   if(pinnedKey === 'e:' + id) pinnedKey = null;
   toast('Back in 2 hours: ' + (em.subject || 'email'), () => emailPatch(id, {snoozedUntil: null}));
 }
+/* ---------- add / edit to-dos and schedule items, with reminders ---------- */
+let ed = null;
+const ymdOf = ts => ymd(new Date(ts));
+function dayTs(day, dateStr){
+  const d = new Date(); d.setHours(0,0,0,0);
+  if(day === 'tomorrow') d.setDate(d.getDate() + 1);
+  else if(day === 'date' && dateStr){ const [y,m,dd] = dateStr.split('-').map(Number); d.setFullYear(y, m - 1, dd); }
+  return d.getTime();
+}
+function atTime(dayStart, hhmm){ const d = new Date(dayStart); if(hhmm){ const [h,m] = hhmm.split(':').map(Number); d.setHours(h, m, 0, 0); } return d.getTime(); }
+function openEditor(id, type){
+  const it = id ? items.find(x => x.id === id) : null;
+  if(id && !it) return;
+  const t = it ? it.type : type;
+  let day = 'today', date = '';
+  if(it){
+    if(!it.dueAtTs) day = it.noDate ? 'none' : 'today';
+    else {
+      const k = ymdOf(it.dueAtTs), today = ymd(new Date()), tm = new Date(); tm.setDate(tm.getDate() + 1);
+      day = k === today ? 'today' : k === ymd(tm) ? 'tomorrow' : 'date'; date = k;
+    }
+  }
+  ed = {id: id || null, type: t, text: it ? it.text : '', day, date, time: it && it.time ? it.time : '',
+        priority: !!(it && it.priority), alsoSched: !!(it && it.linkedId),
+        remindOpt: it && it.remindOpt && (it.remindAtTs || 0) > Date.now() ? it.remindOpt : null,
+        popup: it && it.remindHow ? it.remindHow.indexOf('popup') >= 0 : true,
+        email: it && it.remindHow ? it.remindHow.indexOf('email') >= 0 : true};
+  renderEditor();
+  $('edWrap').classList.remove('hidden');
+  setTimeout(() => { const i = $('edText'); if(i){ i.focus(); if(!ed.id) i.select(); } }, 50);
+}
+const hm12 = t => { if(!t) return ''; const [h, m] = t.split(':').map(Number); return (h % 12 || 12) + ':' + String(m).padStart(2, '0') + (h < 12 ? ' AM' : ' PM'); };
+function closeEditor(){ $('edWrap').classList.add('hidden'); ed = null; }
+function edChip(group, val, label, on, disabled){
+  return '<button type="button" data-act="ed" data-g="' + group + '" data-v="' + val + '" aria-pressed="' + (on ? 'true' : 'false') + '"' + (disabled ? ' disabled' : '') + '>' + (on ? '✓ ' : '') + label + '</button>';
+}
+function renderEditor(){
+  const isSched = ed.type === 'schedule';
+  const noDay = ed.day === 'none', noTime = !ed.time;
+  if(noDay) ed.remindOpt = null;
+  if(noTime && (ed.remindOpt === 10 || ed.remindOpt === 30 || ed.remindOpt === 60)) ed.remindOpt = 'at';
+  const kind = isSched ? 'SCHEDULE ITEM' : (ed.type === 'followup' ? 'FOLLOW-UP' : 'TO-DO');
+  $('ed').innerHTML =
+    '<h2 id="edTitle"><span class="' + (isSched ? 'hl-p' : 'hl-y') + '">' + (ed.id ? 'EDIT ' : 'NEW ') + kind + '</span></h2>' +
+    '<label class="fl" for="edText">What</label><input type="text" id="edText" value="' + esc(ed.text) + '" placeholder="' + (isSched ? 'e.g. Tasting — Klein family' : 'e.g. Send Goldberg contract') + '">' +
+    '<div class="fl">When</div><div class="chips">' +
+      edChip('day','today','TODAY',ed.day === 'today') + edChip('day','tomorrow','TOMORROW',ed.day === 'tomorrow') +
+      edChip('day','date','PICK A DATE',ed.day === 'date') + (isSched ? '' : edChip('day','none','NO DATE',ed.day === 'none')) + '</div>' +
+    (ed.day === 'date' ? '<input type="date" id="edDate" value="' + esc(ed.date) + '">' : '') +
+    (noDay ? '' : '<div style="display:flex;gap:10px;align-items:center"><input type="time" id="edTime" value="' + esc(ed.time) + '"><span class="note">' + (isSched ? 'time (leave empty for all day)' : 'time (optional)') + '</span></div>') +
+    (isSched ? '' : '<div class="chips">' + edChip('pri','1','PRIORITY',ed.priority) + (noDay || (ed.id && items.find(x => x.id === ed.id && x.linkedId)) ? '' : edChip('also','1','ALSO ON MY SCHEDULE',ed.alsoSched)) + '</div>') +
+    '<div class="remind"><div class="fl" style="display:flex;align-items:center;gap:6px;margin:0">' + I_BELL + 'Remind me</div>' +
+      (noDay ? '<div class="note">Pick a day to set a reminder.</div>' :
+      '<div class="chips">' + edChip('rem','none','NO REMINDER',!ed.remindOpt) +
+        edChip('rem','at', noTime ? 'THAT MORNING 9 AM' : 'AT ' + hm12(ed.time), ed.remindOpt === 'at') +
+        edChip('rem','10','10 MIN BEFORE',ed.remindOpt === 10, noTime) + edChip('rem','30','30 MIN BEFORE',ed.remindOpt === 30, noTime) +
+        edChip('rem','60','1 HR BEFORE',ed.remindOpt === 60, noTime) + edChip('rem','day','DAY BEFORE',ed.remindOpt === 'day') + '</div>' +
+      (ed.remindOpt ? '<div class="fl" style="margin:0">How</div>' +
+        '<label class="chk"><input type="checkbox" id="edPopup"' + (ed.popup ? ' checked' : '') + '>Pop-up + sound on the hub</label>' +
+        '<label class="chk"><input type="checkbox" id="edEmail"' + (ed.email ? ' checked' : '') + '>Email to my phone (works even if the hub is closed)</label>' : '')) +
+    '</div>' +
+    '<div class="row-btns"><button type="button" class="b-main" data-act="ed" data-g="save">SAVE</button>' +
+      '<button type="button" class="b" data-act="ed" data-g="cancel">Cancel</button>' +
+      (ed.id ? '<button type="button" class="b del" data-act="ed" data-g="delete">Delete</button>' : '') + '</div>';
+}
+function edGrab(){
+  if(!ed) return;
+  const v = id => $(id) ? $(id).value : null;
+  if($('edText')) ed.text = v('edText');
+  if($('edDate')) ed.date = v('edDate');
+  if($('edTime')) ed.time = v('edTime') || '';
+  if($('edPopup')) ed.popup = $('edPopup').checked;
+  if($('edEmail')) ed.email = $('edEmail').checked;
+}
+function edAction(b){
+  if(!ed) return;
+  edGrab();
+  const g = b.dataset.g, v = b.dataset.v;
+  if(g === 'day'){ ed.day = v; if(v === 'date' && !ed.date){ const d = new Date(); d.setDate(d.getDate() + 2); ed.date = ymd(d); } renderEditor(); }
+  else if(g === 'pri'){ ed.priority = !ed.priority; renderEditor(); }
+  else if(g === 'also'){ ed.alsoSched = !ed.alsoSched; renderEditor(); }
+  else if(g === 'rem'){ ed.remindOpt = v === 'none' ? null : (isNaN(Number(v)) ? v : Number(v)); renderEditor(); }
+  else if(g === 'cancel') closeEditor();
+  else if(g === 'save') saveEditor().catch(fail);
+  else if(g === 'delete') deleteItem().catch(fail);
+}
+// When the reminder should go off.
+function remindTs(dueDayStart, time, opt){
+  if(!opt) return null;
+  const base = time ? atTime(dueDayStart, time) : atTime(dueDayStart, '09:00');
+  if(opt === 'at') return base;
+  if(opt === 'day') return base - 86400000;
+  return base - opt * 60000;
+}
+async function saveEditor(){
+  edGrab();
+  const text = String(ed.text || '').trim();
+  if(!text){ toast('Type what it is first.', null); $('edText').focus(); return; }
+  if(ed.type === 'schedule' && ed.day === 'none') ed.day = 'today';
+  const rec = {text};
+  let rTs = null;
+  if(ed.day === 'none'){ Object.assign(rec, {dueAtTs: null, dueDateLabel: null, time: null, noDate: true}); }
+  else {
+    const start = dayTs(ed.day, ed.date);
+    const due = ed.time ? atTime(start, ed.time) : (ed.day === 'today' && ed.type !== 'schedule' ? null : atTime(start, '23:59'));
+    Object.assign(rec, {dueAtTs: due, time: ed.time || null, noDate: false,
+      dueDateLabel: new Date(start).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})});
+    if(ed.type === 'schedule' && !ed.time) rec.dueAtTs = atTime(start, '00:01');   // all-day item still sits on that day
+    rTs = remindTs(start, ed.time, ed.remindOpt);
+  }
+  if(ed.type !== 'schedule') rec.priority = !!ed.priority;
+  const how = []; if(ed.popup) how.push('popup'); if(ed.email) how.push('email');
+  if(rTs && how.length){
+    Object.assign(rec, {remindOpt: ed.remindOpt, remindAtTs: rTs, remindHow: how,
+      remindEmailPending: how.indexOf('email') >= 0 && rTs > Date.now() - 60000, remindPopupDoneAt: null});
+    if(how.indexOf('popup') >= 0 && typeof Notification !== 'undefined' && Notification.permission === 'default'){ try{ Notification.requestPermission(); }catch(e){} }
+  } else {
+    Object.assign(rec, {remindOpt: null, remindAtTs: null, remindHow: [], remindEmailPending: false});
+  }
+  const wasNew = !ed.id, type = ed.type, also = ed.alsoSched;
+  let id = ed.id;
+  if(wasNew){
+    const ref = await myDayCol.add(Object.assign({owner: OWNER_KEY, type, status: 'pending', createdAt: Date.now(), source: 'Hub'}, rec));
+    id = ref && ref.id;
+  } else {
+    await myDayCol.doc(id).update(Object.assign({notifiedAt: null}, rec));
+  }
+  // "Also on my schedule": a linked copy, same as the Operations Hub does it
+  const cur = items.find(x => x.id === id);
+  if(type !== 'schedule' && also && id && !(cur && cur.linkedId) && rec.dueAtTs !== undefined && !rec.noDate){
+    const copy = Object.assign({owner: OWNER_KEY, type: 'schedule', status: 'pending', createdAt: Date.now(), source: 'Hub', linkedId: id, linkedType: type}, rec);
+    if(copy.dueAtTs == null) copy.dueAtTs = atTime(dayTs(ed.day, ed.date), '00:01');
+    delete copy.priority;
+    // the reminder lives on the to-do only, so it doesn't go off twice
+    Object.assign(copy, {remindOpt: null, remindAtTs: null, remindHow: [], remindEmailPending: false});
+    const ref2 = await myDayCol.add(copy);
+    if(ref2 && ref2.id) await myDayCol.doc(id).update({linkedId: ref2.id, linkedType: 'schedule'});
+  }
+  closeEditor();
+  toast((wasNew ? 'Added: ' : 'Saved: ') + text + (rTs && how.length ? (rTs < Date.now() ? ' (that reminder time has already passed)' : ' · reminder set') : ''), null);
+}
+async function deleteItem(){
+  const it = items.find(x => x.id === ed.id); if(!it) return;
+  const keep = Object.assign({}, it); delete keep.id;
+  await myDayCol.doc(it.id).delete();
+  closeEditor();
+  toast('Deleted: ' + it.text, () => myDayCol.doc(it.id).set(keep));
+}
+$('edWrap').addEventListener('click', e => { if(e.target.id === 'edWrap') closeEditor(); });
+// Typing a time switches the "minutes before" choices on without redrawing the panel.
+$('ed').addEventListener('input', e => {
+  if(!ed || !e.target || e.target.id !== 'edTime') return;
+  ed.time = e.target.value || '';
+  const noTime = !ed.time;
+  $('ed').querySelectorAll('[data-g="rem"]').forEach(btn => {
+    const v = btn.dataset.v;
+    if(v === '10' || v === '30' || v === '60') btn.disabled = noTime;
+    if(v === 'at') btn.textContent = (ed.remindOpt === 'at' ? '✓ ' : '') + (noTime ? 'THAT MORNING 9 AM' : 'AT ' + hm12(ed.time));
+  });
+});
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape' && ed) closeEditor();
+  if(e.key === 'Enter' && ed && e.target && e.target.id === 'edText') saveEditor().catch(fail);
+});
+
+/* ---------- reminder pop-up (+ sound) while the hub is open ---------- */
+let alarmOpen = null;
+function beep(){
+  try{
+    const C = window.AudioContext || window.webkitAudioContext; if(!C) return;
+    const ctx = new C(); [0, 0.35, 0.7].forEach(t => {
+      const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime + t); g.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.25);
+      o.connect(g); g.connect(ctx.destination); o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.3);
+    });
+  }catch(e){}
+}
+function dueAlarms(){
+  const now = Date.now();
+  return items.filter(it => it.status !== 'done' && it.remindAtTs && it.remindAtTs <= now && it.remindAtTs > now - 3 * 3600000 &&
+    (it.remindHow || []).indexOf('popup') >= 0 && !((it.remindPopupDoneAt || 0) >= it.remindAtTs))
+    .sort((a, b) => a.remindAtTs - b.remindAtTs);
+}
+function checkAlarms(){
+  if(alarmOpen) { if(!items.find(x => x.id === alarmOpen && !((x.remindPopupDoneAt || 0) >= x.remindAtTs))) closeAlarm(); return; }
+  const it = dueAlarms()[0]; if(!it) return;
+  alarmOpen = it.id;
+  const due = it.dueAtTs && it.time ? fmtTime(it.dueAtTs) : '';
+  const mins = it.dueAtTs && it.time ? Math.round((it.dueAtTs - Date.now()) / 60000) : null;
+  const when = mins == null ? 'REMINDER' : mins > 1 ? 'REMINDER · IN ' + (mins >= 120 ? Math.round(mins / 60) + ' HRS' : mins + ' MIN') : mins >= -1 ? 'REMINDER · NOW' : 'REMINDER · ' + ago(it.dueAtTs).toUpperCase() + ' AGO';
+  $('alarm').innerHTML = '<div class="lbl" style="display:flex;align-items:center;gap:6px"><span class="hl-p" style="display:inline-flex;gap:6px;align-items:center">' + I_BELL + esc(when) + '</span></div>' +
+    '<div class="what" id="alarmWhat">' + (due ? esc(due) + ' · ' : '') + esc(it.text) + '</div>' +
+    '<div class="rn-btns"><button type="button" class="b-main" data-act="alarm" data-do="ok" data-id="' + esc(it.id) + '">OK, GOT IT</button>' +
+    '<button type="button" class="b" data-act="alarm" data-do="snooze" data-id="' + esc(it.id) + '">Remind me in 10 min</button>' +
+    '<button type="button" class="b" data-act="alarm" data-do="open" data-id="' + esc(it.id) + '">Open</button></div>';
+  $('alarmWrap').classList.remove('hidden');
+  beep();
+  if(document.hidden && typeof Notification !== 'undefined' && Notification.permission === 'granted'){ try{ new Notification('Reminder', {body: (due ? due + ' · ' : '') + it.text}); }catch(e){} }
+}
+function closeAlarm(){ alarmOpen = null; $('alarmWrap').classList.add('hidden'); }
+async function alarmAction(id, what){
+  const it = items.find(x => x.id === id); closeAlarm(); if(!it) return;
+  if(what === 'snooze'){ await myDayCol.doc(id).update({remindAtTs: Date.now() + 10 * 60000, remindPopupDoneAt: null, remindEmailPending: false, remindHow: ['popup']}); toast('Reminding you again in 10 minutes', null); return; }
+  await myDayCol.doc(id).update({remindPopupDoneAt: Date.now()});
+  if(what === 'open'){
+    if(it.type === 'schedule') showView('sched');
+    else { pinnedKey = 't:' + id; skipped.delete(pinnedKey); showView('today'); render(); }
+  }
+}
+setInterval(checkAlarms, 15000);
+
 /* ---------- WhatsApp actions ---------- */
 let voiceAudio = null, voiceBtn = null;
 async function playVoice(btn, id){
@@ -1180,6 +1429,7 @@ function startData(){
   setLive(true, 'CONNECTING');
   unsubs.push(myDayCol.where('owner', '==', OWNER_KEY).onSnapshot(snap => {
     items = snap.docs.map(d => Object.assign({id: d.id}, d.data()));
+    setTimeout(checkAlarms, 300);
     setLive(!snap.metadata.fromCache, snap.metadata.fromCache ? 'OFFLINE' : 'LIVE');
     render();
   }, err => { console.error(err); setLive(false, 'NOT CONNECTED'); }));
