@@ -1075,7 +1075,8 @@ async function playVoice(btn, id){
     if(!d.exists) throw new Error('missing');
     const m = d.data(), bin = atob(m.b64), bytes = new Uint8Array(bin.length);
     for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const url = URL.createObjectURL(new Blob([bytes], {type: String(m.mimetype || 'audio/ogg').split(';')[0]}));
+    const type = String(m.b64 || '').indexOf('T2dnUw') === 0 ? 'audio/ogg' : String(m.mimetype || 'audio/ogg').split(';')[0];
+    const url = URL.createObjectURL(new Blob([bytes], {type}));
     const a = new Audio(url); voiceAudio = a; voiceBtn = btn;
     const reset = () => { btn.setAttribute('aria-pressed', 'false'); btn.querySelector('span').textContent = 'PLAY'; if(voiceAudio === a) voiceAudio = null; };
     a.onended = reset;
