@@ -121,7 +121,8 @@
   .self-note{border:2px dashed var(--ink);border-radius:10px;padding:10px 12px;font-size:14px;line-height:1.45}
   .mail-row{display:flex;align-items:center;gap:12px;min-height:64px;border-bottom:1px solid var(--rule);padding:6px 0}
   .mail-row .box{width:96px;flex:none;display:inline-flex;align-items:center;gap:6px;font:800 11px var(--head);letter-spacing:.06em;text-transform:uppercase}
-  .mail-row .what{flex:1;min-width:0}
+  .mail-row .what{flex:1;min-width:0;cursor:pointer}
+  .mail-row .what:hover .w1 strong{text-decoration:underline}
   .mail-row .w1{font-size:15px;overflow-wrap:anywhere}
   .mail-row .w2{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .mail-row .tm{font-size:12px;color:var(--muted);flex:none}
@@ -431,6 +432,7 @@ const GMAIL = (id, mailbox) => 'https://mail.google.com/mail/?authuser=' + encod
 const GMAILem = em => GMAIL(em.threadId || em.id, em.mailbox);
 const waChatsCol = db.collection('hubWaChats'), waMsgsCol = db.collection('hubWaMsgs'), waOutCol = db.collection('hubWaOutbox');
 let waChats = [], waMsgs = [], waStatus = undefined, waFailed = [], inboxFilter = 'all';
+const waExpanded = new Set();
 try{ inboxFilter = localStorage.getItem('hubInboxFilter') || 'all'; }catch(e){}
 let emails = [], emailStatus = undefined, ordersStatus = undefined, failedSends = [], composerFor = null, pinnedKey = null, cardPending = false;
 const drafts = {};
@@ -515,7 +517,17 @@ function buildQueue(pend){
   const rest = pend.filter(it => !(it.dueAtTs && it.dueAtTs < now)).map(it => ({key: 't:' + it.id, task: it}));
   const mails = waitingAll();
   let q = over.concat(mails, rest);
-  if(pinnedKey){ const i = q.findIndex(x => x.key === pinnedKey); if(i > 0){ const [x] = q.splice(i, 1); q.unshift(x); } else if(i < 0) pinnedKey = null; }
+  if(pinnedKey){
+    const i = q.findIndex(x => x.key === pinnedKey);
+    if(i > 0){ const [x] = q.splice(i, 1); q.unshift(x); }
+    else if(i < 0){
+      // opened from "Everything else": show it even though it isn't waiting on Kenny
+      const id = pinnedKey.slice(2);
+      const c = pinnedKey[0] === 'w' ? waChats.find(x => x.id === id) : null;
+      const em = pinnedKey[0] === 'e' ? emails.find(x => x.id === id) : null;
+      if(c) q.unshift({key: pinnedKey, wa: c}); else if(em) q.unshift({key: pinnedKey, email: em}); else pinnedKey = null;
+    }
+  }
   return q;
 }
 const laterItems = () => items.filter(it => isActionable(it) && it.status !== 'done' && !isTodayOrEarlier(it)).sort(sortForFocus);
@@ -683,7 +695,7 @@ function emailCardHtml(em, pos, n){
 function mailRow(em, withActs){
   const snoozed = em.snoozedUntil > Date.now();
   return '<div class="mail-row"><span class="box">' + I_MAIL + esc(em.box || 'kenny@') + '</span>' +
-    '<div class="what"><div class="w1"><strong>' + esc(em.fromName || em.fromEmail) + '</strong> — ' + esc(em.subject || '(no subject)') +
+    '<div class="what" role="button" tabindex="0" data-act="eopen" data-id="' + esc(em.id) + '" title="Open this email"><div class="w1"><strong>' + esc(em.fromName || em.fromEmail) + '</strong> — ' + esc(em.subject || '(no subject)') +
       (snoozed ? ' <span class="tag hl-y">LATER · ' + esc(fmtTime(em.snoozedUntil)) + '</span>' : '') + '</div>' +
       '<div class="w2">' + esc(em.snippet || '') + '</div></div>' +
     '<span class="tm">' + esc(whenLabel(em.theirAt || em.lastAt)) + '</span>' +
@@ -724,7 +736,7 @@ function voiceHtml(m){
   const words = m.transcript
     ? '<div class="vtext">“' + esc(m.transcript) + '”</div>'
     : (st === 'pending' || st === 'transcribing') ? '<div class="t" style="text-align:left">Typing it out…</div>'
-    : st === 'failed' ? '<div class="t" style="text-align:left">Couldn’t type this one out — listen in WhatsApp.</div>'
+    : st === 'failed' ? '<div class="t" style="text-align:left">Couldn’t type this one out — listen in WhatsApp.' + (m.mediaError ? '<br><strong>Why:</strong> ' + esc(m.mediaError) : '') + '</div>'
     : '<div class="t" style="text-align:left">Listen in WhatsApp.</div>';
   return '<div class="att">' + (play || I_PLAY) + 'Voice note</div>' + words;
 }
@@ -739,14 +751,16 @@ function bubbleHtml(m, c){
 function waCardHtml(c, pos, n){
   const id = esc(c.id), did = esc(waDraftId(c)), open = composerFor === waDraftId(c);
   const waited = Date.now() - (c.lastInAt || c.lastAt || Date.now());
-  const msgs = chatMsgs(c, 6), link = waLink(c);
+  const allMsgs = chatMsgs(c, 60), shown = waExpanded.has(c.id) ? 60 : 6;
+  const msgs = allMsgs.slice(-shown), more = allMsgs.length - msgs.length, link = waLink(c);
   const canSend = !waStatus || waStatus.canSend !== false;
   let h = '<div class="rn-top"><h1 class="rn-title"><span class="hl-c">RIGHT NOW</span></h1>' +
     '<span class="rn-count">' + pos + ' of ' + n + '</span>' +
     '<span class="rn-due' + (waited > 4 * 3600000 ? ' hl-p' : '') + '">' + I.clock + 'WAITING ' + esc(ago(c.lastInAt || c.lastAt).toUpperCase()) + '</span></div>' +
     '<div class="rn-kind" style="flex-wrap:wrap">' + I_WA + 'WHATSAPP' + (c.isGroup ? ' · GROUP' : '') + ' · ' + esc(fmtPhone(c.name || c.phone) || 'Unknown') +
       ' <span style="font-weight:500;color:var(--muted)">' + (c.phone && !c.isGroup && c.phone !== c.name ? '<span class="wa-ph">· ' + esc(fmtPhone(c.phone)) + ' </span>' : '') + '· ' + esc(whenLabel(c.lastInAt || c.lastAt)) + '</span></div>' +
-    '<div class="bubbles">' + (msgs.length > 1 ? '<div class="lbl2">Latest in this chat</div>' : '') +
+    '<div class="bubbles">' + (more > 0 ? '<button type="button" class="link-btn" data-act="wmore" data-id="' + id + '">Show ' + more + ' earlier message' + (more === 1 ? '' : 's') + '</button>'
+                              : msgs.length > 1 ? '<div class="lbl2">' + (waExpanded.has(c.id) ? 'Last 4 days in this chat' : 'Latest in this chat') + '</div>' : '') +
       (msgs.length ? msgs.map(m => bubbleHtml(m, c)).join('') : '<div class="bub them"><div>' + esc(c.lastText || '') + '</div></div>') + '</div>';
   const rest = '<button type="button" class="b" data-act="wdone" data-id="' + id + '">Done</button>' +
     '<button type="button" class="b" data-act="wlater" data-id="' + id + '">Later (2 hrs)</button>' +
@@ -773,7 +787,7 @@ function waRow(c, withActs){
   const nIn = waMsgs.filter(m => m.chatKey === c.chatKey && !m.fromMe && (m.at || 0) > Math.max(c.handledAt || 0, c.lastOutAt || 0)).length;
   const sub = c.isGroup ? 'group' + (nIn ? ' · ' + nIn + ' new' : '') : (nIn > 1 ? nIn + ' messages' : (nIn === 1 ? '1 message' : 'chat'));
   return '<div class="mail-row"><span class="box">' + I_WA + 'WHATSAPP</span>' +
-    '<div class="what"><div class="w1"><strong>' + esc(fmtPhone(c.name || c.phone) || 'Unknown') + '</strong> — ' + esc(sub) +
+    '<div class="what" role="button" tabindex="0" data-act="wopen" data-id="' + esc(c.id) + '" title="Open this chat"><div class="w1"><strong>' + esc(fmtPhone(c.name || c.phone) || 'Unknown') + '</strong> — ' + esc(sub) +
       (snoozed ? ' <span class="tag hl-y">LATER · ' + esc(fmtTime(c.snoozedUntil)) + '</span>' : '') + '</div>' +
       '<div class="w2">' + esc((c.isGroup && !c.lastFromMe && c.lastSender ? c.lastSender + ': ' : '') + prettyLast(c.lastText)) + '</div></div>' +
     '<span class="tm">' + esc(whenLabel(c.lastInAt || c.lastAt || 0)) + '</span>' +
@@ -1012,6 +1026,7 @@ document.addEventListener('click', e => {
   else if(act === 'wopen'){ pinnedKey = 'w:' + id; skipped.delete(pinnedKey); composerFor = 'wa:' + id; const c = waChats.find(x => x.id === id); if(c && c.snoozedUntil > Date.now()) waPatch(id, {snoozedUntil: null}).catch(fail); showView('today'); render(); focusReply('wa:' + id); }
   else if(act === 'wsend') sendWa(id).catch(fail);
   else if(act === 'wplay') playVoice(b, id);
+  else if(act === 'wmore'){ waExpanded.add(id); render(); }
   else if(act === 'wdone') waDone(id).catch(fail);
   else if(act === 'wlater') waLater(id).catch(fail);
   else if(act === 'wtodo') waTodo(id).catch(fail);
@@ -1136,6 +1151,7 @@ function closeSheet(){ $('sheet').classList.remove('open'); $('fab').style.visib
 $('fab').onclick = openSheet;
 $('sheet').addEventListener('click', e => { if(e.target.id === 'sheet') closeSheet(); });
 document.addEventListener('keydown', e => { if(e.key === 'Escape') closeSheet(); });
+document.addEventListener('keydown', e => { if(e.key === 'Enter' && e.target.matches && e.target.matches('.mail-row .what[data-act]')) e.target.click(); });
 
 /* ---------- toast with undo ---------- */
 let toastTimer = null;
