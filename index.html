@@ -1965,7 +1965,7 @@ function startFirebaseListeners(){
     }
   });
   checklistCol.onSnapshot( snap=>{ checklists={}; snap.docs.forEach(d=>{ checklists[d.id]=d.data().items||[]; }); if(currentView==='checklists'||currentView==='home') render(); updateBadge(); });
-  clientPortalsCol.onSnapshot( snap=>{ clientPortals={}; snap.docs.forEach(d=>{ clientPortals[d.id]=d.data(); }); if(currentView==='pipeline'||currentView==='events'||currentView==='home') render(); try{ if(typeof syncHubDrawer==='function') syncHubDrawer(); }catch(e){} });
+  clientPortalsCol.onSnapshot( snap=>{ clientPortals={}; snap.docs.forEach(d=>{ clientPortals[d.id]=d.data(); }); _clientPortalsLoaded=true; if(currentView==='pipeline'||currentView==='events'||currentView==='home') render(); try{ if(typeof syncHubDrawer==='function') syncHubDrawer(); }catch(e){} });
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
   invoicesCol.onSnapshot( snap=>{
     invoices={}; snap.docs.forEach(d=>{ invoices[d.id]=d.data(); });
@@ -3574,6 +3574,7 @@ const checklistTemplate = [
 
 let checklists = {};
 let clientPortals = {};
+let _clientPortalsLoaded = false; // true once the first portals snapshot has arrived
 
 const dayOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
 const typeMap = {dinner:'Dinner',lunch:'Lunch',engagement:'Engagement',barmitzvah:'Bar mitzvah',shalosh:'Shalosh seudah',dropoff:'Drop off'};
@@ -6615,6 +6616,7 @@ function _cfPanel(title, inner, extraHead){
 }
 
 function renderInqDetail(inq, role){
+  _ensureInquiryPortal(inq, { catchUp:true }); // older clients already past New get theirs when their file is opened
   if(window._hubClassic) return renderInqDetailClassic(inq, role);
   return renderClientFilePage(inq, role);
 }
@@ -7350,6 +7352,7 @@ async function convertEstimateToInvoice(id){  const inq=_findInq(id); if(!inq) r
   if(!e){
     if(!confirm('This will book '+((inq.firstName||'')+' '+(inq.lastName||'')).trim()+', create their event, and turn this estimate into an invoice. Continue?')) return;
     inq.stage='booked'; logActivity(inq.id,'stage','Marked Booked (estimate \u2192 invoice)',{stage:'booked'}); await _saveInquiry(inq);
+    _ensureInquiryPortal(inq);
     createEventFromInquiry(inq);
     e=events.find(x=>x.id===evId);
   }
@@ -8279,6 +8282,7 @@ function moveInquiry(id, stage){
   if(stage==='followup_1' && !inq.followup1SentAt) inq.followup1SentAt = Date.now();
   if(stage==='followup_2' && !inq.followup2SentAt) inq.followup2SentAt = Date.now();
   _saveInquiry(inq);
+  _ensureInquiryPortal(inq);
   // Google Calendar sync (runs through Apps Script as your account)
   if(stage==='menu_sent' && prevStage!=='booked'){ gcalMenuSent(inq); }
   // When marked Booked, automatically create the event on the correct W/E page
@@ -10385,6 +10389,7 @@ function saveInquiryEdits(id){
     if(_prevSnap.stage !== newStage) logActivity(inq.id,'stage', _actStageLabel(_prevSnap.stage)+' \u2192 '+_actStageLabel(newStage), {prevStage:_prevSnap.stage, stage:newStage});
   }catch(e){ console.warn('inquiry edit log skipped:', e); }
   _saveInquiry(inq);
+  _ensureInquiryPortal(inq);
 
   // Keep the linked This-Week event in sync (and create one if newly booked)
   if(newStage==='booked'){
@@ -18096,6 +18101,33 @@ async function openInquiryPortal(inqId){
   copyPortalLink(url);
   window.open(url, '_blank');
 }
+// Every client who has been sent a menu (or is further along) gets a portal
+// automatically, however they got there: menu email, card moved in the
+// Pipeline, stage changed in the edit form, estimate converted to invoice.
+// Creating a portal sends nothing to the client - it only makes the link exist.
+// Waits for the portals list to load so it can never make a second portal
+// for someone who already has one.
+var _PORTAL_AUTO_STAGES = { menu_sent:1, followup_1:1, followup_2:1, booked:1 };
+var _portalAutoTried = {};
+function _ensureInquiryPortal(inq, opts){
+  opts = opts || {};
+  try{
+    if(!inq || !inq.id || !_PORTAL_AUTO_STAGES[inq.stage]) return;
+    if(!clientPortalsCol || !_clientPortalsLoaded) return;
+    if(inq.portalId || _findPortalIdForInquiry(inq.id)) return;
+    const ev = (typeof _eventForInq==='function') ? _eventForInq(inq) : null;
+    if(ev && ev.portalId) return;
+    // Catch-up (opening an older client file): skip booked events already in the past.
+    if(opts.catchUp && inq.stage==='booked' && inq.eventDate){
+      const t = new Date(); const today = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+      if(String(inq.eventDate) < today) return;
+    }
+    if(_portalAutoTried[inq.id]) return;
+    _portalAutoTried[inq.id] = true;
+    createInquiryPortal(inq.id, { silent:true }); // the portals listener refreshes the screen when it lands
+  }catch(e){ console.warn('_ensureInquiryPortal failed:', e); }
+}
+
 async function createInquiryPortal(inqId, opts){
   opts = opts || {};
   const inq = inquiries.find(x=>x.id===inqId);
@@ -18111,7 +18143,9 @@ async function createInquiryPortal(inqId, opts){
     return existingId;
   }
   const token = _genPortalToken();
-  const portalId = 'p_inq_' + inqId + '_' + Date.now().toString(36);
+  // One fixed id per inquiry: if two people trigger this at the same moment,
+  // the second one finds the first one's portal instead of making another.
+  const portalId = 'p_inq_' + inqId;
   const f = _portalFieldsFromInquiry(inq);
   const est = aggregateEstimateForPortal(inq, 'primary');
   const estimateOptions = estimateOptionsForPortal(inq);
@@ -18137,9 +18171,16 @@ async function createInquiryPortal(inqId, opts){
     createdAt: Date.now()
   };
   try{
-    await clientPortalsCol.doc(portalId).set(doc);
+    const ref = clientPortalsCol.doc(portalId);
+    let already = null;
+    await db.runTransaction(async function(t){
+      const snap = await t.get(ref);
+      if(snap.exists){ already = snap.data(); return; }
+      t.set(ref, doc);
+    });
     inq.portalId = portalId;
     await _saveInquiry(inq);
+    if(already){ clientPortals[portalId] = already; return portalId; }
     clientPortals[portalId] = doc;
     if(!opts.silent){
       render();
