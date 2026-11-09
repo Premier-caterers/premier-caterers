@@ -727,7 +727,12 @@ function waAttach(m){
   if(a) return 'File · ' + esc(m.attachment);
   return '';
 }
-function chatMsgs(c, n){ return waMsgs.filter(m => m.chatKey === c.chatKey).sort((a, b) => (a.at || 0) - (b.at || 0)).slice(-n); }
+function chatMsgs(c, n){
+  const list = waMsgs.filter(m => m.chatKey === c.chatKey);
+  // WaAPI sometimes reports the same message twice, once without an id — hide the copy
+  const dup = m => !m.msgId && list.some(o => o !== m && o.msgId && Math.abs((o.at || 0) - (m.at || 0)) < 3000 && (o.type || o.attachment) === (m.type || m.attachment) && (o.text || '') === (m.text || ''));
+  return list.filter(m => !dup(m)).sort((a, b) => (a.at || 0) - (b.at || 0)).slice(-n);
+}
 function voiceHtml(m){
   const play = m.hasAudio
     ? '<button type="button" class="vplay" data-act="wplay" data-id="' + esc(m.id) + '" aria-label="Play voice note">' + I_PLAY + '<span>PLAY</span></button>'
