@@ -421,6 +421,8 @@ const HUB_EMAIL = 'kenny@thepremiercaterer.com';
 const OWNER_KEY = 'owner';            // how the Operations Hub stores Kenny's My Day items
 const SNOOZE_MS = 2 * 60 * 60 * 1000; // "Later" = 2 hours
 const MAX_DOTS = 12;
+const WAITING_DAYS = 5;               // only the last 5 days count as "waiting on you"; older ones go to Everything else
+const recentEnough = ts => (ts || 0) >= Date.now() - WAITING_DAYS * 86400000;
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
@@ -482,12 +484,12 @@ const pendingToday = () => items.filter(it => isActionable(it) && it.status !== 
 const doneToday = () => { const sod = startOfDay(Date.now()); return items.filter(it => isActionable(it) && it.status === 'done' && (it.doneAt || 0) >= sod); };
 function waitingEmails(){
   const now = Date.now();
-  return emails.filter(em => em.needsYou && !em.handled && !(em.snoozedUntil > now) && !(em.replyQueuedAt && em.replyQueuedAt >= (em.theirAt || 0)))
+  return emails.filter(em => em.needsYou && !em.handled && recentEnough(em.theirAt || em.lastAt) && !(em.snoozedUntil > now) && !(em.replyQueuedAt && em.replyQueuedAt >= (em.theirAt || 0)))
     .sort((a, b) => (b.theirAt || b.lastAt || 0) - (a.theirAt || a.lastAt || 0));
 }
 function waitingChats(){
   const now = Date.now();
-  return waChats.filter(c => c.needsYou && !((c.handledAt || 0) >= (c.lastInAt || 0)) && !(c.snoozedUntil > now) && !((c.replyQueuedAt || 0) >= (c.lastInAt || 0)))
+  return waChats.filter(c => c.needsYou && recentEnough(c.lastInAt || c.lastAt) && !((c.handledAt || 0) >= (c.lastInAt || 0)) && !(c.snoozedUntil > now) && !((c.replyQueuedAt || 0) >= (c.lastInAt || 0)))
     .sort((a, b) => (b.lastInAt || b.lastAt || 0) - (a.lastInAt || a.lastAt || 0));
 }
 const snoozedChats = () => waChats.filter(c => c.needsYou && !((c.handledAt || 0) >= (c.lastInAt || 0)) && c.snoozedUntil > Date.now());
@@ -875,11 +877,11 @@ function renderEmail(head){
     : '<div class="empty-line">' + (inboxFilter === 'wa' ? 'No WhatsApp chats waiting on you.' : inboxFilter === 'email' ? 'No emails waiting on you.' : 'Nothing waiting on you.') + '</div>');
   const waitingKeys = new Set(list.map(x => x.key));
   const recent = Date.now() - 3 * 86400000;
-  const others = (inboxFilter === 'wa' ? [] : emails.filter(em => !em.needsYou && !em.handled).map(em => ({email: em, ts: em.lastAt || 0})))
+  const others = (inboxFilter === 'wa' ? [] : emails.filter(em => !em.handled && !waitingKeys.has('e:' + em.id)).map(em => ({email: em, ts: em.lastAt || 0})))
     .concat(inboxFilter === 'email' ? [] : waChats.filter(c => !waitingKeys.has('w:' + c.id) && (c.lastAt || 0) > recent).map(c => ({wa: c, ts: c.lastAt || 0})))
     .sort((a, b) => b.ts - a.ts);
   $('otherWrap').classList.toggle('hidden', !others.length);
-  $('otherHead').textContent = 'Everything else · ' + others.length + ' (receipts, notices, chats you already answered)';
+  $('otherHead').textContent = 'Everything else · ' + others.length + ' (older than ' + WAITING_DAYS + ' days, receipts, notices, ones you answered)';
   $('otherList').innerHTML = others.slice(0, 60).map(x => x.wa ? waRow(x.wa, false) : mailRow(x.email, false)).join('');
 }
 function renderLive(){
