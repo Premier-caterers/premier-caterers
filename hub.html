@@ -1189,9 +1189,11 @@ function startData(){
   }, err => { console.warn('Email not loaded:', err); }));
   unsubs.push(db.collection('hubSyncStatus').doc('email').onSnapshot(d => { emailStatus = d.exists ? d.data() : null; render(); },
     err => { console.warn('Email status not loaded:', err); emailStatus = null; render(); }));
-  unsubs.push(waChatsCol.onSnapshot(snap => { waChats = snap.docs.map(d => Object.assign({id: d.id}, d.data())); render(); },
+  // WhatsApp Status updates (stories) are not conversations — never show them
+  const notStatus = x => !/@broadcast$|@newsletter$/.test(String(x.chatJid || '')) && x.chatKey !== 'status';
+  unsubs.push(waChatsCol.onSnapshot(snap => { waChats = snap.docs.map(d => Object.assign({id: d.id}, d.data())).filter(notStatus); render(); },
     err => console.warn('WhatsApp chats not loaded:', err)));
-  unsubs.push(waMsgsCol.where('at', '>=', Date.now() - 4 * 86400000).onSnapshot(snap => { waMsgs = snap.docs.map(d => Object.assign({id: d.id}, d.data())); render(); },
+  unsubs.push(waMsgsCol.where('at', '>=', Date.now() - 4 * 86400000).onSnapshot(snap => { waMsgs = snap.docs.map(d => Object.assign({id: d.id}, d.data())).filter(notStatus); render(); },
     err => console.warn('WhatsApp messages not loaded:', err)));
   unsubs.push(db.collection('hubSyncStatus').doc('whatsapp').onSnapshot(d => { waStatus = d.exists ? d.data() : null; render(); },
     err => { console.warn('WhatsApp status not loaded:', err); waStatus = null; render(); }));
