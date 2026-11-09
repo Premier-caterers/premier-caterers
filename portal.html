@@ -338,11 +338,18 @@ async function verifyPaymentIfReturning(){
 }
 let portalDoc = null;
 let shellBuilt = false;
+let globalQuestions = [];
 let activeTab = (focusTab && ['overview','invoice','details','documents','contract','questions'].indexOf(focusTab)>-1) ? focusTab : 'overview';
 
 (async function(){
   await authReady;
   if(!pid || !tok){ stateScreen('🔗','Link incomplete','This portal link is missing information. Please use the exact link from your email.'); return; }
+
+  // Extra questions the caterer added for EVERY event (per-event ones live on the portal record).
+  db.collection('portalSettings').doc('clientChecklist').onSnapshot(function(s){
+    globalQuestions = (s.exists && Array.isArray(s.data().items)) ? s.data().items : [];
+    if(shellBuilt) renderDetails();
+  }, function(){});
 
   db.collection('clientPortals').doc(pid).onSnapshot(function(snap){
     if(!snap.exists){ stateScreen('🔍','Event not found','We could not find this event. Please contact Premier Caterers at events@thepremiercaterer.com.'); return; }
@@ -839,6 +846,16 @@ function scheduleSave(){
   }, 700);
 }
 
+// Extra questions: the caterer's every-event list plus this event's own.
+// Answers are saved in clientIntake.customAnswers, keyed by question id.
+function customQuestions(){
+  const own = (portalDoc && Array.isArray(portalDoc.customQuestions)) ? portalDoc.customQuestions : [];
+  return (globalQuestions||[]).concat(own).filter(function(q){ return q && q.id && q.text; });
+}
+function customAnswer(id){
+  return (intake && intake.customAnswers && intake.customAnswers[id]) || '';
+}
+
 function progressPct(){
   const checks = [];
   checks.push(intake.menuConfirmed !== null);
@@ -848,6 +865,7 @@ function progressPct(){
   checks.push(intake.wineLiquor !== null);
   checks.push(!!intake.allergies || intake.allergies === '');
   checks.push(!!intake.musicianName || !!intake.floristName || !!intake.photographerName);
+  customQuestions().forEach(function(q){ if(q.required) checks.push(!!String(customAnswer(q.id)).trim()); });
   const done = checks.filter(Boolean).length;
   return Math.round((done/checks.length)*100);
 }
@@ -878,7 +896,11 @@ function _detailSectionStatuses(){
     { id:'detail-sec-vendors',   label:'Vendors',                        status:'optional' },
     { id:'detail-sec-logo',      label: isWedding() ? 'Logo & ceremony' : 'Logo', status:'optional' },
     { id:'detail-sec-other',     label:'Anything else',                  status:'optional' }
-  ];
+  ].concat(customQuestions().length ? [{
+      id:'detail-sec-custom', label:'More questions from us',
+      status: customQuestions().some(function(q){ return q.required && !String(customAnswer(q.id)).trim(); }) ? 'pending'
+            : (customQuestions().some(function(q){ return q.required; }) ? 'done' : 'optional')
+    }] : []);
 }
 
 function renderDetailsForm(host){
@@ -965,6 +987,17 @@ function renderDetailsForm(host){
     + renderUploadField('Upload any other files', 'otherFiles', 'other')
     + '</div>';
 
+  // Extra questions added by the caterer (for this event, or for every event)
+  const _cq = customQuestions();
+  if(_cq.length){
+    html += '<div class="section-block" id="detail-sec-custom"><h3><span class="step-dot">8</span>More questions from us</h3>'
+      + _cq.map(function(q){
+          return '<div class="field-row"><label>'+esc(q.text)+(q.required?'':' <span style="font-weight:400;color:var(--text3,#9A8F86)">(optional)</span>')+'</label>'
+            + '<textarea data-custom-q="'+esc(q.id)+'" rows="2">'+esc(customAnswer(q.id))+'</textarea></div>';
+        }).join('')
+      + '</div>';
+  }
+
   html += '<div class="submit-bar"><button class="btn-primary" id="submitDetailsBtn">'+(intake.submittedAt?'Update Submission':'Submit Details')+'</button></div>'
     + '<div class="autosave-note">Your answers save automatically as you go — come back anytime with your link.</div>';
 
@@ -1038,6 +1071,15 @@ function renderMealUploadField(field, mealIndex){
 }
 
 function wireDetailsEvents(host){
+  // extra questions added by the caterer
+  host.querySelectorAll('[data-custom-q]').forEach(function(elx){
+    elx.addEventListener('input', function(){
+      if(!intake.customAnswers || typeof intake.customAnswers!=='object') intake.customAnswers = {};
+      intake.customAnswers[elx.dataset.customQ] = elx.value;
+      scheduleSave();
+    });
+  });
+
   // simple top-level fields
   host.querySelectorAll('[data-field]').forEach(function(elx){
     elx.addEventListener('input', function(){

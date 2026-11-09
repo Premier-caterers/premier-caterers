@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Premier Caterers — Operations Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=40">
+<link rel="stylesheet" href="styles.css?v=41">
 </head>
 <body>
 
@@ -1965,6 +1965,7 @@ function startFirebaseListeners(){
     }
   });
   checklistCol.onSnapshot( snap=>{ checklists={}; snap.docs.forEach(d=>{ checklists[d.id]=d.data().items||[]; }); if(currentView==='checklists'||currentView==='home') render(); updateBadge(); });
+  db.collection('portalSettings').doc('clientChecklist').onSnapshot( s=>{ ciGlobalItems=(s.exists&&Array.isArray(s.data().items))?s.data().items:[]; try{ if(typeof syncHubDrawer==='function') syncHubDrawer(); }catch(e){} }, ()=>{} );
   clientPortalsCol.onSnapshot( snap=>{ clientPortals={}; snap.docs.forEach(d=>{ clientPortals[d.id]=d.data(); }); _clientPortalsLoaded=true; if(currentView==='pipeline'||currentView==='events'||currentView==='home') render(); try{ if(typeof syncHubDrawer==='function') syncHubDrawer(); }catch(e){} });
   equipCol.onSnapshot( snap=>{ eventEquipment={}; snap.docs.forEach(d=>{ eventEquipment[d.id]=d.data(); }); if(currentView==='equipment') render(); });
   invoicesCol.onSnapshot( snap=>{
@@ -6623,6 +6624,290 @@ function renderInqDetail(inq, role){
 
 // Documents as a gridded table with a status per document (full-page client file).
 // Same click actions as the drawer's icon tiles; status comes from data the app already keeps.
+// ─────────────────────────────────────────────────────────────
+// CLIENT INFO CHECKLIST — the questions we need the client to answer.
+// The answers live in ONE place: the client portal record
+// (clientPortals/<id>.clientIntake). The portal's Event details form, this
+// Documents row, the download and the paperwork packet all read that same
+// record, so anything answered in one place shows in all of them.
+// Added items:  this event only -> clientPortals/<id>.customQuestions
+//               every event     -> portalSettings/clientChecklist.items
+// Answers to added items        -> clientIntake.customAnswers[<item id>]
+// ─────────────────────────────────────────────────────────────
+var ciGlobalItems = [];
+var _ciOpen = {};
+function _ciPortalIdFor(inq){
+  if(!inq) return '';
+  const ev = (typeof _eventForInq==='function') ? _eventForInq(inq) : null;
+  return inq.portalId || _findPortalIdForInquiry(inq.id) || (ev && ev.portalId) || '';
+}
+function _ciTime12(t){
+  const m = String(t||'').match(/^(\d{1,2}):(\d{2})/); if(!m) return String(t||'');
+  let h = parseInt(m[1],10); const ap = h>=12?'PM':'AM'; h = h%12||12;
+  return h+':'+m[2]+' '+ap;
+}
+function _ciModel(inq){
+  const pid = _ciPortalIdFor(inq);
+  const p = pid ? (clientPortals[pid]||null) : null;
+  const ii = (p && p.clientIntake) || {};
+  const ans = ii.customAnswers || {};
+  const fc = a => Array.isArray(a) ? a.length : 0;
+  const files = (n, what) => n ? (n+' '+what+(n===1?'':'s')) : '';
+  const items = [];
+  const add = (o) => items.push(o);
+  const opt = (key, label, answer) => add({key, label, answer, required:false, status: String(answer||'').trim() ? 'done' : 'optional'});
+
+  add({key:'menu', label:'Menu confirmation', required:true,
+       status: (ii.menuConfirmed===true||ii.menuConfirmed===false) ? 'done' : 'pending',
+       answer: ii.menuConfirmed===true ? 'Confirmed as-is'
+             : ii.menuConfirmed===false ? ('Needs a change'+(ii.menuChangeNotes?(': '+ii.menuChangeNotes):'')) : ''});
+
+  const meals = Array.isArray(ii.meals) ? ii.meals : [];
+  const mealLines = meals.map((m,i)=>{
+    const bits = [];
+    if(m.guestAdults) bits.push(m.guestAdults+' adults');
+    if(m.guestKids) bits.push(m.guestKids+' kids');
+    if(m.startTime) bits.push('starts '+_ciTime12(m.startTime));
+    const fp = fc(m.floorplanFiles); if(fp) bits.push(files(fp,'floorplan'));
+    if(m.clientProvidesLinens) bits.push('client brings linens');
+    const miss = []; if(!m.guestAdults) miss.push('guest count'); if(!m.startTime) miss.push('start time');
+    return (m.label||('Meal '+(i+1)))+': '+(bits.join(', ')||'nothing yet')+(miss.length?(' (missing '+miss.join(' and ')+')'):'');
+  });
+  add({key:'meals', label:'Guests, timing and floorplans', required:true,
+       status: (meals.length && meals.every(m=>m.guestAdults && m.startTime)) ? 'done' : 'pending',
+       answer: mealLines.join('\n')});
+
+  const liq = fc(ii.liquorListFiles);
+  add({key:'wine', label:'Wine and liquor', required:true,
+       status: (ii.wineLiquor===false || (ii.wineLiquor===true && liq)) ? 'done' : 'pending',
+       answer: ii.wineLiquor===false ? 'No alcohol'
+             : ii.wineLiquor===true ? (liq ? ('Yes — '+files(liq,'list')+' uploaded') : 'Yes — list not uploaded yet') : ''});
+
+  opt('allergies', 'Allergies', ii.allergies||'');
+  opt('vendors', 'Vendors', [['Musician',ii.musicianName],['Florist',ii.floristName],['Photographer',ii.photographerName]]
+        .filter(x=>x[1]&&String(x[1]).trim()).map(x=>x[0]+': '+x[1]).join(' · '));
+  const wedding = /wedding/i.test((p&&p.eventType)||inq.eventType||'');
+  opt('logo', wedding ? 'Logo and ceremony' : 'Logo',
+      [files(fc(ii.logoFiles),'logo file'), wedding?files(fc(ii.ceremonyFiles),'ceremony file'):''].filter(Boolean).join(', '));
+  opt('other', 'Anything else', [ii.otherNotes||'', files(fc(ii.otherFiles),'file')].filter(Boolean).join('\n'));
+
+  const extra = (ciGlobalItems||[]).map(q=>Object.assign({scope:'all'},q))
+    .concat(((p&&p.customQuestions)||[]).map(q=>Object.assign({scope:'event'},q)));
+  extra.filter(q=>q&&q.id&&q.text).forEach(q=>{
+    const a = String(ans[q.id]||'');
+    add({key:'q:'+q.id, id:q.id, scope:q.scope, label:q.text, required:!!q.required, custom:true,
+         status: a.trim() ? 'done' : (q.required ? 'pending' : 'optional'), answer:a});
+  });
+
+  const req = items.filter(x=>x.required);
+  return { pid, p, items, required:req.length, answered:req.filter(x=>x.status==='done').length,
+           submittedAt: ii.submittedAt||null };
+}
+function _ciStatus(m){
+  if(!m.pid) return {cls:'dash-st--open', txt:'○ No portal yet', required:false};
+  if(m.answered===m.required) return {cls:'dash-st--done', txt:'✓ All answered', required:true};
+  if(m.answered===0 && !m.submittedAt) return {cls:'dash-st--overdue', txt:'✕ 0 of '+m.required+' answered', required:true};
+  return {cls:'dash-st--soon', txt:'● '+m.answered+' of '+m.required+' answered', required:true};
+}
+function _ciDetailHtml(inq, m, role){
+  const id = inq.id;
+  if(!m.pid){
+    return `<div class="ci-box"><div class="ci-empty">The client portal is created automatically when the first menu is sent.</div>
+      ${role.canEdit?`<div class="ci-actions"><button class="btn btn--sm" onclick="_ciCreatePortal('${id}')"><i class="ti ti-plus"></i>Create portal now</button></div>`:''}</div>`;
+  }
+  const sym = {done:'<span class="ci-sym ci-sym--done" aria-label="Answered">✓</span>',
+               pending:'<span class="ci-sym ci-sym--need" aria-label="Still needed">✕</span>',
+               optional:'<span class="ci-sym ci-sym--opt" aria-label="Optional">○</span>'};
+  const tok = (m.p && m.p.token) || '';
+  const list = m.items.map(it=>`<div class="ci-it">
+      ${sym[it.status]}
+      <div class="ci-it__main">
+        <div class="ci-it__q">${pcEsc(it.label)}${it.required?'':' <span class="ci-tag">optional</span>'}${it.custom?` <span class="ci-tag">${it.scope==='all'?'all events':'this event only'}</span>`:''}</div>
+        <div class="ci-it__a${String(it.answer||'').trim()?'':' is-empty'}">${String(it.answer||'').trim()?pcEsc(it.answer):(it.status==='pending'?'Still needed':'Not answered')}</div>
+      </div>
+      ${it.custom&&role.canEdit?`<button class="btn btn--icon btn--ghost btn--sm" title="Remove this item" aria-label="Remove this item" onclick="_ciRemoveItem('${id}','${pcEsc(it.id)}','${it.scope}')"><i class="ti ti-trash"></i></button>`:''}
+    </div>`).join('');
+  return `<div class="ci-box">${list}
+    <div class="ci-actions">
+      ${role.canEdit?`<button class="btn btn--sm btn--pri" onclick="toggleStaffPortalForm('inq_${id}','${pcEsc(tok)}')"><i class="ti ti-edit"></i>Fill in answers</button>
+      <button class="btn btn--sm" onclick="_ciAddItemModal('${id}')"><i class="ti ti-plus"></i>Add item</button>`:''}
+      <button class="btn btn--sm" onclick="_ciDownload('${id}')"><i class="ti ti-download"></i>Download</button>
+    </div>
+    <div class="ci-note">Same answers the client sees in their portal. A change in either place shows in both.</div>
+  </div>`;
+}
+function _ciToggle(inqId){
+  _ciOpen[inqId] = !_ciOpen[inqId];
+  const d = document.getElementById('ci-detail-'+inqId);
+  if(d) d.style.display = _ciOpen[inqId] ? '' : 'none';
+  const b = document.getElementById('ci-btn-'+inqId);
+  if(b) b.textContent = (_ciOpen[inqId] ? 'Hide' : 'Show') + ' →';
+}
+async function _ciCreatePortal(inqId){
+  const pid = await createInquiryPortal(inqId, { silent:true });
+  if(!pid){ alert('Could not create the portal — please check your connection and try again.'); return; }
+  _ciOpen[inqId] = true;
+  try{ showToast('Client portal created'); }catch(e){}
+  render();
+}
+function _ciNewId(){ return 'q_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+// Add an item — asks whether it's for this event only or every event.
+function _ciAddItemModal(inqId){
+  document.getElementById('ciAddModal')?.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'ciAddModal'; wrap.className = 'ci-modal';
+  wrap.onclick = ev => { if(ev.target===wrap) wrap.remove(); };
+  wrap.innerHTML = `<div class="ci-modal__card card" role="dialog" aria-modal="true" aria-labelledby="ciAddTitle">
+    <div class="card__head"><b id="ciAddTitle">Add an item to the client checklist</b></div>
+    <div class="card__body">
+      <label class="field-label" for="ci-add-text">What do you need the client to tell you?</label>
+      <input id="ci-add-text" class="field" type="text" maxlength="200" placeholder="Will there be a sweet table?" style="width:100%">
+      <label class="ci-check"><input id="ci-add-req" type="checkbox" checked> The client must answer this (counts toward "answered")</label>
+      <div class="ci-scope" role="radiogroup" aria-label="Add to which events">
+        <label class="ci-scope__opt"><input type="radio" name="ci-scope" value="event" checked><span><b>Just this event</b><br><span class="u-faint">Only this client sees it</span></span></label>
+        <label class="ci-scope__opt"><input type="radio" name="ci-scope" value="all"><span><b>All events</b><br><span class="u-faint">Every client's checklist, now and future</span></span></label>
+      </div>
+      <div id="ci-add-err" class="ci-err" role="alert"></div>
+    </div>
+    <div class="card__foot ci-actions">
+      <button class="btn btn--ghost" onclick="document.getElementById('ciAddModal').remove()">Cancel</button>
+      <button class="btn btn--pri" id="ci-add-save" onclick="_ciAddItemSave('${inqId}')">Add item</button>
+    </div></div>`;
+  document.body.appendChild(wrap);
+  setTimeout(()=>document.getElementById('ci-add-text')?.focus(), 30);
+}
+async function _ciAddItemSave(inqId){
+  const text = (document.getElementById('ci-add-text').value||'').trim();
+  const err = document.getElementById('ci-add-err');
+  if(!text){ err.textContent = 'Type the question first.'; document.getElementById('ci-add-text').focus(); return; }
+  const required = !!document.getElementById('ci-add-req').checked;
+  const scope = (document.querySelector('input[name="ci-scope"]:checked')||{}).value || 'event';
+  const item = { id:_ciNewId(), text, required, addedAt:Date.now() };
+  const btn = document.getElementById('ci-add-save'); if(btn){ btn.disabled = true; btn.textContent = 'Adding…'; }
+  try{
+    if(scope==='all'){
+      const list = (ciGlobalItems||[]).concat([item]);
+      await db.collection('portalSettings').doc('clientChecklist').set({ items:list, updatedAt:Date.now() }, { merge:true });
+      ciGlobalItems = list;
+    } else {
+      const inq = inquiries.find(x=>x.id===inqId);
+      const pid = _ciPortalIdFor(inq);
+      if(!pid) throw new Error('This client has no portal yet.');
+      const list = ((clientPortals[pid]&&clientPortals[pid].customQuestions)||[]).concat([item]);
+      await clientPortalsCol.doc(pid).update({ customQuestions:list });
+      clientPortals[pid] = Object.assign({}, clientPortals[pid], { customQuestions:list });
+    }
+    document.getElementById('ciAddModal')?.remove();
+    _ciOpen[inqId] = true;
+    try{ showToast(scope==='all' ? 'Added to every event’s checklist' : 'Added to this event’s checklist'); }catch(e){}
+    try{ syncHubDrawer(); }catch(e){} render();
+  }catch(e){
+    err.textContent = 'Could not save — '+((e&&e.message)||'check your connection')+'.';
+    if(btn){ btn.disabled = false; btn.textContent = 'Add item'; }
+  }
+}
+function _ciRemoveItem(inqId, qid, scope){
+  document.getElementById('ciAddModal')?.remove();
+  const it = (scope==='all' ? ciGlobalItems : ((clientPortals[_ciPortalIdFor(inquiries.find(x=>x.id===inqId))]||{}).customQuestions||[])).find(q=>q.id===qid);
+  if(!it) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'ciAddModal'; wrap.className = 'ci-modal';
+  wrap.onclick = ev => { if(ev.target===wrap) wrap.remove(); };
+  wrap.innerHTML = `<div class="ci-modal__card card" role="dialog" aria-modal="true">
+    <div class="card__head"><b>Remove this item?</b></div>
+    <div class="card__body"><p style="margin:0 0 8px">“${pcEsc(it.text)}”</p>
+      <p class="u-faint" style="margin:0">${scope==='all'?'This removes it from <b>every</b> client’s checklist.':'This removes it from this client’s checklist only.'} Answers already given are kept on file.</p>
+      <div id="ci-add-err" class="ci-err" role="alert"></div></div>
+    <div class="card__foot ci-actions">
+      <button class="btn btn--ghost" onclick="document.getElementById('ciAddModal').remove()">Cancel</button>
+      <button class="btn btn--danger" onclick="_ciRemoveItemSave('${inqId}','${pcEsc(qid)}','${scope}')">Remove</button>
+    </div></div>`;
+  document.body.appendChild(wrap);
+}
+async function _ciRemoveItemSave(inqId, qid, scope){
+  try{
+    if(scope==='all'){
+      const list = (ciGlobalItems||[]).filter(q=>q.id!==qid);
+      await db.collection('portalSettings').doc('clientChecklist').set({ items:list, updatedAt:Date.now() }, { merge:true });
+      ciGlobalItems = list;
+    } else {
+      const pid = _ciPortalIdFor(inquiries.find(x=>x.id===inqId));
+      const list = ((clientPortals[pid]&&clientPortals[pid].customQuestions)||[]).filter(q=>q.id!==qid);
+      await clientPortalsCol.doc(pid).update({ customQuestions:list });
+      clientPortals[pid] = Object.assign({}, clientPortals[pid], { customQuestions:list });
+    }
+    document.getElementById('ciAddModal')?.remove();
+    try{ syncHubDrawer(); }catch(e){} render();
+  }catch(e){
+    const err = document.getElementById('ci-add-err');
+    if(err) err.textContent = 'Could not remove — '+((e&&e.message)||'check your connection')+'.';
+  }
+}
+
+// Draws the checklist onto a jsPDF document (letter, pt). Used by the
+// Download button and by the event paperwork packet.
+// Unanswered items get ruled lines so it can be filled in by hand on a call.
+function _ciDrawPdf(doc, m, title, sub, newPage){
+  const ML=50, MR=562, BOTTOM=742, W=MR-ML-30;
+  const T=c=>doc.setTextColor(c[0],c[1],c[2]), D=c=>doc.setDrawColor(c[0],c[1],c[2]);
+  const DARK=[29,31,33], GREY=[99,102,106], FAINT=[147,150,143], GREEN=[63,122,68], RED=[179,38,30];
+  doc.setFont('helvetica','bold'); doc.setFontSize(16); T(DARK); doc.text(title, ML, 50);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); T(GREY); doc.text(sub, ML, 66);
+  doc.text(m.answered+' of '+m.required+' required answered', MR, 66, {align:'right'});
+  D([210,210,205]); doc.setLineWidth(0.5); doc.line(ML, 76, MR, 76);
+  let y = 100;
+  m.items.forEach(it=>{
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    const qLines = doc.splitTextToSize(it.label + (it.required?'':'  (optional)'), W);
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    const has = String(it.answer||'').trim();
+    const aLines = has ? doc.splitTextToSize(String(it.answer), W) : [];
+    const rowH = qLines.length*14 + (has ? aLines.length*13 : 34) + 14;
+    if(y + rowH > BOTTOM){ newPage(); y = 50; }
+    // status mark: tick in a box = answered, empty bold box + NEEDED = still needed, circle = optional
+    doc.setLineWidth(1.1);
+    if(it.status==='done'){ D(GREEN); doc.rect(ML, y-10, 12, 12); doc.setLineWidth(1.6); doc.line(ML+2.5, y-4, ML+5, y-1.5); doc.line(ML+5, y-1.5, ML+9.5, y-7.5); }
+    else if(it.status==='pending'){ D(RED); doc.setLineWidth(1.6); doc.rect(ML, y-10, 12, 12); doc.setFont('helvetica','bold'); doc.setFontSize(6.5); T(RED); doc.text('NEEDED', ML+6, y+9, {align:'center'}); }
+    else { D(FAINT); doc.circle(ML+6, y-4, 5.5); }
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); T(DARK);
+    qLines.forEach((l,i)=>doc.text(l, ML+24, y+i*14));
+    let ny = y + qLines.length*14;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    if(has){ T(GREY); aLines.forEach(l=>{ doc.text(l, ML+24, ny); ny+=13; }); }
+    else { D([200,200,195]); doc.setLineWidth(0.5); doc.line(ML+24, ny+6, MR, ny+6); doc.line(ML+24, ny+24, MR, ny+24); ny += 34; }
+    y = ny + 14;
+  });
+  doc.setFont('helvetica','normal'); doc.setFontSize(7); T(GREY);
+  doc.text('Generated '+new Date().toLocaleString('en-US'), ML, 792-24);
+}
+function _ciTitleBits(inq){
+  const ev = (typeof _eventForInq==='function') ? _eventForInq(inq) : null;
+  const name = (typeof clientPrimary==='function' ? clientPrimary(inq) : '') || inq.eventName || ((inq.firstName||'')+' '+(inq.lastName||'')).trim() || 'Client';
+  const num = ev ? (fullEventNum(ev)||ev.job||'') : (inq.job||'');
+  const date = inq.eventDate ? formatDate(inq.eventDate) : '';
+  return { name, sub: [name, num?('#'+num):'', date].filter(Boolean).join(' · ') };
+}
+async function _ciDownload(inqId){
+  const inq = inquiries.find(x=>x.id===inqId); if(!inq) return;
+  try{
+    await ensureJsPdf();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({unit:'pt', format:'letter'});
+    const t = _ciTitleBits(inq);
+    _ciDrawPdf(doc, _ciModel(inq), 'Client info checklist', t.sub, ()=>doc.addPage());
+    doc.save(('Client-info-checklist_'+t.name).replace(/[^0-9A-Za-z_\-]+/g,'-').replace(/-+$/,'').slice(0,70)+'.pdf');
+  }catch(e){ alert('Could not build the download — '+((e&&e.message)||e)); }
+}
+
+// Documents tab row (with its expanding detail) for the full-page client file.
+function _ciDocRow(inq, role){
+  const m = _ciModel(inq), st = _ciStatus(m), id = inq.id, open = !!_ciOpen[id];
+  return { name:'Client info checklist', cls:st.cls, txt:st.txt, required:st.required,
+           action:`_ciToggle('${id}')`, label:(open?'Hide':'Show'), btnId:'ci-btn-'+id,
+           detail:`<div id="ci-detail-${id}" class="ci-detail" style="${open?'':'display:none'}">${_ciDetailHtml(inq, m, role)}</div>` };
+}
+
 function _cfDocsTable(inq, role, ev, full){
   const id = inq.id;
   const OK='dash-st--done', DUE='dash-st--soon', MISS='dash-st--overdue', NA='dash-st--open';
@@ -6647,6 +6932,8 @@ function _cfDocsTable(inq, role, ev, full){
   const cs = contractStatusInfo('inq_'+id);
   const CM = {none:[MISS,'✕ Not created'], draft:[DUE,'● Draft'], sent:[DUE,'◷ Awaiting signature'], signed:[OK,'✓ Signed']}[cs.key]||[NA,cs.label];
   add('Contract', CM[0], CM[1], `openContract('${id}')`, 'Open', true);
+  // Client info checklist — the same answers as the client portal's Event details
+  rows.push(_ciDocRow(inq, role));
   // BEO
   if(ev) add('BEO', ev.beo?OK:MISS, ev.beo?'✓ Ready':'✕ Not started', `openBeo('${id}')`, ev.beo?'Open':'Start', true);
   else add('BEO', NA, '○ After booking', `openBeo('${id}')`, 'Open', false);
@@ -6694,8 +6981,8 @@ function _cfDocsTable(inq, role, ev, full){
     ${rows.map(r=>`<div class="cf-doctbl__row" role="row">
       <div role="cell">${r.name}${r.required?'':' <span class="u-faint" style="font-size:11.5px">optional</span>'}</div>
       <div role="cell" class="cf-doctbl__st ${r.cls}">${r.txt}</div>
-      <div role="cell">${r.action?`<button class="cf-linkbtn" onclick="${r.action.replace(/"/g,'&quot;')}">${r.label} →</button>`:''}</div>
-    </div>`).join('')}
+      <div role="cell">${r.action?`<button class="cf-linkbtn"${r.btnId?` id="${r.btnId}"`:''} onclick="${r.action.replace(/"/g,'&quot;')}">${r.label} →</button>`:''}</div>
+    </div>${r.detail||''}`).join('')}
   </div>`;
   return { html: `<button onclick="openPaperwork('${id}')" class="btn btn--pri btn--block" style="margin-bottom:12px"><i class="ti ti-files"></i>Create event paperwork</button>${table}`
                  + (full ? `${insuranceCompanyLinks_()}${emailAttachmentsBlock(inq)}${clientUploadsBlock(ev)}` : ''),
@@ -14744,6 +15031,8 @@ async function buildPacketPdfBytes(eventId, opts){
   if(opts.floorplanDoc && floorLink) enclosed.push('Floor plan(s)'+(opts.floorplanCopies>1?(' \u00d7'+opts.floorplanCopies):''));
   if(opts.logo && logoLink) enclosed.push('Client logo'+(opts.logoCopies>1?(' \u00d7'+opts.logoCopies):''));
   if(opts.weeklycover && e.weekOf) enclosed.push('Weekly cover sheet'+(opts.weeklycoverCopies>1?(' \u00d7'+opts.weeklycoverCopies):''));
+  const ciModel = (opts.clientinfo && inq && inq.id) ? _ciModel(inq) : null;
+  if(ciModel && ciModel.pid) enclosed.push('Client info checklist'+(opts.clientinfoCopies>1?(' \u00d7'+opts.clientinfoCopies):''));
   if(opts.checklist && checklists[e.id] && checklists[e.id].length) enclosed.push('Final checklist'+(opts.checklistCopies>1?(' \u00d7'+opts.checklistCopies):''));
   if(opts.foodlabels) enclosed.push('Food labels'+(opts.foodlabelsCopies>1?(' \u00d7'+opts.foodlabelsCopies):''));
   const flLogo = opts.foodlabels ? await _flLogoSize() : null;
@@ -15043,6 +15332,7 @@ async function buildPacketPdfBytes(eventId, opts){
   if(opts.contract && contractObj){ for(let c=0;c<(opts.contractCopies||1);c++) drawContract(); }
   if(opts.weeklycover){ for(let c=0;c<(opts.weeklycoverCopies||1);c++) drawWeeklyCoverSheet(); }
   if(opts.checklist){ for(let c=0;c<(opts.checklistCopies||1);c++) drawFinalChecklist(); }
+  if(ciModel && ciModel.pid){ for(let c=0;c<(opts.clientinfoCopies||1);c++){ page(); _ciDrawPdf(doc, ciModel, 'Client info checklist', clientName+(evFull?(' \u00b7 #'+evFull):''), page); } }
   if(opts.foodlabels){ const fl=_flData(e).lines; for(let c=0;c<(opts.foodlabelsCopies||1);c++){ page(); _flDrawPage(doc, fl, flLogo); } }
 
   // ---- merge (our vector pages + any fetched documents) via pdf-lib ----
@@ -15104,11 +15394,12 @@ function _ppGatherOpts(){
     logo:ck('pp-logo'), logoCopies:num('pp-logo-copies',1),
     weeklycover:ck('pp-weeklycover'), weeklycoverCopies:num('pp-weeklycover-copies',1),
     checklist:ck('pp-checklist'), checklistCopies:num('pp-checklist-copies',1),
+    clientinfo:ck('pp-clientinfo'), clientinfoCopies:num('pp-clientinfo-copies',1),
     foodlabels:ck('pp-foodlabels'), foodlabelsCopies:num('pp-foodlabels-copies',1,99),
   };
 }
 function _ppAnySelected(opts){
-  return !!(opts.cover||opts.beo||opts.invoice||opts.contract||opts.menu||opts.grocery||opts.venue||opts.floorplanDoc||opts.logo||opts.weeklycover||opts.checklist||opts.foodlabels);
+  return !!(opts.cover||opts.beo||opts.invoice||opts.contract||opts.menu||opts.grocery||opts.venue||opts.floorplanDoc||opts.logo||opts.weeklycover||opts.checklist||opts.clientinfo||opts.foodlabels);
 }
 const _ppFailedNames={menu:'menu',grocery:'grocery list',venue:'venue sheet',floorplanDoc:'floor plan',logo:'logo'};
 async function _runPaperwork(eventId, mode){
@@ -15224,6 +15515,11 @@ function openPaperwork(arg){
           +row(hasVenue,!hasVenue,'pp-venue','Venue sheet',hasVenue?'Pulled in via the Apps Script relay':'No venue sheet attached yet', hasVenue?cpx('pp-venue-copies',1):'')
           +row(hasFloor,!hasFloor,'pp-floorplan','Floor plan(s)',hasFloor?'Pulled in via the Apps Script relay':'No floor plan attached yet', hasFloor?cpx('pp-floorplan-copies',1):'')
           +row(hasLogo,!hasLogo,'pp-logo','Client logo',hasLogo?'Added as an image page':'No logo attached yet', hasLogo?cpx('pp-logo-copies',1):'');
+      })()
+      +(function(){
+        const ci = (inq && inq.id) ? _ciModel(inq) : null;
+        const ok = !!(ci && ci.pid);
+        return row(false,!ok,'pp-clientinfo','Client info checklist', ok?('Client\u2019s answers \u00b7 '+ci.answered+' of '+ci.required+' required answered'):'No client portal yet', ok?cpx('pp-clientinfo-copies',1):'');
       })()
       +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#999;margin:14px 0 6px">Not yet available</div>'
       +row(false,true,'pp-equipment','Equipment list','Coming soon','')
