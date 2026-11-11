@@ -78,6 +78,17 @@
   .ruled-list .sub{display:block;font-size:13px;color:var(--muted)}
   .sect-head{display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--ink);padding-bottom:6px}
   .empty-line{font-size:15px;color:var(--muted);padding:14px 0}
+  .daybar{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin:14px 0 6px}
+  .daybar button,.daybar .dpick{min-height:48px;border:2px solid var(--ink);border-radius:10px;background:var(--paper);font:800 14px var(--head);letter-spacing:.03em;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 14px;position:relative}
+  .daybar .arrow{width:48px;padding:0;font-size:22px}
+  .daybar .dlabel{flex:1;min-width:170px;border:2px solid var(--ink);border-radius:10px;text-align:center;padding:6px 10px;background:var(--soft)}
+  .daybar .dlabel b{display:block;font:900 18px var(--head);letter-spacing:.02em}
+  .daybar .dlabel span{font-size:13px;color:var(--muted)}
+  .daybar .dlabel.is-today{background:var(--yellow)}
+  .daybar .dpick input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+  .daybar .back{border-style:dashed}
+  .ruled-list .row.done .what{text-decoration:line-through;color:var(--muted)}
+  .done-tag{font:800 11px var(--head);letter-spacing:.06em;border:1.5px solid var(--ink);border-radius:6px;padding:2px 6px;flex:none}
 
   /* sticky note */
   .sticky{background:var(--yellow);padding:20px;transform:rotate(-1.5deg);box-shadow:3px 6px 14px rgba(0,0,0,.18);display:flex;flex-direction:column;gap:8px}
@@ -120,7 +131,10 @@
 
   /* ---------- email ---------- */
   .rn-subj{margin:0;font:800 22px var(--head);line-height:1.25;overflow-wrap:anywhere}
-  .rn-snip{margin:0;font-size:17px;line-height:1.5;color:#2E2E2B;overflow-wrap:anywhere;white-space:pre-line;max-height:9em;overflow:hidden}
+  .rn-snip{margin:0;font-size:17px;line-height:1.55;color:#2E2E2B;overflow-wrap:anywhere;white-space:pre-line;border-left:3px solid var(--ink);padding:2px 0 2px 14px}
+  .rn-snip.clip{max-height:16em;overflow:hidden;-webkit-mask-image:linear-gradient(#000 70%,transparent);mask-image:linear-gradient(#000 70%,transparent)}
+  .more-btn{margin:8px 0 0;min-height:44px;padding:0 14px;border:2px solid var(--ink);border-radius:10px;background:var(--paper);font:800 13px var(--head);letter-spacing:.04em}
+  .mini-mail .w2{display:block;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .composer{border:2px solid var(--ink);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;background:var(--soft)}
   .composer label{font:900 12px var(--head);letter-spacing:.12em;text-transform:uppercase}
   .composer textarea{min-height:110px;border:none;background:transparent;font:17px Inter,sans-serif;resize:vertical;line-height:1.5;outline:none;color:var(--ink)}
@@ -185,7 +199,7 @@
   details.other[open] summary::before{transform:rotate(90deg)}
   @media (max-width:760px){
     .rn-subj{font-size:17px}
-    .rn-snip{font-size:15px;max-height:6em}
+    .rn-snip{font-size:15px}
     .mail-row{flex-wrap:wrap}
     .mail-row .box{width:auto}
     .mail-row .what{flex-basis:100%;order:3}
@@ -389,7 +403,14 @@
 
     <!-- SCHEDULE -->
     <div id="v-sched" class="view-wrap hidden">
-      <div class="sect-head"><h1 class="view-title"><span class="hl-p">TODAY’S SCHEDULE</span></h1><button type="button" class="add-btn" data-act="addsched">+ ADD TO SCHEDULE</button></div>
+      <div class="sect-head"><h1 class="view-title"><span class="hl-p">SCHEDULE</span></h1><button type="button" class="add-btn" data-act="addsched">+ ADD TO SCHEDULE</button></div>
+      <div class="daybar">
+        <button type="button" class="arrow" data-act="dayprev" aria-label="Previous day">‹</button>
+        <div class="dlabel" id="dayLabel" aria-live="polite"></div>
+        <button type="button" class="arrow" data-act="daynext" aria-label="Next day">›</button>
+        <label class="dpick">📅 PICK DATE<input type="date" id="dayPick" aria-label="Pick a date"></label>
+        <button type="button" class="back" data-act="daytoday" id="dayBack">↩ TODAY</button>
+      </div>
       <div class="ruled-list" id="schedList"></div>
     </div>
 
@@ -491,7 +512,7 @@ function eventYmd(e){
 }
 function fmtTime(ts){ return new Date(ts).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}); }
 function shortTime(ts){ const t = fmtTime(ts), m = t.match(/^(.*?)\s?(AM|PM)$/i); return m ? esc(m[1]) + '<small>' + m[2].toUpperCase() + '</small>' : esc(t); }
-function hhmmToTs(t){ if(!/^\d{1,2}:\d{2}/.test(t || '')) return null; const [h,m] = t.split(':').map(Number); const x = new Date(); x.setHours(h,m,0,0); return x.getTime(); }
+function hhmmToTs(t, base){ if(!/^\d{1,2}:\d{2}/.test(t || '')) return null; const [h,m] = t.split(':').map(Number); const x = base ? new Date(base) : new Date(); x.setHours(h,m,0,0); return x.getTime(); }
 function dueInfo(it){
   if(!it.dueAtTs) return {text:'', over:false};
   const now = Date.now();
@@ -564,17 +585,53 @@ function buildQueue(pend){
   return q;
 }
 const laterItems = () => items.filter(it => isActionable(it) && it.status !== 'done' && !isTodayOrEarlier(it)).sort(sortForFocus);
-function scheduleToday(){
-  const sod = startOfDay(Date.now()), eod = endOfDay(Date.now());
-  const out = items.filter(it => it.type === 'schedule' && it.status !== 'done' && it.dueAtTs && it.dueAtTs >= sod && it.dueAtTs <= eod)
-    .map(it => ({ts: it.dueAtTs, timed: !!it.time, what: it.text, sub: '', dur: 60, isEvent: false, item: it}));
-  todaysEvents.forEach(e => {
-    const t = e.startTime || e.time || '', ts = hhmmToTs(t);
+function scheduleToday(){ return scheduleFor(new Date(), todaysEvents, false); }
+function scheduleFor(day, evs, withDone){
+  const sod = startOfDay(day), eod = endOfDay(day);
+  const out = items.filter(it => it.type === 'schedule' && (withDone || it.status !== 'done') && it.dueAtTs && it.dueAtTs >= sod && it.dueAtTs <= eod)
+    .map(it => ({ts: it.dueAtTs, timed: !!it.time, what: it.text, sub: '', dur: 60, isEvent: false, item: it, done: it.status === 'done'}));
+  evs.forEach(e => {
+    const t = e.startTime || e.time || '', ts = hhmmToTs(t, sod);
     const sub = [e.type, e.eventNumber ? 'Job ' + e.eventNumber : (e.job ? 'Job ' + e.job : ''), e.addr].filter(Boolean).join(' · ');
     out.push({ts: ts || eod, timed: !!ts, what: e.name || e.client || 'Event', sub, dur: 180, isEvent: true});
   });
   return out.sort((a,b) => a.ts - b.ts);
 }
+
+/* ---------- schedule tab: any day ---------- */
+let schedDay = new Date(), schedEvents = [], schedEvUnsub = null, schedEvWeek = '', schedEvDay = '';
+function dayWord(d){
+  const k = ymd(d), t = new Date(), y = new Date(), m = new Date();
+  y.setDate(t.getDate() - 1); m.setDate(t.getDate() + 1);
+  return k === ymd(t) ? 'Today' : k === ymd(m) ? 'Tomorrow' : k === ymd(y) ? 'Yesterday' : (startOfDay(d) < startOfDay(t) ? 'Past day' : 'Coming up');
+}
+function watchSchedEvents(){
+  const wk = weekEndingSunday(schedDay), dk = ymd(schedDay);
+  if(wk === schedEvWeek && schedEvUnsub){ schedEvDay = dk; return; }
+  if(schedEvUnsub){ schedEvUnsub(); schedEvUnsub = null; }
+  schedEvWeek = wk; schedEvDay = dk; schedEvents = [];
+  schedEvUnsub = eventsCol.where('weekOf', '==', wk).onSnapshot(snap => {
+    schedEvents = snap.docs.map(d => Object.assign({id: d.id}, d.data())).filter(e => !e.deleted);
+    render();
+  }, err => console.warn('Events not loaded:', err));
+}
+function setSchedDay(d){
+  const x = new Date(d); x.setHours(12,0,0,0);
+  if(isNaN(x)) return;
+  schedDay = x; watchSchedEvents(); render();
+}
+function renderSchedDay(){
+  const isToday = ymd(schedDay) === ymd(new Date());
+  const evs = schedEvents.filter(e => eventYmd(e) === ymd(schedDay));
+  const sched = scheduleFor(schedDay, evs, true);
+  const word = dayWord(schedDay);
+  $('dayLabel').className = 'dlabel' + (isToday ? ' is-today' : '');
+  $('dayLabel').innerHTML = '<b>' + esc(schedDay.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'}) + (schedDay.getFullYear() !== new Date().getFullYear() ? ', ' + schedDay.getFullYear() : '')) + '</b><span>' + (isToday ? '★ ' : '') + esc(word) + '</span>';
+  $('dayPick').value = ymd(schedDay);
+  $('dayBack').classList.toggle('hidden', isToday);
+  $('schedList').innerHTML = sched.length ? sched.map(schedRowEd).join('') : '<div class="empty-line">Nothing scheduled ' + (isToday ? 'today' : 'this day') + '.</div>';
+}
+$('dayPick').addEventListener('change', e => { if(e.target.value) setSchedDay(e.target.value + 'T12:00:00'); });
 
 /* ---------- icons ---------- */
 const I = {
@@ -646,7 +703,7 @@ function render(){
   const upcoming = sched.filter(s => !s.timed || s.ts >= nowTs - 30 * 60000).slice(0, 2);
   $('comingHead').textContent = window.matchMedia('(max-width:760px)').matches ? 'NEXT ON THE SCHEDULE' : 'COMING UP';
   $('comingList').innerHTML = upcoming.length ? upcoming.map(schedRow).join('') : '<div class="empty-line">Nothing else scheduled today.</div>';
-  $('schedList').innerHTML = sched.length ? sched.map(schedRowEd).join('') : '<div class="empty-line">Nothing scheduled today.</div>';
+  renderSchedDay();
 
   // to-do view
   const list = pend.concat(done.slice().sort((a,b) => (a.doneAt||0) - (b.doneAt||0)));
@@ -690,6 +747,7 @@ function focusCardHtml(focus, queue, head){
     '</div>';
 }
 const I_MAIL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path></svg>';
+const emailExpanded = new Set();
 function emailCardHtml(em, pos, n){
   const waited = Date.now() - (em.theirAt || em.lastAt || Date.now());
   const id = esc(em.id), open = composerFor === em.id;
@@ -699,7 +757,13 @@ function emailCardHtml(em, pos, n){
     '<div class="rn-kind" style="flex-wrap:wrap">' + I_MAIL + 'EMAIL · ' + esc(em.box || 'kenny@') + ' · ' + esc(em.fromName || em.fromEmail) +
       ' <span style="font-weight:500;color:var(--muted)">· ' + esc(whenLabel(em.theirAt || em.lastAt)) + (em.messageCount > 1 ? ' · ' + em.messageCount + ' emails in this thread' : '') + '</span></div>' +
     '<h2 class="rn-subj">' + esc(em.subject || '(no subject)') + '</h2>' +
-    '<p class="rn-snip">' + esc(em.body || em.snippet || '') + '</p>';
+    (function(){
+      const txt = String(em.body || em.snippet || '').trim();
+      if(!txt) return '<p class="rn-snip" style="color:var(--muted)">(No text in this email — open it in Gmail to see it.)</p>';
+      const long = txt.length > 900 || txt.split('\n').length > 14, full = emailExpanded.has(em.id);
+      return '<p class="rn-snip' + (long && !full ? ' clip' : '') + '">' + esc(txt) + '</p>' +
+        (long ? '<button type="button" class="more-btn" data-act="emore" data-id="' + id + '">' + (full ? '▲ SHOW LESS' : '▼ SHOW THE WHOLE EMAIL') + '</button>' : '');
+    })();
   if(em.replyToSelf){
     h += '<div class="self-note">This email came from your own <strong>' + esc(em.fromEmail) + '</strong> mailbox, so a reply here would go back to yourself, not the client. Open it in Gmail or the Operations Hub to answer.</div>' +
       '<div class="rn-btns"><a class="b-main" href="' + GMAILem(em) + '" target="_blank" rel="noopener">OPEN IN GMAIL</a>' +
@@ -741,7 +805,7 @@ function mailRow(em, withActs){
     '</div>';
 }
 function miniMail(em){
-  return '<button type="button" class="mini-mail" data-act="eopen" data-id="' + esc(em.id) + '"><span style="flex:none;display:inline-flex">' + I_MAIL + '</span><span class="w"><strong>' + esc(em.fromName || em.fromEmail) + '</strong> — ' + esc(em.subject || '') + '</span><span class="tm">' + esc(whenLabel(em.theirAt || em.lastAt)) + '</span></button>';
+  return '<button type="button" class="mini-mail" data-act="eopen" data-id="' + esc(em.id) + '"><span style="flex:none;display:inline-flex">' + I_MAIL + '</span><span class="w"><strong>' + esc(em.fromName || em.fromEmail) + '</strong> — ' + esc(em.subject || '') + (em.snippet ? '<span class="w2">' + esc(em.snippet) + '</span>' : '') + '</span><span class="tm">' + esc(whenLabel(em.theirAt || em.lastAt)) + '</span></button>';
 }
 /* ---------- WhatsApp ---------- */
 const I_WA = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z"></path></svg>';
@@ -942,8 +1006,8 @@ function todoRow(it, editable){
 }
 const todoRowEd = it => todoRow(it, true);
 function schedRow(s, editable){
-  return '<div class="row"><span class="tm">' + (s.timed ? shortTime(s.ts) : s.isEvent ? 'Event' : 'All day') + '</span><span class="what">' + esc(s.what) + (s.sub ? '<span class="sub">' + esc(s.sub) + '</span>' : '') + '</span>' +
-    (s.item ? bellTag(s.item) : '') + (editable === true && s.item ? penBtn(s.item.id) : '') + '</div>';
+  return '<div class="row' + (s.done ? ' done' : '') + '"><span class="tm">' + (s.timed ? shortTime(s.ts) : s.isEvent ? 'Event' : 'All day') + '</span><span class="what">' + esc(s.what) + (s.sub ? '<span class="sub">' + esc(s.sub) + '</span>' : '') + '</span>' +
+    (s.done ? '<span class="done-tag">✓ DONE</span>' : s.item ? bellTag(s.item) : '') + (editable === true && s.item ? penBtn(s.item.id) : '') + '</div>';
 }
 const schedRowEd = s => schedRow(s, true);
 
@@ -1061,6 +1125,7 @@ document.addEventListener('click', e => {
   else if(act === 'tomorrow') moveTo(id, tomorrowMorning(), 'Moved to tomorrow 9 AM').catch(fail);
   else if(act === 'skip'){ skipped.add(b.dataset.key); if(pinnedKey === b.dataset.key) pinnedKey = null; render(); }
   else if(act === 'unskip'){ skipped.clear(); render(); }
+  else if(act === 'emore'){ if(emailExpanded.has(id)) emailExpanded.delete(id); else emailExpanded.add(id); render(); }
   else if(act === 'ereply'){ composerFor = id; render(); focusReply(id); }
   else if(act === 'eopen'){ pinnedKey = 'e:' + id; skipped.delete(pinnedKey); const em = emails.find(x => x.id === id); composerFor = em && !em.replyToSelf ? id : null; if(em && em.snoozedUntil > Date.now()) emailPatch(id, {snoozedUntil: null}).catch(fail); showView('today'); render(); focusReply(id); }
   else if(act === 'ecancel'){ composerFor = null; render(); }
@@ -1069,7 +1134,10 @@ document.addEventListener('click', e => {
   else if(act === 'elater') emailLater(id).catch(fail);
   else if(act === 'goinbox') showView('inbox');
   else if(act === 'addtodo') openEditor(null, 'todo');
-  else if(act === 'addsched') openEditor(null, 'schedule');
+  else if(act === 'addsched') openEditor(null, 'schedule', ymd(schedDay));
+  else if(act === 'dayprev'){ const d = new Date(schedDay); d.setDate(d.getDate() - 1); setSchedDay(d); }
+  else if(act === 'daynext'){ const d = new Date(schedDay); d.setDate(d.getDate() + 1); setSchedDay(d); }
+  else if(act === 'daytoday') setSchedDay(new Date());
   else if(act === 'edit'){ e.preventDefault(); openEditor(id); }
   else if(act === 'ed') edAction(b);
   else if(act === 'alarm') alarmAction(b.dataset.id, b.dataset.do);
@@ -1121,7 +1189,7 @@ function dayTs(day, dateStr){
   return d.getTime();
 }
 function atTime(dayStart, hhmm){ const d = new Date(dayStart); if(hhmm){ const [h,m] = hhmm.split(':').map(Number); d.setHours(h, m, 0, 0); } return d.getTime(); }
-function openEditor(id, type){
+function openEditor(id, type, presetYmd){
   const it = id ? items.find(x => x.id === id) : null;
   if(id && !it) return;
   const t = it ? it.type : type;
@@ -1132,6 +1200,9 @@ function openEditor(id, type){
       const k = ymdOf(it.dueAtTs), today = ymd(new Date()), tm = new Date(); tm.setDate(tm.getDate() + 1);
       day = k === today ? 'today' : k === ymd(tm) ? 'tomorrow' : 'date'; date = k;
     }
+  } else if(presetYmd && presetYmd !== ymd(new Date())){
+    const tm = new Date(); tm.setDate(tm.getDate() + 1);
+    day = presetYmd === ymd(tm) ? 'tomorrow' : 'date'; date = presetYmd;
   }
   ed = {id: id || null, type: t, text: it ? it.text : '', day, date, time: it && it.time ? it.time : '',
         priority: !!(it && it.priority), alsoSched: !!(it && it.linkedId),
@@ -1466,6 +1537,8 @@ function startData(){
     window._outboxSeen = true;
     render();
   }, err => console.warn('Outbox not loaded:', err)));
+  schedEvWeek = ''; watchSchedEvents();
+  unsubs.push(() => { if(schedEvUnsub){ schedEvUnsub(); schedEvUnsub = null; } schedEvWeek = ''; });
   const today = ymd(new Date());
   unsubs.push(eventsCol.where('weekOf', '==', weekEndingSunday(new Date())).onSnapshot(snap => {
     todaysEvents = snap.docs.map(d => Object.assign({id: d.id}, d.data())).filter(e => eventYmd(e) === today && !e.deleted);
