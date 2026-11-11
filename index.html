@@ -5380,8 +5380,13 @@ function _ewGuests(e){
   return g ? String(g) : '<span class="u-faint">—</span>';
 }
 function _ewVenue(e){
-  const v = venues.find(v=>v.addr===e.addr || v.name===e.name);
-  return pcEsc((v && v.name) || e.addr || '');
+  // Venue name comes from the event's own inquiry first. Only fall back to the saved
+  // Venues list when the event actually has an address — a blank address used to
+  // "match" any venue saved without one (e.g. every blank event showed Chabad od suffern).
+  const inq = _beoInquiryFor(e) || {};
+  const addr = String(e.addr||'').trim();
+  const v = addr ? venues.find(v=>String(v.addr||'').trim().toLowerCase()===addr.toLowerCase()) : null;
+  return pcEsc(inq.venueName || (v && v.name) || addr || inq.venueLocation || '');
 }
 function _ewCrew(e){
   const p = [];
@@ -5524,7 +5529,7 @@ function renderEvents(){
       // status dropdown, and 3 quick links (Menu/Invoice/Checklist). Grocery,
       // Equipment, Changes and everything else live one click away in the
       // event hub (openEventHub), not on the card face.
-      const ccVenueName = (()=>{ const _v=venues.find(v=>v.addr===e.addr||v.name===e.name); return (_v&&_v.name) || e.addr || ''; })();
+      const ccVenueName = _ewVenue(e);
       const ccInvStatus = role.canViewInvoices ? aggregateInvoiceStatus(e.id) : 'none';
       const ccClPct = (()=>{ const items=checklists[e.id]||[]; const active=items.filter(i=>!i.na); if(!active.length) return 0; const done=active.filter(i=>i.done||(i.assignees&&i.assignees.some(a=>a.done))).length; return Math.round(done/active.length*100); })();
       const ccUnanswered = hasUnansweredPortalMessage(e);
