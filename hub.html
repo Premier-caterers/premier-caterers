@@ -536,7 +536,7 @@ const pendingToday = () => items.filter(it => isActionable(it) && it.status !== 
 const doneToday = () => { const sod = startOfDay(Date.now()); return items.filter(it => isActionable(it) && it.status === 'done' && (it.doneAt || 0) >= sod); };
 function waitingEmails(){
   const now = Date.now();
-  return emails.filter(em => em.needsYou && !em.handled && recentEnough(em.theirAt || em.lastAt) && !(em.snoozedUntil > now) && !(em.replyQueuedAt && em.replyQueuedAt >= (em.theirAt || 0)))
+  return emails.filter(em => em.needsYou && !fromUs(em) && !em.handled && recentEnough(em.theirAt || em.lastAt) && !(em.snoozedUntil > now) && !(em.replyQueuedAt && em.replyQueuedAt >= (em.theirAt || 0)))
     .sort((a, b) => (b.theirAt || b.lastAt || 0) - (a.theirAt || a.lastAt || 0));
 }
 function waitingChats(){
@@ -552,7 +552,10 @@ function waitingAll(){
     .concat(waitingChats().map(c => ({key: 'w:' + c.id, wa: c, ts: c.lastInAt || c.lastAt || 0})))
     .sort((a, b) => b.ts - a.ts);
 }
-const snoozedEmails = () => emails.filter(em => em.needsYou && !em.handled && em.snoozedUntil > Date.now());
+// Your own company mailboxes (e.g. a reply you sent from events@ that was bcc'd to kenny@) never count as waiting on you.
+const OUR_BOXES = /^(kenny|events|orders|notes)@thepremiercaterer\.com$/i;
+const fromUs = em => OUR_BOXES.test(String(em.fromEmail || '').trim());
+const snoozedEmails = () => emails.filter(em => em.needsYou && !fromUs(em) && !em.handled && em.snoozedUntil > Date.now());
 function emailsHandledToday(){
   const sod = startOfDay(Date.now());
   return emails.filter(em => (em.handledAt || 0) >= sod || (em.repliedAt || 0) >= sod || (em.replyQueuedAt || 0) >= sod).length;
