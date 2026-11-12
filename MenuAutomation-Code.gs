@@ -1441,7 +1441,9 @@ function pcAiParseInquiry_(b) {
       'Drop off catering', 'Breakfast', 'Brunch', 'Conference', 'Other'
     ];
  
+    var todayStr = Utilities.formatDate(new Date(), 'America/New_York', 'yyyy-MM-dd');
     var prompt =
+      'Today is ' + todayStr + '. ' +
       'You are extracting structured inquiry data from an email or notes for a kosher catering company (Premier Caterers). ' +
       'The person may be expressing interest in services, asking about catering, or providing details about an event they want to book.\n\n' +
       'Extract EVERY field you can find from the text. Return ONLY a JSON object (no markdown, no explanation) with these keys:\n' +
@@ -1452,7 +1454,7 @@ function pcAiParseInquiry_(b) {
       '  phone            = phone number (keep exactly as written)\n' +
       '  eventName        = the name/title of the specific event (e.g. "Sarah\'s Bat Mitzvah")\n' +
       '  eventType        = the type of event. MUST BE ONE OF: ' + JSON.stringify(eventTypes) + '. If the text doesn\'t clearly match one, leave blank.\n' +
-      '  eventDate        = the date in YYYY-MM-DD format if visible. If only a partial date (e.g. "March 14"), guess the year as 2026 or 2027 if needed and return the full YYYY-MM-DD. If completely unclear, leave blank.\n' +
+      '  eventDate        = the date in YYYY-MM-DD format if visible. If only a partial date (e.g. "March 14"), use the NEXT time that date comes after today (never a past date) and return the full YYYY-MM-DD. If completely unclear, leave blank.\n' +
       '  venueName        = name of the venue/hall if mentioned\n' +
       '  venueLocation    = venue address or location description\n' +
       '  guestCount       = number of guests as a plain number (e.g. "120", not "120 guests")\n' +
@@ -1466,7 +1468,7 @@ function pcAiParseInquiry_(b) {
       'Rules:\n' +
       '  • Leave a field blank ("") if you don\'t see it in the text — do NOT guess or make up values.\n' +
       '  • For eventType, match against the list exactly. If unsure, leave blank.\n' +
-      '  • For eventDate, if you see "March 14" or similar without a year, pick 2026 or 2027 as reasonable and fill in the full YYYY-MM-DD.\n' +
+      '  • For eventDate, if you see "March 14" or similar without a year, use the next upcoming occurrence after today (never a date in the past) and fill in the full YYYY-MM-DD.\n' +
       '  • For guestCount, extract just the number (e.g. "120", not "120 guests" or "around 120").\n' +
       '  • Do NOT include fields that are empty — keep the JSON clean and minimal.\n' +
       '  • Return ONLY valid JSON. No markdown fences (```), no preamble, no explanation.\n\n' +
