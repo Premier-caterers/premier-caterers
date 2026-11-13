@@ -631,6 +631,29 @@ const db = firebase.firestore();
 const catalogCol = db.collection('dropOffCatalog');
 const ordersCol  = db.collection('dropOffOrders');
 
+// ── ONE NAME PER CLIENT ── spelling variants are corrected to the one official name
+// on save (same list in index.html). Add a line here to cover another client.
+const PC_CLIENT_NAMES = [
+  { name:'5th Avenue Synagogue', match:/^(5th|fifth)(\s+ave(nue)?)?(\s+synag\w*)?$/i }
+];
+function pcCanonName(v){
+  const t=String(v||'').trim().replace(/\s+/g,' ').replace(/[.,]+$/,'');
+  if(!t) return null;
+  for(const r of PC_CLIENT_NAMES){ if(r.match.test(t)) return r.name; }
+  return null;
+}
+function pcCanonOrder(o){
+  try{
+    const a=pcCanonName(o.organization), b=pcCanonName(o.locationName), c=pcCanonName(o.clientName);
+    const hit=a||b||c; if(!hit) return o;
+    o.organization=hit;
+    if(b) o.locationName=hit;
+    if(c) o.clientName=hit;
+  }catch(_){}
+  return o;
+}
+
+
 // Staff accounts — same real Firebase Auth logins as the main app.
 const PC_EMAILS = {
   owner:   'kenny@thepremiercaterer.com',
@@ -1439,6 +1462,7 @@ async function saveDraftNow(){
   // undefined.
   if(!draftStarted) payload.startNotified = false;
   try{
+    pcCanonOrder(payload);
     if(currentOrderId){
       await ordersCol.doc(currentOrderId).set(payload, {merge:true});
     } else {
@@ -1530,6 +1554,7 @@ async function submitOrder(){
   };
 
   try{
+    pcCanonOrder(order);
     if(currentOrderId){
       await ordersCol.doc(currentOrderId).set(order, {merge:true});
     } else {

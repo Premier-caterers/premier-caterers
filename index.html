@@ -1752,7 +1752,35 @@ function _mergeFileLists(rec, stored){
     rec[field] = out;
   });
 }
+// ── ONE NAME PER CLIENT ── spelling variants are corrected to the one official name
+// on save (same list in dropoff.html). Add a line here to cover another client.
+const PC_CLIENT_NAMES = [
+  { name:'5th Avenue Synagogue', match:/^(5th|fifth)(\s+ave(nue)?)?(\s+synag\w*)?$/i }
+];
+function pcCanonName(v){
+  const t=String(v||'').trim().replace(/\s+/g,' ').replace(/[.,]+$/,'');
+  if(!t) return null;
+  for(const r of PC_CLIENT_NAMES){ if(r.match.test(t)) return r.name; }
+  return null;
+}
+function pcCanonClient(o, kind){
+  try{
+    if(!o) return;
+    const org=pcCanonName(o.organization);
+    if(org) o.organization=org;
+    if(kind==='event'){
+      const n=pcCanonName(o.name);
+      if(n){ o.name=n; o.organization=n; }
+    } else {
+      const person=pcCanonName(((o.firstName||'')+' '+(o.lastName||'')).trim());
+      if(person){ o.firstName=''; o.lastName=''; o.organization=person; }
+      const en=pcCanonName(o.eventName); if(en){ o.eventName=''; o.organization=en; }
+      const vn=pcCanonName(o.venueName); if(vn) o.venueName=vn;
+    }
+  }catch(_){}
+}
 async function _saveEvent(e){ 
+  pcCanonClient(e,'event');
   try{ const _gi=_inqForEventRec(e); if(_gi && !(await ownerGuard(_gi,'edit'))){ await _ownRevert('events', e); return; } }catch(_){}
   try{ 
     if(!db) throw new Error('Database not connected yet');
@@ -1767,6 +1795,7 @@ async function _saveEvent(e){
 }
 async function _saveChange(c){ try{ await db.collection('changes').doc(c.id).set(c); }catch(err){ console.error(err); } }
 async function _saveInquiry(i){
+  pcCanonClient(i,'inquiry');
   try{ if(i && !(await ownerGuard(i,'edit'))){ await _ownRevert('inquiries', i); return; } }catch(_){}
   try{
     _actOnSaveInquiry(i);
