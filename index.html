@@ -5657,6 +5657,12 @@ function renderDetail(e,role){
       </div>
     </div>
     ${(()=>{ const cc=contactChips(e); return cc?`<div style="margin:-2px 0 12px">${cc}</div>`:''; })()}
+    ${(role.canEdit && !_beoInquiryFor(e).id) ? `<div style="display:flex;gap:12px;align-items:center;padding:12px 14px;border:1.5px dashed var(--amber-text);background:var(--amber-bg);border-radius:var(--radius);margin:0 0 14px">
+      <i class="ti ti-alert-triangle" style="font-size:20px;color:var(--amber-text);flex-shrink:0"></i>
+      <div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--amber-text)">No client file for this event</div>
+      <div style="font-size:12px;color:var(--text2)">It was added straight to the week, so the client file and invoice can’t open.</div></div>
+      <button class="btn btn--pri" style="white-space:nowrap;flex-shrink:0" onclick="openCreateClientFileModal('${e.id}')"><i class="ti ti-folder-plus"></i> Create client file</button>
+    </div>` : ''}
     <div class="detail-grid">
       <div>
         <div class="detail-block">
@@ -9898,6 +9904,129 @@ function repeatEventCreate(eventId){
 }
 window.openRepeatEventModal = openRepeatEventModal;
 window.closeRepeatEventModal = closeRepeatEventModal;
+
+// ── CREATE CLIENT FILE FOR AN OLD EVENT ──
+// Events added straight to the week (no inquiry) can't open a client file or an invoice.
+// This gives them one. Same job number; checklist, equipment and invoice(s) come along.
+// If the event's id is not the standard 'inq_<id>', it is re-keyed and the old copy goes
+// to Trash (restorable), so the week never shows a duplicate.
+function _ccfEventDate(e){
+  if(e.eventDate) return e.eventDate;
+  const wk = e.weekOf ? new Date(e.weekOf+'T12:00:00') : null;
+  const m = String(e.dayLabel||'').match(/(\d{1,2})\/(\d{1,2})/);
+  if(m && wk && !isNaN(wk)){
+    let y = wk.getFullYear(); const mo = parseInt(m[1]);
+    if(mo===12 && wk.getMonth()===0) y--;
+    return y+'-'+String(mo).padStart(2,'0')+'-'+String(parseInt(m[2])).padStart(2,'0');
+  }
+  const off = {sunday:0,saturday:-1,friday:-2,thursday:-3,wednesday:-4,tuesday:-5,monday:-6}[String(e.day||'').toLowerCase()];
+  if(wk && !isNaN(wk) && off!==undefined){ wk.setDate(wk.getDate()+off); return wk.toISOString().slice(0,10); }
+  return '';
+}
+function openCreateClientFileModal(evId){
+  const e = events.find(x=>x.id===evId); if(!e) return;
+  closeCreateClientFileModal();
+  const nm = pcEsc(e.name||'this event');
+  const wrap = document.createElement('div');
+  wrap.id = 'ccfModal';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+  wrap.onclick = ev=>{ if(ev.target===wrap) closeCreateClientFileModal(); };
+  wrap.innerHTML = `<div class="card" style="background:var(--bg);max-width:460px;width:100%;padding:20px 22px">
+    <div style="font-size:16px;font-weight:600;margin-bottom:10px">Create a client file for ${nm}?</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.8">
+      <div><i class="ti ti-check"></i> Keeps job # ${pcEsc(displayJob(e.job)||e.job||'')}, day, address, menu, staff, notes, checklist</div>
+      <div><i class="ti ti-check"></i> Stage set to ${e.lost?'Lost':'Booked'}</div>
+      <div><i class="ti ti-check"></i> Opens the client file, with Quote / Invoice ready</div>
+      ${String(e.id).indexOf('inq_')===0?'':'<div><i class="ti ti-check"></i> Old copy goes to Trash (restorable), no duplicate on the week</div>'}
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn--ghost" onclick="closeCreateClientFileModal()">Cancel</button>
+      <button class="btn btn--pri" id="ccfGo" onclick="createClientFileForEvent('${e.id}')"><i class="ti ti-folder-plus"></i> Create</button>
+    </div></div>`;
+  document.body.appendChild(wrap);
+}
+function closeCreateClientFileModal(){ const m=document.getElementById('ccfModal'); if(m) m.remove(); }
+async function createClientFileForEvent(evId){
+  const src = events.find(x=>x.id===evId);
+  if(!src){ closeCreateClientFileModal(); return; }
+  if(_beoInquiryFor(src).id){ closeCreateClientFileModal(); openEventFile(evId); return; }
+  const go = document.getElementById('ccfGo'); if(go){ go.disabled=true; go.textContent='Creating…'; }
+  try{
+    // Reuse the id when the event already follows the inq_<id> pattern (its inquiry was deleted).
+    const keepId = String(src.id).indexOf('inq_')===0;
+    const newInqId = keepId ? String(src.id).slice(4) : (Date.now()+'');
+    const newEvId = 'inq_'+newInqId;
+    const eventDate = _ccfEventDate(src);
+    const contact = String(src.contactName||'').trim().split(/\s+/);
+    const newInq = {
+      id: newInqId,
+      firstName: contact.length>1 ? contact.slice(0,-1).join(' ') : (contact[0]||''),
+      lastName: contact.length>1 ? contact[contact.length-1] : '',
+      organization: src.organization || src.name || '',
+      eventName: src.notes && src.notes.length<80 ? src.notes : (src.name||''),
+      eventType: src.typeLabel || '',
+      eventDate,
+      phone: src.phone||'', email: src.email||'',
+      venueName: '', venueLocation: src.addr||'',
+      guestCount: '', cuisine: '', meatDairy: '', shabbos: 'No',
+      howFound: '', referredBy: '',
+      source: 'old-event', createdFromEventId: src.id,
+      menuLink: src.menuLink||'',
+      menuAutomationTriggered: true,   // never auto-generate a menu for an existing event
+      stage: src.lost ? 'lost' : 'booked',
+      submittedAt: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+    };
+    inquiries.push(newInq);
+    await _saveInquiry(newInq);
+    try{ logActivity(newInqId,'inquiry','Client file created for existing event '+(fullEventNum(src)||src.job||''), {source:'old-event'}); }catch(_){}
+
+    const newEvent = JSON.parse(JSON.stringify(src));
+    newEvent.id = newEvId;
+    newEvent.inquiryId = newInqId;
+    if(eventDate && !newEvent.eventDate) newEvent.eventDate = eventDate;
+
+    if(!keepId){
+      // Carry checklist, equipment and every invoice slot across to the new key.
+      if(checklists[src.id]){ checklists[newEvId] = checklists[src.id]; await _saveChecklist(newEvId, checklists[src.id]); }
+      if(eventEquipment[src.id]){ eventEquipment[newEvId] = eventEquipment[src.id]; await _saveEquipment(newEvId, eventEquipment[src.id]); }
+      const slotKeys = invoiceSlotsForEvent(src.id);
+      for(const k of slotKeys){
+        const nk = newEvId + k.slice(String(src.id).length);
+        const inv = JSON.parse(JSON.stringify(invoices[k])); inv.eventId = newEvId;
+        invoices[nk] = inv; await _saveInvoice(nk, inv);
+      }
+      events.push(newEvent);
+      await _saveEvent(newEvent);
+      // Old copy to Trash, same as Delete does, then remove it.
+      const nm = displayJob(src.job)+' '+src.name;
+      await moveToTrash('event', nm+' (replaced by client file)', src, {bundle:{
+        event: src,
+        checklist: (checklists[src.id] ? {items: checklists[src.id]} : null),
+        equipment: (eventEquipment[src.id] || null),
+        invoice: (invoices[src.id] || null)
+      }});
+      await db.collection('events').doc(src.id).delete();
+      await db.collection('checklists').doc(src.id).delete().catch(()=>{});
+      await db.collection('equipment').doc(src.id).delete().catch(()=>{});
+      for(const k of slotKeys){ await db.collection('invoices').doc(k).delete().catch(()=>{}); delete invoices[k]; }
+      const ix = events.findIndex(x=>x.id===src.id); if(ix>=0) events.splice(ix,1);
+    } else {
+      Object.assign(src, {inquiryId:newInqId, eventDate:src.eventDate||eventDate});
+      await _saveEvent(src);
+    }
+    closeCreateClientFileModal();
+    selectedId = null; editingId = null;
+    showToast('Client file created ✓');
+    openEventFile(newEvId);
+  }catch(err){
+    console.error('createClientFileForEvent', err);
+    if(go){ go.disabled=false; go.innerHTML='<i class="ti ti-folder-plus"></i> Create'; }
+    showToast('Could not create the client file — nothing was removed. '+(err.message||''), 5000);
+  }
+}
+window.openCreateClientFileModal = openCreateClientFileModal;
+window.closeCreateClientFileModal = closeCreateClientFileModal;
+window.createClientFileForEvent = createClientFileForEvent;
 window.repeatEventCreate = repeatEventCreate;
 
 function deleteInquiry(id){
