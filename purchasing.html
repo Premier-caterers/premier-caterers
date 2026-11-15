@@ -755,9 +755,42 @@ async function backfillLastPurchaseIdsOnce(){
 }
 
 function vendorName(id){ const v=vendors.find(x=>x.id===id); return v?v.name:'(unknown vendor)'; }
-function jobDateLabel(e){ if(!e||!e.eventDate) return ''; const p=String(e.eventDate).split('-'); return p.length===3?(parseInt(p[1])+'/'+parseInt(p[2])+'/'+p[0].slice(-2)):e.eventDate; }
-function jobEventLabel(e){ if(!e) return ''; const nm=e.clientName||e.eventName||'Event'; const ty=e.eventType?(' — '+e.eventType):''; const dt=jobDateLabel(e); return nm+ty+(dt?' ('+dt+')':''); }
-function sortedJobEvents(){ return jobEvents.slice().sort((a,b)=>String(b.eventDate||'').localeCompare(String(a.eventDate||''))); }
+// Real event date: eventDate when set, otherwise worked out from weekOf (the Sunday
+// the week ends on) + day — most events only carry weekOf + day.
+const _JOB_DAY_BACK = {sunday:0,saturday:1,friday:2,thursday:3,wednesday:4,tuesday:5,monday:6};
+function jobEventISO(e){
+  if(!e) return '';
+  if(e.eventDate) return String(e.eventDate);
+  const back = _JOB_DAY_BACK[String(e.day||'').toLowerCase()];
+  if(!e.weekOf || back===undefined) return '';
+  const d = new Date(String(e.weekOf)+'T12:00:00'); if(isNaN(d)) return '';
+  d.setDate(d.getDate()-back);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function jobDateLabel(e){ const iso=jobEventISO(e); if(!iso) return ''; const p=iso.split('-'); if(p.length!==3) return iso; const dow=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(iso+'T12:00:00').getDay()]; return dow+' '+parseInt(p[1])+'/'+parseInt(p[2])+'/'+p[0].slice(-2); }
+function jobEventLabel(e){
+  if(!e) return '';
+  const nm = e.name || e.organization || e.contactName || e.clientName || e.eventName || 'Unnamed event';
+  const tyRaw = e.typeLabel || e.type || e.eventType || '';
+  const ty = tyRaw ? String(tyRaw).charAt(0).toUpperCase()+String(tyRaw).slice(1) : '';
+  const dt = jobDateLabel(e);
+  const num = e.eventNumber || e.job || '';
+  return [dt, nm, ty, num?'#'+num:''].filter(Boolean).join(' · ') + (e.lost?' (lost)':'');
+}
+function sortedJobEvents(){ return jobEvents.filter(e=>!e.lost).sort((a,b)=>jobEventISO(b).localeCompare(jobEventISO(a)) || String(a.eventNumber||'').localeCompare(String(b.eventNumber||''))); }
+// Event picker options: events within 10 days of the invoice date first, then everything else newest-first.
+function jobEventOptionsHtml(selectedId, nearISO){
+  const all = sortedJobEvents();
+  const opt = e=>`<option value="${e.id}" ${selectedId===e.id?'selected':''}>${esc(jobEventLabel(e))}</option>`;
+  const base = nearISO ? new Date(String(nearISO)+'T12:00:00') : null;
+  if(!base || isNaN(base)) return all.map(opt).join('');
+  const near = all.filter(e=>{ const iso=jobEventISO(e); if(!iso) return false; const diff=(new Date(iso+'T12:00:00')-base)/86400000; return diff>=-10 && diff<=10; })
+                  .sort((a,b)=>jobEventISO(a).localeCompare(jobEventISO(b)));
+  const nearIds = {}; near.forEach(e=>nearIds[e.id]=1);
+  const rest = all.filter(e=>!nearIds[e.id]);
+  return (near.length?`<optgroup label="Near the invoice date (${esc(fmtDate(nearISO))})">${near.map(opt).join('')}</optgroup>`:'') +
+         `<optgroup label="All events (newest first)">${rest.map(opt).join('')}</optgroup>`;
+}
 function jobEventById(id){ return jobEvents.find(e=>e.id===id); }
 function fmtMoney(n){ n=parseFloat(n); return isNaN(n)?'—':'$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmtDate(d){ if(!d) return '—'; const p=String(d).split('-'); return p.length===3?(parseInt(p[1])+'/'+parseInt(p[2])+'/'+p[0].slice(-2)):d; }
@@ -2349,7 +2382,7 @@ function renderScanReview(){
       <label>Job / Event — is this invoice for one specific event, or general stock?</label>
       <select id="scanJobEvent" onchange="_scanState.jobEventId=this.value">
         <option value="">Non-event specific order</option>
-        ${sortedJobEvents().map(e=>`<option value="${e.id}" ${_scanState.jobEventId===e.id?'selected':''}>${esc(jobEventLabel(e))}</option>`).join('')}
+        ${jobEventOptionsHtml(_scanState.jobEventId, p.invoiceDate)}
       </select>
     </div>
   </div>`;
