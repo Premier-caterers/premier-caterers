@@ -7510,6 +7510,9 @@ async function duplicateInquiry(sourceId){
     // 5. Create the matching event (uses the standard function so this event
     //    lands on the right week's cover sheet and gets its own #NN number).
     createEventFromInquiry(newInq);
+    // 5b. Put it on Google Calendar as booked (blueberry). This step was missing,
+    //     so duplicated events (e.g. 5th Ave, W/E Nov 22) never reached the calendar.
+    gcalBooked(newInq);
     // 6. Log activity on BOTH inquiries for traceability.
     try {
       const nameLabel = clientPrimary(src) || 'client';
@@ -9652,6 +9655,21 @@ async function gcalBooked(inq){
   }
 }
 
+// Keep an EXISTING calendar entry in step when the client name, event type,
+// venue or date is edited in the app. (Before this, the title was written once
+// when the entry was created and never changed again.) Only touches entries
+// the app already knows about, so it can never create a duplicate.
+async function gcalSyncDetails(inq, prevTitle, prevDate){
+  if(!inq || !inq.gcalId) return;
+  const title = _gcalTitle(inq);
+  const date  = inq.eventDate || '';
+  if(title === prevTitle && date === prevDate) return;
+  const res = await _gcalCall({ action:'calUpdate', eventId:inq.gcalId, title:title, date:date,
+                                note: _gcalToday()+' \u2014 details changed in app' });
+  if(res && res.success) showToast('Google Calendar updated');
+  else if(res && res.error) console.warn('Calendar update failed: '+res.error);
+}
+
 // Mark an inquiry as Lost / Declined. Keeps it for reference; if it had a booked
 // event, the event stays on the calendar but turns banana/amber as a visual flag.
 function markInquiryLost(id){
@@ -10834,6 +10852,7 @@ function saveInquiryEdits(id){
   Object.keys(_ACT_FIELDS_INQ).forEach(k=>{ _prevSnap[k]=inq[k]; });
   const g = k => { const el=document.getElementById('ie-'+k); return el? (el.value||'').trim() : (inq[k]||''); };
   const wasBooked = inq.stage==='booked';
+  const _calTitleBefore = _gcalTitle(inq), _calDateBefore = inq.eventDate || '';
   // Remember the event address as it was when the form opened, so we can tell
   // whether the user actually typed in the "Event address" box (see below).
   const _evBefore = _eventForInq(inq);
@@ -10859,6 +10878,8 @@ function saveInquiryEdits(id){
   }catch(e){ console.warn('inquiry edit log skipped:', e); }
   _saveInquiry(inq);
   _ensureInquiryPortal(inq);
+  // Keep the Google Calendar entry's title/date in step with these edits
+  gcalSyncDetails(inq, _calTitleBefore, _calDateBefore);
 
   // Keep the linked This-Week event in sync (and create one if newly booked)
   if(newStage==='booked'){

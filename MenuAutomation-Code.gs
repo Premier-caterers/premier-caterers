@@ -98,6 +98,7 @@ function doGet(e) {
   if (params.action === 'smsSend')     return _pcJson(pcAlloSms_(params.to, params.body));
   if (params.action === 'calAdd')      return _pcJson(pcCalAdd_(params));
   if (params.action === 'calMark')     return _pcJson(pcCalMark_(params));
+  if (params.action === 'calUpdate')   return _pcJson(pcCalUpdate_(params));
   if (params.action === 'aiSummarizeClient') return _pcJson(pcAiSummarizeClient_(params));
   if (params.action === 'generateSuggestions') return _pcJson(pcGenerateFollowupSuggestions_());
   // Make the automatic menu(s) for ONE inquiry right now — the app calls this the
@@ -885,6 +886,33 @@ function pcCalMark_(p){
     var ev = cal.getEventById(p.eventId);
     if(!ev) return { success:false, error:'Calendar event not found' };
     if(p.color){ try{ ev.setColor(String(p.color)); }catch(e){} }
+    if(p.note){ var desc = ev.getDescription() || ''; ev.setDescription(desc ? (desc + '\n' + p.note) : p.note); }
+    return { success:true };
+  }catch(e){ return { success:false, error:String(e) }; }
+}
+
+// calUpdate -> keeps an existing calendar event in step with the app when the
+// client name, event type, venue or date is edited. Changes the title and, if
+// the date moved, the date (a multi-day event keeps its length).
+function pcCalUpdate_(p){
+  try{
+    if(!p || !p.eventId) return { success:false, error:'Missing eventId' };
+    var cal = CalendarApp.getDefaultCalendar();
+    var ev = cal.getEventById(p.eventId);
+    if(!ev) return { success:false, error:'Calendar event not found' };
+    if(p.title && ev.getTitle() !== p.title) ev.setTitle(String(p.title));
+    if(p.date){
+      var parts = String(p.date).split('-');
+      if(parts.length === 3){
+        var d = new Date(parseInt(parts[0],10), parseInt(parts[1],10)-1, parseInt(parts[2],10));
+        var oldStart = ev.getAllDayStartDate();
+        if(oldStart && oldStart.getTime() !== d.getTime()){
+          var days = Math.max(1, Math.round((ev.getAllDayEndDate().getTime() - oldStart.getTime()) / 86400000));
+          if(days > 1) ev.setAllDayDates(d, new Date(d.getTime() + days * 86400000));
+          else ev.setAllDayDate(d);
+        }
+      }
+    }
     if(p.note){ var desc = ev.getDescription() || ''; ev.setDescription(desc ? (desc + '\n' + p.note) : p.note); }
     return { success:true };
   }catch(e){ return { success:false, error:String(e) }; }
