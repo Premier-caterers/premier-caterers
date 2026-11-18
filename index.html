@@ -16723,11 +16723,36 @@ function renderReports(){
     eventRevenue[e.id] = rev;
   });
 
+  // Records with no event date (e.g. the YBH Hot Lunch Program, billed once a
+  // month on one record) used to be skipped entirely, so their money never
+  // reached the monthly/yearly totals. Count each of their invoices in the
+  // invoice's own month instead: inv.serviceMonth ('YYYY-MM') if set, else the
+  // invoice date.
+  const _invMonthKey = (inv)=>{
+    if(inv.serviceMonth && /^\d{4}-\d{2}$/.test(inv.serviceMonth)) return inv.serviceMonth;
+    const d = new Date(inv.invoiceDate||inv.createdAt||'');
+    return isNaN(d) ? null : d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  };
+  const undatedInvRev = []; // [{y, m, rev, type}]
+  events.forEach(e=>{
+    if(_monthKeyFromWeekOf(e.weekOf)) return;
+    invoiceSlotsForEvent(e.id).forEach(k=>{
+      const inv=invoices[k]; if(!inv) return;
+      if(!(inv.status==='invoice'||inv.status==='paid'||inv.status==='approved')) return;
+      const mk=_invMonthKey(inv); if(!mk) return;
+      undatedInvRev.push({ y:parseInt(mk.slice(0,4)), m:parseInt(mk.slice(5,7))-1, rev:invRevenue(inv), type:e.typeLabel||e.type||'Other' });
+    });
+  });
+
   // ── Section 1: business overview ────────────────────────────────
   const monthRevThis = new Array(12).fill(0);
   const monthRevLast = new Array(12).fill(0);
   let totalRevThis = 0, totalRevLast = 0;
   let evThis = 0, evLast = 0;
+  undatedInvRev.forEach(r=>{
+    if(r.y===thisYear){ monthRevThis[r.m]+=r.rev; totalRevThis+=r.rev; }
+    else if(r.y===lastYear){ monthRevLast[r.m]+=r.rev; totalRevLast+=r.rev; }
+  });
   events.forEach(e=>{
     const y = eventYear(e); if(y!==thisYear && y!==lastYear) return;
     const mk = _monthKeyFromWeekOf(e.weekOf); if(!mk) return;
@@ -16768,6 +16793,12 @@ function renderReports(){
     const rev = eventRevenue[e.id] || 0;
     if(y===thisYear){ byType[t].countThis++; byType[t].revThis+=rev; }
     else            { byType[t].countLast++; byType[t].revLast+=rev; }
+  });
+  // Undated monthly-billed records: add their revenue to their type (no event count).
+  undatedInvRev.forEach(r=>{
+    if(r.y!==thisYear && r.y!==lastYear) return;
+    if(!byType[r.type]) byType[r.type] = {countThis:0, countLast:0, revThis:0, revLast:0};
+    if(r.y===thisYear) byType[r.type].revThis+=r.rev; else byType[r.type].revLast+=r.rev;
   });
   const typeRows = Object.keys(byType).map(k=>({key:k, ...byType[k]}))
     .sort((a,b)=>b.revThis-a.revThis);
