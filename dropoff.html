@@ -633,20 +633,35 @@ const ordersCol  = db.collection('dropOffOrders');
 
 // ── ONE NAME PER CLIENT ── spelling variants are corrected to the one official name
 // on save (same list in index.html). Add a line here to cover another client.
+// person:true  — the match is a contact person's name: the record gets the client
+//                name as its organization, but the person is kept as the contact.
+// noVenue:true — a delivery TO this place doesn't make it the client (people
+//                sponsor their own kiddush at TJC and pay for it themselves).
 const PC_CLIENT_NAMES = [
-  { name:'5th Avenue Synagogue', match:/^(5th|fifth)(\s+ave(nue)?)?(\s+synag\w*)?$/i }
+  { name:'5th Avenue Synagogue', match:/^(5th|fifth)(\s+ave(nue)?)?(\s+synag\w*)?$/i },
+  { name:'Teaneck Jewish Center', match:/^(tjc|teaneck jewish( center)?)$/i, noVenue:true },
+  { name:'Teaneck Jewish Center', match:/^ryan richmond$/i, person:true, noVenue:true }
 ];
-function pcCanonName(v){
+function _pcCanonRule(v, opts){
+  opts=opts||{};
   const t=String(v||'').trim().replace(/\s+/g,' ').replace(/[.,]+$/,'');
   if(!t) return null;
-  for(const r of PC_CLIENT_NAMES){ if(r.match.test(t)) return r.name; }
+  for(const r of PC_CLIENT_NAMES){
+    if(!!r.person!==!!opts.person) continue;
+    if(opts.venue && r.noVenue) continue;
+    if(r.match.test(t)) return r;
+  }
   return null;
 }
+function pcCanonName(v){ const r=_pcCanonRule(v); return r?r.name:null; }
+function pcCanonPerson(v){ const r=_pcCanonRule(v,{person:true}); return r?r.name:null; }
+function pcCanonVenue(v){ const r=_pcCanonRule(v,{venue:true}); return r?r.name:null; }
 function pcCanonOrder(o){
   try{
-    const a=pcCanonName(o.organization), b=pcCanonName(o.locationName), c=pcCanonName(o.clientName);
-    const hit=a||b||c; if(!hit) return o;
-    o.organization=hit;
+    const a=pcCanonName(o.organization), c=pcCanonName(o.clientName)||pcCanonPerson(o.clientName);
+    const b=pcCanonVenue(o.locationName), p=pcCanonPerson(o.contactName);
+    const hit=a||b||c||p; if(!hit) return o;
+    o.organization=hit;                       // contactName is never changed
     if(b) o.locationName=hit;
     if(c) o.clientName=hit;
   }catch(_){}
