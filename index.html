@@ -13088,7 +13088,11 @@ async function copyInvoiceSlot(srcKey){
   inv.depositAmount = 0;
   if(inv.status==='paid') inv.status = 'invoice';
   inv._editOverride = (inv.status==='invoice');   // open unlocked so lines can be deleted right away
+  // A copy is a NEW invoice: date it today, and don't inherit the source's
+  // billing month (Reports would otherwise file e.g. December under November).
+  delete inv.serviceMonth;
   if(inv.status!=='invoice') inv.invoiceDate = '';
+  else inv.invoiceDate = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   inv.createdAt = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   invoices[key] = inv;
   await _saveInvoice(key, inv);
