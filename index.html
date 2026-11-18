@@ -13473,6 +13473,7 @@ window._reportRows = [];
 // printout (running balance) instead of a plain report table.
 function openInvoiceReports(){
   document.getElementById('invReportsModal')?.remove();
+  document.getElementById('repBackBtn')?.remove();
   const clients = [...new Set(events.map(e=>e.name).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const types = [...new Set(events.map(e=>e.typeLabel||e.type).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const statusOpts = [['','All statuses'],['none','No quote'],['quote','Quote'],['approved','Approved'],['invoice','Invoice open'],['paid','Paid']];
@@ -13483,7 +13484,7 @@ function openInvoiceReports(){
     <div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.5rem;width:100%;max-width:900px;max-height:92vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.25)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
         <div style="font-size:17px;font-weight:600;color:var(--text)">Reports &amp; statements</div>
-        <button onclick="document.getElementById('invReportsModal').remove()" style="border:none;background:none;cursor:pointer;font-size:20px;color:var(--text3)">&times;</button>
+        <button onclick="document.getElementById('invReportsModal').remove();document.getElementById('repBackBtn')?.remove()" style="border:none;background:none;cursor:pointer;font-size:20px;color:var(--text3)">&times;</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:.9rem">
         <div><label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:3px">From date</label>
@@ -13526,7 +13527,8 @@ function generateInvoiceReport(){
       const t = inv ? calcInvoiceTotals(inv) : {grand:0,balance:0};
       const deposit = inv ? parseFloat(inv.deposit||0) : 0;
       rows.push({
-        eid:k, job:displayJob(e.job)||e.job||'', client:e.name||'', date:e.weekOf||'',
+        eid:k, evId:e.id, hasInv:!!inv, order:_repOrderLink(e),
+        job:displayJob(e.job)||e.job||'', client:e.name||'', date:e.weekOf||'',
         dateDisp:getFullEventDate(e), type:e.typeLabel||e.type||'', status:st,
         invoiced:t.grand||0, paid:Math.max(0,(t.grand||0)-(t.balance||0)), balance:Math.max(0,t.balance||0)
       });
@@ -13550,7 +13552,7 @@ function generateInvoiceReport(){
   const rowsHtml = rows.map(r=>{
     if(isStatement) runningBal += r.invoiced - r.paid;
     return '<tr>'
-      + '<td class="shrink"><span class="job-pill">'+pcEsc(r.job)+'</span></td>'
+      + '<td class="shrink"><span class="job-pill" role="button" tabindex="0" title="Open the client file" style="cursor:pointer;text-decoration:underline" onclick="_repOpenFile(\''+r.evId+'\')">'+pcEsc(r.job)+'</span></td>'
       + (isStatement?'':'<td>'+pcEsc(r.client)+'</td>')
       + '<td class="shrink u-nowrap">'+pcEsc(r.dateDisp)+'</td>'
       + '<td class="shrink">'+pcEsc(r.type)+'</td>'
@@ -13559,21 +13561,71 @@ function generateInvoiceReport(){
       + '<td class="num shrink u-muted">'+(r.paid>0?'$'+r.paid.toFixed(2):'\u2014')+'</td>'
       + '<td class="num shrink"'+(r.balance>0.01?' style="color:var(--red-solid);font-weight:600"':'')+'>'+(r.balance>0.01?'$'+r.balance.toFixed(2):'\u2014')+'</td>'
       + (isStatement?'<td class="num shrink" style="font-weight:600">$'+runningBal.toFixed(2)+'</td>':'')
+      + '<td class="shrink u-nowrap">'+_repInvBtn(r)+'</td>'
+      + '<td class="shrink u-nowrap">'+_repOrderBtn(r)+'</td>'
       + '</tr>';
   }).join('');
 
   el.innerHTML = '<div class="tbl-wrap"><table class="tbl">'
     + '<thead><tr><th>Event</th>'+(isStatement?'':'<th>Client</th>')+'<th>Date</th><th>Type</th><th>Status</th>'
-    + '<th class="num">Invoiced</th><th class="num">Paid</th><th class="num">Balance</th>'+(isStatement?'<th class="num">Running bal.</th>':'')+'</tr></thead>'
+    + '<th class="num">Invoiced</th><th class="num">Paid</th><th class="num">Balance</th>'+(isStatement?'<th class="num">Running bal.</th>':'')+'<th>Invoice</th><th>Order</th></tr></thead>'
     + '<tbody>'+rowsHtml+'</tbody>'
     + '<tfoot><tr style="font-weight:700;border-top:1.5px solid var(--border2)"><td'+(isStatement?'':' colspan="2"')+'>'+rows.length+' invoice'+(rows.length===1?'':'s')+'</td><td colspan="2"></td><td></td>'
     + '<td class="num">$'+totInv.toFixed(2)+'</td><td class="num">$'+totPaid.toFixed(2)+'</td>'
-    + '<td class="num" style="color:'+(totBal>0.01?'var(--red-solid)':'inherit')+'">$'+totBal.toFixed(2)+'</td>'+(isStatement?'<td></td>':'')+'</tr></tfoot>'
+    + '<td class="num" style="color:'+(totBal>0.01?'var(--red-solid)':'inherit')+'">$'+totBal.toFixed(2)+'</td>'+(isStatement?'<td></td>':'')+'<td></td><td></td></tr></tfoot>'
     + '</table></div>'
     + '<div style="display:flex;gap:8px;margin-top:.9rem;justify-content:flex-end">'
     + '<button class="btn" onclick="downloadInvoiceReportCsv()"><i class="ti ti-file-spreadsheet" style="font-size:14px;vertical-align:-2px"></i> Download CSV</button>'
     + '<button class="btn btn--pri" onclick="printInvoiceReport()"><i class="ti ti-printer" style="font-size:14px;vertical-align:-2px"></i> '+(isStatement?'Print statement':'Print report')+'</button>'
     + '</div>';
+}
+// ── Report links: open the invoice / order / client file straight from a report row ──
+function _repOrderLink(e){
+  if(e.dropOffOrderId) return {url:'dropoff.html?order='+encodeURIComponent(e.dropOffOrderId), label:'Order', icon:'ti-shopping-cart'};
+  let inq=null; try{ inq=_beoInquiryFor(e); }catch(_){}
+  const url = (inq && (inq.menuLink || (Array.isArray(inq.menus)&&inq.menus[0]&&inq.menus[0].url))) || e.pdfMenuLink || e.menuLink || '';
+  return url ? {url, label:'Menu', icon:'ti-file-text'} : null;
+}
+function _repBtn(icon,label,onclick,dashed){
+  return '<button class="btn btn--sm'+(dashed?' btn--dashed':'')+'" onclick="event.stopPropagation();'+onclick+'"><i class="ti '+icon+'" style="font-size:13px;vertical-align:-2px"></i> '+label+'</button>';
+}
+function _repInvBtn(r){
+  const k=String(r.eid).replace(/'/g,"\\'");
+  if(!r.hasInv || r.status==='none') return _repBtn('ti-plus','Create invoice',"_repOpenInvoice('"+k+"')",true);
+  const label = (r.status==='quote'||r.status==='approved') ? 'Open quote' : 'Open invoice';
+  return _repBtn(r.status==='quote'||r.status==='approved'?'ti-file-dollar':'ti-file-invoice', label, "_repOpenInvoice('"+k+"')");
+}
+function _repOrderBtn(r){
+  if(!r.order) return '<span class="u-muted" style="font-size:12px">None on file</span>';
+  return '<a class="btn btn--sm" href="'+pcEsc(r.order.url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()"><i class="ti '+r.order.icon+'" style="font-size:13px;vertical-align:-2px"></i> '+r.order.label+' <i class="ti ti-external-link" style="font-size:11px;vertical-align:-1px"></i></a>';
+}
+function _repHide(){
+  const m=document.getElementById('invReportsModal'); if(!m) return;
+  m.style.display='none';
+  if(!document.getElementById('repBackBtn')){
+    const b=document.createElement('button');
+    b.id='repBackBtn'; b.className='btn btn--pri';
+    b.style.cssText='position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:8999;box-shadow:0 2px 10px rgba(0,0,0,.2)';
+    b.innerHTML='<i class="ti ti-arrow-left" style="font-size:14px;vertical-align:-2px"></i> Back to report';
+    b.onclick=_repShow;
+    document.body.appendChild(b);
+  }
+}
+function _repShow(){
+  document.getElementById('repBackBtn')?.remove();
+  const m=document.getElementById('invReportsModal');
+  if(m){ m.style.display='flex'; }
+}
+function _repOpenInvoice(k){
+  _repHide();
+  const evId=baseEventIdOf(k);
+  try{ _navReturnCapture(evId); }catch(_){}
+  showView('invoices');
+  setTimeout(()=>{ try{ openInvoice(k); }catch(err){ console.error(err); } },300);
+}
+function _repOpenFile(evId){
+  _repHide();
+  try{ openEventFile(evId); }catch(err){ console.error(err); }
 }
 function downloadInvoiceReportCsv(){
   const rows = window._reportRows||[];
