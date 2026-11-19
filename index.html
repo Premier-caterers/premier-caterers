@@ -20255,8 +20255,29 @@ async function fetchMessageBody(id){
 // for that address, and (b) the Apps Script pcGmailSend_ has been updated to
 // honor the sendAs field. Until the Apps Script is updated, sendAs is silently
 // ignored by the relay (emails still send from events@).
+// Kenny's "schedule a call" booking link, added to the bottom of every email
+// Kenny sends from the app. Skipped for: other staff's logins (it's Kenny's
+// calendar), texts (all-digit SMS addresses), the office printer, emails
+// that only go to our own staff, and emails that already contain the link.
+const PC_BOOKING_URL = 'https://calendar.app.google/hAWhPmpDwaofKDpR8';
+function _withBookingLink(to, body, htmlBody){
+  const out = { body: body||'', htmlBody: htmlBody||body||'' };
+  try{
+    if(authUser !== 'owner') return out;
+    const rcpts = String(to||'').split(/[,;]/).map(x=>x.trim().toLowerCase()).filter(Boolean);
+    if(!rcpts.length) return out;
+    if(rcpts.some(a=>a.includes('print.brother.com') || /^[0-9]+@/.test(a))) return out;
+    if(rcpts.every(a=>a.endsWith('@thepremiercaterer.com'))) return out;
+    if((out.htmlBody+out.body).includes('calendar.app.google')) return out;
+    out.htmlBody += '<p style="margin-top:18px"><a href="'+PC_BOOKING_URL+'" target="_blank">\ud83d\udcc5 Click here to schedule a call with Kenny</a></p>';
+    out.body += '\n\nSchedule a call with Kenny: '+PC_BOOKING_URL;
+  }catch(_){}
+  return out;
+}
+
 async function sendGmailEmail(to, subject, body, htmlBody, attachments, sendAs){
   try{ const _gi=_inqForRecipients(to); if(_gi && !(await ownerGuard(_gi,'send'))){ showToast('Not sent'); return false; } }catch(_){}
+  { const _bk = _withBookingLink(to, body, htmlBody); body = _bk.body; htmlBody = _bk.htmlBody; }
   if(gmailViaScript()){
     try{
       const payload = {
