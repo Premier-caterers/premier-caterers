@@ -166,11 +166,16 @@
   .qrow .l2{font-size:13px;color:var(--muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
   .qrow .l2 strong{color:var(--ink);font-weight:700}
   .qrow .who-tag{flex:none;font:800 10px var(--head);letter-spacing:.06em;border:2px solid var(--ink);border-radius:6px;padding:1px 5px;text-transform:uppercase}
-  .qrow .ics{display:grid;grid-template-columns:repeat(2,40px);gap:6px;flex:none}
+  .qrow .ics{display:grid;grid-template-columns:repeat(3,40px);gap:6px;flex:none;align-content:start}
   .qrow .ic{width:40px;height:34px;border:2px solid var(--ink);border-radius:9px;background:var(--paper);display:inline-flex;align-items:center;justify-content:center;color:var(--ink);text-decoration:none}
   .qrow .ic.pri{background:var(--cyan)}
   .qbox .empty-line{padding:14px 2px}
   #comingList .src-link{display:none}
+  .fp-list{display:flex;flex-direction:column;gap:6px;max-height:42vh;overflow-y:auto;border:2px solid var(--ink);border-radius:12px;padding:8px}
+  .fp-list button{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border:2px solid var(--rule);border-radius:10px;background:var(--paper);font:600 14px Inter,sans-serif;text-align:left;color:var(--ink)}
+  .fp-list button[aria-pressed="true"]{border-color:var(--ink);background:var(--cyan);font-weight:800}
+  .fp-list .sug{margin-left:auto;font:800 10px var(--head);letter-spacing:.06em;border:2px solid var(--ink);border-radius:6px;padding:1px 6px;background:var(--yellow)}
+  .ic.del{border-style:dashed}
   .src-link{flex:none;border:2px solid var(--ink);border-radius:8px;background:var(--paper);font:800 11px var(--head);letter-spacing:.05em;padding:4px 8px;display:inline-flex;align-items:center;gap:5px;color:var(--ink);text-decoration:none;cursor:pointer}
   @media (max-width:1100px){ .qgrid{grid-template-columns:minmax(0,1fr)} .qbox-list{max-height:none;min-height:0} }
   .mini-mail{display:flex;gap:10px;min-height:52px;align-items:center;border-bottom:1px solid var(--rule);font-size:15px;width:100%;background:none;border-left:none;border-right:none;border-top:none;text-align:left;padding:0;color:var(--ink)}
@@ -471,6 +476,7 @@
 </nav>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Write it down"><div class="sticky" id="stickyPhone"></div></div>
 
+<div class="ed-wrap hidden" id="fpWrap" role="dialog" aria-modal="true" aria-labelledby="fpTitle"><div class="ed" id="fp"></div></div>
 <div class="ed-wrap hidden" id="edWrap" role="dialog" aria-modal="true" aria-labelledby="edTitle"><div class="ed" id="ed"></div></div>
 <div class="ed-wrap hidden" id="alarmWrap" role="alertdialog" aria-modal="true" aria-labelledby="alarmWhat"><div class="alarm" id="alarm"></div></div>
 <div id="toast" class="toast hidden" role="status"><span id="toastMsg"></span><button type="button" id="toastUndo">Undo</button></div>
@@ -820,10 +826,13 @@ const I_REPLY = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" str
 const I_CHECK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg>';
 const I_TODO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 12l3 3 5-6"></path></svg>';
 const I_CAL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>';
+const I_TRASH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>';
 const addBtns = key => '<button type="button" class="ic" data-act="mtodo" data-key="' + esc(key) + '" aria-label="Add to To do" title="Add to To do">' + I_TODO + '</button>' +
-  '<button type="button" class="ic" data-act="msched" data-key="' + esc(key) + '" aria-label="Add to Schedule" title="Add to Schedule">' + I_CAL + '</button>';
+  '<button type="button" class="ic" data-act="msched" data-key="' + esc(key) + '" aria-label="Add to Schedule" title="Add to Schedule">' + I_CAL + '</button>' +
+  '<button type="button" class="ic del" data-act="mdel" data-key="' + esc(key) + '" aria-label="Delete" title="' + (key[0] === 'w' ? 'Delete from the hub (stays in WhatsApp)' : 'Delete (moves to Gmail Trash)') + '">' + I_TRASH + '</button>';
 const addBtnsBig = key => '<button type="button" class="b todo-add" data-act="mtodo" data-key="' + esc(key) + '">' + I_TODO + ' + To do</button>' +
-  '<button type="button" class="b" data-act="msched" data-key="' + esc(key) + '">' + I_CAL + ' + Schedule</button>';
+  '<button type="button" class="b" data-act="msched" data-key="' + esc(key) + '">' + I_CAL + ' + Schedule</button>' +
+  '<button type="button" class="b" style="border-style:dashed" data-act="mdel" data-key="' + esc(key) + '">' + I_TRASH + ' Delete</button>';
 const BOXES = [
   {k: 'kenny', label: 'kenny@', icon: () => I_MAIL},
   {k: 'events', label: 'events@', icon: () => I_MAIL},
@@ -875,7 +884,8 @@ function mailRow(em, withActs){
                       : '<button type="button" class="sm pri" data-act="eopen" data-id="' + esc(em.id) + '">REPLY</button>') +
       '<button type="button" class="sm" data-act="edone" data-id="' + esc(em.id) + '">Done</button>' +
       '<button type="button" class="sm" data-act="mtodo" data-key="e:' + esc(em.id) + '" aria-label="Add to To do">' + I_TODO + '</button>' +
-      '<button type="button" class="sm" data-act="msched" data-key="e:' + esc(em.id) + '" aria-label="Add to Schedule">' + I_CAL + '</button></span>'
+      '<button type="button" class="sm" data-act="msched" data-key="e:' + esc(em.id) + '" aria-label="Add to Schedule">' + I_CAL + '</button>' +
+      '<button type="button" class="sm" style="border-style:dashed" data-act="mdel" data-key="e:' + esc(em.id) + '" aria-label="Delete">' + I_TRASH + '</button></span>'
     : '<span class="acts" style="display:flex;gap:8px"><a class="sm" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink)" href="' + GMAILem(em) + '" target="_blank" rel="noopener">Open in Gmail</a></span>') +
     '</div>';
 }
@@ -972,7 +982,8 @@ function waRow(c, withActs){
     (withActs ? '<span class="acts" style="display:flex;gap:8px"><button type="button" class="sm pri" data-act="wopen" data-id="' + esc(c.id) + '">REPLY</button>' +
       '<button type="button" class="sm" data-act="wdone" data-id="' + esc(c.id) + '">Done</button>' +
       '<button type="button" class="sm" data-act="mtodo" data-key="w:' + esc(c.id) + '" aria-label="Add to To do">' + I_TODO + '</button>' +
-      '<button type="button" class="sm" data-act="msched" data-key="w:' + esc(c.id) + '" aria-label="Add to Schedule">' + I_CAL + '</button></span>'
+      '<button type="button" class="sm" data-act="msched" data-key="w:' + esc(c.id) + '" aria-label="Add to Schedule">' + I_CAL + '</button>' +
+      '<button type="button" class="sm" style="border-style:dashed" data-act="mdel" data-key="w:' + esc(c.id) + '" aria-label="Delete">' + I_TRASH + '</button></span>'
     : '<span class="acts" style="display:flex;gap:8px"><button type="button" class="sm" data-act="wopen" data-id="' + esc(c.id) + '">Open</button></span>') +
     '</div>';
 }
@@ -1068,7 +1079,7 @@ function renderEmail(head){
   const waitingKeys = new Set(list.map(x => x.key));
   const recent = Date.now() - 3 * 86400000;
   const others = (inboxFilter === 'wa' ? [] : emails.filter(em => inboxFilter === 'all' || String(em.mailbox || 'kenny').toLowerCase() === inboxFilter).filter(em => !em.handled && !waitingKeys.has('e:' + em.id)).map(em => ({email: em, ts: em.lastAt || 0})))
-    .concat(inboxFilter !== 'all' && inboxFilter !== 'wa' ? [] : waChats.filter(c => !waitingKeys.has('w:' + c.id) && (c.lastAt || 0) > recent).map(c => ({wa: c, ts: c.lastAt || 0})))
+    .concat(inboxFilter !== 'all' && inboxFilter !== 'wa' ? [] : waChats.filter(c => !waitingKeys.has('w:' + c.id) && (c.lastAt || 0) > recent && !((c.deletedAt || 0) >= (c.lastInAt || c.lastAt || 0))).map(c => ({wa: c, ts: c.lastAt || 0})))
     .sort((a, b) => b.ts - a.ts);
   $('otherWrap').classList.toggle('hidden', !others.length);
   $('otherHead').textContent = 'Everything else · ' + others.length + ' (older than ' + WAITING_DAYS + ' days, receipts, notices, ones you answered)';
@@ -1226,7 +1237,9 @@ document.addEventListener('click', e => {
   else if(act === 'eopen'){ pinnedKey = 'e:' + id; skipped.delete(pinnedKey); const em = emails.find(x => x.id === id); composerFor = em && !em.replyToSelf ? id : null; if(em && em.snoozedUntil > Date.now()) emailPatch(id, {snoozedUntil: null}).catch(fail); showView('today'); render(); focusReply(id); }
   else if(act === 'ecancel'){ composerFor = null; render(); }
   else if(act === 'esend') sendReply(id).catch(fail);
-  else if(act === 'edone') emailDone(id).catch(fail);
+  else if(act === 'edone') openFilePicker(id);
+  else if(act === 'mdel') deleteMsg(b.dataset.key).catch(fail);
+  else if(act === 'fp') fpAction(b);
   else if(act === 'elater') emailLater(id).catch(fail);
   else if(act === 'goinbox') showView('inbox');
   else if(act === 'addtodo') openEditor(null, 'todo');
@@ -1264,6 +1277,87 @@ function focusReply(id){
   }, 60);
 }
 const emailPatch = (id, p) => inboxCol.doc(id).update(p);
+/* ---------- Done → file it in a Gmail folder ---------- */
+const hubLabels = {kenny: [], events: [], orders: []};
+let fileMemory = {}, fp = null;
+const memKey = em => (String(em.mailbox || 'kenny') + '|' + String(em.fromEmail || '').toLowerCase()).replace(/[.\/]/g, '_');
+function openFilePicker(id){
+  const em = emails.find(x => x.id === id); if(!em) return;
+  const mb = String(em.mailbox || 'kenny').toLowerCase();
+  const labels = hubLabels[mb] || [];
+  const remembered = fileMemory[memKey(em)];
+  let sug = remembered && labels.indexOf(remembered) >= 0 ? remembered : (em.suggestLabel && labels.indexOf(em.suggestLabel) >= 0 ? em.suggestLabel : '');
+  if(!sug){   // last resort: a folder whose name matches the sender (Bertram → "Product orders/Bertram")
+    const who = (String(em.fromName || '') + ' ' + String(em.fromEmail || '')).toLowerCase();
+    sug = labels.find(l => { const last = l.split('/').pop().toLowerCase().trim(); return last.length >= 4 && who.indexOf(last) >= 0; }) || '';
+  }
+  fp = {id, mb, labels, sug, pick: sug || '', q: ''};
+  renderFilePicker();
+  $('fpWrap').classList.remove('hidden');
+}
+function renderFilePicker(){
+  const em = emails.find(x => x.id === fp.id); if(!em){ closeFilePicker(); return; }
+  const q = fp.q.toLowerCase();
+  const list = fp.labels.filter(l => !q || l.toLowerCase().indexOf(q) >= 0);
+  if(fp.sug && list.indexOf(fp.sug) > 0){ list.splice(list.indexOf(fp.sug), 1); list.unshift(fp.sug); }
+  $('fp').innerHTML = '<h2 id="fpTitle"><span class="hl-c">DONE — FILE IT</span></h2>' +
+    '<div style="font-size:14px;color:var(--muted)">' + esc(em.fromName || em.fromEmail) + ' — ' + esc(em.subject || '') + '</div>' +
+    '<div class="fl">Put it in which ' + esc(fp.mb) + '@ folder?</div>' +
+    (fp.labels.length > 8 ? '<input type="text" id="fpQ" placeholder="Search folders" value="' + esc(fp.q) + '">' : '') +
+    '<div class="fp-list">' + (list.length ? list.map(l => '<button type="button" data-act="fp" data-g="pick" data-v="' + esc(l) + '" aria-pressed="' + (fp.pick === l) + '">' + (fp.pick === l ? I_CHECK : '') + esc(l) + (l === fp.sug ? '<span class="sug">SUGGESTED</span>' : '') + '</button>').join('')
+      : '<div class="note">' + (fp.labels.length ? 'No folder matches.' : 'Loading folders… (if this stays empty, the mailbox has no folders yet)') + '</div>') + '</div>' +
+    '<div class="row-btns"><button type="button" class="b-main" data-act="fp" data-g="file"' + (fp.pick ? '' : ' disabled') + '>' + I_CHECK + (fp.pick ? 'FILE IN “' + esc(fp.pick.length > 24 ? fp.pick.slice(0, 22) + '…' : fp.pick) + '”' : 'PICK A FOLDER') + '</button>' +
+      '<button type="button" class="b" data-act="fp" data-g="archive">Done, no folder</button>' +
+      '<button type="button" class="b" data-act="fp" data-g="cancel">Cancel</button></div>' +
+    '<div class="note">Takes it out of the Gmail inbox' + (fp.pick ? ' and puts it in that folder' : '') + '. Undo is on the message that pops up.</div>';
+  const qi = $('fpQ'); if(qi){ qi.oninput = () => { fp.q = qi.value; const pos = qi.selectionStart; renderFilePicker(); const n = $('fpQ'); if(n){ n.focus(); n.setSelectionRange(pos, pos); } }; }
+}
+function closeFilePicker(){ $('fpWrap').classList.add('hidden'); fp = null; }
+$('fpWrap').addEventListener('click', e => { if(e.target.id === 'fpWrap') closeFilePicker(); });
+function fpAction(b){
+  if(!fp) return;
+  const g = b.dataset.g;
+  if(g === 'pick'){ fp.pick = fp.pick === b.dataset.v ? '' : b.dataset.v; renderFilePicker(); }
+  else if(g === 'cancel') closeFilePicker();
+  else if(g === 'file' && fp.pick) fileEmail(fp.id, fp.pick).catch(fail);
+  else if(g === 'archive') fileEmail(fp.id, '').catch(fail);
+}
+async function fileEmail(id, label){
+  const em = emails.find(x => x.id === id); if(!em){ closeFilePicker(); return; }
+  closeFilePicker();
+  await emailPatch(id, {handled: true, handledAt: Date.now(), filedLabel: label || null});
+  if(composerFor === id) composerFor = null;
+  if(pinnedKey === 'e:' + id) pinnedKey = null;
+  const job = await outboxCol.add({type: 'file', mailbox: em.mailbox || 'kenny', threadId: em.threadId || id, label: label || '', subject: em.subject || '', by: HUB_EMAIL, status: 'queued', createdAt: Date.now()});
+  if(label && em.fromEmail){ fileMemory[memKey(em)] = label; db.collection('hubFileMemory').doc('main').set({map: {[memKey(em)]: label}}, {merge: true}).catch(e => console.warn(e)); }
+  toast((label ? 'Filed in ' + label + ': ' : 'Done: ') + (em.subject || 'email'), () => undoGmail(id, job, label));
+}
+async function undoGmail(id, job, label){
+  // the email may already have left the Gmail inbox (and the live list), so use what the job recorded
+  const snap = await job.get(), j = snap.exists ? snap.data() : {};
+  await emailPatch(id, {handled: false, handledAt: null, filedLabel: null, deletedAt: null, inInbox: true});
+  if(j.status === 'queued') await job.update({status: 'cancelled'});
+  else if(j.threadId) await outboxCol.add({type: 'untrash', mailbox: j.mailbox || 'kenny', threadId: j.threadId, label: label || '', subject: j.subject || '', by: HUB_EMAIL, status: 'queued', createdAt: Date.now()});
+}
+/* ---------- Delete ---------- */
+async function deleteMsg(key){
+  const id = key.slice(2);
+  if(key[0] === 'w'){
+    const c = waChats.find(x => x.id === id); if(!c) return;
+    const before = {handledAt: c.handledAt || null, deletedAt: c.deletedAt || null};
+    await waPatch(id, {handledAt: Date.now(), deletedAt: Date.now()});
+    if(composerFor === 'wa:' + id) composerFor = null;
+    if(pinnedKey === 'w:' + id) pinnedKey = null;
+    toast('Removed from the hub (still in WhatsApp): ' + (c.name || 'chat'), () => waPatch(id, before));
+    return;
+  }
+  const em = emails.find(x => x.id === id); if(!em) return;
+  await emailPatch(id, {handled: true, handledAt: Date.now(), deletedAt: Date.now()});
+  if(composerFor === id) composerFor = null;
+  if(pinnedKey === 'e:' + id) pinnedKey = null;
+  const job = await outboxCol.add({type: 'trash', mailbox: em.mailbox || 'kenny', threadId: em.threadId || id, subject: em.subject || '', by: HUB_EMAIL, status: 'queued', createdAt: Date.now()});
+  toast('Deleted (in Gmail Trash): ' + (em.subject || 'email'), () => undoGmail(id, job, ''));
+}
 async function emailDone(id){
   const em = emails.find(x => x.id === id); if(!em) return;
   await emailPatch(id, {handled: true, handledAt: Date.now()});
@@ -1669,6 +1763,8 @@ function startData(){
     err => console.warn('WhatsApp outbox not loaded:', err)));
   unsubs.push(db.collection('hubSyncStatus').doc('email_orders').onSnapshot(d => { ordersStatus = d.exists ? d.data() : null; render(); },
     err => { console.warn('orders@ status not loaded:', err); ordersStatus = null; render(); }));
+  ['kenny', 'events', 'orders'].forEach(mb => unsubs.push(db.collection('hubLabels').doc(mb).onSnapshot(d => { hubLabels[mb] = d.exists ? (d.data().labels || []) : []; }, err => console.warn('folders not loaded:', err))));
+  unsubs.push(db.collection('hubFileMemory').doc('main').onSnapshot(d => { fileMemory = d.exists ? (d.data().map || {}) : {}; }, err => console.warn('folder memory not loaded:', err)));
   unsubs.push(db.collection('hubSyncStatus').doc('email_events').onSnapshot(d => { eventsStatus = d.exists ? d.data() : null; render(); },
     err => { console.warn('events@ status not loaded:', err); eventsStatus = null; render(); }));
   unsubs.push(outboxCol.where('status', '==', 'failed').onSnapshot(snap => {
