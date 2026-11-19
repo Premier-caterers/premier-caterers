@@ -166,10 +166,11 @@
   .qrow .l2{font-size:13px;color:var(--muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
   .qrow .l2 strong{color:var(--ink);font-weight:700}
   .qrow .who-tag{flex:none;font:800 10px var(--head);letter-spacing:.06em;border:2px solid var(--ink);border-radius:6px;padding:1px 5px;text-transform:uppercase}
-  .qrow .ics{display:flex;flex-direction:column;gap:6px;flex:none}
+  .qrow .ics{display:grid;grid-template-columns:repeat(2,40px);gap:6px;flex:none}
   .qrow .ic{width:40px;height:34px;border:2px solid var(--ink);border-radius:9px;background:var(--paper);display:inline-flex;align-items:center;justify-content:center;color:var(--ink);text-decoration:none}
   .qrow .ic.pri{background:var(--cyan)}
   .qbox .empty-line{padding:14px 2px}
+  .src-link{flex:none;border:2px solid var(--ink);border-radius:8px;background:var(--paper);font:800 11px var(--head);letter-spacing:.05em;padding:4px 8px;display:inline-flex;align-items:center;gap:5px;color:var(--ink);text-decoration:none;cursor:pointer}
   @media (max-width:1100px){ .qgrid{grid-template-columns:minmax(0,1fr)} .qbox-list{max-height:none;min-height:0} }
   .mini-mail{display:flex;gap:10px;min-height:52px;align-items:center;border-bottom:1px solid var(--rule);font-size:15px;width:100%;background:none;border-left:none;border-right:none;border-top:none;text-align:left;padding:0;color:var(--ink)}
   .mini-mail .w{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -767,6 +768,7 @@ function focusCardHtml(focus, queue, head){
       '<button type="button" class="b" data-act="tomorrow" data-id="' + esc(focus.id) + '">Tomorrow</button>' +
       '<button type="button" class="b" data-act="skip" data-key="t:' + esc(focus.id) + '">Skip</button>' +
       '<button type="button" class="b" data-act="edit" data-id="' + esc(focus.id) + '" aria-label="Edit">' + I_PEN + '</button>' +
+      (srcOf(focus) ? '<button type="button" class="b" data-act="srcopen" data-id="' + esc(focus.id) + '">' + (srcOf(focus).kind === 'wa' ? I_WA : I_MAIL) + ' Open original</button>' : '') +
     '</div>';
 }
 const I_MAIL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path></svg>';
@@ -792,7 +794,7 @@ function emailCardHtml(em, pos, n){
       '<div class="rn-btns"><a class="b-main" href="' + GMAILem(em) + '" target="_blank" rel="noopener">OPEN IN GMAIL</a>' +
       '<button type="button" class="b" data-act="edone" data-id="' + id + '">Done</button>' +
       '<button type="button" class="b" data-act="elater" data-id="' + id + '">Later (2 hrs)</button>' +
-      '<button type="button" class="b" data-act="skip" data-key="e:' + id + '">Skip</button></div>';
+      '<button type="button" class="b" data-act="skip" data-key="e:' + id + '">Skip</button>' + addBtnsBig('e:' + em.id) + '</div>';
     return h;
   }
   if(open){
@@ -803,18 +805,24 @@ function emailCardHtml(em, pos, n){
       '<span class="note">Sends from ' + esc(em.mailbox || 'kenny') + '@ as a reply in the same email thread, within a minute.</span></div></div>' +
       '<div class="rn-btns"><button type="button" class="b" data-act="edone" data-id="' + id + '">Done</button>' +
       '<button type="button" class="b" data-act="elater" data-id="' + id + '">Later (2 hrs)</button>' +
-      '<a class="b" href="' + GMAILem(em) + '" target="_blank" rel="noopener">Open in Gmail</a></div>';
+      '<a class="b" href="' + GMAILem(em) + '" target="_blank" rel="noopener">Open in Gmail</a>' + addBtnsBig('e:' + em.id) + '</div>';
   } else {
     h += '<div class="rn-btns"><button type="button" class="b-main" data-act="ereply" data-id="' + id + '">REPLY</button>' +
       '<button type="button" class="b" data-act="edone" data-id="' + id + '">Done</button>' +
       '<button type="button" class="b" data-act="elater" data-id="' + id + '">Later (2 hrs)</button>' +
       '<button type="button" class="b" data-act="skip" data-key="e:' + id + '">Skip</button>' +
-      '<a class="b" href="' + GMAILem(em) + '" target="_blank" rel="noopener">Open in Gmail</a></div>';
+      '<a class="b" href="' + GMAILem(em) + '" target="_blank" rel="noopener">Open in Gmail</a>' + addBtnsBig('e:' + em.id) + '</div>';
   }
   return h;
 }
 const I_REPLY = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"></path><path d="M4 9h10a6 6 0 0 1 6 6v5"></path></svg>';
 const I_CHECK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg>';
+const I_TODO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 12l3 3 5-6"></path></svg>';
+const I_CAL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>';
+const addBtns = key => '<button type="button" class="ic" data-act="mtodo" data-key="' + esc(key) + '" aria-label="Add to To do" title="Add to To do">' + I_TODO + '</button>' +
+  '<button type="button" class="ic" data-act="msched" data-key="' + esc(key) + '" aria-label="Add to Schedule" title="Add to Schedule">' + I_CAL + '</button>';
+const addBtnsBig = key => '<button type="button" class="b todo-add" data-act="mtodo" data-key="' + esc(key) + '">' + I_TODO + ' + To do</button>' +
+  '<button type="button" class="b" data-act="msched" data-key="' + esc(key) + '">' + I_CAL + ' + Schedule</button>';
 const BOXES = [
   {k: 'kenny', label: 'kenny@', icon: () => I_MAIL},
   {k: 'events', label: 'events@', icon: () => I_MAIL},
@@ -833,7 +841,7 @@ function qMailRow(em){
     '<div class="l1">' + tag + '<span class="nm">' + esc(em.fromName || em.fromEmail) + '</span><span class="when">' + esc(whenLabel(em.theirAt || em.lastAt)) + '</span></div>' +
     '<div class="l2"><strong>' + esc(em.subject || '(no subject)') + '</strong>' + (snoozed ? ' <span class="tag hl-y">LATER · ' + esc(fmtTime(em.snoozedUntil)) + '</span>' : '') +
       (function(){ const t = String(em.snippet || em.body || '').replace(/\s+/g, ' ').trim().slice(0, 300); return t ? ' — ' + esc(t) : ''; })() + '</div></div>' +
-    '<div class="ics">' + reply + '<button type="button" class="ic" data-act="edone" data-id="' + id + '" aria-label="Done" title="Done">' + I_CHECK + '</button></div></div>';
+    '<div class="ics">' + reply + '<button type="button" class="ic" data-act="edone" data-id="' + id + '" aria-label="Done" title="Done">' + I_CHECK + '</button>' + addBtns('e:' + em.id) + '</div></div>';
 }
 function qWaRow(c){
   const id = esc(c.id), snoozed = c.snoozedUntil > Date.now();
@@ -844,7 +852,7 @@ function qWaRow(c){
     '<div class="l2"><strong>' + esc(sub) + '</strong>' + (snoozed ? ' <span class="tag hl-y">LATER · ' + esc(fmtTime(c.snoozedUntil)) + '</span>' : '') +
       ' — ' + esc((c.isGroup && !c.lastFromMe && c.lastSender ? c.lastSender + ': ' : '') + prettyLast(c.lastText)) + '</div></div>' +
     '<div class="ics"><button type="button" class="ic pri" data-act="wopen" data-id="' + id + '" aria-label="Reply" title="Reply">' + I_REPLY + '</button>' +
-    '<button type="button" class="ic" data-act="wdone" data-id="' + id + '" aria-label="Done" title="Done">' + I_CHECK + '</button></div></div>';
+    '<button type="button" class="ic" data-act="wdone" data-id="' + id + '" aria-label="Done" title="Done">' + I_CHECK + '</button>' + addBtns('w:' + c.id) + '</div></div>';
 }
 function qBoxes(list){
   return '<div class="qgrid">' + BOXES.map(b => {
@@ -864,7 +872,9 @@ function mailRow(em, withActs){
     (withActs ? '<span class="acts" style="display:flex;gap:8px">' +
       (em.replyToSelf ? '<a class="sm pri" style="display:inline-flex;align-items:center;text-decoration:none;color:var(--ink)" href="' + GMAILem(em) + '" target="_blank" rel="noopener">GMAIL</a>'
                       : '<button type="button" class="sm pri" data-act="eopen" data-id="' + esc(em.id) + '">REPLY</button>') +
-      '<button type="button" class="sm" data-act="edone" data-id="' + esc(em.id) + '">Done</button></span>'
+      '<button type="button" class="sm" data-act="edone" data-id="' + esc(em.id) + '">Done</button>' +
+      '<button type="button" class="sm" data-act="mtodo" data-key="e:' + esc(em.id) + '" aria-label="Add to To do">' + I_TODO + '</button>' +
+      '<button type="button" class="sm" data-act="msched" data-key="e:' + esc(em.id) + '" aria-label="Add to Schedule">' + I_CAL + '</button></span>'
     : '<span class="acts" style="display:flex;gap:8px"><a class="sm" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink)" href="' + GMAILem(em) + '" target="_blank" rel="noopener">Open in Gmail</a></span>') +
     '</div>';
 }
@@ -933,7 +943,7 @@ function waCardHtml(c, pos, n){
     '<button type="button" class="b" data-act="wlater" data-id="' + id + '">Later (2 hrs)</button>' +
     (open ? '' : '<button type="button" class="b" data-act="skip" data-key="w:' + id + '">Skip</button>') +
     (link ? '<a class="b" href="' + esc(link) + '" target="_blank" rel="noopener">Open in WhatsApp</a>' : '') +
-    '<button type="button" class="b todo-add" data-act="wtodo" data-id="' + id + '">+ To do</button>';
+    addBtnsBig('w:' + c.id);
   if(open){
     h += '<div class="composer"><label for="rt-' + did + '">Your WhatsApp reply — goes to ' + (c.isGroup ? 'the group ' : '') + esc(c.name || c.phone || 'this chat') + '</label>' +
       '<textarea class="reply-ta" id="rt-' + did + '" data-id="' + did + '" placeholder="Type, or write with your pen"></textarea>' +
@@ -959,7 +969,9 @@ function waRow(c, withActs){
       '<div class="w2">' + esc((c.isGroup && !c.lastFromMe && c.lastSender ? c.lastSender + ': ' : '') + prettyLast(c.lastText)) + '</div></div>' +
     '<span class="tm">' + esc(whenLabel(c.lastInAt || c.lastAt || 0)) + '</span>' +
     (withActs ? '<span class="acts" style="display:flex;gap:8px"><button type="button" class="sm pri" data-act="wopen" data-id="' + esc(c.id) + '">REPLY</button>' +
-      '<button type="button" class="sm" data-act="wdone" data-id="' + esc(c.id) + '">Done</button></span>'
+      '<button type="button" class="sm" data-act="wdone" data-id="' + esc(c.id) + '">Done</button>' +
+      '<button type="button" class="sm" data-act="mtodo" data-key="w:' + esc(c.id) + '" aria-label="Add to To do">' + I_TODO + '</button>' +
+      '<button type="button" class="sm" data-act="msched" data-key="w:' + esc(c.id) + '" aria-label="Add to Schedule">' + I_CAL + '</button></span>'
     : '<span class="acts" style="display:flex;gap:8px"><button type="button" class="sm" data-act="wopen" data-id="' + esc(c.id) + '">Open</button></span>') +
     '</div>';
 }
@@ -1085,12 +1097,12 @@ function todoRow(it, editable){
   const isDone = it.status === 'done', d = dueInfo(it);
   const tag = isDone ? '' : (d.over ? '<span class="tag hl-p">OVERDUE</span>' : (d.text ? '<span class="tag">' + esc(d.text) + '</span>' : ''));
   return '<label class="todo-row' + (isDone ? ' done' : '') + '"><input type="checkbox" class="ring" data-act="toggle" data-id="' + esc(it.id) + '"' + (isDone ? ' checked' : '') + ' aria-label="Done: ' + esc(it.text) + '">' +
-    '<span class="tx">' + esc(it.text) + '</span><span class="meta">' + (isDone ? '' : bellTag(it)) + tag + '</span>' + (editable === true ? penBtn(it.id) : '') + '</label>';
+    '<span class="tx">' + esc(it.text) + '</span><span class="meta">' + srcLink(it) + (isDone ? '' : bellTag(it)) + tag + '</span>' + (editable === true ? penBtn(it.id) : '') + '</label>';
 }
 const todoRowEd = it => todoRow(it, true);
 function schedRow(s, editable){
   return '<div class="row' + (s.done ? ' done' : '') + '"><span class="tm">' + (s.timed ? shortTime(s.ts) : s.isEvent ? 'Event' : 'All day') + '</span><span class="what">' + esc(s.what) + (s.sub ? '<span class="sub">' + esc(s.sub) + '</span>' : '') + '</span>' +
-    (s.done ? '<span class="done-tag">✓ DONE</span>' : s.item ? bellTag(s.item) : '') + (editable === true && s.item ? penBtn(s.item.id) : '') + '</div>';
+    (s.item ? srcLink(s.item) : '') + (s.done ? '<span class="done-tag">✓ DONE</span>' : s.item ? bellTag(s.item) : '') + (editable === true && s.item ? penBtn(s.item.id) : '') + '</div>';
 }
 const schedRowEd = s => schedRow(s, true);
 
@@ -1233,6 +1245,9 @@ document.addEventListener('click', e => {
   else if(act === 'wdone') waDone(id).catch(fail);
   else if(act === 'wlater') waLater(id).catch(fail);
   else if(act === 'wtodo') waTodo(id).catch(fail);
+  else if(act === 'mtodo') openFromMsg(b.dataset.key, 'todo');
+  else if(act === 'msched') openFromMsg(b.dataset.key, 'schedule');
+  else if(act === 'srcopen'){ e.preventDefault(); openOriginal(id); }
   else if(act === 'wclearfail') waOutCol.doc(id).update({dismissed: true}).catch(fail);
   else if(act === 'eclearfail') outboxCol.doc(id).update({dismissed: true}).catch(fail);
 });
@@ -1287,7 +1302,7 @@ function openEditor(id, type, presetYmd){
     const tm = new Date(); tm.setDate(tm.getDate() + 1);
     day = presetYmd === ymd(tm) ? 'tomorrow' : 'date'; date = presetYmd;
   }
-  ed = {id: id || null, type: t, text: it ? it.text : '', day, date, time: it && it.time ? it.time : '',
+  ed = {id: id || null, type: t, text: it ? it.text : '', day, date, time: it && it.time ? it.time : '', src: null,
         priority: !!(it && it.priority), alsoSched: !!(it && it.linkedId),
         remindOpt: it && it.remindOpt && (it.remindAtTs || 0) > Date.now() ? it.remindOpt : null,
         popup: it && it.remindHow ? it.remindHow.indexOf('popup') >= 0 : true,
@@ -1359,6 +1374,43 @@ function remindTs(dueDayStart, time, opt){
   if(opt === 'day') return base - 86400000;
   return base - opt * 60000;
 }
+function msgSrc(key){
+  const id = key.slice(2);
+  if(key[0] === 'e'){
+    const em = emails.find(x => x.id === id); if(!em) return null;
+    return {src: {kind: 'email', id: em.id, threadId: em.threadId || em.id, mailbox: em.mailbox || 'kenny', from: em.fromName || em.fromEmail || '', subject: em.subject || ''},
+            text: (em.fromName || em.fromEmail || 'Email') + ' — ' + (em.subject || '(no subject)')};
+  }
+  const c = waChats.find(x => x.id === id); if(!c) return null;
+  return {src: {kind: 'wa', id: c.id, chatJid: c.chatJid || '', phone: c.phone || '', from: fmtPhone(c.name || c.phone) || ''},
+          text: 'WhatsApp ' + (fmtPhone(c.name || c.phone) || '') + ': ' + String(prettyLast(c.lastText) || '').slice(0, 120)};
+}
+function openFromMsg(key, type){
+  const m = msgSrc(key); if(!m) return;
+  openEditor(null, type);
+  ed.src = m.src; ed.text = m.text;
+  renderEditor();
+  setTimeout(() => { const i = $('edText'); if(i){ i.focus(); i.select(); } }, 50);
+}
+async function clearMsg(src){
+  if(src.kind === 'email'){ await emailPatch(src.id, {handled: true, handledAt: Date.now()}); if(composerFor === src.id) composerFor = null; if(pinnedKey === 'e:' + src.id) pinnedKey = null; }
+  else { await waPatch(src.id, {handledAt: Date.now()}); if(composerFor === 'wa:' + src.id) composerFor = null; if(pinnedKey === 'w:' + src.id) pinnedKey = null; }
+}
+function openOriginal(itemId){
+  const it = items.find(x => x.id === itemId); if(!it) return;
+  let src = it.src;
+  if(!src && it.linkedId){ const o = items.find(x => x.id === it.linkedId); src = o && o.src; }
+  if(!src) return;
+  if(src.kind === 'email'){
+    if(emails.find(x => x.id === src.id)){ pinnedKey = 'e:' + src.id; skipped.delete(pinnedKey); composerFor = null; showView('today'); render(); window.scrollTo(0, 0); }
+    else window.open(GMAIL(src.threadId || src.id, src.mailbox), '_blank', 'noopener');
+  } else {
+    if(waChats.find(x => x.id === src.id)){ pinnedKey = 'w:' + src.id; skipped.delete(pinnedKey); composerFor = null; showView('today'); render(); window.scrollTo(0, 0); }
+    else { const d = String(src.phone || '').replace(/\D/g, ''); if(d) window.open('https://wa.me/' + d, '_blank', 'noopener'); }
+  }
+}
+const srcOf = it => it.src || (it.linkedId ? (items.find(x => x.id === it.linkedId) || {}).src : null);
+const srcLink = it => { const s = srcOf(it); return s ? '<button type="button" class="src-link" data-act="srcopen" data-id="' + esc(it.id) + '" title="Open the ' + (s.kind === 'wa' ? 'WhatsApp chat' : 'email') + ' this came from">' + (s.kind === 'wa' ? I_WA : I_MAIL) + 'OPEN ORIGINAL</button>' : ''; };
 async function saveEditor(){
   edGrab();
   const text = String(ed.text || '').trim();
@@ -1387,6 +1439,7 @@ async function saveEditor(){
   const wasNew = !ed.id, type = ed.type, also = ed.alsoSched;
   let id = ed.id;
   if(wasNew){
+    if(ed.src) rec.src = ed.src;
     const ref = await myDayCol.add(Object.assign({owner: OWNER_KEY, type, status: 'pending', createdAt: Date.now(), source: 'Hub'}, rec));
     id = ref && ref.id;
   } else {
@@ -1403,7 +1456,9 @@ async function saveEditor(){
     const ref2 = await myDayCol.add(copy);
     if(ref2 && ref2.id) await myDayCol.doc(id).update({linkedId: ref2.id, linkedType: 'schedule'});
   }
+  const fromMsg = wasNew && ed.src ? ed.src : null;
   closeEditor();
+  if(fromMsg){ await clearMsg(fromMsg); toast('Added to ' + (type === 'schedule' ? 'Schedule' : 'To do') + ' and cleared from the inbox: ' + text, null); return; }
   toast((wasNew ? 'Added: ' : 'Saved: ') + text + (rTs && how.length ? (rTs < Date.now() ? ' (that reminder time has already passed)' : ' · reminder set') : ''), null);
 }
 async function deleteItem(){
