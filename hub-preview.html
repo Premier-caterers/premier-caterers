@@ -176,6 +176,15 @@
   .fp-list button[aria-pressed="true"]{border-color:var(--ink);background:var(--cyan);font-weight:800}
   .fp-list .sug{margin-left:auto;font:800 10px var(--head);letter-spacing:.06em;border:2px solid var(--ink);border-radius:6px;padding:1px 6px;background:var(--yellow)}
   .ic.del{border-style:dashed}
+  .att-row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 2px}
+  .att-chip{display:inline-flex;align-items:center;gap:6px;border:2px solid var(--ink);border-radius:9px;padding:4px 6px 4px 9px;font-size:13px;max-width:100%;background:var(--paper)}
+  .att-chip .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+  .att-chip .sz{font-size:11px;color:var(--muted)}
+  .att-chip.up{border-style:dashed}
+  .att-chip.bad{border-color:#B3261E;color:#B3261E}
+  .att-chip button{min-height:28px;min-width:28px;border:none;background:none;font-size:16px;font-weight:800;cursor:pointer;color:inherit}
+  label.att-btn{cursor:pointer}
+  label.att-btn input{display:none}
   .src-link{flex:none;border:2px solid var(--ink);border-radius:8px;background:var(--paper);font:800 11px var(--head);letter-spacing:.05em;padding:4px 8px;display:inline-flex;align-items:center;gap:5px;color:var(--ink);text-decoration:none;cursor:pointer}
   @media (max-width:1100px){ .qgrid{grid-template-columns:minmax(0,1fr)} .qbox-list{max-height:none;min-height:0} }
   .mini-mail{display:flex;gap:10px;min-height:52px;align-items:center;border-bottom:1px solid var(--rule);font-size:15px;width:100%;background:none;border-left:none;border-right:none;border-top:none;text-align:left;padding:0;color:var(--ink)}
@@ -484,6 +493,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script>
 /* Premier Hub — planner look, Focus view.
    Same Firebase project and login as the Operations Hub (index.html), and the
@@ -807,7 +817,8 @@ function emailCardHtml(em, pos, n){
   if(open){
     h += '<div class="composer"><label for="rt-' + id + '">Your reply — goes to ' + esc(em.fromName || em.fromEmail) + (em.replyTo && em.replyTo !== em.fromName ? ' (' + esc(em.replyTo) + ')' : '') + '</label>' +
       '<textarea class="reply-ta" id="rt-' + id + '" data-id="' + id + '" placeholder="Type, or write with your pen"></textarea>' +
-      '<div class="rn-btns"><button type="button" class="b-main" data-act="esend" data-id="' + id + '">SEND REPLY</button>' +
+      attRow(em.id) +
+      '<div class="rn-btns"><button type="button" class="b-main" data-act="esend" data-id="' + id + '">SEND REPLY</button>' + attBtn(em.id) +
       '<button type="button" class="b" data-act="ecancel" data-id="' + id + '">Cancel</button>' +
       '<span class="note">Sends from ' + esc(em.mailbox || 'kenny') + '@ as a reply in the same email thread, within a minute.</span></div></div>' +
       '<div class="rn-btns"><button type="button" class="b" data-act="edone" data-id="' + id + '">Done</button>' +
@@ -959,7 +970,7 @@ function waCardHtml(c, pos, n){
     h += '<div class="composer"><label for="rt-' + did + '">Your WhatsApp reply — goes to ' + (c.isGroup ? 'the group ' : '') + esc(c.name || c.phone || 'this chat') + '</label>' +
       '<textarea class="reply-ta" id="rt-' + did + '" data-id="' + did + '" placeholder="Type, or write with your pen"></textarea>' +
       (canSend
-        ? '<div class="rn-btns"><button type="button" class="b-main" data-act="wsend" data-id="' + id + '">SEND ON WHATSAPP</button>' +
+        ? attRow(waDraftId(c)) + '<div class="rn-btns"><button type="button" class="b-main" data-act="wsend" data-id="' + id + '">SEND ON WHATSAPP</button>' + attBtn(waDraftId(c)) +
           '<button type="button" class="b" data-act="ecancel" data-id="' + id + '">Cancel</button>' +
           '<span class="note">Sends from your WhatsApp (201-250-9487), within a minute.</span></div>'
         : '<div class="self-note">Sending from the hub isn’t switched on yet — add your WaAPI key to the WhatsApp script (see the setup steps). Until then, answer in WhatsApp.</div>' +
@@ -1240,6 +1251,7 @@ document.addEventListener('click', e => {
   else if(act === 'edone') openFilePicker(id);
   else if(act === 'mdel') deleteMsg(b.dataset.key).catch(fail);
   else if(act === 'fp') fpAction(b);
+  else if(act === 'attdel'){ atts[id] = (atts[id] || []).filter(a => a.key !== b.dataset.key); refreshAtt(id); }
   else if(act === 'elater') emailLater(id).catch(fail);
   else if(act === 'goinbox') showView('inbox');
   else if(act === 'addtodo') openEditor(null, 'todo');
@@ -1676,26 +1688,64 @@ async function waTodo(id){
 async function sendWa(id){
   const c = waChats.find(x => x.id === id); if(!c) return;
   const did = 'wa:' + id, body = (drafts[did] || '').trim();
-  if(!body){ toast('Write your message first.', null); focusReply(did); return; }
+  const files = readyAtts(did); if(!files) return;
+  if(!body && !files.length){ toast('Write your message first.', null); focusReply(did); return; }
   const btns = document.querySelectorAll('[data-act="wsend"][data-id="' + CSS.escape(id) + '"]'); btns.forEach(b => b.disabled = true);
   try{
-    await waOutCol.add({chatJid: c.chatJid || '', chatKey: c.chatKey || id, body, status: 'queued', createdAt: Date.now(), by: HUB_EMAIL});
+    await waOutCol.add({chatJid: c.chatJid || '', chatKey: c.chatKey || id, body, attachments: files, status: 'queued', createdAt: Date.now(), by: HUB_EMAIL});
     await waPatch(id, {replyQueuedAt: Date.now()});
-    delete drafts[did]; composerFor = null;
+    delete drafts[did]; delete atts[did]; composerFor = null;
     if(pinnedKey === 'w:' + id) pinnedKey = null;
     toast('WhatsApp to ' + (c.name || 'chat') + ' is on its way — it sends within a minute.', null);
   } finally { btns.forEach(b => b.disabled = false); }
 }
+/* ---------- attachments ---------- */
+const atts = {};                      // draft id → [{key, name, size, type, status, url, path, error}]
+const ATT_MAX = 20 * 1024 * 1024;     // 20 MB in total per message
+let storage = null;
+function fmtSize(n){ return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+function attChips(did){
+  return (atts[did] || []).map(a => '<span class="att-chip' + (a.status === 'uploading' ? ' up' : a.status === 'failed' ? ' bad' : '') + '">' +
+    (a.type && a.type.indexOf('image/') === 0 ? '🖼' : '📄') + '<span class="nm">' + esc(a.name) + '</span><span class="sz">' +
+    (a.status === 'uploading' ? 'uploading…' : a.status === 'failed' ? 'didn’t upload' : fmtSize(a.size)) + '</span>' +
+    '<button type="button" data-act="attdel" data-id="' + esc(did) + '" data-key="' + esc(a.key) + '" aria-label="Remove ' + esc(a.name) + '">×</button></span>').join('');
+}
+const attRow = did => '<div class="att-row" data-for="' + esc(did) + '">' + attChips(did) + '</div>';
+const attBtn = did => '<label class="b att-btn">📎 Attach files<input type="file" multiple class="att-in" data-for="' + esc(did) + '"></label>';
+function refreshAtt(did){ document.querySelectorAll('.att-row[data-for="' + CSS.escape(did) + '"]').forEach(r => { r.innerHTML = attChips(did); }); }
+async function addFiles(did, files){
+  if(!storage){ try{ storage = firebase.storage(); }catch(e){ toast('Can’t attach files right now — reload the page.', null); return; } }
+  const list = atts[did] = atts[did] || [];
+  let total = list.reduce((t, a) => t + (a.status === 'failed' ? 0 : a.size), 0);
+  for(const f of Array.from(files || [])){
+    if(total + f.size > ATT_MAX){ toast('Too big — up to 20 MB of files per message. “' + f.name + '” was left off.', null); continue; }
+    total += f.size;
+    const a = {key: Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: f.name, size: f.size, type: f.type || 'application/octet-stream', status: 'uploading'};
+    list.push(a); refreshAtt(did);
+    const d = new Date(), safe = f.name.replace(/[^\w.\- ]+/g, '_').slice(-80);
+    a.path = 'hub-attachments/' + d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '/' + a.key + '_' + safe;
+    storage.ref(a.path).put(f, {contentType: a.type}).then(snap => snap.ref.getDownloadURL()).then(url => { a.url = url; a.status = 'ready'; refreshAtt(did); })
+      .catch(err => { console.warn('upload failed', err); a.status = 'failed'; a.error = String(err && err.message || err); refreshAtt(did); toast('“' + a.name + '” didn’t upload. Remove it and try again.', null); });
+  }
+}
+document.addEventListener('change', e => { const t = e.target; if(t && t.classList && t.classList.contains('att-in')){ addFiles(t.dataset.for, t.files); t.value = ''; } });
+function readyAtts(did){
+  const list = atts[did] || [];
+  if(list.some(a => a.status === 'uploading')){ toast('Still uploading your files — one moment, then press send again.', null); return null; }
+  if(list.some(a => a.status === 'failed')){ toast('One file didn’t upload. Remove it (×) and send again.', null); return null; }
+  return list.map(a => ({name: a.name, url: a.url, type: a.type, size: a.size, path: a.path}));
+}
 async function sendReply(id){
   const em = emails.find(x => x.id === id); if(!em) return;
   const body = (drafts[id] || '').trim();
-  if(!body){ toast('Write your reply first.', null); focusReply(id); return; }
+  const files = readyAtts(id); if(!files) return;
+  if(!body && !files.length){ toast('Write your reply first.', null); focusReply(id); return; }
   const btns = document.querySelectorAll('[data-act="esend"][data-id="' + CSS.escape(id) + '"]'); btns.forEach(b => b.disabled = true);
   try{
     await outboxCol.add({type: 'reply', mailbox: em.mailbox || 'kenny', threadId: em.threadId || id, body, to: em.replyTo || em.fromEmail, subject: em.subject || '',
-      status: 'queued', createdAt: Date.now(), by: HUB_EMAIL});
+      attachments: files, status: 'queued', createdAt: Date.now(), by: HUB_EMAIL});
     await emailPatch(id, {replyQueuedAt: Date.now()});
-    delete drafts[id]; composerFor = null;
+    delete drafts[id]; delete atts[id]; composerFor = null;
     if(pinnedKey === 'e:' + id) pinnedKey = null;
     toast('Reply to ' + (em.fromName || em.fromEmail) + ' is on its way — it sends within a minute.', null);
   } finally { btns.forEach(b => b.disabled = false); }
