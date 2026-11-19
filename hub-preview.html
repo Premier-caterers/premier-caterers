@@ -1287,6 +1287,10 @@ function openFilePicker(id){
   const labels = hubLabels[mb] || [];
   const remembered = fileMemory[memKey(em)];
   let sug = remembered && labels.indexOf(remembered) >= 0 ? remembered : (em.suggestLabel && labels.indexOf(em.suggestLabel) >= 0 ? em.suggestLabel : '');
+  if(!sug){   // last resort: a folder whose name matches the sender (Bertram → "Product orders/Bertram")
+    const who = (String(em.fromName || '') + ' ' + String(em.fromEmail || '')).toLowerCase();
+    sug = labels.find(l => { const last = l.split('/').pop().toLowerCase().trim(); return last.length >= 4 && who.indexOf(last) >= 0; }) || '';
+  }
   fp = {id, mb, labels, sug, pick: sug || '', q: ''};
   renderFilePicker();
   $('fpWrap').classList.remove('hidden');
@@ -1329,11 +1333,11 @@ async function fileEmail(id, label){
   toast((label ? 'Filed in ' + label + ': ' : 'Done: ') + (em.subject || 'email'), () => undoGmail(id, job, label));
 }
 async function undoGmail(id, job, label){
-  const em = emails.find(x => x.id === id);
-  await emailPatch(id, {handled: false, handledAt: null, filedLabel: null, deletedAt: null});
-  const snap = await job.get();
-  if(snap.exists && snap.data().status === 'queued') await job.update({status: 'cancelled'});
-  else if(em) await outboxCol.add({type: 'untrash', mailbox: em.mailbox || 'kenny', threadId: em.threadId || id, label: label || '', subject: em.subject || '', by: HUB_EMAIL, status: 'queued', createdAt: Date.now()});
+  // the email may already have left the Gmail inbox (and the live list), so use what the job recorded
+  const snap = await job.get(), j = snap.exists ? snap.data() : {};
+  await emailPatch(id, {handled: false, handledAt: null, filedLabel: null, deletedAt: null, inInbox: true});
+  if(j.status === 'queued') await job.update({status: 'cancelled'});
+  else if(j.threadId) await outboxCol.add({type: 'untrash', mailbox: j.mailbox || 'kenny', threadId: j.threadId, label: label || '', subject: j.subject || '', by: HUB_EMAIL, status: 'queued', createdAt: Date.now()});
 }
 /* ---------- Delete ---------- */
 async function deleteMsg(key){
