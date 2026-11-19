@@ -488,7 +488,7 @@ const waChatsCol = db.collection('hubWaChats'), waMsgsCol = db.collection('hubWa
 let waChats = [], waMsgs = [], waStatus = undefined, waFailed = [], inboxFilter = 'all';
 const waExpanded = new Set();
 try{ inboxFilter = localStorage.getItem('hubInboxFilter') || 'all'; }catch(e){}
-let emails = [], emailStatus = undefined, ordersStatus = undefined, failedSends = [], composerFor = null, pinnedKey = null, cardPending = false;
+let emails = [], emailStatus = undefined, ordersStatus = undefined, eventsStatus = undefined, failedSends = [], composerFor = null, pinnedKey = null, cardPending = false;
 const drafts = {};
 
 let items = [], todaysEvents = [], skipped = new Set(), unsubs = [];
@@ -925,6 +925,12 @@ function ordersState(){
   if(!ordersStatus.ok) return 'error';
   return (Date.now() - (ordersStatus.lastRun || 0) > 5 * 60000) ? 'stale' : 'ok';
 }
+function eventsState(){
+  if(eventsStatus === undefined) return 'loading';
+  if(eventsStatus === null) return 'off';
+  if(!eventsStatus.ok) return 'error';
+  return (Date.now() - (eventsStatus.lastRun || 0) > 5 * 60000) ? 'stale' : 'ok';
+}
 function renderEmail(head){
   const waiting = waitingEmails(), snoozed = snoozedEmails();
   const all = waitingAll();
@@ -951,6 +957,10 @@ function renderEmail(head){
     if(ost === 'off') notice += '<div class="warn-box" style="margin-top:8px"><strong>orders@ isn’t connected yet.</strong>Set up the same “Premier Hub Sync” script once more, signed in as orders@.</div>';
     else if(ost === 'stale') notice += '<div class="warn-box" style="margin-top:8px"><strong>orders@ stopped updating.</strong>Last ran ' + esc(ago(ordersStatus.lastRun)) + ' ago. Open the orders@ Premier Hub Sync script and run HS_setup again.</div>';
     else if(ost === 'error') notice += '<div class="warn-box" style="margin-top:8px"><strong>orders@ sync hit a problem.</strong>' + esc(ordersStatus.error || '') + '</div>';
+    const est = eventsState();
+    if(est === 'off') notice += '<div class="warn-box" style="margin-top:8px"><strong>events@ isn’t connected yet.</strong>Set up the same “Premier Hub Sync” script once more, signed in as events@.</div>';
+    else if(est === 'stale') notice += '<div class="warn-box" style="margin-top:8px"><strong>events@ stopped updating.</strong>Last ran ' + esc(ago(eventsStatus.lastRun)) + ' ago. Open the events@ Premier Hub Sync script and run HS_setup again.</div>';
+    else if(est === 'error') notice += '<div class="warn-box" style="margin-top:8px"><strong>events@ sync hit a problem.</strong>' + esc(eventsStatus.error || '') + '</div>';
   }
   if(wst === 'off') notice += '<div class="warn-box" style="margin-top:8px"><strong>WhatsApp isn’t connected to the hub yet.</strong>Finish the WhatsApp setup steps (the WhatsApp Bridge script, signed in as kenny@).</div>';
   else if(wst === 'disconnected') notice += '<div class="warn-box" style="margin-top:8px"><strong>WhatsApp is disconnected.</strong>Open waapi.app and scan the QR code again from WhatsApp on your iPhone (Settings → Linked Devices → Link a Device). Messages that arrive while it’s disconnected are lost.</div>';
@@ -986,7 +996,8 @@ function renderEmail(head){
 function renderLive(){
   const st = emailState(), phone = window.matchMedia('(max-width:760px)').matches;
   const ost = ordersState();
-  const mailBad = st === 'stale' || st === 'error' || ost === 'stale' || ost === 'error';
+  const est = eventsState();
+  const mailBad = st === 'stale' || st === 'error' || ost === 'stale' || ost === 'error' || est === 'stale' || est === 'error';
   const mail = mailBad ? 'EMAIL ✗' : st === 'ok' ? 'EMAIL ✓' : st === 'off' ? 'EMAIL · SET UP' : st === 'loading' ? 'EMAIL …' : 'EMAIL ✗';
   const wst = waState(), waBad = wst === 'stale' || wst === 'error' || wst === 'disconnected';
   const wa = wst === 'ok' ? 'WHATSAPP ✓' : wst === 'off' ? 'WHATSAPP · SET UP' : wst === 'loading' ? 'WHATSAPP …' : 'WHATSAPP ✗';
@@ -1533,6 +1544,8 @@ function startData(){
     err => console.warn('WhatsApp outbox not loaded:', err)));
   unsubs.push(db.collection('hubSyncStatus').doc('email_orders').onSnapshot(d => { ordersStatus = d.exists ? d.data() : null; render(); },
     err => { console.warn('orders@ status not loaded:', err); ordersStatus = null; render(); }));
+  unsubs.push(db.collection('hubSyncStatus').doc('email_events').onSnapshot(d => { eventsStatus = d.exists ? d.data() : null; render(); },
+    err => { console.warn('events@ status not loaded:', err); eventsStatus = null; render(); }));
   unsubs.push(outboxCol.where('status', '==', 'failed').onSnapshot(snap => {
     const before = new Set(failedSends.map(f => f.id));
     failedSends = snap.docs.map(d => Object.assign({id: d.id}, d.data())).filter(f => !f.dismissed);
