@@ -16712,6 +16712,9 @@ function renderReports(){
   const eventYearMonth = (e)=>{ const mk=_monthKeyFromWeekOf(e.weekOf); return mk?mk.key:null; };
   const eventYear = (e)=>{ const mk=_monthKeyFromWeekOf(e.weekOf); return mk?parseInt(mk.key.slice(0,4)):null; };
 
+  // Events marked Lost never happened, so their quotes/invoices must not count
+  // toward sales (Gotownik and Betty Kay were inflating Oct/Nov).
+  const rptEvents = events.filter(e=>!e.lost);
   const now = new Date();
   const thisYear = now.getFullYear();
   const lastYear = thisYear-1;
@@ -16719,7 +16722,7 @@ function renderReports(){
 
   // Match each event to its invoice slots so revenue rolls to the event date's month.
   const eventRevenue = {};
-  events.forEach(e=>{
+  rptEvents.forEach(e=>{
     const slots = invoiceSlotsForEvent(e.id);
     if(!slots.length) return;
     let rev = 0;
@@ -16738,7 +16741,7 @@ function renderReports(){
     return isNaN(d) ? null : d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
   };
   const undatedInvRev = []; // [{y, m, rev, type}]
-  events.forEach(e=>{
+  rptEvents.forEach(e=>{
     if(_monthKeyFromWeekOf(e.weekOf)) return;
     invoiceSlotsForEvent(e.id).forEach(k=>{
       const inv=invoices[k]; if(!inv) return;
@@ -16757,7 +16760,7 @@ function renderReports(){
     if(r.y===thisYear){ monthRevThis[r.m]+=r.rev; totalRevThis+=r.rev; }
     else if(r.y===lastYear){ monthRevLast[r.m]+=r.rev; totalRevLast+=r.rev; }
   });
-  events.forEach(e=>{
+  rptEvents.forEach(e=>{
     const y = eventYear(e); if(y!==thisYear && y!==lastYear) return;
     const mk = _monthKeyFromWeekOf(e.weekOf); if(!mk) return;
     const m = parseInt(mk.key.slice(5,7))-1;
@@ -16790,7 +16793,7 @@ function renderReports(){
 
   // ── Section 2: event type performance ──────────────────────────
   const byType = {}; // type -> {countThis, countLast, revThis, revLast}
-  events.forEach(e=>{
+  rptEvents.forEach(e=>{
     const y = eventYear(e); if(y!==thisYear && y!==lastYear) return;
     const t = e.typeLabel || e.type || 'Other';
     if(!byType[t]) byType[t] = {countThis:0, countLast:0, revThis:0, revLast:0};
@@ -16835,7 +16838,7 @@ function renderReports(){
   const nowMs = Date.now();
   const oneMonth = 31*24*60*60*1000;
   const outstanding = []; // {clientName, evId, slotKey, evDate, balance, bucket}
-  events.forEach(e=>{
+  rptEvents.forEach(e=>{
     const slots = invoiceSlotsForEvent(e.id);
     slots.forEach(k=>{
       const inv = invoices[k]; if(!inv) return;
