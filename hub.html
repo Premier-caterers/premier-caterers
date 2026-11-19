@@ -151,6 +151,26 @@
   .mail-row .sm{min-height:44px;padding:0 12px;border:2px solid var(--ink);border-radius:10px;background:var(--paper);font:600 13px Inter,sans-serif;flex:none}
   .mail-row .sm.pri{background:var(--cyan);font:800 13px var(--head)}
   .mail-row .tag{font-size:11px;font-weight:800;letter-spacing:.05em}
+  .qgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+  .qbox{border:3px solid var(--ink);border-radius:16px;background:var(--paper);padding:12px 14px;display:flex;flex-direction:column;min-width:0}
+  .qbox-h{display:flex;align-items:center;gap:8px;border-bottom:3px solid var(--ink);padding-bottom:8px;font:900 14px var(--head);letter-spacing:.08em;text-transform:uppercase}
+  .qbox-h .n{margin-left:auto;font:800 12px var(--head);color:var(--muted);letter-spacing:.06em}
+  .qbox-list{max-height:calc(50vh - 90px);min-height:160px;overflow-y:auto;overscroll-behavior:contain}
+  .qrow{display:flex;gap:10px;align-items:flex-start;padding:10px 2px;border-bottom:1px solid var(--rule)}
+  .qrow:last-child{border-bottom:none}
+  .qrow .b2{flex:1;min-width:0;cursor:pointer}
+  .qrow .b2:hover .nm{text-decoration:underline}
+  .qrow .l1{display:flex;align-items:center;gap:6px;font-size:15px}
+  .qrow .nm{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qrow .when{margin-left:auto;flex:none;font-size:12px;color:var(--muted)}
+  .qrow .l2{font-size:13px;color:var(--muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+  .qrow .l2 strong{color:var(--ink);font-weight:700}
+  .qrow .who-tag{flex:none;font:800 10px var(--head);letter-spacing:.06em;border:2px solid var(--ink);border-radius:6px;padding:1px 5px;text-transform:uppercase}
+  .qrow .ics{display:flex;flex-direction:column;gap:6px;flex:none}
+  .qrow .ic{width:40px;height:34px;border:2px solid var(--ink);border-radius:9px;background:var(--paper);display:inline-flex;align-items:center;justify-content:center;color:var(--ink);text-decoration:none}
+  .qrow .ic.pri{background:var(--cyan)}
+  .qbox .empty-line{padding:14px 2px}
+  @media (max-width:1100px){ .qgrid{grid-template-columns:minmax(0,1fr)} .qbox-list{max-height:none;min-height:0} }
   .mini-mail{display:flex;gap:10px;min-height:52px;align-items:center;border-bottom:1px solid var(--rule);font-size:15px;width:100%;background:none;border-left:none;border-right:none;border-top:none;text-align:left;padding:0;color:var(--ink)}
   .mini-mail .w{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .mini-mail .tm{font-size:12px;color:var(--muted);flex:none;width:auto;font-weight:500}
@@ -415,7 +435,7 @@
     </div>
 
     <!-- INBOX -->
-    <div id="v-inbox" class="view-wrap hidden" style="max-width:1000px">
+    <div id="v-inbox" class="view-wrap hidden" style="max-width:none">
       <div class="sect-head"><h1 class="view-title"><span class="hl-c">INBOX — NEEDS YOU</span></h1><span class="lbl" id="inboxCount" style="font-size:12px"></span></div>
       <div id="inboxNotice"></div>
       <div class="chips" id="inboxChips" role="group" aria-label="Show"></div>
@@ -793,6 +813,47 @@ function emailCardHtml(em, pos, n){
   }
   return h;
 }
+const I_REPLY = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"></path><path d="M4 9h10a6 6 0 0 1 6 6v5"></path></svg>';
+const I_CHECK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg>';
+const BOXES = [
+  {k: 'kenny', label: 'kenny@', icon: () => I_MAIL},
+  {k: 'events', label: 'events@', icon: () => I_MAIL},
+  {k: 'orders', label: 'orders@', icon: () => I_MAIL},
+  {k: 'wa', label: 'WhatsApp', icon: () => I_WA}
+];
+const boxOf = x => x.wa ? 'wa' : String((x.email && x.email.mailbox) || 'kenny').toLowerCase();
+function qMailRow(em){
+  const id = esc(em.id), snoozed = em.snoozedUntil > Date.now();
+  const own = String(em.mailbox || 'kenny').toLowerCase() + '@';
+  const tag = em.box && String(em.box).toLowerCase() !== own ? '<span class="who-tag">' + esc(String(em.box).replace(/@.*$/, '')) + '</span>' : '';
+  const reply = em.replyToSelf
+    ? '<a class="ic pri" href="' + GMAILem(em) + '" target="_blank" rel="noopener" aria-label="Open in Gmail" title="Open in Gmail">' + I_MAIL + '</a>'
+    : '<button type="button" class="ic pri" data-act="eopen" data-id="' + id + '" aria-label="Reply" title="Reply">' + I_REPLY + '</button>';
+  return '<div class="qrow"><div class="b2" role="button" tabindex="0" data-act="eopen" data-id="' + id + '" title="Open this email">' +
+    '<div class="l1">' + tag + '<span class="nm">' + esc(em.fromName || em.fromEmail) + '</span><span class="when">' + esc(whenLabel(em.theirAt || em.lastAt)) + '</span></div>' +
+    '<div class="l2"><strong>' + esc(em.subject || '(no subject)') + '</strong>' + (snoozed ? ' <span class="tag hl-y">LATER · ' + esc(fmtTime(em.snoozedUntil)) + '</span>' : '') +
+      (function(){ const t = String(em.snippet || em.body || '').replace(/\s+/g, ' ').trim().slice(0, 300); return t ? ' — ' + esc(t) : ''; })() + '</div></div>' +
+    '<div class="ics">' + reply + '<button type="button" class="ic" data-act="edone" data-id="' + id + '" aria-label="Done" title="Done">' + I_CHECK + '</button></div></div>';
+}
+function qWaRow(c){
+  const id = esc(c.id), snoozed = c.snoozedUntil > Date.now();
+  const nIn = waMsgs.filter(m => m.chatKey === c.chatKey && !m.fromMe && (m.at || 0) > Math.max(c.handledAt || 0, c.lastOutAt || 0)).length;
+  const sub = c.isGroup ? 'Group' + (nIn ? ' · ' + nIn + ' new' : '') : (nIn > 1 ? nIn + ' messages' : (nIn === 1 ? '1 message' : 'Chat'));
+  return '<div class="qrow"><div class="b2" role="button" tabindex="0" data-act="wopen" data-id="' + id + '" title="Open this chat">' +
+    '<div class="l1">' + (c.isGroup ? '<span class="who-tag">GROUP</span>' : '') + '<span class="nm">' + esc(fmtPhone(c.name || c.phone) || 'Unknown') + '</span><span class="when">' + esc(whenLabel(c.lastInAt || c.lastAt || 0)) + '</span></div>' +
+    '<div class="l2"><strong>' + esc(sub) + '</strong>' + (snoozed ? ' <span class="tag hl-y">LATER · ' + esc(fmtTime(c.snoozedUntil)) + '</span>' : '') +
+      ' — ' + esc((c.isGroup && !c.lastFromMe && c.lastSender ? c.lastSender + ': ' : '') + prettyLast(c.lastText)) + '</div></div>' +
+    '<div class="ics"><button type="button" class="ic pri" data-act="wopen" data-id="' + id + '" aria-label="Reply" title="Reply">' + I_REPLY + '</button>' +
+    '<button type="button" class="ic" data-act="wdone" data-id="' + id + '" aria-label="Done" title="Done">' + I_CHECK + '</button></div></div>';
+}
+function qBoxes(list){
+  return '<div class="qgrid">' + BOXES.map(b => {
+    const items = list.filter(x => boxOf(x) === b.k);
+    const waiting = items.filter(x => !(x.wa ? x.wa.snoozedUntil > Date.now() : x.email.snoozedUntil > Date.now())).length;
+    return '<section class="qbox" aria-label="' + esc(b.label) + '"><div class="qbox-h">' + b.icon() + esc(b.label) + '<span class="n">' + waiting + ' WAITING</span></div>' +
+      '<div class="qbox-list">' + (items.length ? items.map(x => x.wa ? qWaRow(x.wa) : qMailRow(x.email)).join('') : '<div class="empty-line">Nothing waiting here.</div>') + '</div></section>';
+  }).join('') + '</div>';
+}
 function mailRow(em, withActs){
   const snoozed = em.snoozedUntil > Date.now();
   return '<div class="mail-row"><span class="box">' + I_MAIL + esc(em.box || 'kenny@') + '</span>' +
@@ -978,20 +1039,28 @@ function renderEmail(head){
   $('inboxNotice').innerHTML = notice;
   $('inboxCount').textContent = all.length ? all.length + ' WAITING' : '';
   const nE = waiting.length, nW = all.length - nE;
+  const phoneInbox = window.matchMedia('(max-width:760px)').matches;
+  if(!['all', 'kenny', 'events', 'orders', 'wa'].includes(inboxFilter)) inboxFilter = 'all';
+  const savedFilter = inboxFilter;
+  if(!phoneInbox) inboxFilter = 'all';
+  const fullList = all.concat(snoozed.map(em => ({key: 'e:' + em.id, email: em})), snoozedChats().map(c => ({key: 'w:' + c.id, wa: c})));
+  const nOf = k => all.filter(x => boxOf(x) === k).length;
   const chip = (k, label, icon) => '<button type="button" data-act="ifilter" data-id="' + k + '" aria-pressed="' + (inboxFilter === k) + '">' + icon + label + '</button>';
-  $('inboxChips').innerHTML = chip('all', 'ALL · ' + all.length, '') + chip('email', 'EMAIL · ' + nE, I_MAIL) + chip('wa', 'WHATSAPP · ' + nW, I_WA);
-  const list = all.concat(snoozed.map(em => ({key: 'e:' + em.id, email: em})), snoozedChats().map(c => ({key: 'w:' + c.id, wa: c})))
-    .filter(x => inboxFilter === 'all' || (inboxFilter === 'wa' ? !!x.wa : !!x.email));
-  $('inboxList').innerHTML = (st === 'off' && wst === 'off') ? '' : (list.length ? list.map(x => x.wa ? waRow(x.wa, true) : mailRow(x.email, true)).join('')
-    : '<div class="empty-line">' + (inboxFilter === 'wa' ? 'No WhatsApp chats waiting on you.' : inboxFilter === 'email' ? 'No emails waiting on you.' : 'Nothing waiting on you.') + '</div>');
+  $('inboxChips').innerHTML = phoneInbox ? chip('all', 'ALL · ' + all.length, '') + BOXES.map(b => chip(b.k, b.label.toUpperCase() + ' · ' + nOf(b.k), b.icon())).join('') : '';
+  $('inboxChips').classList.toggle('hidden', !phoneInbox);
+  const list = fullList.filter(x => inboxFilter === 'all' || boxOf(x) === inboxFilter);
+  $('inboxList').innerHTML = (st === 'off' && wst === 'off') ? '' : !phoneInbox ? qBoxes(fullList)
+    : (list.length ? list.map(x => x.wa ? waRow(x.wa, true) : mailRow(x.email, true)).join('')
+    : '<div class="empty-line">Nothing waiting on you here.</div>');
   const waitingKeys = new Set(list.map(x => x.key));
   const recent = Date.now() - 3 * 86400000;
-  const others = (inboxFilter === 'wa' ? [] : emails.filter(em => !em.handled && !waitingKeys.has('e:' + em.id)).map(em => ({email: em, ts: em.lastAt || 0})))
-    .concat(inboxFilter === 'email' ? [] : waChats.filter(c => !waitingKeys.has('w:' + c.id) && (c.lastAt || 0) > recent).map(c => ({wa: c, ts: c.lastAt || 0})))
+  const others = (inboxFilter === 'wa' ? [] : emails.filter(em => inboxFilter === 'all' || String(em.mailbox || 'kenny').toLowerCase() === inboxFilter).filter(em => !em.handled && !waitingKeys.has('e:' + em.id)).map(em => ({email: em, ts: em.lastAt || 0})))
+    .concat(inboxFilter !== 'all' && inboxFilter !== 'wa' ? [] : waChats.filter(c => !waitingKeys.has('w:' + c.id) && (c.lastAt || 0) > recent).map(c => ({wa: c, ts: c.lastAt || 0})))
     .sort((a, b) => b.ts - a.ts);
   $('otherWrap').classList.toggle('hidden', !others.length);
   $('otherHead').textContent = 'Everything else · ' + others.length + ' (older than ' + WAITING_DAYS + ' days, receipts, notices, ones you answered)';
   $('otherList').innerHTML = others.slice(0, 60).map(x => x.wa ? waRow(x.wa, false) : mailRow(x.email, false)).join('');
+  inboxFilter = savedFilter;
 }
 function renderLive(){
   const st = emailState(), phone = window.matchMedia('(max-width:760px)').matches;
