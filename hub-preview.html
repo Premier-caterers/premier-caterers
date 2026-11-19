@@ -793,7 +793,8 @@ const emailExpanded = new Set();
 function emailCardHtml(em, pos, n){
   const waited = Date.now() - (em.theirAt || em.lastAt || Date.now());
   const id = esc(em.id), open = composerFor === em.id;
-  let h = '<div class="rn-top"><h1 class="rn-title"><span class="hl-c">RIGHT NOW</span></h1>' +
+  let h = (openedFrom === 'inbox' ? '<button type="button" class="link-btn" data-act="backinbox" style="margin-bottom:6px">← Back to the inbox</button>' : '') +
+    '<div class="rn-top"><h1 class="rn-title"><span class="hl-c">RIGHT NOW</span></h1>' +
     '<span class="rn-count">' + pos + ' of ' + n + '</span>' +
     '<span class="rn-due' + (waited > 4 * 3600000 ? ' hl-p' : '') + '">' + I.clock + 'WAITING ' + esc(ago(em.theirAt || em.lastAt).toUpperCase()) + '</span></div>' +
     '<div class="rn-kind" style="flex-wrap:wrap">' + I_MAIL + 'EMAIL · ' + esc(em.box || 'kenny@') + ' · ' + esc(em.fromName || em.fromEmail) +
@@ -953,7 +954,8 @@ function waCardHtml(c, pos, n){
   const allMsgs = chatMsgs(c, 60), shown = waExpanded.has(c.id) ? 60 : 6;
   const msgs = allMsgs.slice(-shown), more = allMsgs.length - msgs.length, link = waLink(c);
   const canSend = !waStatus || waStatus.canSend !== false;
-  let h = '<div class="rn-top"><h1 class="rn-title"><span class="hl-c">RIGHT NOW</span></h1>' +
+  let h = (openedFrom === 'inbox' ? '<button type="button" class="link-btn" data-act="backinbox" style="margin-bottom:6px">← Back to the inbox</button>' : '') +
+    '<div class="rn-top"><h1 class="rn-title"><span class="hl-c">RIGHT NOW</span></h1>' +
     '<span class="rn-count">' + pos + ' of ' + n + '</span>' +
     '<span class="rn-due' + (waited > 4 * 3600000 ? ' hl-p' : '') + '">' + I.clock + 'WAITING ' + esc(ago(c.lastInAt || c.lastAt).toUpperCase()) + '</span></div>' +
     '<div class="rn-kind" style="flex-wrap:wrap">' + I_WA + 'WHATSAPP' + (c.isGroup ? ' · GROUP' : '') + ' · ' + esc(fmtPhone(c.name || c.phone) || 'Unknown') +
@@ -1198,6 +1200,14 @@ function setMode(m){
 }
 document.querySelectorAll('.mode button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
 window.matchMedia('(max-width:900px)').addEventListener('change', e => { if(e.matches && mode === 'full') setMode('focus'); });
+// After you finish with a message you opened from the Inbox, go back to the Inbox.
+let openedFrom = null;
+function backToInbox(){
+  if(openedFrom !== 'inbox') return false;
+  openedFrom = null; pinnedKey = null; composerFor = null;
+  showView('inbox'); render(); window.scrollTo(0, 0);
+  return true;
+}
 function showView(v){
   currentView = v;
   const show = v === 'today' ? (mode === 'full' ? 'full' : 'today') : v;
@@ -1245,8 +1255,9 @@ document.addEventListener('click', e => {
   else if(act === 'unskip'){ skipped.clear(); render(); }
   else if(act === 'emore'){ if(emailExpanded.has(id)) emailExpanded.delete(id); else emailExpanded.add(id); render(); }
   else if(act === 'ereply'){ composerFor = id; render(); focusReply(id); }
-  else if(act === 'eopen'){ pinnedKey = 'e:' + id; skipped.delete(pinnedKey); const em = emails.find(x => x.id === id); composerFor = em && !em.replyToSelf ? id : null; if(em && em.snoozedUntil > Date.now()) emailPatch(id, {snoozedUntil: null}).catch(fail); showView('today'); render(); focusReply(id); }
-  else if(act === 'ecancel'){ composerFor = null; render(); }
+  else if(act === 'eopen'){ openedFrom = currentView; pinnedKey = 'e:' + id; skipped.delete(pinnedKey); const em = emails.find(x => x.id === id); composerFor = em && !em.replyToSelf ? id : null; if(em && em.snoozedUntil > Date.now()) emailPatch(id, {snoozedUntil: null}).catch(fail); showView('today'); render(); focusReply(id); }
+  else if(act === 'ecancel'){ composerFor = null; if(!backToInbox()) render(); }
+  else if(act === 'backinbox'){ pinnedKey = null; composerFor = null; backToInbox(); }
   else if(act === 'esend') sendReply(id).catch(fail);
   else if(act === 'edone') openFilePicker(id);
   else if(act === 'mdel') deleteMsg(b.dataset.key).catch(fail);
@@ -1264,7 +1275,7 @@ document.addEventListener('click', e => {
   else if(act === 'alarm') alarmAction(b.dataset.id, b.dataset.do);
   else if(act === 'ifilter'){ inboxFilter = id; try{ localStorage.setItem('hubInboxFilter', id); }catch(e){} render(); }
   else if(act === 'wreply'){ composerFor = 'wa:' + id; render(); focusReply('wa:' + id); }
-  else if(act === 'wopen'){ pinnedKey = 'w:' + id; skipped.delete(pinnedKey); composerFor = 'wa:' + id; const c = waChats.find(x => x.id === id); if(c && c.snoozedUntil > Date.now()) waPatch(id, {snoozedUntil: null}).catch(fail); showView('today'); render(); focusReply('wa:' + id); }
+  else if(act === 'wopen'){ openedFrom = currentView; pinnedKey = 'w:' + id; skipped.delete(pinnedKey); composerFor = 'wa:' + id; const c = waChats.find(x => x.id === id); if(c && c.snoozedUntil > Date.now()) waPatch(id, {snoozedUntil: null}).catch(fail); showView('today'); render(); focusReply('wa:' + id); }
   else if(act === 'wsend') sendWa(id).catch(fail);
   else if(act === 'wplay') playVoice(b, id);
   else if(act === 'wmore'){ waExpanded.add(id); render(); }
@@ -1343,6 +1354,7 @@ async function fileEmail(id, label){
   const job = await outboxCol.add({type: 'file', mailbox: em.mailbox || 'kenny', threadId: em.threadId || id, label: label || '', subject: em.subject || '', by: HUB_EMAIL, status: 'queued', createdAt: Date.now()});
   if(label && em.fromEmail){ fileMemory[memKey(em)] = label; db.collection('hubFileMemory').doc('main').set({map: {[memKey(em)]: label}}, {merge: true}).catch(e => console.warn(e)); }
   toast((label ? 'Filed in ' + label + ': ' : 'Done: ') + (em.subject || 'email'), () => undoGmail(id, job, label));
+  backToInbox();
 }
 async function undoGmail(id, job, label){
   // the email may already have left the Gmail inbox (and the live list), so use what the job recorded
@@ -1361,6 +1373,7 @@ async function deleteMsg(key){
     if(composerFor === 'wa:' + id) composerFor = null;
     if(pinnedKey === 'w:' + id) pinnedKey = null;
     toast('Removed from the hub (still in WhatsApp): ' + (c.name || 'chat'), () => waPatch(id, before));
+  backToInbox();
     return;
   }
   const em = emails.find(x => x.id === id); if(!em) return;
@@ -1369,6 +1382,7 @@ async function deleteMsg(key){
   if(pinnedKey === 'e:' + id) pinnedKey = null;
   const job = await outboxCol.add({type: 'trash', mailbox: em.mailbox || 'kenny', threadId: em.threadId || id, subject: em.subject || '', by: HUB_EMAIL, status: 'queued', createdAt: Date.now()});
   toast('Deleted (in Gmail Trash): ' + (em.subject || 'email'), () => undoGmail(id, job, ''));
+  backToInbox();
 }
 async function emailDone(id){
   const em = emails.find(x => x.id === id); if(!em) return;
@@ -1383,6 +1397,7 @@ async function emailLater(id){
   if(composerFor === id) composerFor = null;
   if(pinnedKey === 'e:' + id) pinnedKey = null;
   toast('Back in 2 hours: ' + (em.subject || 'email'), () => emailPatch(id, {snoozedUntil: null}));
+  backToInbox();
 }
 /* ---------- add / edit to-dos and schedule items, with reminders ---------- */
 let ed = null;
@@ -1565,7 +1580,7 @@ async function saveEditor(){
   }
   const fromMsg = wasNew && ed.src ? ed.src : null;
   closeEditor();
-  if(fromMsg){ await clearMsg(fromMsg); toast('Added to ' + (type === 'schedule' ? 'Schedule' : 'To do') + ' and cleared from the inbox: ' + text, null); return; }
+  if(fromMsg){ await clearMsg(fromMsg); toast('Added to ' + (type === 'schedule' ? 'Schedule' : 'To do') + ' and cleared from the inbox: ' + text, null); backToInbox(); return; }
   toast((wasNew ? 'Added: ' : 'Saved: ') + text + (rTs && how.length ? (rTs < Date.now() ? ' (that reminder time has already passed)' : ' · reminder set') : ''), null);
 }
 async function deleteItem(){
@@ -1671,6 +1686,7 @@ async function waDone(id){
   if(composerFor === 'wa:' + id) composerFor = null;
   if(pinnedKey === 'w:' + id) pinnedKey = null;
   toast('Done: ' + (c.name || 'WhatsApp chat'), () => waPatch(id, before));
+  backToInbox();
 }
 async function waLater(id){
   const c = waChats.find(x => x.id === id); if(!c) return;
@@ -1678,6 +1694,7 @@ async function waLater(id){
   if(composerFor === 'wa:' + id) composerFor = null;
   if(pinnedKey === 'w:' + id) pinnedKey = null;
   toast('Back in 2 hours: ' + (c.name || 'WhatsApp chat'), () => waPatch(id, {snoozedUntil: null}));
+  backToInbox();
 }
 async function waTodo(id){
   const c = waChats.find(x => x.id === id); if(!c) return;
@@ -1697,6 +1714,7 @@ async function sendWa(id){
     delete drafts[did]; delete atts[did]; composerFor = null;
     if(pinnedKey === 'w:' + id) pinnedKey = null;
     toast('WhatsApp to ' + (c.name || 'chat') + ' is on its way — it sends within a minute.', null);
+  backToInbox();
   } finally { btns.forEach(b => b.disabled = false); }
 }
 /* ---------- attachments ---------- */
@@ -1748,6 +1766,7 @@ async function sendReply(id){
     delete drafts[id]; delete atts[id]; composerFor = null;
     if(pinnedKey === 'e:' + id) pinnedKey = null;
     toast('Reply to ' + (em.fromName || em.fromEmail) + ' is on its way — it sends within a minute.', null);
+  backToInbox();
   } finally { btns.forEach(b => b.disabled = false); }
 }
 
