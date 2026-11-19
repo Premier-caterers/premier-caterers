@@ -832,7 +832,7 @@ function qMailRow(em){
   return '<div class="qrow"><div class="b2" role="button" tabindex="0" data-act="eopen" data-id="' + id + '" title="Open this email">' +
     '<div class="l1">' + tag + '<span class="nm">' + esc(em.fromName || em.fromEmail) + '</span><span class="when">' + esc(whenLabel(em.theirAt || em.lastAt)) + '</span></div>' +
     '<div class="l2"><strong>' + esc(em.subject || '(no subject)') + '</strong>' + (snoozed ? ' <span class="tag hl-y">LATER · ' + esc(fmtTime(em.snoozedUntil)) + '</span>' : '') +
-      (em.snippet ? ' — ' + esc(em.snippet) : '') + '</div></div>' +
+      (function(){ const t = String(em.snippet || em.body || '').replace(/\s+/g, ' ').trim().slice(0, 300); return t ? ' — ' + esc(t) : ''; })() + '</div></div>' +
     '<div class="ics">' + reply + '<button type="button" class="ic" data-act="edone" data-id="' + id + '" aria-label="Done" title="Done">' + I_CHECK + '</button></div></div>';
 }
 function qWaRow(c){
