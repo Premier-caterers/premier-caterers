@@ -572,9 +572,17 @@ function sortForFocus(a, b){
 }
 const pendingToday = () => items.filter(it => isActionable(it) && it.status !== 'done' && isTodayOrEarlier(it)).sort(sortForFocus);
 const doneToday = () => { const sod = startOfDay(Date.now()); return items.filter(it => isActionable(it) && it.status === 'done' && (it.doneAt || 0) >= sod); };
+/* Kenny's own say on senders: 'show' = always in the boxes, 'hide' = never in the boxes. By address, or whole company domain. */
+let senderRules = {};
+const ruleKey = k => String(k || '').toLowerCase().replace(/[.\/]/g, '_');
+function senderRule(em){
+  const a = String(em.fromEmail || '').toLowerCase(), d = a.split('@')[1] || '';
+  return senderRules[ruleKey(a)] || (d ? senderRules[ruleKey('@' + d)] : '') || '';
+}
+const wantsYou = em => { const r = senderRule(em); return r === 'hide' ? false : r === 'show' ? (!em.lastFromMe && !fromUs(em)) : em.needsYou; };
 function waitingEmails(){
   const now = Date.now();
-  return emails.filter(em => em.needsYou && !fromUs(em) && !em.handled && recentEnough(em.theirAt || em.lastAt) && !(em.snoozedUntil > now) && !(em.replyQueuedAt && em.replyQueuedAt >= (em.theirAt || 0)))
+  return emails.filter(em => wantsYou(em) && !fromUs(em) && !em.handled && recentEnough(em.theirAt || em.lastAt) && !(em.snoozedUntil > now) && !(em.replyQueuedAt && em.replyQueuedAt >= (em.theirAt || 0)))
     .sort((a, b) => (b.theirAt || b.lastAt || 0) - (a.theirAt || a.lastAt || 0));
 }
 function waitingChats(){
@@ -593,7 +601,7 @@ function waitingAll(){
 // Your own company mailboxes (e.g. a reply you sent from events@ that was bcc'd to kenny@) never count as waiting on you.
 const OUR_BOXES = /^(kenny|events|orders|notes)@thepremiercaterer\.com$/i;
 const fromUs = em => OUR_BOXES.test(String(em.fromEmail || '').trim());
-const snoozedEmails = () => emails.filter(em => em.needsYou && !fromUs(em) && !em.handled && em.snoozedUntil > Date.now());
+const snoozedEmails = () => emails.filter(em => wantsYou(em) && !fromUs(em) && !em.handled && em.snoozedUntil > Date.now());
 function emailsHandledToday(){
   const sod = startOfDay(Date.now());
   return emails.filter(em => (em.handledAt || 0) >= sod || (em.repliedAt || 0) >= sod || (em.replyQueuedAt || 0) >= sod).length;
@@ -839,6 +847,7 @@ const I_CHECK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" str
 const I_TODO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 12l3 3 5-6"></path></svg>';
 const I_CAL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>';
 const I_TRASH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>';
+const I_MUTE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M6.5 6.5l11 11"></path></svg>';
 const addBtns = key => '<button type="button" class="ic" data-act="mtodo" data-key="' + esc(key) + '" aria-label="Add to To do" title="Add to To do">' + I_TODO + '</button>' +
   '<button type="button" class="ic" data-act="msched" data-key="' + esc(key) + '" aria-label="Add to Schedule" title="Add to Schedule">' + I_CAL + '</button>' +
   '<button type="button" class="ic del" data-act="mdel" data-key="' + esc(key) + '" aria-label="Delete" title="' + (key[0] === 'w' ? 'Delete from the hub (stays in WhatsApp)' : 'Delete (moves to Gmail Trash)') + '">' + I_TRASH + '</button>';
@@ -863,7 +872,8 @@ function qMailRow(em){
     '<div class="l1">' + tag + '<span class="nm">' + esc(em.fromName || em.fromEmail) + '</span><span class="when">' + esc(whenLabel(em.theirAt || em.lastAt)) + '</span></div>' +
     '<div class="l2"><strong>' + esc(em.subject || '(no subject)') + '</strong>' + (snoozed ? ' <span class="tag hl-y">LATER · ' + esc(fmtTime(em.snoozedUntil)) + '</span>' : '') +
       (function(){ const t = String(em.snippet || em.body || '').replace(/\s+/g, ' ').trim().slice(0, 300); return t ? ' — ' + esc(t) : ''; })() + '</div></div>' +
-    '<div class="ics">' + reply + '<button type="button" class="ic" data-act="edone" data-id="' + id + '" aria-label="Done" title="Done">' + I_CHECK + '</button>' + addBtns('e:' + em.id) + '</div></div>';
+    '<div class="ics">' + reply + '<button type="button" class="ic" data-act="edone" data-id="' + id + '" aria-label="Done" title="Done">' + I_CHECK + '</button>' + addBtns('e:' + em.id) +
+    '<button type="button" class="ic" data-act="shide" data-id="' + id + '" aria-label="Not important — stop showing this sender in the boxes" title="Not important — stop showing this sender in the boxes">' + I_MUTE + '</button></div></div>';
 }
 function qWaRow(c){
   const id = esc(c.id), snoozed = c.snoozedUntil > Date.now();
@@ -898,7 +908,8 @@ function mailRow(em, withActs){
       '<button type="button" class="sm" data-act="mtodo" data-key="e:' + esc(em.id) + '" aria-label="Add to To do">' + I_TODO + '</button>' +
       '<button type="button" class="sm" data-act="msched" data-key="e:' + esc(em.id) + '" aria-label="Add to Schedule">' + I_CAL + '</button>' +
       '<button type="button" class="sm" style="border-style:dashed" data-act="mdel" data-key="e:' + esc(em.id) + '" aria-label="Delete">' + I_TRASH + '</button></span>'
-    : '<span class="acts" style="display:flex;gap:8px"><a class="sm" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink)" href="' + GMAILem(em) + '" target="_blank" rel="noopener">Open in Gmail</a></span>') +
+    : '<span class="acts" style="display:flex;gap:8px">' + (fromUs(em) ? '' : '<button type="button" class="sm pri" data-act="sshow" data-id="' + esc(em.id) + '" title="Always show emails from this sender in the boxes">Show in boxes</button>') +
+      '<a class="sm" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink)" href="' + GMAILem(em) + '" target="_blank" rel="noopener">Open in Gmail</a></span>') +
     '</div>';
 }
 function miniMail(em){
@@ -1267,6 +1278,8 @@ document.addEventListener('click', e => {
   else if(act === 'edone') openFilePicker(id);
   else if(act === 'mdel') deleteMsg(b.dataset.key).catch(fail);
   else if(act === 'fp') fpAction(b);
+  else if(act === 'shide') setSenderRule(id, 'hide').catch(fail);
+  else if(act === 'sshow') setSenderRule(id, 'show').catch(fail);
   else if(act === 'attdel'){ atts[id] = (atts[id] || []).filter(a => a.key !== b.dataset.key); refreshAtt(id); }
   else if(act === 'elater') emailLater(id).catch(fail);
   else if(act === 'goinbox') showView('inbox');
@@ -1367,6 +1380,20 @@ async function undoGmail(id, job, label){
   await emailPatch(id, {handled: false, handledAt: null, filedLabel: null, deletedAt: null, inInbox: true});
   if(j.status === 'queued') await job.update({status: 'cancelled'});
   else if(j.threadId) await outboxCol.add({type: 'untrash', mailbox: j.mailbox || 'kenny', threadId: j.threadId, label: label || '', subject: j.subject || '', by: HUB_EMAIL, status: 'queued', createdAt: Date.now()});
+}
+/* ---------- sender rules ---------- */
+const FREEMAIL = /^(gmail|googlemail|yahoo|ymail|aol|hotmail|outlook|live|msn|icloud|me|mac|comcast|verizon|optonline|att|sbcglobal|protonmail|proton)\./i;
+async function setSenderRule(id, rule){
+  const em = emails.find(x => x.id === id); if(!em || !em.fromEmail) return;
+  const a = String(em.fromEmail).toLowerCase(), d = a.split('@')[1] || '';
+  // a company's whole domain for 'hide' only when it is not a personal-email provider (never hide all of gmail.com)
+  const key = rule === 'hide' && d && !FREEMAIL.test(d) && /^(no-?reply|alerts?|notifications?|info|news|marketing|updates?|billing|statements?|customerservice|service|support)@/i.test(a) ? '@' + d : a;
+  const prev = senderRules[ruleKey(key)] || null;
+  senderRules[ruleKey(key)] = rule; render();
+  await db.collection('hubSenderRules').doc('main').set({map: {[ruleKey(key)]: rule}}, {merge: true});
+  const who = em.fromName || em.fromEmail;
+  toast(rule === 'hide' ? 'Won’t show ' + who + ' in the boxes any more' : 'Will always show ' + who + ' in the boxes',
+    () => db.collection('hubSenderRules').doc('main').set({map: {[ruleKey(key)]: prev || firebase.firestore.FieldValue.delete()}}, {merge: true}));
 }
 /* ---------- Delete ---------- */
 async function deleteMsg(key){
@@ -1838,6 +1865,7 @@ function startData(){
   unsubs.push(db.collection('hubSyncStatus').doc('email_orders').onSnapshot(d => { ordersStatus = d.exists ? d.data() : null; render(); },
     err => { console.warn('orders@ status not loaded:', err); ordersStatus = null; render(); }));
   ['kenny', 'events', 'orders'].forEach(mb => unsubs.push(db.collection('hubLabels').doc(mb).onSnapshot(d => { hubLabels[mb] = d.exists ? (d.data().labels || []) : []; }, err => console.warn('folders not loaded:', err))));
+  unsubs.push(db.collection('hubSenderRules').doc('main').onSnapshot(d => { senderRules = d.exists ? (d.data().map || {}) : {}; render(); }, err => console.warn('sender rules not loaded:', err)));
   unsubs.push(db.collection('hubFileMemory').doc('main').onSnapshot(d => { fileMemory = d.exists ? (d.data().map || {}) : {}; }, err => console.warn('folder memory not loaded:', err)));
   unsubs.push(db.collection('hubSyncStatus').doc('email_events').onSnapshot(d => { eventsStatus = d.exists ? d.data() : null; render(); },
     err => { console.warn('events@ status not loaded:', err); eventsStatus = null; render(); }));
