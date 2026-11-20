@@ -1547,7 +1547,12 @@ function openFromMsg(key, type){
   setTimeout(() => { const i = $('edText'); if(i){ i.focus(); i.select(); } }, 50);
 }
 async function clearMsg(src){
-  if(src.kind === 'email'){ await emailPatch(src.id, {handled: true, handledAt: Date.now()}); if(composerFor === src.id) composerFor = null; if(pinnedKey === 'e:' + src.id) pinnedKey = null; }
+  if(src.kind === 'email'){
+    await emailPatch(src.id, {handled: true, handledAt: Date.now()});
+    if(composerFor === src.id) composerFor = null; if(pinnedKey === 'e:' + src.id) pinnedKey = null;
+    // it now lives on the to-do list / schedule, so take it out of the Gmail inbox too (archived, not deleted)
+    await outboxCol.add({type: 'file', mailbox: src.mailbox || 'kenny', threadId: src.threadId || src.id, label: '', subject: src.subject || '', by: HUB_EMAIL, status: 'queued', createdAt: Date.now()});
+  }
   else { await waPatch(src.id, {handledAt: Date.now()}); if(composerFor === 'wa:' + src.id) composerFor = null; if(pinnedKey === 'w:' + src.id) pinnedKey = null; }
 }
 function openOriginal(itemId){
@@ -1612,7 +1617,7 @@ async function saveEditor(){
   }
   const fromMsg = wasNew && ed.src ? ed.src : null;
   closeEditor();
-  if(fromMsg){ await clearMsg(fromMsg); toast('Added to ' + (type === 'schedule' ? 'Schedule' : 'To do') + ' and cleared from the inbox: ' + text, null); backToInbox(); return; }
+  if(fromMsg){ await clearMsg(fromMsg); toast('Added to ' + (type === 'schedule' ? 'Schedule' : 'To do') + (fromMsg.kind === 'email' ? ' and archived in Gmail: ' : ' and cleared from the inbox: ') + text, null); backToInbox(); return; }
   toast((wasNew ? 'Added: ' : 'Saved: ') + text + (rTs && how.length ? (rTs < Date.now() ? ' (that reminder time has already passed)' : ' · reminder set') : ''), null);
 }
 async function deleteItem(){
