@@ -4439,8 +4439,17 @@ function render(){
   // couple of letters.
   let _focusRestore = null;
   const _activeEl = document.activeElement;
-  if(_activeEl && _mainAreaBefore && _mainAreaBefore.contains(_activeEl) && (_activeEl.tagName==='INPUT'||_activeEl.tagName==='TEXTAREA') && _activeEl.id){
-    _focusRestore = { id:_activeEl.id, start:_activeEl.selectionStart, end:_activeEl.selectionEnd };
+  if(_activeEl && _mainAreaBefore && _mainAreaBefore.contains(_activeEl) && (_activeEl.tagName==='INPUT'||_activeEl.tagName==='TEXTAREA')){
+    let _sel = { start:null, end:null };
+    try{ _sel = { start:_activeEl.selectionStart, end:_activeEl.selectionEnd }; }catch(e){}
+    if(_activeEl.id){
+      _focusRestore = { id:_activeEl.id, start:_sel.start, end:_sel.end };
+    } else if(_activeEl.placeholder){
+      // No id — remember it by its placeholder text and position on the page,
+      // so a box someone forgot to give an id still keeps focus while typing.
+      const _same = Array.from(_mainAreaBefore.querySelectorAll(_activeEl.tagName.toLowerCase())).filter(x=>x.placeholder===_activeEl.placeholder);
+      _focusRestore = { ph:_activeEl.placeholder, tag:_activeEl.tagName.toLowerCase(), idx:_same.indexOf(_activeEl), start:_sel.start, end:_sel.end };
+    }
   }
 
   let html = '';
@@ -4515,7 +4524,13 @@ function render(){
     }
   }
   if(_focusRestore){
-    const _refocus = document.getElementById(_focusRestore.id);
+    let _refocus = null;
+    if(_focusRestore.id) _refocus = document.getElementById(_focusRestore.id);
+    else {
+      const _ma = document.getElementById('mainArea');
+      const _same = _ma ? Array.from(_ma.querySelectorAll(_focusRestore.tag)).filter(x=>x.placeholder===_focusRestore.ph) : [];
+      _refocus = _same[_focusRestore.idx] || null;
+    }
     if(_refocus){
       _refocus.focus();
       if(typeof _refocus.setSelectionRange==='function' && _focusRestore.start!=null){
@@ -6112,7 +6127,20 @@ function plFolderBack(colKey){
   if(nav && nav.group!=null){ nav.group=null; } else { delete window._plFolderNav[colKey]; }
   render();
 }
-function plFolderSearch(colKey, val){ window._plFolderSearch = window._plFolderSearch||{}; window._plFolderSearch[colKey]=val; render(); }
+function plFolderSearch(colKey, val){ window._plFolderSearch = window._plFolderSearch||{}; window._plFolderSearch[colKey]=val; clearTimeout(window._plFolderT); window._plFolderT=setTimeout(render,250); }
+// Pipeline-wide search (added) — filters every column at once.
+function plSearchInput(val){ window._plSearch = val; clearTimeout(window._plSearchT); window._plSearchT = setTimeout(render, 250); }
+function plSearchClear(){ window._plSearch = ''; render(); setTimeout(()=>document.getElementById('plSearchInput')?.focus(), 0); }
+function plSearchMatch(inq, words){
+  if(!words.length) return true;
+  const digits = s => String(s||'').replace(/\D/g,'');
+  const hay = [clientPrimary(inq), inq.firstName, inq.lastName, (typeof clientContact==='function'?clientContact(inq):''),
+    inq.eventName, inq.venueName, inq.venueAddress, inq.address, inq.email, inq.phone, inq.eventType, inq.eventDate,
+    inq.org, inq.organization, inq.company, inq.jobNumber, inq.job]
+    .filter(Boolean).join(' ').toLowerCase();
+  const hayDigits = digits(inq.phone);
+  return words.every(w => hay.includes(w) || (/^\d{3,}$/.test(w.replace(/\D/g,'')) && w.replace(/\D/g,'').length===w.replace(/[\s()+.-]/g,'').length && hayDigits.includes(w.replace(/\D/g,''))));
+}
 
 function renderPipeline(){
   const role = roles[currentRole];
@@ -6143,12 +6171,25 @@ function renderPipeline(){
     ${(()=>{ const n=_unansweredList().length; return `<button type="button" class="pl-stat" onclick="openUnansweredList()" title="Client emails with no reply yet \u2014 click to see them" style="text-align:left;cursor:pointer;font-family:inherit;${n?'border:1.5px dashed var(--coral-solid);background:var(--brass-tint)':''}"><div class="k" style="${n?'color:var(--coral-solid)':''}"><i class="ti ti-mail"></i> Unanswered emails</div><div class="v" style="${n?'color:var(--coral-solid)':''}">${n}</div></button>`; })()}
   </div>`;
 
+  const plQ = (window._plSearch||'').trim().toLowerCase();
+  const plWords = plQ ? plQ.split(/\s+/) : [];
+  const plTotalMatches = plQ ? inquiries.filter(i=>plSearchMatch(i, plWords)).length : 0;
   let h = `
   <div class="section-header">
     <div><div class="eyebrow">Sales</div><div class="section-title">Pipeline</div></div>
-    ${role.canEdit ? `<button class="btn btn--pri" onclick="openAddInquiryModal()"><i class="ti ti-plus"></i> Add inquiry</button>` : ''}
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <div style="position:relative">
+        <i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text3);pointer-events:none"></i>
+        <input id="plSearchInput" class="field" type="text" autocomplete="off" placeholder="Search name, phone, email, venue…"
+          value="${pcEsc(window._plSearch||'')}" style="width:260px;max-width:60vw;padding-left:30px;${plQ?'padding-right:30px;':''}"
+          oninput="plSearchInput(this.value)" onkeydown="if(event.key==='Escape'){event.stopPropagation();plSearchClear();}">
+        ${plQ ? `<button type="button" onclick="plSearchClear()" title="Clear search" aria-label="Clear search" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:none;cursor:pointer;color:var(--text3);font-size:16px;padding:2px 4px;line-height:1"><i class="ti ti-x"></i></button>` : ''}
+      </div>
+      ${role.canEdit ? `<button class="btn btn--pri" onclick="openAddInquiryModal()"><i class="ti ti-plus"></i> Add inquiry</button>` : ''}
+    </div>
   </div>
   ${statHtml}
+  ${plQ ? `<div style="font-size:12.5px;color:var(--text2);margin:-4px 0 10px;display:flex;align-items:center;gap:6px"><i class="ti ti-filter" style="font-size:13px"></i>${plTotalMatches} client${plTotalMatches===1?'':'s'} match &ldquo;${pcEsc(window._plSearch.trim())}&rdquo; <button type="button" class="btn btn--ghost btn--sm" onclick="plSearchClear()">Clear</button></div>` : ''}
   <div class="pipeline-cols" style="display:flex;flex-wrap:nowrap;gap:12px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch">
   ${stages.map(s=>{
     const bookedCols = {booked:1, month_out:1, two_weeks:1, this_week:1};
@@ -6158,6 +6199,7 @@ function renderPipeline(){
     else cards = bookedCols[s.key]
                 ? inquiries.filter(i=>i.stage==='booked' && plBookedBucket(i)===s.key)
                 : inquiries.filter(i=>i.stage===s.key);
+    if(plQ) cards = cards.filter(i=>plSearchMatch(i, plWords));
     const sortBy = window._plSort[s.key] || 'date';
     cards = cards.slice().sort(plSortComparator(sortBy));
     const isBooked = (s.key==='booked'||s.key==='month_out'||s.key==='two_weeks'||s.key==='this_week');
@@ -6171,10 +6213,10 @@ function renderPipeline(){
     const isArchiveCol = (s.key==='past_paid'||s.key==='past_unpaid'||s.key==='lost');
     let archiveExtraHtml = '';
     let archiveSuppressCards = false;
-    if(isArchiveCol && cards.length){
+    if(isArchiveCol && cards.length && !plQ){
       const allArchiveCards = cards;
       const searchVal = ((window._plFolderSearch||{})[s.key]||'').trim().toLowerCase();
-      const searchBox = `<div style="margin-bottom:8px"><input type="text" placeholder="Search this column…" value="${searchVal.replace(/"/g,'&quot;')}" oninput="plFolderSearch('${s.key}',this.value)" style="width:100%;font-size:12px;padding:6px 9px;border:0.5px solid var(--border2);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-family:inherit"></div>`;
+      const searchBox = `<div style="margin-bottom:8px"><input type="text" id="plColSearch-${s.key}" placeholder="Search this column…" value="${searchVal.replace(/"/g,'&quot;')}" oninput="plFolderSearch('${s.key}',this.value)" style="width:100%;font-size:12px;padding:6px 9px;border:0.5px solid var(--border2);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-family:inherit"></div>`;
       if(searchVal){
         cards = allArchiveCards.filter(inq=>{
           const nm = (clientPrimary(inq)||`${inq.firstName||''} ${inq.lastName||''}`).toLowerCase();
@@ -6218,7 +6260,7 @@ function renderPipeline(){
         </div>
       </div>
       ${archiveExtraHtml}
-      ${cards.length===0 && !archiveSuppressCards ? `<div style="text-align:center;padding:1.5rem 0;font-size:12px;color:var(--text3)">No clients yet</div>` : ''}
+      ${cards.length===0 && !archiveSuppressCards ? `<div style="text-align:center;padding:1.5rem 0;font-size:12px;color:var(--text3)">${plQ?'No matches':'No clients yet'}</div>` : ''}
       ${archiveSuppressCards ? '' : cards.map(inq=>{
         const compact = plCardCompact(inq, s.key);
         const nm = clientPrimary(inq) || `${inq.firstName||''} ${inq.lastName||''}`.trim();
@@ -13496,7 +13538,7 @@ function renderInvoices(){
     + sortOpts.map(function(o){ return '<option value="'+o[0]+'" '+(invSort===o[0]?'selected':'')+'>'+o[1]+'</option>'; }).join('')
     + '</select>';
   const searchHtml = '<div style="position:relative"><i class="ti ti-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text3)"></i>'
-    + '<input type="text" value="'+pcEsc(window._invSearch||'')+'" placeholder="Search client, event #, type..." oninput="window._invSearch=this.value;_invSearchDebounced()" style="padding:7px 10px 7px 28px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;width:220px">'
+    + '<input type="text" id="invSearchInput" value="'+pcEsc(window._invSearch||'')+'" placeholder="Search client, event #, type..." oninput="window._invSearch=this.value;_invSearchDebounced()" style="padding:7px 10px 7px 28px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;width:220px">'
     + '</div>';
   const reportsBtnHtml = '<button class="btn" onclick="openInvoiceReports()"><i class="ti ti-report-money" style="font-size:14px;vertical-align:-2px"></i> Reports &amp; statements</button>';
 
