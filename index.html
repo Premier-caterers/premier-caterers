@@ -404,25 +404,6 @@ function doPost(e) {
 </div>
 </div>
 
-<!-- Attach document modal -->
-<div style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:center;justify-content:center;padding:2rem" id="attachModal">
-  <div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
-    <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1rem" id="attachModalTitle">Attach file</div>
-    <div style="margin-bottom:.75rem">
-      <a id="attachDriveSearchBtn" href="#" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;text-decoration:none;margin-bottom:10px">
-        <i class="ti ti-search" style="font-size:14px"></i>Search Drive
-      </a>
-    </div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Paste the Google Drive or Docs URL:</div>
-    <input type="text" id="attachInput" placeholder="https://docs.google.com/..." style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;margin-bottom:6px">
-    <div style="font-size:11px;color:var(--text3);margin-bottom:1rem">In Google Drive: right-click file → Share → Copy link → paste above</div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn-cancel" onclick="closeAttachModal()">Cancel</button>
-      <button class="btn-save" onclick="saveAttachDoc()">Save link</button>
-    </div>
-  </div>
-</div>
-
 <div class="modal-wrap" id="addModal">
   <div class="modal" style="max-width:640px;max-height:90vh;overflow-y:auto">
     <div class="eyebrow" style="margin-bottom:5px">New event</div>
@@ -5754,21 +5735,21 @@ function renderDetail(e,role){
           <div class="drow">
             <span class="dkey">Grocery</span>
             <span class="dval">${ed&&role.canEdit
-              ? `<input type="text" id="f-groceryLink" value="${e.groceryLink||''}">`
+              ? `<span style="display:flex;gap:6px;align-items:center"><input type="text" id="f-groceryLink" value="${e.groceryLink||''}" style="flex:1;min-width:0">${pcUploadBtn(e.id,'groceryLink','f-groceryLink')}</span>`
               : (e.groceryLink ? `<a href="${e.groceryLink}" target="_blank" style="font-size:12px;color:var(--blue-mid)">Open <i class="ti ti-external-link" style="font-size:11px"></i></a>` : '—')}
             </span>
           </div>
           <div class="drow">
             <span class="dkey">Floorplan</span>
             <span class="dval">${ed&&role.canEdit
-              ? `<input type="text" id="f-floorplan" value="${e.floorplan||''}">`
+              ? `<span style="display:flex;gap:6px;align-items:center"><input type="text" id="f-floorplan" value="${e.floorplan||''}" style="flex:1;min-width:0">${pcUploadBtn(e.id,'floorplan','f-floorplan')}</span>`
               : (e.floorplan ? `<a href="${e.floorplan}" target="_blank" style="font-size:12px;color:var(--blue-mid)">Open <i class="ti ti-external-link" style="font-size:11px"></i></a>` : '—')}
             </span>
           </div>
           <div class="drow">
             <span class="dkey">Venue info</span>
             <span class="dval">${ed&&role.canEdit
-              ? `<input type="text" id="f-venueLink" value="${e.venueLink||'https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0'}">`
+              ? `<span style="display:flex;gap:6px;align-items:center"><input type="text" id="f-venueLink" value="${e.venueLink||'https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0'}" style="flex:1;min-width:0">${pcUploadBtn(e.id,'venueLink','f-venueLink')}</span>`
               : (e.venueLink
                 ? `<a href="${e.venueLink}" target="_blank" style="font-size:12px;color:var(--blue-mid)">Open <i class="ti ti-external-link" style="font-size:11px"></i></a>`
                 : `<a href="https://docs.google.com/spreadsheets/d/11wMoukDYUDcU9acm_O-iepb-du3rtzlIc7Ud3uzIPes/edit?gid=0#gid=0" target="_blank" style="font-size:12px;color:var(--blue-mid)">Open venue sheet <i class="ti ti-external-link" style="font-size:11px"></i></a>`)}
@@ -5782,15 +5763,15 @@ function renderDetail(e,role){
                     <img src="${driveImgUrl(e.logoData)}" style="max-height:60px;max-width:120px;border-radius:6px;border:0.5px solid var(--border);object-fit:contain" onerror="this.style.display='none'">
                     ${ed&&role.canEdit
                       ? `<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px">
-                          <input type="text" id="f-logoData" value="${e.logoData||''}" placeholder="Google Drive link" style="background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:4px 7px;font-size:12px;color:var(--text);font-family:inherit;width:100%">
+                          <span style="display:flex;gap:6px;align-items:center"><input type="text" id="f-logoData" value="${e.logoData||''}" placeholder="Google Drive link" style="background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:4px 7px;font-size:12px;color:var(--text);font-family:inherit;flex:1;min-width:0">${pcUploadBtn(e.id,'logoData','f-logoData','image/*')}</span>
                           <button onclick="removeLogo('${e.id}')" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;align-self:flex-start">Remove</button>
                         </div>`
                       : `<button onclick="startEdit('${e.id}')" style="font-size:11px;padding:3px 8px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer">Change</button>`}
                   </div>`
                 : ed&&role.canEdit
                   ? `<div style="display:flex;flex-direction:column;gap:6px">
-                      <input type="text" id="f-logoData" value="" placeholder="Paste Google Drive image link..." style="background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);font-family:inherit;width:100%">
-                      <div style="font-size:11px;color:var(--text3);line-height:1.5">In Google Drive: right-click image → Share → Anyone with link → Copy link. Paste it above.</div>
+                      <span style="display:flex;gap:6px;align-items:center"><input type="text" id="f-logoData" value="" placeholder="Paste Google Drive image link..." style="background:var(--bg2);border:0.5px solid var(--border2);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text);font-family:inherit;flex:1;min-width:0">${pcUploadBtn(e.id,'logoData','f-logoData','image/*')}</span>
+                      <div style="font-size:11px;color:var(--text3);line-height:1.5">Upload the image, or in Google Drive: right-click image → Share → Anyone with link → Copy link and paste it above.</div>
                     </div>`
                   : `<button onclick="startEdit('${e.id}')" style="font-size:12px;padding:5px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg2);color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px"><i class="ti ti-link" style="font-size:13px"></i>Add logo link</button>`}
             </div>
@@ -9212,6 +9193,57 @@ async function uploadToStorage(eventId, field, file){
   }
 }
 
+// ── Drag & drop for every upload box ──
+// Any element marked data-dropzone that contains an <input type="file">
+// accepts dropped files. (Dropping onto a <label> does nothing on its own,
+// so the "drag & drop" boxes only worked with click until this was added.)
+(function(){
+  const zoneOf = ev => ev.target && ev.target.closest ? ev.target.closest('[data-dropzone]') : null;
+  const hasFiles = ev => ev.dataTransfer && Array.from(ev.dataTransfer.types||[]).indexOf('Files') !== -1;
+  document.addEventListener('dragover', function(ev){
+    const z = zoneOf(ev); if(!z || !hasFiles(ev)) return;
+    ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy';
+    z.style.borderColor = 'var(--maroon)'; z.style.background = 'var(--bg2)';
+  });
+  document.addEventListener('dragleave', function(ev){
+    const z = zoneOf(ev); if(!z || z.contains(ev.relatedTarget)) return;
+    z.style.borderColor = 'var(--border2)'; z.style.background = '';
+  });
+  document.addEventListener('drop', function(ev){
+    const z = zoneOf(ev); if(!z || !hasFiles(ev)) return;
+    ev.preventDefault();
+    z.style.borderColor = 'var(--border2)'; z.style.background = '';
+    const inp = z.querySelector('input[type=file]');
+    const dropped = Array.from(ev.dataTransfer.files || []);
+    if(!inp || !dropped.length) return;
+    const use = inp.multiple ? dropped : dropped.slice(0,1);
+    try {
+      const dt = new DataTransfer(); use.forEach(f=>dt.items.add(f)); inp.files = dt.files;
+    } catch(err){ console.error('drop: could not hand files to the input', err); showToast('Drag & drop not supported here — click the box to choose the file.'); return; }
+    inp.dispatchEvent(new Event('change', {bubbles:true}));
+  });
+  // A file dropped just outside a box would otherwise open in the tab and
+  // navigate away from the app. Block that while any upload box is on screen.
+  window.addEventListener('dragover', ev => { if(hasFiles(ev) && document.querySelector('[data-dropzone]')) ev.preventDefault(); });
+  window.addEventListener('drop', ev => { if(hasFiles(ev) && !zoneOf(ev) && document.querySelector('[data-dropzone]')) ev.preventDefault(); });
+})();
+
+// Small "Upload" button that sits beside a link field in edit mode.
+// Uploads the file and fills the field with its link — Save still needed.
+function pcUploadBtn(eventId, field, inputId, accept){
+  return `<label class="btn btn--ghost btn--sm" title="Upload a file instead of pasting a link" style="cursor:pointer;flex-shrink:0;white-space:nowrap"><i class="ti ti-upload"></i>Upload<input type="file" ${accept?`accept="${accept}"`:''} style="display:none" onchange="pcUploadIntoInput('${eventId}','${field}','${inputId}',this)"></label>`;
+}
+async function pcUploadIntoInput(eventId, field, inputId, inp){
+  const file = inp.files && inp.files[0];
+  inp.value = '';
+  if(!file) return;
+  const url = await uploadToStorage(eventId, field, file);
+  if(!url) return;
+  const el = document.getElementById(inputId);
+  if(el){ el.value = url; showToast('Uploaded — press Save to keep it'); }
+  else { await saveEventField(eventId, field, url); showToast('File uploaded and attached ✓'); render(); }
+}
+
 function openAttachModal(eventId, field, currentUrl, label){
   const e = events.find(x=>x.id===eventId);
   document.getElementById('attachModal')?.remove();
@@ -9230,11 +9262,12 @@ function openAttachModal(eventId, field, currentUrl, label){
       </div>` : ''}
       <div style="margin-bottom:14px">
         <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Upload a file</div>
-        <label style="display:block;border:2px dashed var(--border2);border-radius:var(--radius);padding:20px;text-align:center;cursor:pointer;color:var(--text3);font-size:13px" onmouseover="this.style.borderColor='var(--maroon)'" onmouseout="this.style.borderColor='var(--border2)'">
+        <label data-dropzone style="display:block;border:2px dashed var(--border2);border-radius:var(--radius);padding:20px;text-align:center;cursor:pointer;color:var(--text3);font-size:13px" onmouseover="this.style.borderColor='var(--maroon)'" onmouseout="this.style.borderColor='var(--border2)'">
           <i class="ti ti-upload" style="font-size:24px;display:block;margin-bottom:6px"></i>
           Click to upload or drag & drop
-          <input type="file" style="display:none" onchange="handleAttachUpload('${eventId}','${field}',this.files[0])">
+          <input type="file" ${field==='logoData'?'accept="image/*"':''} style="display:none" onchange="handleAttachUpload('${eventId}','${field}',this.files[0])">
         </label>
+        ${field==='menuLink' ? `<div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5"><i class="ti ti-info-circle" style="font-size:12px;vertical-align:-1px"></i> An uploaded menu can be opened, but &ldquo;Email PDF&rdquo; only works with a Google Doc link.</div>` : ''}
       </div>
       <div>
         <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Or paste a URL</div>
@@ -9346,7 +9379,7 @@ function openMultiAttachModal(eventId, field, label, kind){
       <div id="maFileList" style="overflow-y:auto;margin-bottom:14px"></div>
       <div style="margin-bottom:14px;flex-shrink:0">
         <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Upload file(s)</div>
-        <label style="display:block;border:2px dashed var(--border2);border-radius:var(--radius);padding:20px;text-align:center;cursor:pointer;color:var(--text3);font-size:13px" onmouseover="this.style.borderColor='var(--maroon)'" onmouseout="this.style.borderColor='var(--border2)'">
+        <label data-dropzone style="display:block;border:2px dashed var(--border2);border-radius:var(--radius);padding:20px;text-align:center;cursor:pointer;color:var(--text3);font-size:13px" onmouseover="this.style.borderColor='var(--maroon)'" onmouseout="this.style.borderColor='var(--border2)'">
           <i class="ti ti-upload" style="font-size:24px;display:block;margin-bottom:6px"></i>
           Click to upload or drag &amp; drop \u2014 multiple files OK
           <input type="file" multiple style="display:none" onchange="handleMultiAttachUpload('${eventId}','${field}','${label.replace(/'/g,"\\'")}',this.files,'${kind||''}')">
@@ -19635,32 +19668,82 @@ function removeLogo(id){
 let _attachEventId = null;
 let _attachField = null;
 
+// Menus stay link-only: "Email PDF" needs a real Google Doc, and an uploaded
+// file can't be exported that way.
+const _ATTACH_LINK_ONLY = {menuLink:1, pdfMenuLink:1};
+
+// Built fresh each time with its own id ("attachDocModal"). It used to be a
+// static <div id="attachModal">, which openAttachModal() deleted (same id) —
+// after that, every "Attach" button in the Documents list silently did nothing
+// until the page was reloaded.
 function attachDoc(eventId, field){
   _attachEventId = eventId;
   _attachField = field;
-  const labels = {menuLink:'Attach menu', pdfMenuLink:'Attach PDF menu', groceryLink:'Attach grocery list', floorplan:'Attach floorplan', venueLink:'Attach venue info'};
-  document.getElementById('attachModalTitle').textContent = labels[field] || 'Attach file';
+  const labels = {menuLink:'Attach menu', pdfMenuLink:'Attach PDF menu', groceryLink:'Attach grocery list', floorplan:'Attach floorplan', venueLink:'Attach venue info', logoData:'Attach client logo'};
   const e = events.find(x=>x.id===eventId);
-  document.getElementById('attachInput').value = (e && e[field]) || '';
-  const searchBtn = document.getElementById('attachDriveSearchBtn');
-  if(searchBtn && e){
-    const q = encodeURIComponent(e.name + ' ' + e.typeLabel);
-    searchBtn.href = `https://drive.google.com/drive/u/1/folders/1SXKlQ-KttKGXXShVxzofkZXs3LJGu9KV?q=${q}`;
-    searchBtn.innerHTML = `<i class="ti ti-search" style="font-size:14px"></i>Search Drive for "${e.name}"`;
+  const linkOnly = !!_ATTACH_LINK_ONLY[field];
+  const accept = field==='logoData' ? 'image/*' : '';
+  const cur = (e && e[field]) || '';
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const searchHref = e ? `https://drive.google.com/drive/u/1/folders/1SXKlQ-KttKGXXShVxzofkZXs3LJGu9KV?q=${encodeURIComponent(e.name + ' ' + e.typeLabel)}` : '';
+  document.getElementById('attachDocModal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'attachDocModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:2rem';
+  m.innerHTML = `
+  <div style="background:var(--bg);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+    <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:1rem">${esc(labels[field] || 'Attach file')}</div>
+    ${linkOnly ? `
+    <div style="font-size:11.5px;color:var(--text3);margin-bottom:12px;line-height:1.5"><i class="ti ti-info-circle" style="font-size:12px;vertical-align:-1px"></i> Menus need to be a Google Doc link so &ldquo;Email PDF&rdquo; works.</div>` : `
+    <label data-dropzone style="display:block;border:2px dashed var(--border2);border-radius:var(--radius);padding:20px 12px;text-align:center;cursor:pointer;color:var(--text2);font-size:13px">
+      <i class="ti ti-upload" style="font-size:24px;display:block;margin-bottom:6px;color:var(--text3)"></i>
+      <span data-dz-text>Drag a file here, or <span style="color:var(--maroon);text-decoration:underline">choose from computer</span></span>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">PDF, photo, Word, Excel &middot; on a phone you can take a photo</div>
+      <input type="file" ${accept?`accept="${accept}"`:''} style="display:none" onchange="attachDocUpload(this.files[0])">
+    </label>
+    <div style="display:flex;align-items:center;gap:10px;margin:12px 0;font-size:11px;color:var(--text3)"><div style="flex:1;border-top:0.5px solid var(--border2)"></div>or<div style="flex:1;border-top:0.5px solid var(--border2)"></div></div>`}
+    ${e ? `<a href="${searchHref}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:0.5px solid var(--blue-border);border-radius:var(--radius);background:var(--blue-bg);color:var(--blue-text);font-size:13px;text-decoration:none;margin-bottom:12px"><i class="ti ti-search" style="font-size:14px"></i>Search Drive for &quot;${esc(e.name)}&quot;</a>` : ''}
+    <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Paste the Google Drive or Docs URL:</div>
+    <input type="text" id="attachInput" value="${esc(cur)}" placeholder="https://docs.google.com/..." style="width:100%;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:inherit;margin-bottom:6px">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:1rem">In Google Drive: right-click file → Share → Copy link → paste above</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn--ghost" onclick="closeAttachModal()">Cancel</button>
+      <button class="btn btn--pri" onclick="saveAttachDoc()">Save link</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', ev => { if(ev.target===m) closeAttachModal(); });
+  if(linkOnly) setTimeout(()=>document.getElementById('attachInput')?.focus(),100);
+}
+
+async function attachDocUpload(file){
+  if(!file) return;
+  const eid = _attachEventId, field = _attachField;
+  const txt = document.querySelector('#attachDocModal [data-dz-text]');
+  const oldTxt = txt ? txt.innerHTML : '';
+  if(txt) txt.innerHTML = 'Uploading ' + String(file.name).replace(/</g,'&lt;') + '&hellip;';
+  const url = await uploadToStorage(eid, field, file);
+  if(!url){ if(txt) txt.innerHTML = oldTxt; return; }
+  // The box may have been closed while uploading — restore its target first.
+  _attachEventId = eid; _attachField = field;
+  if(!document.getElementById('attachInput')){
+    const tmp = document.createElement('input'); tmp.id='attachInput'; tmp.type='hidden'; document.body.appendChild(tmp);
   }
-  const modal = document.getElementById('attachModal');
-  if(modal){ modal.style.display='flex'; setTimeout(()=>document.getElementById('attachInput')?.focus(),100); }
+  document.getElementById('attachInput').value = url;
+  saveAttachDoc();
+  document.getElementById('attachInput')?.remove();
+  showToast('File uploaded and attached ✓');
 }
 
 function closeAttachModal(){
-  const modal = document.getElementById('attachModal');
-  if(modal) modal.style.display='none';
+  document.getElementById('attachDocModal')?.remove();
   _attachEventId = null; _attachField = null;
 }
 
 function saveAttachDoc(){
   const url = document.getElementById('attachInput').value.trim();
   if(!url) return;
+  const _keepId = _attachEventId;
   const e = events.find(x=>x.id===_attachEventId);
   if(e){
     e[_attachField] = url;
@@ -19679,7 +19762,7 @@ function saveAttachDoc(){
   }
   closeAttachModal();
   render();
-  setTimeout(()=>{ selectedId=_attachEventId||selectedId; document.querySelector('.detail-panel')?.scrollIntoView({behavior:'smooth',block:'nearest'}); },50);
+  setTimeout(()=>{ selectedId=_keepId||selectedId; document.querySelector('.detail-panel')?.scrollIntoView({behavior:'smooth',block:'nearest'}); },50);
 }
 
 
