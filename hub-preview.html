@@ -1086,9 +1086,14 @@ function renderEmail(head){
   $('inboxChips').innerHTML = phoneInbox ? chip('all', 'ALL · ' + all.length, '') + BOXES.map(b => chip(b.k, b.label.toUpperCase() + ' · ' + nOf(b.k), b.icon())).join('') : '';
   $('inboxChips').classList.toggle('hidden', !phoneInbox);
   const list = fullList.filter(x => inboxFilter === 'all' || boxOf(x) === inboxFilter);
-  $('inboxList').innerHTML = (st === 'off' && wst === 'off') ? '' : !phoneInbox ? qBoxes(fullList)
+  // keep each box where you scrolled it — the list redraws whenever a new message arrives
+  const keepScroll = {};
+  document.querySelectorAll('#inboxList .qbox').forEach(q => { const l = q.querySelector('.qbox-list'); if(l) keepScroll[q.getAttribute('aria-label')] = l.scrollTop; });
+  const newInboxHtml = (st === 'off' && wst === 'off') ? '' : !phoneInbox ? qBoxes(fullList)
     : (list.length ? list.map(x => x.wa ? waRow(x.wa, true) : mailRow(x.email, true)).join('')
     : '<div class="empty-line">Nothing waiting on you here.</div>');
+  if($('inboxList').innerHTML !== newInboxHtml) $('inboxList').innerHTML = newInboxHtml;
+  document.querySelectorAll('#inboxList .qbox').forEach(q => { const l = q.querySelector('.qbox-list'), v = keepScroll[q.getAttribute('aria-label')]; if(l && v) l.scrollTop = v; });
   const waitingKeys = new Set(list.map(x => x.key));
   const recent = Date.now() - 3 * 86400000;
   const others = (inboxFilter === 'wa' ? [] : emails.filter(em => inboxFilter === 'all' || String(em.mailbox || 'kenny').toLowerCase() === inboxFilter).filter(em => !em.handled && !waitingKeys.has('e:' + em.id)).map(em => ({email: em, ts: em.lastAt || 0})))
