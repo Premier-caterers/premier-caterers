@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Premier Caterers — Your Event Portal</title>
+<title>Premier Caterers — Your Event Page</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -26,7 +26,7 @@
 
   .frame{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-top:20px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
 
-  .portal-header{background:var(--nav-bg);color:#fff;padding:26px 28px 0}
+  .portal-header{background:var(--nav-bg);color:#fff;padding:26px 28px 4px}
   .brand{font-family:'Fraunces',serif;font-size:14px;letter-spacing:.02em;color:var(--brass);margin-bottom:16px}
   .portal-header h1{font-family:'Fraunces',serif;font-size:23px;font-weight:600;margin:0 0 4px;color:#fff}
   .portal-header .sub{color:#A9AEB0;font-size:13.5px;margin-bottom:18px}
@@ -45,6 +45,31 @@
   .job-pill{display:inline-block;background:var(--maroon);color:#fff;font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px}
   .type-pill{display:inline-block;background:var(--brass-tint);color:var(--brass-deep);font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px}
   .welcome-note{color:var(--text2);font-size:13.5px;margin-top:20px;line-height:1.65}
+  .home-btn{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.25);padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:16px}
+  .home-btn:hover{background:rgba(255,255,255,.18)}
+  .sec-title{font-family:'Fraunces',serif;font-size:19px;font-weight:600;margin:0 0 14px}
+  .need-banner{border:2px dashed #8F6A1E;background:#FAF0DC;color:#5C4210;border-radius:10px;padding:12px 14px;font-size:13.5px;font-weight:600;margin-bottom:16px}
+  .tile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .tile{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 10px 14px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:7px;cursor:pointer;font-family:inherit;color:var(--text);text-decoration:none;transition:border-color .15s, transform .1s}
+  .tile:hover{border-color:var(--maroon)}
+  .tile:active{transform:scale(.98)}
+  .tile .ti-ic{font-size:30px;line-height:1}
+  .tile b{font-size:14px;font-weight:600}
+  .tile .tsub{font-size:11.5px;color:var(--text2)}
+  .stag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;display:inline-flex;gap:4px;align-items:center}
+  .stag-need{background:#FAF0DC;color:#5C4210;border:1.5px dashed #8F6A1E}
+  .stag-done{background:#E7F0E3;color:#2B4D2E;border:1.5px solid #37613A}
+  .stag-info{background:#EEF0F5;color:#2F3B55;border:1.5px solid #6A7896}
+  .home-facts{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+  .home-fact{background:var(--bg3);border-radius:8px;padding:8px 12px;font-size:12.5px;color:var(--text2)}
+  .home-fact strong{color:var(--text);font-weight:700}
+  .wa-box{border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px;text-align:center}
+  .wa-btn{display:inline-flex;align-items:center;gap:8px;background:#1F7A4D;color:#fff;text-decoration:none;font-weight:700;font-size:14.5px;padding:13px 22px;border-radius:10px}
+  .wa-btn:hover{background:#17603C}
+  .big-link{display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;color:var(--maroon);font-weight:700;font-size:14px;text-decoration:none}
+  .big-link:hover{border-color:var(--maroon)}
+  .big-link .bl-sub{display:block;font-weight:400;font-size:12px;color:var(--text2)}
+  @media (max-width:520px){ .tile-grid{grid-template-columns:repeat(2,minmax(0,1fr))} }
   .welcome-note a{color:var(--maroon)}
 
   .invoice-summary{display:flex;justify-content:space-between;align-items:flex-end;padding:18px 0;border-bottom:1px solid var(--border);margin-bottom:18px;flex-wrap:wrap;gap:12px}
@@ -343,7 +368,7 @@ async function verifyPaymentIfReturning(){
 let portalDoc = null;
 let shellBuilt = false;
 let globalQuestions = [];
-let activeTab = (focusTab && ['overview','invoice','details','documents','contract','questions'].indexOf(focusTab)>-1) ? focusTab : 'overview';
+let activeTab = (focusTab && ['home','overview','menu','invoice','details','documents','contract','questions','photos','wine'].indexOf(focusTab)>-1) ? focusTab : (qp('paid')==='1' ? 'invoice' : 'home');
 
 (async function(){
   await authReady;
@@ -381,6 +406,8 @@ function refreshPanels(){
   // Re-render everything EXCEPT the questions composer if the user is mid-type,
   // so a live caterer reply doesn't wipe what they're writing.
   renderOverview();
+  renderMenu();
+  renderHome();
   renderInvoice();
   renderDetails();
   renderDocuments();
@@ -413,19 +440,14 @@ function renderShell(){
   root.innerHTML =
     '<div class="frame">'
     + '<div class="portal-header">'
-      + '<div class="brand">Premier Caterers'+(staffMode?' <span style="background:var(--brass);color:#20262A;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px;letter-spacing:0;vertical-align:middle">STAFF VIEW</span>':'')+'</div>'
+      + '<div class="brand">Premier Caterers · Your event page'+(staffMode?' <span style="background:var(--brass);color:#20262A;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px;letter-spacing:0;vertical-align:middle">STAFF VIEW</span>':'')+'</div>'
       + '<h1>'+esc(portalDoc.eventName||'Your Event')+'</h1>'
       + '<div class="sub">'+esc(fmtDate(portalDoc.eventDate))+(portalDoc.venue?(' · '+esc(portalDoc.venue)):'')+'</div>'
-      + '<div class="tabs">'
-        + '<button class="tab'+(activeTab==='overview'?' active':'')+'" data-tab="overview">Overview</button>'
-        + '<button class="tab'+(activeTab==='invoice'?' active':'')+'" data-tab="invoice">'+(_isProspect()?'Estimate':'Invoice &amp; Payment')+'</button>'
-        + '<button class="tab'+(activeTab==='details'?' active':'')+'" data-tab="details">Event Details</button>'
-        + '<button class="tab'+(activeTab==='documents'?' active':'')+'" data-tab="documents">Documents</button>'
-        + (_hasContract()?('<button class="tab'+(activeTab==='contract'?' active':'')+'" data-tab="contract">Contract</button>'):'')
-        + '<button class="tab'+(activeTab==='questions'?' active':'')+'" data-tab="questions">Questions</button>'
-        + '<button class="tab'+(activeTab==='photos'?' active':'')+'" data-tab="photos">Photos</button>'
-      + '</div>'
+      + '<div id="homeBtnWrap"></div>'
     + '</div>'
+    + '<div class="panel'+(activeTab==='home'?' active':'')+'" id="panel-home"></div>'
+    + '<div class="panel'+(activeTab==='menu'?' active':'')+'" id="panel-menu"></div>'
+    + '<div class="panel'+(activeTab==='wine'?' active':'')+'" id="panel-wine"></div>'
     + '<div class="panel'+(activeTab==='overview'?' active':'')+'" id="panel-overview"></div>'
     + '<div class="panel'+(activeTab==='invoice'?' active':'')+'" id="panel-invoice"></div>'
     + '<div class="panel'+(activeTab==='details'?' active':'')+'" id="panel-details"></div>'
@@ -435,16 +457,13 @@ function renderShell(){
     + '<div class="panel'+(activeTab==='photos'?' active':'')+'" id="panel-photos"></div>'
     + '</div>';
 
-  document.querySelectorAll('.tab[data-tab]').forEach(function(btn){
-    btn.addEventListener('click', function(){
-      activeTab = btn.dataset.tab;
-      document.querySelectorAll('.tab[data-tab]').forEach(b=>b.classList.remove('active'));
-      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
-      if(btn.dataset.tab==='photos') renderPhotos();
-    });
+  root.addEventListener('click', function(ev){
+    var t = ev.target.closest('[data-go]');
+    if(!t) return;
+    ev.preventDefault();
+    goTo(t.getAttribute('data-go'));
   });
+  updateHomeBtn();
   if(activeTab==='photos') renderPhotos();
 
   renderOverview();
@@ -453,6 +472,148 @@ function renderShell(){
   renderDocuments();
   renderContract();
   renderQuestions();
+  renderMenu();
+  renderWine();
+  renderHome();
+}
+
+
+// ---------- Home screen ("Your event page") ----------
+var PREMIER_WA = '12012509487';
+var KOSHER_LISTS = [
+  { label:'cRc Liquor List', sub:'Chicago Rabbinical Council', url:'https://www.crckosher.org/consumer/LiquorList.pdf' },
+  { label:'Star-K Beer, Liquor and Liqueur List', sub:'Star-K Kosher Certification', url:'https://star-k.org/resource/list/PCW0Z0DO/Beer,_Liquor_and_Liqueur' }
+];
+var SECTION_NAMES = { menu:'Menu', invoice:'Estimate / invoice', contract:'Contract', details:'Final checklist', documents:'Documents', questions:'Chat with us', photos:'Past events', wine:'Kosher wine and liquor', overview:'Overview' };
+
+function _waLink(){
+  var nm = (portalDoc && portalDoc.eventName) || 'my event';
+  var dt = (portalDoc && portalDoc.eventDate) ? (' on ' + fmtDate(portalDoc.eventDate)) : '';
+  return 'https://wa.me/' + PREMIER_WA + '?text=' + encodeURIComponent('Hi Premier Caterers, this is about ' + nm + dt + '. ');
+}
+function _menuLinks(){
+  var cd = (portalDoc && portalDoc.catererDocuments) || {};
+  var out = [];
+  if(Array.isArray(cd.menus) && cd.menus.length){
+    cd.menus.forEach(function(m){ if(m && m.url) out.push({ label: m.name || 'Menu (PDF)', url: m.url }); });
+  } else if(cd.menuPdf && cd.menuPdf.url){ out.push({ label:'Menu (PDF)', url: cd.menuPdf.url }); }
+  else if(cd.menu && cd.menu.url){ out.push({ label:'Menu (PDF)', url: toPdfUrl(cd.menu.url) }); }
+  return out;
+}
+function _daysAway(){
+  var m = String((portalDoc && portalDoc.eventDate) || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!m) return null;
+  var ev = Date.UTC(+m[1], +m[2]-1, +m[3]);
+  var t = new Date(); var today = Date.UTC(t.getFullYear(), t.getMonth(), t.getDate());
+  return Math.round((ev - today)/86400000);
+}
+function _stag(kind, text){
+  var ic = kind==='need' ? '⚠' : (kind==='done' ? '✓' : '•');
+  return '<span class="stag stag-'+kind+'">'+ic+' '+esc(text)+'</span>';
+}
+function updateHomeBtn(){
+  var w = document.getElementById('homeBtnWrap'); if(!w) return;
+  w.innerHTML = activeTab==='home' ? '' : '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px"><button type="button" class="home-btn" style="margin:0" data-go="home">← Home</button><span style="font-family:Fraunces,serif;font-size:16px;color:#fff">'+esc(SECTION_NAMES[activeTab]||'')+'</span></div>';
+}
+function goTo(tab){
+  if(tab==='linens'){ window.open('linens.html','_blank','noopener'); return; }
+  var panel = document.getElementById('panel-'+tab); if(!panel) return;
+  activeTab = tab;
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+  panel.classList.add('active');
+  if(tab==='photos') renderPhotos();
+  if(tab==='home') renderHome();
+  updateHomeBtn();
+  try{ window.scrollTo({ top:0, behavior:'smooth' }); }catch(e){ window.scrollTo(0,0); }
+}
+
+function renderHome(){
+  var el = document.getElementById('panel-home'); if(!el || !portalDoc) return;
+  var ik = intake || initIntake();
+  var prospect = _isProspect();
+  var inv = portalDoc.invoiceSnapshot || {};
+  var needs = [];
+
+  // Menu status
+  var menus = _menuLinks();
+  var menuTag;
+  if(ik.menuConfirmed===true) menuTag = _stag('done','Confirmed');
+  else if(ik.menuConfirmed===false) menuTag = _stag('info','Change requested');
+  else if(menus.length){ menuTag = _stag('need','Needs your OK'); needs.push('Menu'); }
+  else menuTag = _stag('info','Coming soon');
+
+  // Estimate / invoice
+  var total = parseFloat(inv.total||0);
+  var invTag = prospect
+    ? (total ? _stag('info', money(total)) : _stag('info','Coming soon'))
+    : (balanceRemaining() > 0.009 ? _stag('info', money(balanceRemaining())+' due') : (total ? _stag('done','Paid in full') : _stag('info','Coming soon')));
+
+  // Contract
+  var conTag = _hasContract() ? _stag('info','Ready to view') : _stag('info','Coming soon');
+
+  // Final checklist
+  var pct = 0; try{ var _sv = intake; intake = ik; pct = progressPct(); intake = _sv; }catch(e){}
+  var chkTag;
+  if(ik.submittedAt || pct>=100) chkTag = _stag('done', ik.submittedAt ? 'Submitted' : 'Complete');
+  else { chkTag = _stag('need', pct+'% done'); needs.push('Final checklist'); }
+
+  // Chat
+  var msgs = portalDoc.messages || [];
+  var chatTag = '<span class="tsub">WhatsApp or write here</span>';
+
+  var tiles = [
+    { go:'menu',      ic:'🍽️', name:'Menu',                   tag:menuTag },
+    { go:'invoice',   ic:'🧾', name: prospect ? 'Estimate' : 'Invoice', tag:invTag },
+    { go:'contract',  ic:'✍️', name:'Contract',               tag:conTag },
+    { go:'details',   ic:'✅', name:'Final checklist',        tag:chkTag },
+    { go:'linens',    ic:'🎨', name:'Linen colors',           tag:'<span class="tsub">See our 14 colors</span>' },
+    { go:'wine',      ic:'🍷', name:'Kosher wine and liquor', tag:'<span class="tsub">cRc and Star-K lists</span>' },
+    { go:'photos',    ic:'📸', name:'Past events',            tag:'<span class="tsub">Photo gallery</span>' },
+    { go:'documents', ic:'📁', name:'Documents',              tag:'<span class="tsub">Floorplans, logo, uploads</span>' },
+    { go:'questions', ic:'💬', name:'Chat with us',           tag:chatTag }
+  ];
+
+  var guests = 0; (ik.meals||[]).forEach(function(m){ guests = Math.max(guests, (parseInt(m.guestAdults)||0) + (parseInt(m.guestKids)||0)); });
+  var days = _daysAway();
+  var facts = [];
+  if(guests) facts.push('<div class="home-fact"><strong>'+guests+'</strong> guests</div>');
+  if(days!==null && days>=0) facts.push('<div class="home-fact"><strong>'+(days===0?'Today':(days===1?'Tomorrow':days+' days'))+'</strong>'+(days>1?' away':'')+'</div>');
+  if(portalDoc.jobNumber) facts.push('<div class="home-fact">Job <strong>'+esc(portalDoc.jobNumber)+'</strong></div>');
+
+  el.innerHTML =
+    (facts.length ? '<div class="home-facts">'+facts.join('')+'</div>' : '')
+    + (needs.length ? '<div class="need-banner">⚠ '+(needs.length===1?'1 thing still needs':needs.length+' things still need')+' your answer: '+esc(needs.join(', '))+'</div>' : '')
+    + '<div class="tile-grid">'
+    + tiles.map(function(t){
+        return '<button type="button" class="tile" data-go="'+t.go+'"><span class="ti-ic" aria-hidden="true">'+t.ic+'</span><b>'+esc(t.name)+'</b>'+t.tag+'</button>';
+      }).join('')
+    + '</div>'
+    + '<p class="welcome-note" style="text-align:center">Tap any tile to open it. Questions any time? <a href="'+esc(_waLink())+'" target="_blank" rel="noopener">WhatsApp us at 201-250-9487</a> or email <a href="mailto:events@thepremiercaterer.com">events@thepremiercaterer.com</a>.</p>';
+}
+
+function renderMenu(){
+  var el = document.getElementById('panel-menu'); if(!el || !portalDoc) return;
+  var ik = intake || initIntake();
+  var menus = _menuLinks();
+  var html = '';
+  html += menus.length
+    ? menus.map(function(m){ return '<a class="big-link" href="'+esc(m.url)+'" target="_blank" rel="noopener"><span style="font-size:22px">📋</span><span>'+esc(m.label)+'<span class="bl-sub">Opens as a PDF you can view, download or print</span></span></a>'; }).join('')
+    : '<div class="doc-empty">Your menu will show up here as soon as we send it.</div>';
+  if(menus.length){
+    var st = ik.menuConfirmed===true ? 'You confirmed this menu. Thank you!'
+           : ik.menuConfirmed===false ? 'You asked for a change. We\'ll update the menu and let you know.'
+           : 'Happy with the menu? Let us know in the Final checklist, or ask for a change.';
+    html += '<p class="welcome-note">'+esc(st)+'</p>'
+      + '<div style="margin-top:12px"><button type="button" class="btn-primary" data-go="details">Go to Final checklist</button></div>';
+  }
+  el.innerHTML = html;
+}
+
+function renderWine(){
+  var el = document.getElementById('panel-wine'); if(!el) return;
+  el.innerHTML = '<p class="welcome-note" style="margin:0 0 14px">Bringing your own wine or liquor? Please choose from these kosher lists. Tell us your plans in the Final checklist.</p>'
+    + KOSHER_LISTS.map(function(k){ return '<a class="big-link" href="'+esc(k.url)+'" target="_blank" rel="noopener"><span style="font-size:22px">🍷</span><span>'+esc(k.label)+'<span class="bl-sub">'+esc(k.sub)+' · opens in a new tab</span></span></a>'; }).join('')
+    + '<div style="margin-top:12px"><button type="button" class="btn-ghost" data-go="details">Go to Final checklist</button></div>';
 }
 
 function renderOverview(){
@@ -1387,7 +1548,10 @@ function refreshThreadOnly(){
 function renderQuestions(){
   const el = document.getElementById('panel-questions');
 
-  let html = '<div class="thread-toolbar"><button type="button" class="btn-ghost" id="printThreadBtn">🖨 Print this thread</button></div>';
+  let html = '<div class="wa-box"><a class="wa-btn" href="'+esc(_waLink())+'" target="_blank" rel="noopener"><i class="ti-ic">💬</i> Message us on WhatsApp</a>'
+    + '<div style="font-size:12.5px;color:var(--text2);margin-top:8px">Fastest way to reach us · 201-250-9487 · you\'ll get our reply right on your phone</div></div>'
+    + '<div class="doc-group-title">Or write to us here</div>'
+    + '<div class="thread-toolbar"><button type="button" class="btn-ghost" id="printThreadBtn">🖨 Print this thread</button></div>';
   html += '<div class="thread" id="threadList">'+threadHtml()+'</div>';
   html += '<div class="composer">'
     + '<textarea id="questionText" placeholder="Type a question or note for Premier Caterers…"></textarea>'
