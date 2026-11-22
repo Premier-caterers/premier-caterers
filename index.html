@@ -18482,10 +18482,19 @@ async function buildPortalCatererDocs(e){
     docs.menuPdf = { name:'Menu (PDF)', url };
   }
   try{
-    const c = (typeof contracts!=='undefined') ? contracts[e.id] : null;
-    if(c && typeof contractSignLink==='function'){
-      const link = contractSignLink(e.id);
-      if(link){ docs.contract = { name:'Contract', url: link }; docs.contractSignUrl = link; }
+    let key = null;
+    if(typeof contracts!=='undefined'){
+      if(contracts[e.id]) key = e.id;
+      else if(e.inquiryId && contracts['inq_'+e.inquiryId]) key = 'inq_'+e.inquiryId;
+    }
+    if(key && typeof contractSignLink==='function'){
+      const link = contractSignLink(key);
+      if(link){ docs.contract = { name:'Contract', url: link }; docs.contractSignUrl = link; docs.contractStatus = contracts[key].status || ''; }
+    }
+    // Contract not loaded here — keep whatever link the portal already had.
+    if(!docs.contractSignUrl && e.portalId && typeof clientPortals!=='undefined' && clientPortals[e.portalId]){
+      const prev = clientPortals[e.portalId].catererDocuments || {};
+      if(prev.contractSignUrl){ docs.contractSignUrl = prev.contractSignUrl; if(prev.contract) docs.contract = prev.contract; if(prev.contractStatus) docs.contractStatus = prev.contractStatus; }
     }
   }catch(err){}
   return docs;
@@ -18686,7 +18695,7 @@ async function _buildInquiryCatererDocs(inq){
     const c = (typeof contracts!=='undefined') ? contracts['inq_'+inq.id] : null;
     if(c && typeof contractSignLink==='function'){
       const link = contractSignLink('inq_'+inq.id);
-      if(link){ docs.contract = { name:'Contract', url: link }; docs.contractSignUrl = link; }
+      if(link){ docs.contract = { name:'Contract', url: link }; docs.contractSignUrl = link; docs.contractStatus = c.status || ''; }
     }
   }catch(e){}
   return docs;

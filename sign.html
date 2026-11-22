@@ -120,13 +120,26 @@ const cid = qp('c'), tok = qp('t');
 
 function renderAlreadySigned(doc){
   const when = doc.signedAt ? new Date(doc.signedAt).toLocaleString() : '';
+  if(doc.snapshot || doc.terms){
+    renderContract(doc, true);
+    root.insertAdjacentHTML('afterbegin', '<div class="card"><div class="signed-banner"><div class="ic">✓</div>'
+      + '<h2>This agreement is signed</h2>'
+      + '<p style="color:var(--muted);font-size:14px">Signed by '+esc(doc.signedName||'')+(when?(' on '+esc(when)):'')+'</p></div></div>');
+    root.insertAdjacentHTML('beforeend', '<div class="card">'
+      + '<div class="terms-head">Signature</div>'
+      + (doc.signatureDataUrl ? '<img src="'+esc(doc.signatureDataUrl)+'" alt="Signature" style="max-width:320px;width:100%;border-bottom:1px solid #ccc;display:block;margin:6px 0">' : '')
+      + '<div style="font-size:13.5px">'+esc(doc.signedName||'')+(when?(' · '+esc(when)):'')+'</div>'
+      + '<p class="note" style="margin-top:12px">A copy is on file with Premier Caterers. Questions? Call 201-250-9487.</p>'
+      + '<button type="button" class="clear-btn" style="margin-top:10px" onclick="window.print()">Print or save as PDF</button></div>');
+    return;
+  }
   root.innerHTML = '<div class="card"><div class="signed-banner"><div class="ic">✓</div>'
     + '<h2>This agreement is signed</h2>'
     + '<p style="color:var(--muted);font-size:14px">Signed by '+esc(doc.signedName||'')+(when?(' on '+esc(when)):'')+'</p></div>'
     + '<p class="note">Thank you. A copy is on file with Premier Caterers. Questions? Call 201-250-9487.</p></div>';
 }
 
-function renderContract(doc){
+function renderContract(doc, readOnly){
   const s = doc.snapshot || {};
   const pr = s.pricing;
   const priceHtml = pr ? ('<div style="margin:6px 0 2px">'
@@ -149,8 +162,7 @@ function renderContract(doc){
     + '<div class="terms-head">Terms</div>'
     + '<div class="terms">'+esc(doc.terms||'')+'</div>'
     + '</div>'
-
-    + '<div class="sign-card">'
+    + (readOnly ? '' : ('<div class="sign-card">'
     + '<h2>Sign your agreement</h2>'
     + '<p style="font-size:13.5px;color:var(--muted)">Confirm your details, then draw your signature below.</p>'
     + '<label class="fld" for="fullname">Full name</label>'
@@ -164,7 +176,8 @@ function renderContract(doc){
     + '<label class="agree"><input type="checkbox" id="consent"><span>I consent to sign electronically and to receive records electronically. I understand this electronic signature is the legal equivalent of my handwritten signature.</span></label>'
     + '<button class="submit" id="submitBtn" disabled>Sign agreement</button>'
     + '<p class="note">Your name, email, date &amp; time, IP address and device are recorded as a signature certificate.</p>'
-    + '</div>';
+    + '</div>'));
+  if(readOnly) return;
 
   // best-effort: record that the agreement was opened
   try{ db.collection('contracts').doc(cid).update({ viewedAt: Date.now() }); }catch(e){}

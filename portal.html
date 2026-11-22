@@ -481,7 +481,7 @@ function renderShell(){
 // ---------- Home screen ("Your event page") ----------
 var PREMIER_WA = '12012509487';
 var KOSHER_LISTS = [
-  { label:'cRc Liquor List', sub:'Chicago Rabbinical Council', url:'https://www.crckosher.org/consumer/LiquorList.pdf' },
+  { label:'cRc Liquor List', sub:'Chicago Rabbinical Council', url:'https://consumer.crckosher.org/liquor/' },
   { label:'Star-K Beer, Liquor and Liqueur List', sub:'Star-K Kosher Certification', url:'https://star-k.org/resource/list/PCW0Z0DO/Beer,_Liquor_and_Liqueur' }
 ];
 var SECTION_NAMES = { menu:'Menu', invoice:'Estimate / invoice', contract:'Contract', details:'Final checklist', documents:'Documents', questions:'Chat with us', photos:'Past events', wine:'Kosher wine and liquor', overview:'Overview' };
@@ -549,7 +549,10 @@ function renderHome(){
     : (balanceRemaining() > 0.009 ? _stag('info', money(balanceRemaining())+' due') : (total ? _stag('done','Paid in full') : _stag('info','Coming soon')));
 
   // Contract
-  var conTag = _hasContract() ? _stag('info','Ready to view') : _stag('info','Coming soon');
+  var cst = ((portalDoc.catererDocuments||{}).contractStatus||'');
+  var conTag = !_hasContract() ? _stag('info','Coming soon')
+             : (cst==='signed' ? _stag('done','Signed') : (cst==='sent' ? _stag('need','Ready to sign') : _stag('info','Ready to view')));
+  if(cst==='sent') needs.push('Contract');
 
   // Final checklist
   var pct = 0; try{ var _sv = intake; intake = ik; pct = progressPct(); intake = _sv; }catch(e){}
@@ -878,13 +881,25 @@ function downloadInvoicePdf(invArg){
   // If the app has pushed a ready-made invoice HTML document, use it verbatim
   // (this is the exact same document the caterer sees/prints). Otherwise build
   // a clean one from the snapshot fields.
-  const html = inv.printHtml || buildPortalInvoiceHtml(inv);
+  let html = inv.printHtml || buildPortalInvoiceHtml(inv);
+  // Top bar so phone users can always get back (a script-opened tab has no Back button).
+  const backUrl = location.href.split('#')[0];
+  const bar = '<style>@media print{#pcBackBar{display:none!important}}</style>'
+    + '<div id="pcBackBar" style="position:sticky;top:0;z-index:9999;display:flex;gap:10px;justify-content:space-between;align-items:center;padding:12px 14px;background:#20262A;font-family:Inter,system-ui,sans-serif">'
+    + '<button type="button" onclick="try{window.close()}catch(e){};setTimeout(function(){location.href=' + JSON.stringify(backUrl).replace(/"/g,'&quot;') + '},250)" style="background:#fff;color:#20262A;border:none;border-radius:8px;padding:10px 16px;font-size:15px;font-weight:700;cursor:pointer">&larr; Back to your event page</button>'
+    + '<button type="button" onclick="window.print()" style="background:#7A2E3D;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:15px;font-weight:700;cursor:pointer">Print / Save PDF</button>'
+    + '</div>';
+  if(/<body[^>]*>/i.test(html)) html = html.replace(/<body[^>]*>/i, function(m){ return m + bar; });
+  if(!/name=["']viewport/i.test(html)) html = html.replace(/<head[^>]*>/i, function(m){ return m + '<meta name="viewport" content="width=device-width, initial-scale=1">'; });
+  else html = bar + html;
   const w = window.open('','_blank');
   if(!w){ alert('Please allow pop-ups to download your invoice.'); return; }
   w.document.write(html);
   w.document.close();
   w.focus();
-  setTimeout(function(){ try{ w.print(); }catch(e){} }, 400);
+  // Desktop: open the print dialog right away. Phones: let them read it first and tap Print.
+  const isPhone = window.matchMedia && window.matchMedia('(max-width: 760px), (pointer: coarse)').matches;
+  if(!isPhone) setTimeout(function(){ try{ w.print(); }catch(e){} }, 400);
 }
 
 function buildPortalInvoiceHtml(invArg){
