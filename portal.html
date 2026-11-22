@@ -288,9 +288,12 @@ function money(v){ return '$'+(parseFloat(v||0)).toFixed(2); }
 function fmtDate(iso){
   if(!iso) return '—';
   try{
-    const d = new Date(iso+'T00:00:00Z');
+    const m = String(iso).match(/^(\d{4}-\d{2}-\d{2})/);
+    if(!m) return String(iso);
+    const d = new Date(m[1]+'T00:00:00Z');
+    if(isNaN(d.getTime())) return String(iso);
     return d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric',timeZone:'UTC'});
-  }catch(e){ return iso; }
+  }catch(e){ return String(iso); }
 }
 
 function stateScreen(icon, title, msg){
