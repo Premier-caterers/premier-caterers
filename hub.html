@@ -982,6 +982,38 @@ function s2aEmailsIn(t){
   return out;
 }
 
+const S2A_FWD = /begin forwarded message:?|-{3,}\s*forwarded message\s*-{3,}|-{3,}\s*original message\s*-{3,}/i;
+// The forwarded part only (drops our own note and signature above it).
+function s2aFwdPart(t){ t = String(t || ''); const m = t.match(S2A_FWD); return m ? t.slice(m.index) : t; }
+// Never let our own details end up as the client's.
+function s2aClean(p){
+  if(!p) return p;
+  const q = Object.assign({}, p);
+  const full = ((q.firstName || '') + ' ' + (q.lastName || '')).trim();
+  if(/kenny\s+lowy|^premier caterers?$/i.test(full)){ q.firstName = ''; q.lastName = ''; }
+  if(/premier caterers?/i.test(q.organization || '')) q.organization = '';
+  if(q.phone && OUR_PHONES.indexOf(s2aPhone(q.phone)) >= 0) q.phone = '';
+  if(q.email && s2aOurs(q.email)) q.email = '';
+  return q;
+}
+// The hub keeps only the top of a forwarded email. Pull the whole message from Gmail (events@ relay).
+async function s2aFullBody(em){
+  const st = await s2aLoadSettings(), relay = st && st.scriptUrl;
+  if(!relay) return '';
+  const get = async id => { const r = await fetch(relay + (relay.indexOf('?') >= 0 ? '&' : '?') + 'action=gmailGet&id=' + encodeURIComponent(id)); const d = await r.json(); return d && d.ok ? String(d.body || '') : ''; };
+  const list = async q => { const r = await fetch(relay + (relay.indexOf('?') >= 0 ? '&' : '?') + 'action=gmailList&max=5&q=' + encodeURIComponent(q)); const d = await r.json(); return d && d.ok ? (d.messages || []) : []; };
+  const good = b => b && S2A_FWD.test(b);
+  try{
+    for(const id of [em.threadId, em.id].filter(Boolean)){ try{ const b = await get(id); if(good(b)) return b; }catch(e){} }
+    const subj = String(em.subject || '').replace(/"/g, '').trim();
+    if(subj){
+      const found = await list('subject:"' + subj + '" newer_than:120d');
+      for(const m of found){ try{ const b = await get(m.id); if(good(b)) return b; }catch(e){} }
+    }
+  }catch(e){ console.warn('full email not loaded', e); }
+  return '';
+}
+
 // What the message says, who sent it, and how to reach them.
 function s2aMessage(key){
   const id = key.slice(2);
@@ -992,7 +1024,7 @@ function s2aMessage(key){
     const fwd = /\bfwd?\s*:/i.test(em.subject || '') || /begin forwarded message|-{3,}\s*forwarded message/i.test(body);
     const ours = fwd || s2aOurs(em.fromEmail) || /premier caterers?/i.test(em.fromName || '');
     const fromEmail = ours ? '' : s2aEmail(em.fromEmail);
-    return { kind: 'email', key, name: ours ? '' : (em.fromName || ''), fwd,
+    return { kind: 'email', key, em, name: ours ? '' : (em.fromName || ''), fwd,
       phones: s2aPhonesIn(body), emails: (fromEmail ? [fromEmail] : []).concat(s2aEmailsIn(body).filter(e => e !== fromEmail)),
       subject: em.subject || '', link: GMAILem(em), box: em.box || '',
       text: 'From: ' + (em.fromName || '') + ' <' + (em.fromEmail || '') + '>\nSubject: ' + (em.subject || '(no subject)') + '\n\n' + body };
@@ -1082,7 +1114,20 @@ async function openS2A(key){
   s2a = { key, msg, stage: 'loading', parsed: null, aiState: 'working', rel: [], nums: {}, choice: '', why: '', summary: '', f: {}, similar: [], saving: false };
   $('s2aWrap').classList.remove('hidden'); renderS2A();
   const settingsP = s2aLoadSettings();
-  const aiP = s2aParse(msg.text).then(r => { if(s2a && s2a.key === key){ s2a.parsed = r; s2a.aiState = r ? 'done' : 'failed'; } }).catch(() => { if(s2a && s2a.key === key) s2a.aiState = 'failed'; });
+  if(msg.kind === 'email' && msg.fwd){
+    s2a.note = 'Getting the full forwarded email from Gmail…'; renderS2A();
+    const full = await s2aFullBody(msg.em);
+    if(!s2a || s2a.key !== key) return;
+    s2a.note = '';
+    const part = s2aFwdPart(full || String(msg.em.body || ''));
+    s2a.fullMissing = !full;
+    msg.text = 'Subject: ' + (msg.subject || '') + '\n\n' + part;
+    msg.phones = s2aPhonesIn(part); msg.emails = s2aEmailsIn(part);
+  }
+  const forAi = msg.fwd
+    ? 'NOTE: This email was FORWARDED by the caterer (Premier Caterers / Kenny Lowy). The client is the ORIGINAL sender of the forwarded message. Never use Premier Caterers, Kenny Lowy, 201-250-9487, @thepremiercaterer.com or premier.caterers@yahoo.com as the client.\n\n' + msg.text
+    : msg.text;
+  const aiP = s2aParse(forAi).then(r => { if(s2a && s2a.key === key){ s2a.parsed = s2aClean(r); s2a.aiState = r ? 'done' : 'failed'; } }).catch(() => { if(s2a && s2a.key === key) s2a.aiState = 'failed'; });
   try{
     const inqs = await s2aLoadInqs();
     if(!s2a || s2a.key !== key) return;
@@ -1173,7 +1218,7 @@ function renderS2A(){
     '<button type="button" class="b" style="min-height:40px;padding:0 12px" data-act="s2aclose" aria-label="Close">✕</button></div>' +
     '<div class="note">' + (m.kind === 'wa' ? I_WA : I_MAIL) + ' ' + esc(who) + (m.subject ? ' · ' + esc(m.subject) : '') + '</div>';
   if(s2a.stage === 'loading'){
-    h += '<div class="s2a-box">Checking the app for this client…</div>';
+    h += '<div class="s2a-box">' + esc(s2a.note || 'Checking the app for this client…') + '</div>';
   } else if(s2a.stage === 'error'){
     h += '<div class="s2a-box s2a-box--warn">Couldn’t reach the app’s client list (' + esc(s2a.err) + '). Check your connection and try again.</div>' +
       '<div class="row-btns"><button type="button" class="b" data-act="s2aclose">Close</button></div>';
@@ -1202,6 +1247,7 @@ function renderS2A(){
     h += '<div class="row-btns"><button type="button" class="b-main" data-act="s2asave"' + (s2a.saving ? ' disabled' : '') + '>' + (s2a.saving ? 'SAVING…' : (s2a.choice === 'newevent' ? 'CREATE INQUIRY' : 'ADD TO ' + esc(nm.toUpperCase().slice(0, 22)) + '’S FILE')) + '</button>' +
       '<button type="button" class="b" data-act="s2aclose">Cancel</button></div>';
   } else {
+    if(s2a.fullMissing) h += '<div class="s2a-box s2a-box--warn">Couldn’t get the full forwarded email from Gmail — Claude only saw the top of it. Check the name, phone and email.</div>';
     h += '<div class="s2a-box s2a-box--new"><strong>No client with this phone or email</strong>' +
       (s2a.similar.length ? '<div style="margin-top:6px">Similar name in the app — same person?</div>' + s2a.similar.map(q =>
         '<button type="button" class="b s2a-sim" data-act="s2asim" data-id="' + esc(q.id) + '">Yes, it’s ' + esc(s2aNameOf(q)) + (q.phone ? ' · ' + esc(q.phone) : '') + (q.eventType ? ' (' + esc(q.eventType) + ')' : '') + '</button>').join('') : '') + '</div>';
