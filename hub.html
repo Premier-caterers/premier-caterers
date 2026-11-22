@@ -212,6 +212,32 @@
   .alarm{background:var(--paper);border:3px solid var(--ink);border-radius:18px;box-shadow:10px 10px 0 var(--ink);padding:26px;width:100%;max-width:520px;display:flex;flex-direction:column;gap:14px}
   .alarm .what{font:800 24px var(--head);line-height:1.25;overflow-wrap:anywhere}
   @media (max-width:760px){ .ed-wrap{align-items:flex-end;padding:0} .ed{border-radius:18px 18px 0 0;max-height:92vh;box-shadow:none} .alarm .what{font-size:20px} }
+  /* ---------- Send to app ---------- */
+  .ed.s2a{max-width:580px}
+  .s2a-box{border:2px solid var(--ink);border-radius:12px;padding:12px 14px;font-size:15px;line-height:1.5;background:var(--soft)}
+  .s2a-box--ok{background:#E8F4EE;border-color:var(--live)}
+  .s2a-box--ok strong{color:var(--live)}
+  .s2a-box--new{border-style:dashed;background:var(--paper)}
+  .s2a-box--warn{background:#FFF6C7}
+  .s2a-opts{display:flex;flex-direction:column;gap:6px}
+  .s2a-opt{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border:1px solid var(--rule);border-radius:12px;font-size:15px;line-height:1.4;cursor:pointer;min-height:44px;box-sizing:border-box}
+  .s2a-opt input{width:20px;height:20px;accent-color:#1A1A1A;flex:none;margin-top:1px}
+  .s2a-opt.on{border:3px solid var(--ink);background:#FFF6C7}
+  .s2a-opt--new{border-style:dashed}
+  .s2a-num{font:600 12px ui-monospace,Menlo,monospace;color:var(--cover)}
+  .s2a-tag{font:800 10px var(--head);letter-spacing:.08em;border:1.5px dashed var(--ink);border-radius:6px;padding:1px 5px}
+  .s2a-ta{border:2px solid var(--ink);border-radius:10px;padding:10px 12px;font:15px/1.45 Inter,sans-serif;width:100%;box-sizing:border-box;resize:vertical;background:var(--paper);color:var(--ink)}
+  .s2a-allergy{font:800 13px var(--head);letter-spacing:.04em;color:#A32020;border:2px solid #A32020;border-radius:10px;padding:8px 10px;background:#FEF1F1}
+  .s2a-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .s2a-f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:600}
+  .s2a-f.wide{grid-column:1/-1}
+  .s2a-f input,.s2a-f select{border:2px solid var(--ink);border-radius:10px;padding:9px 10px;font:15px Inter,sans-serif;min-height:44px;background:var(--paper);color:var(--ink);box-sizing:border-box;width:100%}
+  .s2a-f.check input{border-style:dashed;border-color:#92600E}
+  .s2a-f.check b{color:#92600E}
+  .s2a-sim{display:block;margin-top:6px;min-height:44px;font-size:14px;text-align:left}
+  .b.s2a-btn{background:#FFE45C}
+  .s2a-done{display:inline-flex;align-items:center;gap:4px;font:800 11px var(--head);letter-spacing:.05em;color:var(--live);border:2px solid var(--live);border-radius:999px;padding:2px 8px;text-decoration:none;background:#E8F4EE;white-space:nowrap}
+  @media (max-width:760px){ .s2a-grid{grid-template-columns:1fr} }
   /* ---------- WhatsApp ---------- */
   .bubbles{display:flex;flex-direction:column;gap:8px}
   .bubbles .lbl2{font:800 11px var(--head);letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
@@ -494,6 +520,7 @@
 
 <div class="ed-wrap hidden" id="fpWrap" role="dialog" aria-modal="true" aria-labelledby="fpTitle"><div class="ed" id="fp"></div></div>
 <div class="ed-wrap hidden" id="edWrap" role="dialog" aria-modal="true" aria-labelledby="edTitle"><div class="ed" id="ed"></div></div>
+<div class="ed-wrap hidden" id="s2aWrap" role="dialog" aria-modal="true" aria-labelledby="s2aTitle"><div class="ed s2a" id="s2a"></div></div>
 <div class="ed-wrap hidden" id="alarmWrap" role="alertdialog" aria-modal="true" aria-labelledby="alarmWhat"><div class="alarm" id="alarm"></div></div>
 <div id="toast" class="toast hidden" role="status"><span id="toastMsg"></span><button type="button" id="toastUndo">Undo</button></div>
 
@@ -813,7 +840,7 @@ function emailCardHtml(em, pos, n){
     '<span class="rn-count">' + pos + ' of ' + n + '</span>' +
     '<span class="rn-due' + (waited > 4 * 3600000 ? ' hl-p' : '') + '">' + I.clock + 'WAITING ' + esc(ago(em.theirAt || em.lastAt).toUpperCase()) + '</span></div>' +
     '<div class="rn-kind" style="flex-wrap:wrap">' + I_MAIL + 'EMAIL · ' + esc(em.box || 'kenny@') + ' · ' + esc(em.fromName || em.fromEmail) +
-      ' <span style="font-weight:500;color:var(--muted)">· ' + esc(whenLabel(em.theirAt || em.lastAt)) + (em.messageCount > 1 ? ' · ' + em.messageCount + ' emails in this thread' : '') + '</span></div>' +
+      ' <span style="font-weight:500;color:var(--muted)">· ' + esc(whenLabel(em.theirAt || em.lastAt)) + (em.messageCount > 1 ? ' · ' + em.messageCount + ' emails in this thread' : '') + '</span>' + s2aTag('e:' + em.id) + '</div>' +
     '<h2 class="rn-subj">' + esc(em.subject || '(no subject)') + '</h2>' +
     (function(){
       const txt = String(em.body || em.snippet || '').trim();
@@ -855,10 +882,10 @@ const I_TODO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stro
 const I_CAL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>';
 const I_TRASH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>';
 const I_MUTE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M6.5 6.5l11 11"></path></svg>';
-const addBtns = key => '<button type="button" class="ic" data-act="mtodo" data-key="' + esc(key) + '" aria-label="Add to To do" title="Add to To do">' + I_TODO + '</button>' +
+const addBtns = key => s2aIc(key) + '<button type="button" class="ic" data-act="mtodo" data-key="' + esc(key) + '" aria-label="Add to To do" title="Add to To do">' + I_TODO + '</button>' +
   '<button type="button" class="ic" data-act="msched" data-key="' + esc(key) + '" aria-label="Add to Schedule" title="Add to Schedule">' + I_CAL + '</button>' +
   '<button type="button" class="ic del" data-act="mdel" data-key="' + esc(key) + '" aria-label="Delete" title="' + (key[0] === 'w' ? 'Delete from the hub (stays in WhatsApp)' : 'Delete (moves to Gmail Trash)') + '">' + I_TRASH + '</button>';
-const addBtnsBig = key => '<button type="button" class="b todo-add" data-act="mtodo" data-key="' + esc(key) + '">' + I_TODO + ' + To do</button>' +
+const addBtnsBig = key => s2aBtn(key) + '<button type="button" class="b todo-add" data-act="mtodo" data-key="' + esc(key) + '">' + I_TODO + ' + To do</button>' +
   '<button type="button" class="b" data-act="msched" data-key="' + esc(key) + '">' + I_CAL + ' + Schedule</button>' +
   '<button type="button" class="b" style="border-style:dashed" data-act="mdel" data-key="' + esc(key) + '">' + I_TRASH + ' Delete</button>';
 const BOXES = [
@@ -876,7 +903,7 @@ function qMailRow(em){
     ? '<a class="ic pri" href="' + GMAILem(em) + '" target="_blank" rel="noopener" aria-label="Open in Gmail" title="Open in Gmail">' + I_MAIL + '</a>'
     : '<button type="button" class="ic pri" data-act="eopen" data-id="' + id + '" aria-label="Reply" title="Reply">' + I_REPLY + '</button>';
   return '<div class="qrow"><div class="b2" role="button" tabindex="0" data-act="eopen" data-id="' + id + '" title="Open this email">' +
-    '<div class="l1">' + tag + '<span class="nm">' + esc(em.fromName || em.fromEmail) + '</span><span class="when">' + esc(whenLabel(em.theirAt || em.lastAt)) + '</span></div>' +
+    '<div class="l1">' + tag + '<span class="nm">' + esc(em.fromName || em.fromEmail) + '</span><span class="when">' + esc(whenLabel(em.theirAt || em.lastAt)) + '</span>' + s2aTag('e:' + em.id) + '</div>' +
     '<div class="l2"><strong>' + esc(em.subject || '(no subject)') + '</strong>' + (snoozed ? ' <span class="tag hl-y">LATER · ' + esc(fmtTime(em.snoozedUntil)) + '</span>' : '') +
       (function(){ const t = String(em.snippet || em.body || '').replace(/\s+/g, ' ').trim().slice(0, 300); return t ? ' — ' + esc(t) : ''; })() + '</div></div>' +
     '<div class="ics">' + reply + '<button type="button" class="ic" data-act="edone" data-id="' + id + '" aria-label="Done" title="Done">' + I_CHECK + '</button>' + addBtns('e:' + em.id) +
@@ -887,7 +914,7 @@ function qWaRow(c){
   const nIn = waMsgs.filter(m => m.chatKey === c.chatKey && !m.fromMe && (m.at || 0) > Math.max(c.handledAt || 0, c.lastOutAt || 0)).length;
   const sub = c.isGroup ? 'Group' + (nIn ? ' · ' + nIn + ' new' : '') : (nIn > 1 ? nIn + ' messages' : (nIn === 1 ? '1 message' : 'Chat'));
   return '<div class="qrow"><div class="b2" role="button" tabindex="0" data-act="wopen" data-id="' + id + '" title="Open this chat">' +
-    '<div class="l1">' + (c.isGroup ? '<span class="who-tag">GROUP</span>' : '') + '<span class="nm">' + esc(fmtPhone(c.name || c.phone) || 'Unknown') + '</span><span class="when">' + esc(whenLabel(c.lastInAt || c.lastAt || 0)) + '</span></div>' +
+    '<div class="l1">' + (c.isGroup ? '<span class="who-tag">GROUP</span>' : '') + '<span class="nm">' + esc(fmtPhone(c.name || c.phone) || 'Unknown') + '</span><span class="when">' + esc(whenLabel(c.lastInAt || c.lastAt || 0)) + '</span>' + s2aTag('w:' + c.id) + '</div>' +
     '<div class="l2"><strong>' + esc(sub) + '</strong>' + (snoozed ? ' <span class="tag hl-y">LATER · ' + esc(fmtTime(c.snoozedUntil)) + '</span>' : '') +
       ' — ' + esc((c.isGroup && !c.lastFromMe && c.lastSender ? c.lastSender + ': ' : '') + prettyLast(c.lastText)) + '</div></div>' +
     '<div class="ics"><button type="button" class="ic pri" data-act="wopen" data-id="' + id + '" aria-label="Reply" title="Reply">' + I_REPLY + '</button>' +
@@ -922,6 +949,374 @@ function mailRow(em, withActs){
 function miniMail(em){
   return '<button type="button" class="mini-mail" data-act="eopen" data-id="' + esc(em.id) + '"><span style="flex:none;display:inline-flex">' + I_MAIL + '</span><span class="w"><strong>' + esc(em.fromName || em.fromEmail) + '</strong> — ' + esc(em.subject || '') + (em.snippet ? '<span class="w2">' + esc(em.snippet) + '</span>' : '') + '</span><span class="tm">' + esc(whenLabel(em.theirAt || em.lastAt)) + '</span></button>';
 }
+
+/* ---------- Send to app (Nov 2026) ----------
+   One tap on an email or WhatsApp chat: the hub checks the Operations Hub for
+   a client with the same phone or email. Found → file the message into that
+   client's Notes & messages (activity collection, same as the app). Not found →
+   Claude fills in a new inquiry for Kenny to check. Nothing saves until he taps. */
+const APP_URL = 'https://premier-caterers.github.io/premier-caterers/index.html';
+const OUR_PHONES = ['2012509487', '2015823455'];
+const S2A_TYPES = ['Wedding','Bar Mitzvah','Bat Mitzvah','Engagement party','Vort','Aufruf','Sheva Brachos','Kiddush','Bris','Shloshim','Shabbos meals',
+  'Bar mitzvah party - not shabbos','Bas mitzvah party - not shabbos','Bar mitzvah over shabbos','Corporate event','Organization event',
+  'Drop off catering','Breakfast','Brunch','Conference','Other'];
+const I_S2A = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h11"></path><path d="M11 6l6 6-6 6"></path><path d="M20 4v16"></path></svg>';
+let s2a = null, s2aInqCache = null, s2aInqAt = 0, s2aSettings = null, sentToApp = {};
+const s2aPhone = p => { const d = String(p || '').replace(/\D/g, ''); return d.length >= 10 ? d.slice(-10) : ''; };
+const s2aEmail = e => String(e || '').trim().toLowerCase();
+const s2aOurs = e => /@thepremiercaterer\.com$/i.test(e || '') || /premiercaterers68@gmail\.com/i.test(e || '');
+const s2aDocKey = key => String(key).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 140);
+const s2aNameOf = q => String(q.organization || ((q.firstName || '') + ' ' + (q.lastName || '')).trim() || q.eventName || 'Client').trim();
+function s2aDate(iso){
+  if(!/^\d{4}-\d{2}-\d{2}/.test(iso || '')) return '';
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', {weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'});
+}
+function s2aPhonesIn(t){
+  const out = []; String(t || '').replace(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g, m => { const p = s2aPhone(m); if(p && OUR_PHONES.indexOf(p) < 0 && out.indexOf(p) < 0) out.push(p); return m; });
+  return out;
+}
+function s2aEmailsIn(t){
+  const out = []; (String(t || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || []).forEach(e => { e = s2aEmail(e); if(!s2aOurs(e) && out.indexOf(e) < 0) out.push(e); });
+  return out;
+}
+
+// What the message says, who sent it, and how to reach them.
+function s2aMessage(key){
+  const id = key.slice(2);
+  if(key[0] === 'e'){
+    const em = emails.find(x => x.id === id); if(!em) return null;
+    const body = String(em.body || em.snippet || '').trim();
+    const fromEmail = s2aOurs(em.fromEmail) ? '' : s2aEmail(em.fromEmail);
+    return { kind: 'email', key, name: s2aOurs(em.fromEmail) ? '' : (em.fromName || ''),
+      phones: s2aPhonesIn(body), emails: (fromEmail ? [fromEmail] : []).concat(s2aEmailsIn(body).filter(e => e !== fromEmail)),
+      subject: em.subject || '', link: GMAILem(em), box: em.box || '',
+      text: 'From: ' + (em.fromName || '') + ' <' + (em.fromEmail || '') + '>\nSubject: ' + (em.subject || '(no subject)') + '\n\n' + body };
+  }
+  const c = waChats.find(x => x.id === id); if(!c) return null;
+  const msgs = chatMsgs(c, 60).filter(m => !m.fromMe).slice(-12);
+  const lines = msgs.map(m => {
+    const voice = waAttach(m).indexOf('Voice note') >= 0;
+    const words = voice ? (m.transcript ? '[Voice note] ' + m.transcript : '[Voice note — not typed out]') : (m.text || ('[' + (waAttach(m).replace(/<[^>]+>/g, '') || 'attachment') + ']'));
+    return (c.isGroup && m.sender ? m.sender + ': ' : '') + words;
+  });
+  if(!lines.length && c.lastText) lines.push(prettyLast(c.lastText));
+  const phone = c.isGroup ? '' : s2aPhone(c.phone);
+  return { kind: 'wa', key, name: c.isGroup ? '' : (c.name && s2aPhone(c.name) !== phone ? c.name : ''), group: c.isGroup ? (c.name || 'Group') : '',
+    phones: phone ? [phone] : [], emails: s2aEmailsIn(lines.join('\n')),
+    subject: '', link: waLink(c), voice: msgs.some(m => waAttach(m).indexOf('Voice note') >= 0),
+    text: lines.join('\n') };
+}
+
+async function s2aLoadInqs(){
+  if(s2aInqCache && Date.now() - s2aInqAt < 120000) return s2aInqCache;
+  const snap = await db.collection('inquiries').get();
+  s2aInqCache = snap.docs.map(d => Object.assign({id: d.id}, d.data())).filter(q => !q.deleted);
+  s2aInqAt = Date.now();
+  return s2aInqCache;
+}
+async function s2aLoadSettings(){
+  if(s2aSettings) return s2aSettings;
+  try{ const d = await db.collection('settings').doc('app').get(); s2aSettings = d.exists ? d.data() : {}; }catch(e){ s2aSettings = {}; }
+  return s2aSettings;
+}
+// Every inquiry for the same client: phone or email match, spreading through each match.
+function s2aRelated(inqs, phones, mails){
+  const P = new Set(phones.filter(Boolean)), E = new Set(mails.filter(Boolean)), hit = new Set();
+  for(let pass = 0; pass < 3; pass++){
+    inqs.forEach(q => {
+      if(hit.has(q.id)) return;
+      const p = s2aPhone(q.phone), e = s2aEmail(q.email);
+      if((p && P.has(p)) || (e && E.has(e))){ hit.add(q.id); if(p) P.add(p); if(e && !s2aOurs(e)) E.add(e); }
+    });
+  }
+  return inqs.filter(q => hit.has(q.id));
+}
+function s2aHow(rel, phones, mails){
+  const P = new Set(phones), E = new Set(mails), how = [];
+  if(rel.some(q => P.has(s2aPhone(q.phone)))) how.push('phone');
+  if(rel.some(q => E.has(s2aEmail(q.email)))) how.push('email');
+  return how.join(' and ');
+}
+async function s2aEventNums(rel){
+  const out = {};
+  await Promise.all(rel.map(q => eventsCol.doc('inq_' + q.id).get().then(d => { if(d.exists){ const e = d.data(); out[q.id] = e.eventNumber || ''; } }).catch(() => {})));
+  return out;
+}
+function s2aPick(rel, parsed, text){
+  const today = ymd(new Date());
+  if(parsed && parsed.eventDate){ const q = rel.find(x => (x.eventDate || '').slice(0, 10) === parsed.eventDate); if(q) return {id: q.id, why: 'the message mentions ' + s2aDate(parsed.eventDate).replace(/, \d{4}$/, '')}; }
+  const low = String(text || '').toLowerCase();
+  const byType = rel.filter(q => q.eventType && low.indexOf(String(q.eventType).toLowerCase()) >= 0);
+  if(byType.length === 1) return {id: byType[0].id, why: 'the message mentions the ' + byType[0].eventType};
+  const up = rel.filter(q => q.stage !== 'lost' && (q.eventDate || '') >= today).sort((a, b) => (a.eventDate || '').localeCompare(b.eventDate || ''));
+  if(up.length) return {id: up[0].id, why: 'it is their next event'};
+  return {id: 'general', why: ''};
+}
+function s2aSummary(p){
+  if(!p) return '';
+  const bits = [];
+  if(p.guestCount) bits.push(p.guestCount + ' guests');
+  if(p.eventDate) bits.push(s2aDate(p.eventDate));
+  if(p.meatDairy) bits.push(p.meatDairy);
+  if(p.venueName || p.venueLocation) bits.push([p.venueName, p.venueLocation].filter(Boolean).join(', '));
+  return [bits.join(' · '), p.comments || ''].filter(Boolean).join('. ').slice(0, 600);
+}
+const S2A_ALLERGY = /allerg|gluten|celiac|coeliac|peanut|tree ?nut|sesame|shellfish|lactose|epi ?pen|anaphyla/i;
+
+async function openS2A(key){
+  const msg = s2aMessage(key);
+  if(!msg){ toast('Couldn’t find that message — refresh and try again.', null); return; }
+  s2a = { key, msg, stage: 'loading', parsed: null, aiState: 'working', rel: [], nums: {}, choice: '', why: '', summary: '', f: {}, similar: [], saving: false };
+  $('s2aWrap').classList.remove('hidden'); renderS2A();
+  const settingsP = s2aLoadSettings();
+  const aiP = s2aParse(msg.text).then(r => { if(s2a && s2a.key === key){ s2a.parsed = r; s2a.aiState = r ? 'done' : 'failed'; } }).catch(() => { if(s2a && s2a.key === key) s2a.aiState = 'failed'; });
+  try{
+    const inqs = await s2aLoadInqs();
+    if(!s2a || s2a.key !== key) return;
+    await s2aMatch(inqs);
+    s2aFill(); renderS2A();
+    await aiP; await settingsP;
+    if(!s2a || s2a.key !== key) return;
+    // A forwarded email may only show the client's phone/email in the text Claude read.
+    if(!s2a.rel.length && s2a.parsed){
+      const p = s2a.parsed;
+      if(p.phone) s2a.msg.phones.push(s2aPhone(p.phone));
+      if(p.email && !s2aOurs(p.email)) s2a.msg.emails.push(s2aEmail(p.email));
+      await s2aMatch(inqs);
+    }
+    s2aFill();
+    renderS2A();
+  }catch(err){
+    console.error('send to app', err);
+    if(s2a && s2a.key === key){ s2a.stage = 'error'; s2a.err = (err && err.message) || 'unknown error'; renderS2A(); }
+  }
+}
+async function s2aMatch(inqs){
+  const m = s2a.msg;
+  const rel = s2aRelated(inqs, m.phones, m.emails);
+  s2a.rel = rel.sort((a, b) => {
+    const t = ymd(new Date()), au = (a.eventDate || '') >= t, bu = (b.eventDate || '') >= t;
+    if(au !== bu) return au ? -1 : 1;
+    return au ? (a.eventDate || '').localeCompare(b.eventDate || '') : (b.eventDate || '').localeCompare(a.eventDate || '');
+  });
+  if(rel.length){
+    s2a.stage = 'match';
+    s2a.how = s2aHow(rel, m.phones, m.emails);
+    s2a.nums = await s2aEventNums(rel);
+  } else {
+    s2a.stage = 'new';
+    // Similar names: same last name (or same organization) — never linked automatically.
+    const nm = (m.name || '').trim().toLowerCase(), last = nm.split(/\s+/).pop();
+    const p = s2a.parsed || {}, plast = String(p.lastName || '').trim().toLowerCase(), porg = String(p.organization || '').trim().toLowerCase();
+    const seen = new Set();
+    s2a.similar = inqs.filter(q => {
+      const ql = String(q.lastName || '').trim().toLowerCase(), qo = String(q.organization || '').trim().toLowerCase();
+      return (ql && (ql === last || ql === plast)) || (qo && porg && qo === porg);
+    }).filter(q => { const k = s2aNameOf(q).toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; }).slice(0, 3);
+  }
+}
+function s2aFill(){
+  const p = s2a.parsed || {}, m = s2a.msg;
+  if(s2a.stage === 'match'){
+    if(!s2a.choiceTouched){ const pk = s2aPick(s2a.rel, p, m.text); s2a.choice = pk.id; s2a.why = pk.why; }
+    if(!s2a.summaryTouched) s2a.summary = s2aSummary(p);
+  }
+  const nameBits = String(m.name || '').trim().split(/\s+/);
+  const f = s2a.f;
+  const set = (k, v) => { if(!f['_t_' + k] && v) f[k] = v; };
+  set('firstName', p.firstName || (nameBits.length > 1 ? nameBits.slice(0, -1).join(' ') : nameBits[0]));
+  set('lastName', p.lastName || (nameBits.length > 1 ? nameBits[nameBits.length - 1] : ''));
+  set('organization', p.organization);
+  set('phone', p.phone || (m.phones[0] ? fmtPhone('1' + m.phones[0]) : ''));
+  set('email', p.email && !s2aOurs(p.email) ? p.email : (m.emails[0] || ''));
+  set('eventType', S2A_TYPES.indexOf(p.eventType) >= 0 ? p.eventType : '');
+  set('eventDate', /^\d{4}-\d{2}-\d{2}$/.test(p.eventDate || '') ? p.eventDate : '');
+  set('guestCount', p.guestCount);
+  set('meatDairy', p.meatDairy);
+  set('venueName', p.venueName);
+  set('venueLocation', p.venueLocation);
+  set('comments', p.comments);
+  if(!f.salesperson) f.salesperson = 'Kenny';
+  // A date with no year written in the message is Claude's guess — ask Kenny to check it.
+  f._dateCheck = !!(f.eventDate && !/\b20\d\d\b/.test(m.text));
+}
+async function s2aParse(text){
+  const st = await s2aLoadSettings();
+  const relay = st && st.scriptUrl;
+  if(!relay) return null;
+  const r = await fetch(relay + (relay.indexOf('?') >= 0 ? '&' : '?') + 'action=aiParseInquiry', {
+    method: 'POST', headers: {'Content-Type': 'text/plain;charset=utf-8'},
+    body: JSON.stringify({action: 'aiParseInquiry', text: String(text || '').slice(0, 12000)})
+  });
+  const d = await r.json();
+  return d && d.ok ? (d.result || {}) : null;
+}
+
+function renderS2A(){
+  const el = $('s2a'); if(!el || !s2a) return;
+  const m = s2a.msg;
+  const who = m.group ? 'WhatsApp group “' + m.group + '”' : (m.name || (m.phones[0] ? fmtPhone('1' + m.phones[0]) : '') || m.emails[0] || 'this sender');
+  let h = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2 id="s2aTitle">SEND TO APP</h2>' +
+    '<button type="button" class="b" style="min-height:40px;padding:0 12px" data-act="s2aclose" aria-label="Close">✕</button></div>' +
+    '<div class="note">' + (m.kind === 'wa' ? I_WA : I_MAIL) + ' ' + esc(who) + (m.subject ? ' · ' + esc(m.subject) : '') + '</div>';
+  if(s2a.stage === 'loading'){
+    h += '<div class="s2a-box">Checking the app for this client…</div>';
+  } else if(s2a.stage === 'error'){
+    h += '<div class="s2a-box s2a-box--warn">Couldn’t reach the app’s client list (' + esc(s2a.err) + '). Check your connection and try again.</div>' +
+      '<div class="row-btns"><button type="button" class="b" data-act="s2aclose">Close</button></div>';
+  } else if(s2a.stage === 'match'){
+    const nm = s2aNameOf(s2a.rel[0]);
+    h += '<div class="s2a-box s2a-box--ok"><strong>✓ Found: ' + esc(nm) + '</strong><br>Matched by ' + esc(s2a.how || 'phone/email') + ' · ' + s2a.rel.length + ' event' + (s2a.rel.length === 1 ? '' : 's') + ' in the app</div>' +
+      '<div class="fl">Which event is this about?</div><div class="s2a-opts" role="radiogroup">' +
+      s2a.rel.map(q => {
+        const on = s2a.choice === q.id;
+        const what = (q.eventType || q.eventName || 'Event') + (q.eventDate ? ' · ' + s2aDate(q.eventDate) : ' · no date yet');
+        return '<label class="s2a-opt' + (on ? ' on' : '') + '"><input type="radio" name="s2aev" value="' + esc(q.id) + '"' + (on ? ' checked' : '') + ' data-s2a="choice">' +
+          '<span><strong>' + esc(what) + '</strong>' + (s2a.nums[q.id] ? ' <span class="s2a-num">' + esc(s2a.nums[q.id]) + '</span>' : '') +
+          (q.stage === 'lost' ? ' <span class="s2a-tag">LOST</span>' : '') +
+          (on && s2a.why ? '<br><span class="note">Picked because ' + esc(s2a.why) + '</span>' : '') + '</span></label>';
+      }).join('') +
+      '<label class="s2a-opt' + (s2a.choice === 'general' ? ' on' : '') + '"><input type="radio" name="s2aev" value="general"' + (s2a.choice === 'general' ? ' checked' : '') + ' data-s2a="choice"><span>Not about one event — client file only</span></label>' +
+      '<label class="s2a-opt s2a-opt--new' + (s2a.choice === 'newevent' ? ' on' : '') + '"><input type="radio" name="s2aev" value="newevent"' + (s2a.choice === 'newevent' ? ' checked' : '') + ' data-s2a="choice"><span>It’s a <strong>new event</strong> → start a new inquiry for ' + esc(nm) + '</span></label></div>';
+    if(s2a.choice === 'newevent'){
+      h += s2aFormHtml(true);
+    } else {
+      h += '<div class="fl">Short summary <span style="text-transform:none;font-weight:500;letter-spacing:0">' + (s2a.aiState === 'working' ? '(Claude is reading it…)' : '(you can edit it)') + '</span></div>' +
+        '<textarea class="s2a-ta" id="s2aSum" data-s2a="summary" rows="3" placeholder="Optional — a line about what they asked">' + esc(s2a.summary) + '</textarea>' +
+        (S2A_ALLERGY.test(m.text) ? '<div class="s2a-allergy">⚠ ALLERGY MENTIONED — flagged on the note</div>' : '') +
+        '<div class="note">The full message is saved too' + (m.kind === 'wa' ? ' (last ' + m.text.split('\n').length + ' message' + (m.text.split('\n').length === 1 ? '' : 's') + ' from them' + (m.voice ? ', voice notes as typed text' : '') + ')' : '') + '.</div>';
+    }
+    h += '<div class="row-btns"><button type="button" class="b-main" data-act="s2asave"' + (s2a.saving ? ' disabled' : '') + '>' + (s2a.saving ? 'SAVING…' : (s2a.choice === 'newevent' ? 'CREATE INQUIRY' : 'ADD TO ' + esc(nm.toUpperCase().slice(0, 22)) + '’S FILE')) + '</button>' +
+      '<button type="button" class="b" data-act="s2aclose">Cancel</button></div>';
+  } else {
+    h += '<div class="s2a-box s2a-box--new"><strong>No client with this phone or email</strong>' +
+      (s2a.similar.length ? '<div style="margin-top:6px">Similar name in the app — same person?</div>' + s2a.similar.map(q =>
+        '<button type="button" class="b s2a-sim" data-act="s2asim" data-id="' + esc(q.id) + '">Yes, it’s ' + esc(s2aNameOf(q)) + (q.phone ? ' · ' + esc(q.phone) : '') + (q.eventType ? ' (' + esc(q.eventType) + ')' : '') + '</button>').join('') : '') + '</div>';
+    h += s2aFormHtml(false);
+    h += '<div class="row-btns"><button type="button" class="b-main" data-act="s2asave"' + (s2a.saving || s2a.aiState === 'working' ? ' disabled' : '') + '>' + (s2a.saving ? 'SAVING…' : (s2a.aiState === 'working' ? 'READING IT…' : 'CREATE INQUIRY')) + '</button>' +
+      '<button type="button" class="b" data-act="s2aclose">Cancel</button></div>';
+  }
+  el.innerHTML = h;
+}
+function s2aFormHtml(forExisting){
+  const f = s2a.f;
+  if(s2a.aiState === 'working') return '<div class="s2a-box">Claude is reading the message and filling in the inquiry…</div>';
+  const inp = (k, label, type, wide) => '<label class="s2a-f' + (wide ? ' wide' : '') + (k === 'eventDate' && f._dateCheck ? ' check' : '') + '"><span>' + label + (k === 'eventDate' && f._dateCheck ? ' <b>⚠ CHECK</b>' : '') + '</span>' +
+    '<input type="' + (type || 'text') + '" data-s2a="f" data-k="' + k + '" value="' + esc(f[k] || '') + '"></label>';
+  const sel = (k, label, opts) => '<label class="s2a-f"><span>' + label + '</span><select data-s2a="f" data-k="' + k + '">' +
+    opts.map(o => '<option value="' + esc(o[0]) + '"' + ((f[k] || '') === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select></label>';
+  const sp = Object.keys((s2aSettings && s2aSettings.salespersonEmails) || {}).filter(Boolean).sort();
+  const sps = sp.length ? sp : ['Kenny', 'Shelley'];
+  return (s2a.aiState === 'failed' ? '<div class="s2a-box s2a-box--warn">Claude couldn’t read this one — fill in what you know.</div>' : '<div class="fl">' + (forExisting ? 'New event — check the details' : 'New inquiry — Claude filled this in, check it') + '</div>') +
+    '<div class="s2a-grid">' +
+      (forExisting ? '' : inp('firstName', 'First name') + inp('lastName', 'Last name') + inp('organization', 'Organization (if any)', 'text', true) + inp('phone', 'Phone', 'tel') + inp('email', 'Email', 'email')) +
+      sel('eventType', 'Event type', [['', 'Pick one…']].concat(S2A_TYPES.map(t => [t, t]))) +
+      inp('eventDate', 'Date', 'date') + inp('guestCount', 'Guests') +
+      sel('meatDairy', 'Meat / Dairy', [['', '—'], ['Meat', 'Meat'], ['Dairy', 'Dairy'], ['Parve', 'Parve']]) +
+      inp('venueName', 'Venue', 'text') + inp('venueLocation', 'Town / address') +
+      sel('salesperson', 'Salesperson', sps.map(n => [n, n])) +
+      '<label class="s2a-f wide"><span>Notes</span><textarea class="s2a-ta" rows="2" data-s2a="f" data-k="comments">' + esc(f.comments || '') + '</textarea></label>' +
+    '</div>' +
+    (f.eventDate && f._dateCheck ? '<div class="note">The message didn’t say the year — Claude picked the next ' + esc(s2aDate(f.eventDate)) + '. Please confirm.</div>' : '') +
+    (!f.eventType ? '<div class="note">Pick an event type so the app can build the menu automatically.</div>' : '');
+}
+function closeS2A(){ $('s2aWrap').classList.add('hidden'); s2a = null; }
+
+async function s2aUseSimilar(id){
+  const inqs = await s2aLoadInqs();
+  const q = inqs.find(x => x.id === id); if(!q || !s2a) return;
+  if(s2aPhone(q.phone)) s2a.msg.phones.push(s2aPhone(q.phone));
+  if(q.email) s2a.msg.emails.push(s2aEmail(q.email));
+  await s2aMatch(inqs);
+  s2a.how = 'your pick (similar name)';
+  s2a.choiceTouched = false; s2aFill(); renderS2A();
+}
+
+function s2aNewInquiry(base){
+  const f = s2a.f, now = Date.now();
+  const v = k => String(f[k] || '').trim();
+  return {
+    id: String(now),
+    firstName: base ? (base.firstName || '') : v('firstName'), lastName: base ? (base.lastName || '') : v('lastName'),
+    organization: base ? (base.organization || '') : v('organization'),
+    phone: base ? (base.phone || '') : v('phone'), email: base ? (base.email || '') : v('email'),
+    eventName: '', eventType: v('eventType'), eventDate: v('eventDate'), eventTBD: false, eventEndDate: '',
+    venueName: v('venueName'), venueLocation: v('venueLocation'), guestCount: v('guestCount').replace(/[^\d]/g, ''),
+    cuisine: '', meatDairy: v('meatDairy'), shabbos: (s2a.parsed && s2a.parsed.shabbos) || 'No',
+    howFound: base ? 'Repeat client' : ((s2a.parsed && s2a.parsed.howFound) || ''), referredBy: (s2a.parsed && s2a.parsed.referredBy) || '',
+    plannerName: (s2a.parsed && s2a.parsed.plannerName) || '', salesperson: v('salesperson') || 'Kenny', comments: v('comments'),
+    // 'website' so the Apps Script menu builder picks it up — same as "Add new lead" in the app.
+    source: 'website', hubSource: s2a.msg.kind === 'wa' ? 'whatsapp' : 'email',
+    menuAutomationTriggered: false, stage: 'new',
+    submittedAt: new Date().toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}),
+    updatedAt: now
+  };
+}
+async function s2aLog(inquiryId, extra){
+  const m = s2a.msg, ts = Date.now();
+  const entry = {
+    id: 'act_' + ts + '_' + Math.random().toString(36).slice(2, 7),
+    inquiryId: String(inquiryId),
+    type: m.kind === 'wa' ? 'whatsapp' : 'email_in',
+    detail: m.text.slice(0, 20000),
+    user: OWNER_KEY, userName: 'Kenny', ts,
+    meta: Object.assign({ via: 'hub', general: false, files: [], subject: m.subject || '', summary: (s2a.summary || '').trim(),
+      allergy: S2A_ALLERGY.test(m.text), link: m.kind === 'email' ? m.link : '', hubKey: m.key }, extra || {})
+  };
+  await db.collection('activity').doc(entry.id).set(entry);
+  return entry;
+}
+async function s2aSave(){
+  if(!s2a || s2a.saving) return;
+  const m = s2a.msg;
+  let inqId, label, isNew = false;
+  if(s2a.stage === 'match' && s2a.choice !== 'newevent'){
+    if(!s2a.choice){ toast('Pick which event this is about.', null); return; }
+    const general = s2a.choice === 'general';
+    inqId = general ? s2a.rel[0].id : s2a.choice; label = s2aNameOf(s2a.rel[0]);
+    s2a.saving = true; renderS2A();
+    try{ await s2aLog(inqId, {general}); }
+    catch(e){ s2a.saving = false; renderS2A(); fail(e); return; }
+  } else {
+    const base = s2a.stage === 'match' ? s2a.rel[0] : null;
+    const inq = s2aNewInquiry(base);
+    if(!base && !inq.firstName && !inq.lastName && !inq.organization){ toast('Add at least a name.', null); return; }
+    if(!inq.eventType && !confirm('No event type picked, so the menu won’t be built automatically.\n\nCreate the inquiry anyway?')) return;
+    s2a.saving = true; renderS2A();
+    try{
+      await db.collection('inquiries').doc(inq.id).set(inq);
+      if(s2aInqCache) s2aInqCache.push(inq);
+      await s2aLog(inq.id, {});
+      inqId = inq.id; label = s2aNameOf(inq); isNew = true;
+    }catch(e){ s2a.saving = false; renderS2A(); fail(e); return; }
+  }
+  const rec = { key: m.key, at: Date.now(), inqId, name: label, isNew };
+  sentToApp[m.key] = rec;
+  db.collection('hubSentToApp').doc(s2aDocKey(m.key)).set(rec).catch(e => console.warn('sent-to-app mark not saved', e));
+  closeS2A(); render();
+  toast(isNew ? 'New inquiry created for ' + label + ' ✓' : 'Added to ' + label + '’s notes ✓', null);
+}
+const s2aAppLink = rec => APP_URL + '?card=' + encodeURIComponent(rec.inqId) + '&tab=notes';
+function s2aTag(key){
+  const r = sentToApp[key]; if(!r) return '';
+  return ' <a class="s2a-done" href="' + esc(s2aAppLink(r)) + '" target="_blank" rel="noopener" title="Open in the Operations Hub">✓ IN APP · ' + esc(r.name || '') + '</a>';
+}
+const s2aBtn = key => '<button type="button" class="b s2a-btn" data-act="s2a" data-key="' + esc(key) + '">' + I_S2A + ' Send to app</button>';
+const s2aIc = key => '<button type="button" class="ic" data-act="s2a" data-key="' + esc(key) + '" aria-label="Send to app" title="Send to app (file in the client’s notes, or start an inquiry)">' + I_S2A + '</button>';
+
+document.addEventListener('change', e => {
+  const t = e.target; if(!s2a || !t.dataset || !t.dataset.s2a) return;
+  if(t.dataset.s2a === 'choice'){ s2a.choice = t.value; s2a.choiceTouched = true; s2a.why = ''; renderS2A(); }
+  else if(t.dataset.s2a === 'f' && t.tagName === 'SELECT'){ s2a.f[t.dataset.k] = t.value; s2a.f['_t_' + t.dataset.k] = true; if(t.dataset.k === 'eventType') renderS2A(); }
+});
+document.addEventListener('input', e => {
+  const t = e.target; if(!s2a || !t.dataset || !t.dataset.s2a) return;
+  if(t.dataset.s2a === 'summary'){ s2a.summary = t.value; s2a.summaryTouched = true; }
+  else if(t.dataset.s2a === 'f'){ s2a.f[t.dataset.k] = t.value; s2a.f['_t_' + t.dataset.k] = true; if(t.dataset.k === 'eventDate') s2a.f._dateCheck = false; }
+});
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && s2a && !$('s2aWrap').classList.contains('hidden')) closeS2A(); });
+
 /* ---------- WhatsApp ---------- */
 const I_WA = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z"></path></svg>';
 const I_PLAY = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7,5 19,12 7,19"></polygon></svg>';
@@ -977,7 +1372,7 @@ function waCardHtml(c, pos, n){
     '<span class="rn-count">' + pos + ' of ' + n + '</span>' +
     '<span class="rn-due' + (waited > 4 * 3600000 ? ' hl-p' : '') + '">' + I.clock + 'WAITING ' + esc(ago(c.lastInAt || c.lastAt).toUpperCase()) + '</span></div>' +
     '<div class="rn-kind" style="flex-wrap:wrap">' + I_WA + 'WHATSAPP' + (c.isGroup ? ' · GROUP' : '') + ' · ' + esc(fmtPhone(c.name || c.phone) || 'Unknown') +
-      ' <span style="font-weight:500;color:var(--muted)">' + (c.phone && !c.isGroup && c.phone !== c.name ? '<span class="wa-ph">· ' + esc(fmtPhone(c.phone)) + ' </span>' : '') + '· ' + esc(whenLabel(c.lastInAt || c.lastAt)) + '</span></div>' +
+      ' <span style="font-weight:500;color:var(--muted)">' + (c.phone && !c.isGroup && c.phone !== c.name ? '<span class="wa-ph">· ' + esc(fmtPhone(c.phone)) + ' </span>' : '') + '· ' + esc(whenLabel(c.lastInAt || c.lastAt)) + '</span>' + s2aTag('w:' + c.id) + '</div>' +
     '<div class="bubbles">' + (more > 0 ? '<button type="button" class="link-btn" data-act="wmore" data-id="' + id + '">Show ' + more + ' earlier message' + (more === 1 ? '' : 's') + '</button>'
                               : msgs.length > 1 ? '<div class="lbl2">' + (waExpanded.has(c.id) ? 'Last 4 days in this chat' : 'Latest in this chat') + '</div>' : '') +
       (msgs.length ? msgs.map(m => bubbleHtml(m, c)).join('') : '<div class="bub them"><div>' + esc(c.lastText || '') + '</div></div>') + '</div>';
@@ -1307,6 +1702,10 @@ document.addEventListener('click', e => {
   else if(act === 'wdone') waDone(id).catch(fail);
   else if(act === 'wlater') waLater(id).catch(fail);
   else if(act === 'wtodo') waTodo(id).catch(fail);
+  else if(act === 's2a') openS2A(b.dataset.key).catch(fail);
+  else if(act === 's2aclose') closeS2A();
+  else if(act === 's2asave') s2aSave().catch(fail);
+  else if(act === 's2asim') s2aUseSimilar(id).catch(fail);
   else if(act === 'mtodo') openFromMsg(b.dataset.key, 'todo');
   else if(act === 'msched') openFromMsg(b.dataset.key, 'schedule');
   else if(act === 'srcopen'){ e.preventDefault(); openOriginal(id); }
@@ -1888,6 +2287,7 @@ function startData(){
     window._outboxSeen = true;
     render();
   }, err => console.warn('Outbox not loaded:', err)));
+  unsubs.push(db.collection('hubSentToApp').where('at', '>=', Date.now() - 30 * 86400000).onSnapshot(snap => { const m = {}; snap.docs.forEach(d => { const r = d.data(); if(r && r.key) m[r.key] = r; }); sentToApp = m; render(); }, err => console.warn('sent-to-app marks not loaded:', err)));
   schedEvWeek = ''; watchSchedEvents();
   unsubs.push(() => { if(schedEvUnsub){ schedEvUnsub(); schedEvUnsub = null; } schedEvWeek = ''; });
   const today = ymd(new Date());

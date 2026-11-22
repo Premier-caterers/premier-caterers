@@ -1993,6 +1993,7 @@ function startFirebaseListeners(){
       const found = inquiries.find(x=>x.id===_pendingCardId);
       if(found){
         _pendingCardId=null;
+        try{ const _t=new URLSearchParams(window.location.search).get('tab'); if(_t){ window._hubTab=window._hubTab||{}; window._hubTab[found.id]=_t; } }catch(e){}
         selectedInqId=found.id;
         showView('pipeline');
         setTimeout(()=>document.querySelector('.inq-detail')?.scrollIntoView({behavior:'smooth',block:'start'}),200);
@@ -9227,13 +9228,14 @@ function _cnListHtml(ctx){
     const text = String(a.detail||'');
     const long = text.length>420 || (text.match(/\n/g)||[]).length>6;
     const files = (a.meta&&a.meta.files)||[];
-    const mine = a.meta && a.meta.via==='client-file' && (a.user===me || currentRole==='admin' || currentRole==='kenny');
+    const mine = a.meta && (a.meta.via==='client-file' || a.meta.via==='hub') && (a.user===me || currentRole==='admin' || currentRole==='kenny');
     return `<article class="cn-item${sys?' cn-item--sys':''}">
       <div class="cn-ic" style="background:${bg};color:${fg}"><i class="ti ${icon}" aria-hidden="true"></i></div>
       <div style="flex:1;min-width:0">
-        <div class="cn-meta"><b style="color:${fg}">${label}</b><span>${_actFmt(a.ts)}${a.userName?(' · '+pcEsc(a.userName)):''}</span>${_cnEvChip(ctx,a)}
+        <div class="cn-meta"><b style="color:${fg}">${label}</b><span>${_actFmt(a.ts)}${a.userName?(' · '+pcEsc(a.userName)):''}${a.meta&&a.meta.via==='hub'?' · sent from the hub':''}</span>${_cnEvChip(ctx,a)}${a.meta&&a.meta.allergy?`<span class="cn-chip" style="background:var(--red-bg);color:var(--red-text);border:1px solid var(--red-text);font-weight:700"><i class="ti ti-alert-triangle" aria-hidden="true"></i> Allergy</span>`:''}
           ${mine?`<button class="cn-del" title="Delete this note" aria-label="Delete this note" onclick="cnDelete('${a.id}')"><i class="ti ti-trash"></i></button>`:''}</div>
         ${a.meta&&a.meta.subject?`<div style="font-weight:600;font-size:14px;margin-top:5px">${pcEsc(a.meta.subject)}</div>`:''}
+        ${a.meta&&a.meta.summary?`<div style="font-weight:600;font-size:14.5px;margin-top:5px;line-height:1.45">${pcEsc(a.meta.summary)}</div>`:''}
         ${text?`<div class="cn-text${long?' is-clamped':''}">${pcEsc(text)}</div>${long?`<button class="cn-link" onclick="const t=this.previousElementSibling;const c=t.classList.toggle('is-clamped');this.textContent=c?'Show all':'Show less'">Show all</button>`:''}`:''}
         ${files.length?`<div class="cn-files">${files.map(f=>`<a href="${pcEsc(f.url)}" target="_blank" rel="noopener"><i class="ti ti-file" aria-hidden="true"></i>${pcEsc(f.name||'File')}</a>`).join('')}</div>`:''}
         ${a.type==='email_in'&&a.meta&&a.meta.link?`<a href="${pcEsc(a.meta.link)}" target="_blank" rel="noopener" style="font-size:12px;display:inline-block;margin-top:4px">Open in Gmail</a>`:''}
@@ -9329,7 +9331,7 @@ function cnOverviewHtml(inq){
   const ctx = cnCtxFromInq(inq);
   const latest = _cnEntries(ctx).filter(_cnIsMessage).slice(0,3);
   const form = inq.comments ? `<div style="font-size:11.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">From the inquiry form</div><div class="cf-notes" style="margin-bottom:12px">${pcEsc(inq.comments)}</div>` : '';
-  const list = latest.map(a=>{ const T=CN_TYPES[a.type]||CN_TYPES.note; const t=String(a.detail||''); return `<div style="display:flex;gap:9px;padding:7px 0;border-bottom:1px solid var(--border)">
+  const list = latest.map(a=>{ const T=CN_TYPES[a.type]||CN_TYPES.note; const t=String((a.meta&&a.meta.summary)||a.detail||''); return `<div style="display:flex;gap:9px;padding:7px 0;border-bottom:1px solid var(--border)">
       <i class="ti ${T.icon}" aria-hidden="true" style="color:${T.fg};font-size:16px;margin-top:2px"></i>
       <div style="min-width:0;flex:1"><div style="font-size:11.5px;color:var(--text2)"><b style="color:${T.fg}">${T.label}</b> · ${_actFmt(a.ts)}</div>
       <div style="font-size:13px;line-height:1.45;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${pcEsc(t)}</div></div></div>`; }).join('');
