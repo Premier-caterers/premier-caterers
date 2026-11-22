@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Premier Caterers — Our Linens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg3:#F1F2ED; --card:#FFFFFF; --maroon:#7A2E3D; --brass:#B98B2E;
+    --nav-bg:#20262A; --text:#23262B; --text2:#62665D; --border:#E3E4DC;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',system-ui,sans-serif;color:var(--text);background:var(--bg3);line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:760px;margin:0 auto;padding:0 16px 60px}
+  .frame{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-top:20px}
+  .head{background:var(--nav-bg);color:#fff;padding:26px 28px 24px}
+  .brand{font-family:'Fraunces',serif;font-size:14px;color:var(--brass);margin-bottom:12px}
+  h1{font-family:'Fraunces',serif;font-size:24px;font-weight:600;margin-bottom:4px}
+  .sub{color:#A9AEB0;font-size:13.5px}
+  .body{padding:24px 28px 30px}
+  .intro{font-size:14px;color:var(--text2);margin-bottom:20px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+  .sw{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff}
+  .chip{height:96px;border-bottom:1px solid var(--border)}
+  .name{padding:10px 12px;font-size:14px;font-weight:600}
+  .note{margin-top:22px;font-size:12.5px;color:var(--text2)}
+  @media (max-width:520px){ .grid{grid-template-columns:repeat(2,1fr)} .chip{height:80px} .head,.body{padding-left:18px;padding-right:18px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="frame">
+    <div class="head">
+      <div class="brand">Premier Caterers</div>
+      <h1>Our linens</h1>
+      <div class="sub">132" round, floor length &middot; fits 72" round tables &middot; 14 colors</div>
+    </div>
+    <div class="body">
+      <p class="intro">These are the linen colors we offer. Let us know your pick in the Event Details section of your portal, or just tell your Premier contact.</p>
+      <div class="grid" id="grid"></div>
+      <p class="note">Colors on screen are approximate and can look different on every phone or computer. Ask us if you'd like to see a color in person.</p>
+    </div>
+  </div>
+</div>
+<script>
+  var LINENS = [
+    ['White','#FFFFFF'],['Ivory','#F3ECD8'],['Beige','#D9C7A7'],['Black','#1A1A1A'],
+    ['Navy blue','#1F2A4D'],['Royal blue','#2A4FB0'],['Light blue','#A9CBE8'],['Red','#B3202A'],
+    ['Pink','#F2B5C8'],['Lavender','#C7B5E0'],['Purple','#5B2B82'],['Sage green','#9CAE8E'],
+    ['Hunter green','#2A4A33'],['Teal','#1B7F82']
+  ];
+  document.getElementById('grid').innerHTML = LINENS.map(function(l){
+    return '<div class="sw"><div class="chip" style="background:'+l[1]+'"></div><div class="name">'+l[0]+'</div></div>';
+  }).join('');
+</script>
+</body>
+</html>

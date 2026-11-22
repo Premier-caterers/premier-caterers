@@ -157,6 +157,7 @@
   .section-block h3 .step-dot{width:22px;height:22px;border-radius:50%;background:var(--brass-tint);color:var(--brass-deep);font-family:'Inter',sans-serif;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
   .helper-link{font-size:12px;color:var(--maroon);text-decoration:none;display:inline-block;margin-bottom:12px}
   .helper-link:hover{text-decoration:underline}
+  .linen-link{font-size:13.5px;font-weight:600;text-decoration:underline}
 
   .field-row{margin-bottom:14px}
   .field-row:last-child{margin-bottom:0}
@@ -1037,11 +1038,11 @@ function renderMealBlock(m, i){
       + '<div class="field-row"><label>Event schedule</label>'+renderMealUploadField('scheduleFiles', i)+'</div>'
     + '</div>'
     + '<div class="field-subhead">Linens</div>'
-    + '<a class="helper-link" href="https://linenswatches.com/fabrics/basic-solids/standard-polyester/" target="_blank" rel="noopener">↗ Browse fabric swatches &amp; colors</a>'
+    + '<a class="helper-link linen-link" href="linens.html" target="_blank" rel="noopener">↗ View our linens (14 colors)</a>'
     + '<div class="field-grid-3">'
-      + '<div class="field-row"><label>Table linen color</label><input type="text" data-meal-field="linenTable" data-meal-index="'+i+'" value="'+esc(m.linenTable)+'"></div>'
-      + '<div class="field-row"><label>Buffet / side tables</label><input type="text" data-meal-field="linenBuffet" data-meal-index="'+i+'" value="'+esc(m.linenBuffet)+'"></div>'
-      + '<div class="field-row"><label>Napkins</label><input type="text" data-meal-field="linenNapkins" data-meal-index="'+i+'" value="'+esc(m.linenNapkins)+'"></div>'
+      + '<div class="field-row"><label>Table linen color</label><input type="text" list="pc-linen-colors" placeholder="Pick or type a color" data-meal-field="linenTable" data-meal-index="'+i+'" value="'+esc(m.linenTable)+'"></div>'
+      + '<div class="field-row"><label>Buffet / side tables</label><input type="text" list="pc-linen-colors" placeholder="Pick or type a color" data-meal-field="linenBuffet" data-meal-index="'+i+'" value="'+esc(m.linenBuffet)+'"></div>'
+      + '<div class="field-row"><label>Napkins</label><input type="text" list="pc-linen-colors" placeholder="Pick or type a color" data-meal-field="linenNapkins" data-meal-index="'+i+'" value="'+esc(m.linenNapkins)+'"></div>'
     + '</div>'
     + '<div class="toggle-row" data-meal-toggle="clientProvidesLinens" data-meal-index="'+i+'">'
       + '<button type="button" class="toggle-btn'+(m.clientProvidesLinens?' selected':'')+'" data-val="true">I\'m providing my own linens</button>'
@@ -1429,5 +1430,6 @@ async function sendQuestion(){
   }
 }
 </script>
+<datalist id="pc-linen-colors"><option value="White"><option value="Ivory"><option value="Beige"><option value="Black"><option value="Navy blue"><option value="Royal blue"><option value="Light blue"><option value="Red"><option value="Pink"><option value="Lavender"><option value="Purple"><option value="Sage green"><option value="Hunter green"><option value="Teal"></datalist>
 </body>
 </html>
