@@ -964,7 +964,8 @@ const I_S2A = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" strok
 let s2a = null, s2aInqCache = null, s2aInqAt = 0, s2aSettings = null, sentToApp = {};
 const s2aPhone = p => { const d = String(p || '').replace(/\D/g, ''); return d.length >= 10 ? d.slice(-10) : ''; };
 const s2aEmail = e => String(e || '').trim().toLowerCase();
-const s2aOurs = e => /@thepremiercaterer\.com$/i.test(e || '') || /premiercaterers68@gmail\.com/i.test(e || '');
+// Our own addresses (and anything that looks like one) never identify a client.
+const s2aOurs = e => /@thepremiercaterer\.com\s*$/i.test(e || '') || /premier\.?caterers?(68)?@/i.test(e || '');
 const s2aDocKey = key => String(key).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 140);
 const s2aNameOf = q => String(q.organization || ((q.firstName || '') + ' ' + (q.lastName || '')).trim() || q.eventName || 'Client').trim();
 function s2aDate(iso){
@@ -987,8 +988,11 @@ function s2aMessage(key){
   if(key[0] === 'e'){
     const em = emails.find(x => x.id === id); if(!em) return null;
     const body = String(em.body || em.snippet || '').trim();
-    const fromEmail = s2aOurs(em.fromEmail) ? '' : s2aEmail(em.fromEmail);
-    return { kind: 'email', key, name: s2aOurs(em.fromEmail) ? '' : (em.fromName || ''),
+    // A forwarded email: the sender is whoever forwarded it (usually us) — only the forwarded text counts.
+    const fwd = /\bfwd?\s*:/i.test(em.subject || '') || /begin forwarded message|-{3,}\s*forwarded message/i.test(body);
+    const ours = fwd || s2aOurs(em.fromEmail) || /premier caterers?/i.test(em.fromName || '');
+    const fromEmail = ours ? '' : s2aEmail(em.fromEmail);
+    return { kind: 'email', key, name: ours ? '' : (em.fromName || ''), fwd,
       phones: s2aPhonesIn(body), emails: (fromEmail ? [fromEmail] : []).concat(s2aEmailsIn(body).filter(e => e !== fromEmail)),
       subject: em.subject || '', link: GMAILem(em), box: em.box || '',
       text: 'From: ' + (em.fromName || '') + ' <' + (em.fromEmail || '') + '>\nSubject: ' + (em.subject || '(no subject)') + '\n\n' + body };
@@ -1021,13 +1025,21 @@ async function s2aLoadSettings(){
   return s2aSettings;
 }
 // Every inquiry for the same client: phone or email match, spreading through each match.
+function s2aShared(inqs){
+  // A phone or email on records with 3+ different client names (a planner, an office, our own) is not a client's.
+  const names = {};
+  inqs.forEach(q => { const n = s2aNameOf(q).toLowerCase(); [s2aPhone(q.phone) && 'p' + s2aPhone(q.phone), s2aEmail(q.email) && 'e' + s2aEmail(q.email)].forEach(k => { if(k){ (names[k] = names[k] || new Set()).add(n); } }); });
+  const out = new Set(); Object.keys(names).forEach(k => { if(names[k].size >= 3) out.add(k); }); return out;
+}
 function s2aRelated(inqs, phones, mails){
-  const P = new Set(phones.filter(Boolean)), E = new Set(mails.filter(Boolean)), hit = new Set();
+  const shared = s2aShared(inqs);
+  const okP = p => p && OUR_PHONES.indexOf(p) < 0 && !shared.has('p' + p), okE = e => e && !s2aOurs(e) && !shared.has('e' + e);
+  const P = new Set(phones.filter(okP)), E = new Set(mails.filter(okE)), hit = new Set();
   for(let pass = 0; pass < 3; pass++){
     inqs.forEach(q => {
       if(hit.has(q.id)) return;
       const p = s2aPhone(q.phone), e = s2aEmail(q.email);
-      if((p && P.has(p)) || (e && E.has(e))){ hit.add(q.id); if(p) P.add(p); if(e && !s2aOurs(e)) E.add(e); }
+      if((okP(p) && P.has(p)) || (okE(e) && E.has(e))){ hit.add(q.id); if(okP(p)) P.add(p); if(okE(e)) E.add(e); }
     });
   }
   return inqs.filter(q => hit.has(q.id));

@@ -9066,16 +9066,22 @@ function _cnNameKey(q){
 function _cnRelatedInqs(seedIds, phone, email){
   const ids = new Set((seedIds||[]).map(String));
   const phones = new Set(), emails = new Set(), names = new Set();
-  const addKeys = q=>{ const p=_cnPhone(q.phone), e=_cnEmail(q.email), n=_cnNameKey(q); if(p) phones.add(p); if(e) emails.add(e); if(n) names.add(n); };
-  if(_cnPhone(phone)) phones.add(_cnPhone(phone));
-  if(_cnEmail(email)) emails.add(_cnEmail(email));
+  // Our own numbers/addresses, and any phone or email on records for 3+ different
+  // client names (a planner, an office, our own Yahoo), never tie clients together.
+  const nm = {};
+  inquiries.forEach(q=>{ const n=_cnNameKey(q); [_cnPhone(q.phone)&&'p'+_cnPhone(q.phone), _cnEmail(q.email)&&'e'+_cnEmail(q.email)].forEach(k=>{ if(k&&n){ (nm[k]=nm[k]||new Set()).add(n); } }); });
+  const okP = p=> p && ['2012509487','2015823455'].indexOf(p)<0 && !(nm['p'+p] && nm['p'+p].size>=3);
+  const okE = e=> e && !/@thepremiercaterer\.com$|premier\.?caterers?(68)?@/i.test(e) && !(nm['e'+e] && nm['e'+e].size>=3);
+  const addKeys = q=>{ const p=_cnPhone(q.phone), e=_cnEmail(q.email), n=_cnNameKey(q); if(okP(p)) phones.add(p); if(okE(e)) emails.add(e); if(n) names.add(n); };
+  if(okP(_cnPhone(phone))) phones.add(_cnPhone(phone));
+  if(okE(_cnEmail(email))) emails.add(_cnEmail(email));
   inquiries.filter(q=>ids.has(String(q.id))).forEach(addKeys);
   // Two passes so a match found by email can bring in that inquiry's phone too.
   for(let pass=0; pass<2; pass++){
     inquiries.forEach(q=>{
       if(ids.has(String(q.id))) return;
       const p=_cnPhone(q.phone), e=_cnEmail(q.email), n=_cnNameKey(q);
-      if((p&&phones.has(p)) || (e&&emails.has(e)) || (n&&names.has(n))){ ids.add(String(q.id)); addKeys(q); }
+      if((okP(p)&&phones.has(p)) || (okE(e)&&emails.has(e)) || (n&&names.has(n))){ ids.add(String(q.id)); addKeys(q); }
     });
   }
   return inquiries.filter(q=>ids.has(String(q.id)));
