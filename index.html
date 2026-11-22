@@ -2081,7 +2081,7 @@ function startFirebaseListeners(){
   groceryStationsCol.onSnapshot( snap=>{ groceryStations=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='grocery') render(); });
   groceryListsCol.onSnapshot( snap=>{ groceryLists={}; snap.docs.forEach(d=>{ groceryLists[d.id]=d.data(); }); if(currentView==='grocery') render(); });
   activityCol = db.collection('activity');
-  activityCol.onSnapshot( snap=>{ activityLog=snap.docs.map(d=>d.data()); if(_actOpenInqId) renderActivityLogBody(); });
+  activityCol.onSnapshot( snap=>{ activityLog=snap.docs.map(d=>d.data()); if(_actOpenInqId) renderActivityLogBody(); try{ if(typeof cnRefreshList==='function') cnRefreshList(); }catch(e){} });
   roadmapCol = db.collection('roadmap');
   roadmapCol.onSnapshot( snap=>{ roadmap=snap.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='roadmap') render(); });
   regularsCol = db.collection('regulars');
@@ -7187,7 +7187,7 @@ function renderClientFilePage(inq, role){
   let tab = window._hubTab[inq.id] || 'overview';
   if(role.canViewInvoices && _estimateOpenId===inq.id) tab = 'money';
   const tabs = [
-    ['overview','Overview'], ['menu','Menu'],
+    ['overview','Overview'], ['notes','Notes &amp; messages'], ['menu','Menu'],
     ...(role.canViewInvoices?[['money','Quote / Invoice']]:[]),
     ...(ev?[['staff','Staffing']]:[]),
     ['docs','Documents'], ['emails','Emails'], ['portal','Client portal'], ['activity','Activity']
@@ -7289,11 +7289,13 @@ function renderClientFilePage(inq, role){
       <div class="cf-col">
         ${_cfPanel('Contact', contactBody)}
         ${_cfPanel('Money', moneyBody)}
-        ${_cfPanel('Notes', notesBody)}
+        ${_cfPanel('Notes &amp; messages', cnOverviewHtml(inq))}
         ${hubAiCard(inq)||''}
         ${_cfPanel('Latest activity', activityBody(4))}
       </div>
     </div>`;
+  } else if(tab==='notes'){
+    body = cnPageTabHtml(inq);
   } else if(tab==='menu'){
     body = _cfPanel('Menu', menuBody);
   } else if(tab==='money'){
@@ -8826,7 +8828,10 @@ const _ACT_META = {
   payment:    {icon:'ti-cash',             color:'#16a34a'},
   edit:       {icon:'ti-pencil',           color:'#9333ea'},
   task:       {icon:'ti-checkbox',         color:'var(--brass)'},
-  note:       {icon:'ti-note',             color:'#6b7280'}
+  note:       {icon:'ti-note',             color:'#6b7280'},
+  call:       {icon:'ti-phone',            color:'#0F5E5E'},
+  whatsapp:   {icon:'ti-brand-whatsapp',   color:'#116244'},
+  file:       {icon:'ti-paperclip',        color:'#92600E'}
 };
 
 // Write an activity entry to Firestore (optimistic local update first).
@@ -9026,6 +9031,333 @@ async function loadClientEmails(silent){
     if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-mail-search"></i>Pull client emails'; }
   }
 }
+
+
+/* ============================================================
+   CLIENT NOTES & MESSAGES  (Added 2026-11-22)
+   One timeline per client across ALL of their events: typed notes,
+   pasted emails / WhatsApp / call notes, and attached files.
+   Stored in the existing `activity` collection (same as the per-event
+   activity log), so every note also shows in that event's log.
+   A client = the inquiry you opened plus every other inquiry with the
+   same phone number, email, or name/organization.
+   ============================================================ */
+const CN_TYPES = {
+  note:       {label:'Note',        icon:'ti-pencil',         fg:'var(--text)',        bg:'var(--bg3)'},
+  call:       {label:'Call notes',  icon:'ti-phone',          fg:'var(--teal-text)',   bg:'var(--teal-bg)'},
+  whatsapp:   {label:'WhatsApp',    icon:'ti-brand-whatsapp', fg:'var(--green-text)',  bg:'var(--green-bg)'},
+  email_in:   {label:'Email in',    icon:'ti-mail-down',      fg:'var(--purple-text)', bg:'var(--purple-bg)'},
+  email_sent: {label:'Email sent',  icon:'ti-mail-forward',   fg:'var(--purple-text)', bg:'var(--purple-bg)'},
+  file:       {label:'File',        icon:'ti-paperclip',      fg:'var(--amber-text)',  bg:'var(--amber-bg)'}
+};
+const CN_FILTERS = [['all','All'],['note','Notes'],['call','Calls'],['email','Emails'],['whatsapp','WhatsApp'],['file','Files']];
+window._cnState = window._cnState || { tab:'timeline', filter:'all', ev:'all', sys:false, draft:'', type:'note', about:'', files:[] };
+
+function _cnPhone(p){ const d=String(p||'').replace(/\D/g,''); return d.length>=10 ? d.slice(-10) : ''; }
+function _cnEmail(e){ return String(e||'').trim().toLowerCase(); }
+function _cnNameKey(q){
+  const org=(q.organization||'').trim().toLowerCase();
+  if(org) return 'org:'+org;
+  const p=((q.firstName||'')+' '+(q.lastName||'')).trim().toLowerCase();
+  return p ? 'nm:'+p : '';
+}
+// Every inquiry that belongs to the same client as the seeds (phone, email or name match).
+function _cnRelatedInqs(seedIds, phone, email){
+  const ids = new Set((seedIds||[]).map(String));
+  const phones = new Set(), emails = new Set(), names = new Set();
+  const addKeys = q=>{ const p=_cnPhone(q.phone), e=_cnEmail(q.email), n=_cnNameKey(q); if(p) phones.add(p); if(e) emails.add(e); if(n) names.add(n); };
+  if(_cnPhone(phone)) phones.add(_cnPhone(phone));
+  if(_cnEmail(email)) emails.add(_cnEmail(email));
+  inquiries.filter(q=>ids.has(String(q.id))).forEach(addKeys);
+  // Two passes so a match found by email can bring in that inquiry's phone too.
+  for(let pass=0; pass<2; pass++){
+    inquiries.forEach(q=>{
+      if(ids.has(String(q.id))) return;
+      const p=_cnPhone(q.phone), e=_cnEmail(q.email), n=_cnNameKey(q);
+      if((p&&phones.has(p)) || (e&&emails.has(e)) || (n&&names.has(n))){ ids.add(String(q.id)); addKeys(q); }
+    });
+  }
+  return inquiries.filter(q=>ids.has(String(q.id)));
+}
+function _cnEventLabel(q){
+  let ev=null; try{ ev=_eventForInq(q); }catch(e){}
+  const num = ev ? (fullEventNum(ev)||'') : '';
+  const what = q.eventType || q.eventName || 'Event';
+  let when = ''; try{ when = q.eventDate ? formatDate(q.eventDate) : ''; }catch(e){}
+  return { num, text: what + (when?(' · '+when):'') };
+}
+function _cnBuildCtx(name, inqs, defaultInqId){
+  const sorted = inqs.slice().sort((a,b)=>String(b.eventDate||'').localeCompare(String(a.eventDate||'')));
+  const events = sorted.map(q=>Object.assign({ inqId:String(q.id) }, _cnEventLabel(q)));
+  return { name, inqIds: events.map(e=>e.inqId), events,
+    defaultInqId: String(defaultInqId || (events[0]&&events[0].inqId) || '') };
+}
+function cnCtxFromInq(inq){
+  const rel = _cnRelatedInqs([inq.id], inq.phone, inq.email);
+  const nm = (typeof clientPrimary==='function' ? clientPrimary(inq) : '') || ((inq.firstName||'')+' '+(inq.lastName||'')).trim();
+  return _cnBuildCtx(nm, rel, inq.id);
+}
+function cnCtxFromGroup(key){
+  const g = (window._clientsGroups||{})[key]; if(!g) return null;
+  const seeds = g.items.map(it=> it.kind==='inq' ? it.id : (String(it.id).indexOf('inq_')===0 ? String(it.id).slice(4) : null)).filter(Boolean);
+  const rel = _cnRelatedInqs(seeds, g.phone, g.email);
+  return _cnBuildCtx(g.name, rel, null);
+}
+
+function _cnEntries(ctx){
+  const set = new Set(ctx.inqIds);
+  return activityLog.filter(a=>set.has(String(a.inquiryId))).slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
+}
+function _cnIsMessage(a){ return !!CN_TYPES[a.type] || (a.meta && a.meta.files && a.meta.files.length); }
+function cnCount(ctx){ return _cnEntries(ctx).filter(_cnIsMessage).length; }
+function _cnFiles(ctx){
+  const out=[];
+  _cnEntries(ctx).forEach(a=>{ ((a.meta&&a.meta.files)||[]).forEach(f=>out.push(Object.assign({ entry:a }, f))); });
+  return out;
+}
+function _cnEvChip(ctx, a){
+  if(a.meta && a.meta.general) return `<span class="cn-chip cn-chip--gen">General</span>`;
+  const e = ctx.events.find(x=>x.inqId===String(a.inquiryId)); if(!e) return '';
+  return `<span class="cn-chip">${e.num?`<span class="cn-mono">${pcEsc(e.num)}</span> `:''}${pcEsc(e.text)}</span>`;
+}
+function _cnCanWrite(){ const r=roles[currentRole]||{}; return !!(r.canEdit || r.showStaff); }
+
+function _cnEnsureStyles(){
+  if(document.getElementById('cnStyles')) return;
+  const s=document.createElement('style'); s.id='cnStyles';
+  s.textContent = `
+  .cn{display:flex;flex-direction:column;gap:14px}
+  .cn-sub{display:flex;gap:4px;border-bottom:1px solid var(--border2)}
+  .cn-sub button{border:none;background:none;padding:10px 14px;font-weight:500;font-size:14px;font-family:inherit;color:var(--text2);cursor:pointer;border-bottom:3px solid transparent}
+  .cn-sub button.is-on{color:var(--maroon);font-weight:700;border-bottom-color:var(--maroon)}
+  .cn-compose{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:12px}
+  .cn-compose textarea{width:100%;box-sizing:border-box;min-height:84px;border:1px solid var(--border2);border-radius:10px;padding:10px 12px;font-size:14px;line-height:1.5;font-family:inherit;resize:vertical;background:var(--bg);color:var(--text)}
+  .cn-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .cn-row label{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2)}
+  .cn-row select{min-height:38px;border:1px solid var(--border2);border-radius:8px;padding:0 10px;font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);max-width:260px}
+  .cn-filefoot{font-size:12px;color:var(--text2);display:flex;flex-wrap:wrap;gap:6px}
+  .cn-filefoot span{background:var(--bg);border:1px solid var(--border2);border-radius:999px;padding:3px 10px}
+  .cn-filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .cn-pill{min-height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--border2);background:var(--bg);font-weight:500;font-size:12.5px;font-family:inherit;color:var(--text);cursor:pointer}
+  .cn-pill.is-on{background:var(--text);color:var(--bg);border:2px solid var(--text);font-weight:700}
+  .cn-item{display:flex;gap:12px;padding:12px 14px;border:1px solid var(--border2);border-radius:12px;background:var(--bg)}
+  .cn-item--sys{border-style:dashed;background:var(--bg2)}
+  .cn-ic{flex:0 0 34px;width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px}
+  .cn-meta{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-size:12px;color:var(--text2)}
+  .cn-chip{padding:2px 8px;border-radius:999px;background:var(--maroon-tint);color:var(--maroon-deep);border:1px solid var(--blue-border);font-size:11.5px}
+  .cn-chip--gen{background:var(--bg3);color:var(--text2);border:1px dashed var(--neutral-solid)}
+  .cn-mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+  .cn-text{font-size:14px;line-height:1.55;margin-top:5px;white-space:pre-wrap;word-break:break-word;color:var(--text)}
+  .cn-text.is-clamped{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+  .cn-link{border:none;background:none;padding:0;margin-top:4px;color:var(--maroon);font-weight:600;font-size:12.5px;font-family:inherit;cursor:pointer}
+  .cn-files{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .cn-files a{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;padding:4px 10px;border-radius:8px;border:1px solid var(--border2);color:var(--text);text-decoration:none;background:var(--bg2)}
+  .cn-del{margin-left:auto;border:none;background:none;color:var(--text3);cursor:pointer;font-size:16px;padding:4px;border-radius:6px}
+  .cn-del:hover{color:var(--red-text);background:var(--red-bg)}
+  .cn-empty{text-align:center;color:var(--text3);font-size:13px;padding:26px 8px;line-height:1.6}
+  .cn-ftable{width:100%;border-collapse:collapse}
+  .cn-ftable td{padding:9px 8px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
+  `;
+  document.head.appendChild(s);
+}
+
+// Whole panel (sub-tabs + composer + list). ctx is kept in window._cnCtx.
+function cnHostHtml(){
+  _cnEnsureStyles();
+  const ctx = window._cnCtx; if(!ctx) return '';
+  const st = window._cnState;
+  if(!ctx.inqIds.length) return `<div class="cn-empty">No events found for this client yet.</div>`;
+  if(!st.about || (st.about!=='general' && ctx.inqIds.indexOf(st.about)<0)) st.about = ctx.defaultInqId;
+  const nFiles = _cnFiles(ctx).length;
+  const sub = `<div class="cn-sub" role="tablist">
+      <button role="tab" class="${st.tab==='timeline'?'is-on':''}" aria-selected="${st.tab==='timeline'}" onclick="cnSetTab('timeline')">Notes &amp; messages (${cnCount(ctx)})</button>
+      <button role="tab" class="${st.tab==='files'?'is-on':''}" aria-selected="${st.tab==='files'}" onclick="cnSetTab('files')">Files (${nFiles})</button>
+    </div>`;
+  if(st.tab==='files') return `<div class="cn">${sub}${_cnFilesHtml(ctx)}</div>`;
+
+  const aboutOpts = ctx.events.map(e=>`<option value="${e.inqId}" ${st.about===e.inqId?'selected':''}>${pcEsc((e.num?e.num+' · ':'')+e.text)}</option>`).join('')
+    + `<option value="general" ${st.about==='general'?'selected':''}>General — no specific event</option>`;
+  const typeOpts = [['note','Note'],['call','Phone call'],['email_in','Email (pasted)'],['whatsapp','WhatsApp (pasted)']]
+    .map(([k,l])=>`<option value="${k}" ${st.type===k?'selected':''}>${l}</option>`).join('');
+  const composer = !_cnCanWrite() ? '' : `<div class="cn-compose">
+      <label for="cnText" style="font-weight:700;font-size:13px;display:block;margin-bottom:6px">Add a note</label>
+      <textarea id="cnText" placeholder="Phone call, idea, anything to remember… or paste an email or WhatsApp message" oninput="window._cnState.draft=this.value">${pcEsc(st.draft||'')}</textarea>
+      <div class="cn-row" style="margin-top:10px">
+        <label>Type <select onchange="window._cnState.type=this.value">${typeOpts}</select></label>
+        <label>About <select onchange="window._cnState.about=this.value">${aboutOpts}</select></label>
+        <label class="btn btn--ghost btn--sm" style="cursor:pointer"><i class="ti ti-paperclip"></i>Attach files<input type="file" multiple style="display:none" onchange="cnPickFiles(this)"></label>
+        <span style="flex:1 1 10px"></span>
+        <button class="btn btn--pri" id="cnSaveBtn" onclick="cnSave()"><i class="ti ti-check"></i>Save note</button>
+      </div>
+      ${st.files.length?`<div class="cn-filefoot" style="margin-top:8px">${st.files.map((f,i)=>`<span><i class="ti ti-paperclip"></i> ${pcEsc(f.name)} <button aria-label="Remove ${pcEsc(f.name)}" onclick="cnUnpick(${i})" style="border:none;background:none;cursor:pointer;color:var(--text3)">×</button></span>`).join('')}</div>`:''}
+    </div>`;
+  const evOpts = `<option value="all">All events</option>` + ctx.events.map(e=>`<option value="${e.inqId}" ${st.ev===e.inqId?'selected':''}>${pcEsc((e.num?e.num+' · ':'')+e.text)}</option>`).join('')
+    + `<option value="general" ${st.ev==='general'?'selected':''}>General only</option>`;
+  const filters = `<div class="cn-filters"><span style="font-size:12px;color:var(--text2);margin-right:2px">Show:</span>
+      ${CN_FILTERS.map(([k,l])=>`<button class="cn-pill${st.filter===k?' is-on':''}" aria-pressed="${st.filter===k}" onclick="cnSetFilter('${k}')">${l}</button>`).join('')}
+      <span style="flex:1 1 10px"></span>
+      <select aria-label="Filter by event" onchange="window._cnState.ev=this.value;cnRefreshList()" style="min-height:34px;border:1px solid var(--border2);border-radius:8px;padding:0 10px;font-size:12.5px;font-family:inherit;background:var(--bg);color:var(--text);max-width:240px">${evOpts}</select>
+      <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text2)"><input type="checkbox" ${st.sys?'checked':''} onchange="window._cnState.sys=this.checked;cnRefreshList()">App activity too</label>
+    </div>`;
+  return `<div class="cn">${sub}${composer}${filters}<div id="cnList">${_cnListHtml(ctx)}</div></div>`;
+}
+
+function _cnListHtml(ctx){
+  const st = window._cnState;
+  let items = _cnEntries(ctx);
+  if(!st.sys) items = items.filter(_cnIsMessage);
+  if(st.ev==='general') items = items.filter(a=>a.meta&&a.meta.general);
+  else if(st.ev!=='all') items = items.filter(a=>String(a.inquiryId)===st.ev && !(a.meta&&a.meta.general));
+  if(st.filter!=='all'){
+    items = items.filter(a=>{
+      if(st.filter==='email') return a.type==='email_in'||a.type==='email_sent';
+      if(st.filter==='file') return a.type==='file' || (a.meta&&a.meta.files&&a.meta.files.length);
+      return a.type===st.filter;
+    });
+  }
+  if(!items.length) return `<div class="cn-empty">Nothing here yet.<br>Type a note above, paste an email or WhatsApp message, or attach a file.</div>`;
+  const me = authUser||'';
+  return items.map(a=>{
+    const T = CN_TYPES[a.type];
+    const sys = !T;
+    const meta = T || (_ACT_META[a.type]||_ACT_META.note);
+    const label = T ? T.label : ({inquiry:'Inquiry',menu:'Menu',stage:'Stage',payment:'Payment',edit:'Edit',task:'Task'}[a.type]||'Activity');
+    const icon = T ? T.icon : meta.icon;
+    const fg = T ? T.fg : 'var(--text2)', bg = T ? T.bg : 'var(--bg3)';
+    const text = String(a.detail||'');
+    const long = text.length>420 || (text.match(/\n/g)||[]).length>6;
+    const files = (a.meta&&a.meta.files)||[];
+    const mine = a.meta && a.meta.via==='client-file' && (a.user===me || currentRole==='admin' || currentRole==='kenny');
+    return `<article class="cn-item${sys?' cn-item--sys':''}">
+      <div class="cn-ic" style="background:${bg};color:${fg}"><i class="ti ${icon}" aria-hidden="true"></i></div>
+      <div style="flex:1;min-width:0">
+        <div class="cn-meta"><b style="color:${fg}">${label}</b><span>${_actFmt(a.ts)}${a.userName?(' · '+pcEsc(a.userName)):''}</span>${_cnEvChip(ctx,a)}
+          ${mine?`<button class="cn-del" title="Delete this note" aria-label="Delete this note" onclick="cnDelete('${a.id}')"><i class="ti ti-trash"></i></button>`:''}</div>
+        ${a.meta&&a.meta.subject?`<div style="font-weight:600;font-size:14px;margin-top:5px">${pcEsc(a.meta.subject)}</div>`:''}
+        ${text?`<div class="cn-text${long?' is-clamped':''}">${pcEsc(text)}</div>${long?`<button class="cn-link" onclick="const t=this.previousElementSibling;const c=t.classList.toggle('is-clamped');this.textContent=c?'Show all':'Show less'">Show all</button>`:''}`:''}
+        ${files.length?`<div class="cn-files">${files.map(f=>`<a href="${pcEsc(f.url)}" target="_blank" rel="noopener"><i class="ti ti-file" aria-hidden="true"></i>${pcEsc(f.name||'File')}</a>`).join('')}</div>`:''}
+        ${a.type==='email_in'&&a.meta&&a.meta.link?`<a href="${pcEsc(a.meta.link)}" target="_blank" rel="noopener" style="font-size:12px;display:inline-block;margin-top:4px">Open in Gmail</a>`:''}
+      </div>
+    </article>`;
+  }).join('');
+}
+
+function _cnFilesHtml(ctx){
+  const files = _cnFiles(ctx);
+  const up = _cnCanWrite() ? `<div class="cn-row"><label class="btn btn--pri" style="cursor:pointer"><i class="ti ti-upload"></i>Upload files<input type="file" multiple style="display:none" onchange="cnPickFiles(this,true)"></label>
+      <span style="font-size:12.5px;color:var(--text2)">Saved to the event chosen in "About" on the notes tab (${pcEsc((ctx.events.find(e=>e.inqId===window._cnState.about)||{}).text||'general')}).</span></div>` : '';
+  if(!files.length) return up + `<div class="cn-empty">No files yet. Event paperwork (floor plans, contracts, logos) stays on each event's Documents tab.</div>`;
+  return up + `<div style="overflow-x:auto"><table class="cn-ftable"><tbody>${files.map(f=>`<tr>
+      <td><a href="${pcEsc(f.url)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px"><i class="ti ti-file" aria-hidden="true"></i>${pcEsc(f.name||'File')}</a></td>
+      <td>${_cnEvChip(ctx,f.entry)}</td>
+      <td style="color:var(--text2);white-space:nowrap">${_actFmt(f.entry.ts)}${f.entry.userName?(' · '+pcEsc(f.entry.userName)):''}</td>
+      <td style="color:var(--text3);white-space:nowrap;text-align:right">${f.size?(Math.max(1,Math.round(f.size/1024))+' KB'):''}</td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+
+function cnRerender(){ const h=document.getElementById('cnHost'); if(h) h.innerHTML = cnHostHtml(); }
+function cnRefreshList(){
+  const h=document.getElementById('cnHost'); if(!h || !window._cnCtx) return;
+  // Re-read the client's inquiries in case one was added or edited meanwhile.
+  const l=document.getElementById('cnList');
+  if(l && window._cnState.tab==='timeline') l.innerHTML = _cnListHtml(window._cnCtx); else cnRerender();
+  const subBtns = h.querySelectorAll('.cn-sub button');
+  if(subBtns.length===2){ subBtns[0].textContent='Notes & messages ('+cnCount(window._cnCtx)+')'; subBtns[1].textContent='Files ('+_cnFiles(window._cnCtx).length+')'; }
+}
+function cnSetTab(t){ window._cnState.tab=t; cnRerender(); }
+function cnSetFilter(f){ window._cnState.filter=f; cnRerender(); }
+function cnPickFiles(inp, saveNow){
+  const picked = Array.from(inp.files||[]); inp.value='';
+  if(!picked.length) return;
+  const big = picked.filter(f=>f.size>25*1024*1024);
+  if(big.length){ alert('Too large (over 25 MB): '+big.map(f=>f.name).join(', ')); }
+  window._cnState.files = window._cnState.files.concat(picked.filter(f=>f.size<=25*1024*1024));
+  if(saveNow){ cnSave(true); } else { cnRerender(); }
+}
+function cnUnpick(i){ window._cnState.files.splice(i,1); cnRerender(); }
+
+async function cnSave(filesOnly){
+  const st = window._cnState, ctx = window._cnCtx; if(!ctx) return;
+  const ta = document.getElementById('cnText');
+  const text = filesOnly ? '' : ((ta?ta.value:st.draft)||'').trim();
+  if(!text && !st.files.length){ ta&&ta.focus(); return; }
+  const general = st.about==='general';
+  const inqId = general ? ctx.defaultInqId : (st.about || ctx.defaultInqId);
+  if(!inqId){ alert('No event to attach this note to.'); return; }
+  const btn = document.getElementById('cnSaveBtn'); if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i>Saving…'; }
+  try{
+    const files=[];
+    for(const f of st.files){
+      const url = await uploadToStorage('cn_'+inqId, 'note', f);
+      if(!url){ throw new Error('upload failed for '+f.name); }
+      files.push({ name:f.name, url, size:f.size, contentType:f.type||'' });
+    }
+    let type = filesOnly ? 'file' : (st.type||'note');
+    if(!text && files.length) type='file';
+    let subject='';
+    if(type==='email_in'){ const m=text.match(/^\s*subject:\s*(.+)$/im); if(m) subject=m[1].trim().slice(0,200); }
+    const detail = text || ('Uploaded '+files.length+' file'+(files.length===1?'':'s'));
+    await logActivity(inqId, type, detail, { via:'client-file', general, files, subject });
+    st.draft=''; st.files=[];
+    showToast('Saved to '+(ctx.name||'client')+'’s notes ✓');
+  }catch(e){
+    console.error('cnSave', e);
+    showToast('Not saved — '+(e.message||'try again'), 4000);
+  }finally{
+    cnRerender();
+  }
+}
+async function cnDelete(id){
+  const a = activityLog.find(x=>x.id===id); if(!a) return;
+  if(!confirm('Delete this note? This can’t be undone.')) return;
+  try{
+    if(!activityCol && typeof db!=='undefined' && db) activityCol = db.collection('activity');
+    await activityCol.doc(id).delete();
+    activityLog = activityLog.filter(x=>x.id!==id);
+    cnRefreshList(); showToast('Note deleted');
+  }catch(e){ showToast('Could not delete — '+(e.message||'try again'), 4000); }
+}
+
+// The client-file page tab body.
+function cnPageTabHtml(inq){
+  window._cnCtx = cnCtxFromInq(inq);
+  if(window._cnCtxFor!==inq.id){ window._cnCtxFor=inq.id; window._cnState.about=''; window._cnState.ev='all'; }
+  return `<section class="cf-panel"><div class="cf-panel__body"><div id="cnHost">${cnHostHtml()}</div></div></section>`;
+}
+// Small preview for the Overview tab.
+function cnOverviewHtml(inq){
+  const ctx = cnCtxFromInq(inq);
+  const latest = _cnEntries(ctx).filter(_cnIsMessage).slice(0,3);
+  const form = inq.comments ? `<div style="font-size:11.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">From the inquiry form</div><div class="cf-notes" style="margin-bottom:12px">${pcEsc(inq.comments)}</div>` : '';
+  const list = latest.map(a=>{ const T=CN_TYPES[a.type]||CN_TYPES.note; const t=String(a.detail||''); return `<div style="display:flex;gap:9px;padding:7px 0;border-bottom:1px solid var(--border)">
+      <i class="ti ${T.icon}" aria-hidden="true" style="color:${T.fg};font-size:16px;margin-top:2px"></i>
+      <div style="min-width:0;flex:1"><div style="font-size:11.5px;color:var(--text2)"><b style="color:${T.fg}">${T.label}</b> · ${_actFmt(a.ts)}</div>
+      <div style="font-size:13px;line-height:1.45;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${pcEsc(t)}</div></div></div>`; }).join('');
+  const n = cnCount(ctx);
+  return form + (list || `<div style="font-size:13px;color:var(--text3);margin-bottom:6px">No notes yet.</div>`)
+    + `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn--sm btn--pri" onclick="setHubTab('${inq.id}','notes')"><i class="ti ti-plus"></i>Add a note</button>${n?`<button class="btn btn--sm" onclick="setHubTab('${inq.id}','notes')">See all (${n})</button>`:''}</div>`;
+}
+
+// From the Clients list: open the same panel in a pop-up.
+function openClientNotes(key){
+  const ctx = cnCtxFromGroup(key); if(!ctx){ alert('Could not find that client.'); return; }
+  window._cnCtx = ctx; window._cnCtxFor = 'group:'+key;
+  window._cnState.about=''; window._cnState.ev='all'; window._cnState.tab='timeline';
+  document.getElementById('clientNotesModal')?.remove();
+  const m=document.createElement('div'); m.id='clientNotesModal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:4vh 14px;overflow-y:auto';
+  m.innerHTML = `<div role="dialog" aria-label="Notes and messages" style="background:var(--bg);border-radius:16px;width:100%;max-width:860px;box-shadow:var(--shadow-overlay);padding:20px 22px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px">
+        <h3 style="margin:0;font-size:20px">${pcEsc(ctx.name||'Client')}</h3>
+        <button aria-label="Close" onclick="closeClientNotes()" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:24px;line-height:1;padding:0 4px">&times;</button>
+      </div>
+      <div id="cnHost">${cnHostHtml()}</div>
+    </div>`;
+  m.addEventListener('click', e=>{ if(e.target===m) closeClientNotes(); });
+  document.body.appendChild(m);
+}
+function closeClientNotes(){ document.getElementById('clientNotesModal')?.remove(); window._cnCtxFor=null; }
+window.openClientNotes=openClientNotes; window.closeClientNotes=closeClientNotes;
 
 /* ---- comprehensive edit logging, driven by the save layer ----
    Any change to an inquiry / its event / its invoice is captured here,
@@ -10478,6 +10810,7 @@ function renderClients(){
     const acts = `<div class="icon-tile-row" style="margin-top:10px">
       <div class="icon-tile icon-tile--purple" onclick="event.stopPropagation();openClientReport('${g.key}')"><div class="icon-tile-icon"><i class="ti ti-report-money"></i></div><div class="icon-tile-label">Report</div></div>
       <div class="icon-tile icon-tile--maroon" onclick="event.stopPropagation();openClientEmails('${g.key}')"><div class="icon-tile-icon"><i class="ti ti-mail"></i></div><div class="icon-tile-label">Emails</div></div>
+      <div class="icon-tile icon-tile--teal" onclick="event.stopPropagation();openClientNotes('${g.key}')"><div class="icon-tile-icon"><i class="ti ti-notes"></i></div><div class="icon-tile-label">Notes &amp; messages</div></div>
       ${role.canEdit?`<div class="icon-tile icon-tile--teal" onclick="event.stopPropagation();newEventForClient('${g.key}','new')"><div class="icon-tile-icon"><i class="ti ti-plus"></i></div><div class="icon-tile-label">New potential event</div></div>`:''}
       ${role.canEdit?`<div class="icon-tile icon-tile--maroon" onclick="event.stopPropagation();newEventForClient('${g.key}','booked')"><div class="icon-tile-icon"><i class="ti ti-calendar-plus"></i></div><div class="icon-tile-label">New booked event</div></div>`:''}
     </div>`;
