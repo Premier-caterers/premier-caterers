@@ -389,7 +389,8 @@ let activeTab = (focusTab && ['home','overview','menu','invoice','details','docu
     portalDoc = data;
 
     if(firstLoad){
-      try{ db.collection('clientPortals').doc(pid).update({ lastViewedAt: Date.now() }); }catch(e){}
+      // Staff opening the page (staff=1) shouldn't count as the client viewing it.
+      if(!staffMode){ try{ db.collection('clientPortals').doc(pid).update({ lastViewedAt: Date.now() }); }catch(e){} }
       renderShell();
       shellBuilt = true;
       verifyPaymentIfReturning();
