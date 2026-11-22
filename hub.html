@@ -305,6 +305,13 @@
     .frame{padding:14px 10px 0;min-height:100vh}
     .page{border-radius:18px 18px 0 0;padding:16px 16px 120px;gap:16px}
     .tabs{display:none}
+    /* phone: to-do text gets the full width; Open original / Overdue / bell go on a line underneath */
+    .todo-row{display:grid;grid-template-columns:auto 1fr auto;column-gap:12px;row-gap:6px;padding:8px 0;align-items:center}
+    .todo-row .ring{grid-column:1;grid-row:1 / span 2}
+    .todo-row .tx{grid-column:2;grid-row:1}
+    .todo-row .pen{grid-column:3;grid-row:1 / span 2}
+    .todo-row .meta{grid-column:2;grid-row:2;justify-self:start;flex-wrap:wrap}
+    .todo-row .meta:empty{display:none}
     .page-head{flex-wrap:nowrap}
     .date{font-size:20px;white-space:nowrap}
     .date .long{display:none}
