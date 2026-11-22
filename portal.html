@@ -484,7 +484,7 @@ var KOSHER_LISTS = [
   { label:'cRc Liquor List', sub:'Chicago Rabbinical Council', url:'https://consumer.crckosher.org/liquor/' },
   { label:'Star-K Beer, Liquor and Liqueur List', sub:'Star-K Kosher Certification', url:'https://star-k.org/resource/list/PCW0Z0DO/Beer,_Liquor_and_Liqueur' }
 ];
-var SECTION_NAMES = { menu:'Menu', invoice:'Estimate / invoice', contract:'Contract', details:'Final checklist', documents:'Documents', questions:'Chat with us', photos:'Past events', wine:'Kosher wine and liquor', overview:'Overview' };
+var SECTION_NAMES = { menu:'Menu', invoice:'Estimate / invoice', contract:'Contract', details:'Final checklist', documents:'Documents', questions:'Chat with us', photos:'Photos of past events', wine:'Kosher wine and liquor', overview:'Overview' };
 
 function _waLink(){
   var nm = (portalDoc && portalDoc.eventName) || 'my event';
@@ -571,7 +571,7 @@ function renderHome(){
     { go:'details',   ic:'✅', name:'Final checklist',        tag:chkTag },
     { go:'linens',    ic:'🎨', name:'Linen colors',           tag:'<span class="tsub">See our 14 colors</span>' },
     { go:'wine',      ic:'🍷', name:'Kosher wine and liquor', tag:'<span class="tsub">cRc and Star-K lists</span>' },
-    { go:'photos',    ic:'📸', name:'Past events',            tag:'<span class="tsub">Photo gallery</span>' },
+    { go:'photos',    ic:'📸', name:'Photos of past events',  tag:'<span class="tsub">Our food and setups</span>' },
     { go:'documents', ic:'📁', name:'Documents',              tag:'<span class="tsub">Floorplans, logo, uploads</span>' },
     { go:'questions', ic:'💬', name:'Chat with us',           tag:chatTag }
   ];
