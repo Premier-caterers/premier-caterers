@@ -1126,39 +1126,44 @@ async function _fetchGmailRaw(query, max){
 // template is chosen. Contract signing links auto-append when a contract
 // exists — no checkbox needed, per Kenny's spec.
 const DEFAULT_EMAIL_TEMPLATES = [
-  { id:'tpl_menu_proposal', builtIn:true, name:'Menu proposal', attachEstimate:true, includeContract:true,
+  { id:'tpl_menu_proposal', builtIn:true, name:'Menu proposal', attachEstimate:false, includeContract:true,
     subject:'{clientName} - {eventName}{eventDateParen} Premier Caterers',
     body:
-`Dear {firstName},
+`{firstName},
 
 Thank you for considering Premier Caterers for your {eventName}{eventDateOn}.
 
-Please find your proposed menu and cost estimate attached as a PDF. We would be delighted to review it with you, make any adjustments to suit your taste and guest count, and answer any questions you may have.
+We would be delighted to review your menu with you, make any adjustments to suit your taste and guest count, and answer any questions you may have.
 
 Looking forward to working with you.
 
 Warm regards,
+{senderName}
+{scheduleCall}
 Premier Caterers
-events@thepremiercaterer.com
+(201) 250-9487
 thepremiercaterer.com` },
 
   { id:'tpl_followup', builtIn:true, name:'Follow-up: still deciding?', attachEstimate:false, includeContract:true,
     subject:'Checking in — {eventName}{eventDateParen}',
     body:
-`Dear {firstName},
+`{firstName},
 
 Just a friendly follow-up on your upcoming {eventName}{eventDateOn}. We wanted to check in and see if you had any questions about the menu or estimate we sent, or if there's anything we can adjust to better fit what you have in mind.
 
 We'd love to work with you and are happy to hop on a quick call whenever it's convenient.
 
 Warm regards,
+{senderName}
+{scheduleCall}
 Premier Caterers
-events@thepremiercaterer.com` },
+(201) 250-9487
+thepremiercaterer.com` },
 
   { id:'tpl_confirm', builtIn:true, name:'Final confirmation', attachEstimate:true, includeContract:false,
     subject:'Final details for your {eventName}{eventDateParen}',
     body:
-`Dear {firstName},
+`{firstName},
 
 We're looking forward to catering your {eventName}{eventDateOn}. Attached is the final invoice reflecting all agreed-upon details.
 
@@ -1169,13 +1174,16 @@ Balance due at this time: {balance}.
 Thank you again for choosing Premier Caterers — we can't wait to serve you and your guests.
 
 Warm regards,
+{senderName}
+{scheduleCall}
 Premier Caterers
-events@thepremiercaterer.com` },
+(201) 250-9487
+thepremiercaterer.com` },
 
   { id:'tpl_thanks_booking', builtIn:true, name:'Thanks for booking', attachEstimate:true, includeContract:false,
     subject:'Welcome aboard — {eventName}{eventDateParen}',
     body:
-`Dear {firstName},
+`{firstName},
 
 Thank you for booking Premier Caterers for your {eventName}{eventDateOn}. We're honored you chose us.
 
@@ -1184,13 +1192,16 @@ Your signed contract and confirmed estimate are attached for your records. As we
 If anything comes up in the meantime, don't hesitate to reach out.
 
 Warm regards,
+{senderName}
+{scheduleCall}
 Premier Caterers
-events@thepremiercaterer.com` },
+(201) 250-9487
+thepremiercaterer.com` },
 
   { id:'tpl_payment_received', builtIn:true, name:'Payment received', attachEstimate:false, includeContract:false,
     subject:'Payment received \u2014 {clientName}{eventDateParen} Premier Caterers',
     body:
-`Dear {firstName},
+`{firstName},
 
 Thank you \u2014 we've received your payment for your {eventName}{eventDateOn}.
 
@@ -1199,28 +1210,67 @@ An updated invoice is attached showing the payment applied. Your current balance
 Please don't hesitate to reach out with any questions.
 
 Warm regards,
+{senderName}
+{scheduleCall}
 Premier Caterers
-events@thepremiercaterer.com
+(201) 250-9487
 thepremiercaterer.com` },
 
   { id:'tpl_payment_reminder', builtIn:true, name:'Payment reminder', attachEstimate:true, includeContract:false,
     subject:'Friendly reminder — balance for {eventName}{eventDateParen}',
     body:
-`Dear {firstName},
+`{firstName},
 
 A friendly reminder that a balance of {balance} is currently outstanding for your {eventName}{eventDateOn}. Please find the updated invoice attached for your reference.
 
 If you've already sent the payment, please disregard this note. Otherwise, we'd appreciate you settling the balance at your convenience.
 
 Warm regards,
+{senderName}
+{scheduleCall}
 Premier Caterers
-events@thepremiercaterer.com` }
+(201) 250-9487
+thepremiercaterer.com` }
 ];
 
 let emailTemplates = DEFAULT_EMAIL_TEMPLATES.slice();
 let _emailTemplatesReady = false;
 
 // Fill in {placeholder} tokens from inquiry + invoice context.
+// Who is sending (first name for the sign-off) and their "schedule a call"
+// link. Only Kenny has a booking link today; add others here.
+const SENDER_BOOKING_URLS = { owner: 'https://calendar.app.google/hAWhPmpDwaofKDpR8' };
+function _senderFirstName(){
+  const map = { owner:'Kenny', kenny:'Kenny', shelley:'Shelley', josh:'Josh', barry:'Barry' };
+  return map[(typeof authUser!=='undefined' && authUser) || ''] || 'Premier Caterers';
+}
+function _senderBookingUrl(){ return SENDER_BOOKING_URLS[(typeof authUser!=='undefined' && authUser) || ''] || ''; }
+
+// Upgrade saved templates (Nov 2026): greeting without "Dear", sign-off with
+// the sender's name + booking link, and the menu email no longer says the
+// menu is "attached as a PDF" (the event page button replaces it). Only
+// rewrites the standard wording, so anything hand-written stays as it is.
+const _NEW_SIGNOFF = "Warm regards,\n{senderName}\n{scheduleCall}\nPremier Caterers\n(201) 250-9487\nthepremiercaterer.com";
+function _upgradeTemplateBody(body){
+  let b = String(body||'');
+  b = b.replace(/^Dear \{firstName\},/, '{firstName},');
+  b = b.replace(/Warm regards,\nPremier Caterers\nevents@thepremiercaterer\.com(\nthepremiercaterer\.com)?\s*$/, _NEW_SIGNOFF);
+  b = b.replace('Please find your proposed menu and cost estimate attached as a PDF. We would be delighted to review it with you,', 'We would be delighted to review your menu with you,');
+  return b;
+}
+function _upgradeSavedTemplates(byId){
+  let changed = false;
+  try{
+    Object.keys(byId).forEach(function(id){
+      const t = byId[id]; if(!t) return;
+      const nb = _upgradeTemplateBody(t.body);
+      if(nb !== t.body){ t.body = nb; changed = true; }
+      if(id==='tpl_menu_proposal' && !t._v2){ t.attachEstimate = false; t._v2 = true; changed = true; }
+    });
+  }catch(e){}
+  return changed;
+}
+
 function applyTemplatePlaceholders(text, ctx){
   if(!text) return '';
   const c = ctx || {};
@@ -1239,9 +1289,12 @@ function applyTemplatePlaceholders(text, ctx){
     balance:     (c.balance != null) ? ('$' + Number(c.balance).toFixed(2)) : '',
     grandTotal:  (c.grandTotal != null) ? ('$' + Number(c.grandTotal).toFixed(2)) : '',
     deposit:     (c.deposit != null) ? ('$' + Number(c.deposit).toFixed(2)) : '',
-    signLink:    c.signLink || ''
+    signLink:    c.signLink || '',
+    senderName:  _senderFirstName(),
+    scheduleCall: _senderBookingUrl() ? ('Schedule a call with me: ' + _senderBookingUrl()) : ''
   };
-  return String(text).replace(/\{(\w+)\}/g, (m,k) => Object.prototype.hasOwnProperty.call(map,k) ? map[k] : m);
+  const out = String(text).replace(/\{(\w+)\}/g, (m,k) => Object.prototype.hasOwnProperty.call(map,k) ? map[k] : m);
+  return out.replace(/\n[ \t]*\n(?=Premier Caterers\n\(201\))/g, '\n'); // no booking link -> no blank line
 }
 
 // Build the context object we hand to applyTemplatePlaceholders. Pulls from
@@ -1292,7 +1345,9 @@ function startEmailTemplates(){
         // Firestore versions override any built-in with the same id.
         const byId = {}; DEFAULT_EMAIL_TEMPLATES.forEach(t => byId[t.id] = Object.assign({}, t));
         list.forEach(t => { if(t && t.id) byId[t.id] = t; });
+        const upgraded = _upgradeSavedTemplates(byId);
         emailTemplates = Object.values(byId);
+        if(upgraded){ try{ db.collection('settings').doc('emailTemplates').set({ templates: emailTemplates, _updatedAt: Date.now() }, { merge:true }); }catch(e){} }
       } else {
         emailTemplates = DEFAULT_EMAIL_TEMPLATES.slice();
         // Seed Firestore with defaults on first run.
@@ -8340,6 +8395,7 @@ function openMenuEmail(inq, link){
   const ctx = buildTemplateContext(inq, { invoiceEid: 'inq_'+inq.id });
   const hasSignLink = !!ctx.signLink;
 
+  _menuEmailPortalUrl = '';
   // Ensure a client portal exists for this inquiry (create on first menu send),
   // and make its link available to drop into the email body.
   let _portalUrl = '';
@@ -8351,8 +8407,10 @@ function openMenuEmail(inq, link){
         if(newPid){
           const np = clientPortals[newPid];
           const nurl = PORTAL_BASE_URL + '?p=' + encodeURIComponent(newPid) + '&t=' + encodeURIComponent((np&&np.token)||'');
+          _menuEmailPortalUrl = nurl;
           const bodyEl = document.getElementById('menu-email-body');
           if(bodyEl && bodyEl.value.indexOf('portal.html')===-1){ bodyEl.value = _appendPortalLink(bodyEl.value, nurl); }
+          _setPortalLinkStatus(true);
         }
       });
     } else if(pid){
@@ -8365,6 +8423,7 @@ function openMenuEmail(inq, link){
       if(clientPortals[pid]){
         const p = clientPortals[pid];
         _portalUrl = PORTAL_BASE_URL + '?p=' + encodeURIComponent(pid) + '&t=' + encodeURIComponent(p.token||'');
+        _menuEmailPortalUrl = _portalUrl;
       }
     }
   }catch(e){}
@@ -8405,19 +8464,21 @@ function openMenuEmail(inq, link){
     +'<div class="modal-row"><label>Subject</label><input type="text" id="menu-email-subject" value="'+subject.replace(/"/g,'&quot;')+'"></div>'
     +'<div class="modal-row"><label>Message</label><textarea id="menu-email-body" style="min-height:220px">'+body+'</textarea></div>'
     +((inq.estimate && Array.isArray(inq.estimate.lines) && inq.estimate.lines.length)
-      ? '<div class="modal-row" style="display:flex;align-items:center;gap:8px;margin-bottom:.5rem"><input type="checkbox" id="menu-email-estimate"'+(defaultAttachEstimate?' checked':'')+' style="width:auto;flex:none"><label for="menu-email-estimate" style="margin:0;cursor:pointer;font-weight:400">Also attach the cost estimate as a PDF</label></div>'
+      ? '<div class="modal-row" style="display:flex;align-items:center;gap:8px;margin-bottom:.5rem"><input type="checkbox" id="menu-email-estimate" style="width:auto;flex:none"><label for="menu-email-estimate" style="margin:0;cursor:pointer;font-weight:400">Also attach the cost estimate as a PDF</label></div>'
       : '')
     +(hasSignLink
       ? '<div style="font-size:11px;color:var(--green-text);margin-bottom:.5rem;display:flex;align-items:center;gap:5px"><i class="ti ti-file-certificate" style="font-size:12px"></i> Contract signing link included in message body</div>'
       : (contracts[('inq_'+inq.id)] || (typeof contractSignLink==='function' && contractSignLink('inq_'+inq.id))) ? ''
         : '<div style="font-size:11px;color:var(--text3);margin-bottom:.5rem;display:flex;align-items:center;gap:5px"><i class="ti ti-info-circle" style="font-size:12px"></i> No contract yet for this event \u2014 create one to include a signing link automatically.</div>')
-    +'<div style="font-size:11px;color:var(--text3);margin-bottom:1rem">The current menu will be attached as a PDF file — the client gets it directly, with no Google Drive permission needed.</div>'
+    +'<div id="menu-email-portal-status" style="font-size:12px;margin-bottom:.6rem"></div>'
+    +(_menuEmailLink ? '<div class="modal-row" style="display:flex;align-items:center;gap:8px;margin-bottom:1rem"><input type="checkbox" id="menu-email-menupdf" style="width:auto;flex:none"><label for="menu-email-menupdf" style="margin:0;font-size:13px">Also attach menu PDF <span style="color:var(--text3);font-size:11px">(the menu is on their event page either way)</span></label></div>' : '')
     +manualAttachWidgetHtml('menu')
     +'<div style="display:flex;gap:8px;justify-content:flex-end">'
     +'<button class="btn-cancel" onclick="document.getElementById(\'sendEmailModal\').remove()">Cancel</button>'
     +'<button class="btn-save" id="menu-email-send" onclick="confirmSendMenuEmail()"><i class="ti ti-send" style="font-size:13px"></i> Send</button>'
     +'</div></div>';
   document.body.appendChild(m);
+  _setPortalLinkStatus(!!_portalUrl);
   setTimeout(()=>document.getElementById('menu-email-to')?.focus(),50);
 }
 
@@ -8437,13 +8498,43 @@ function _appendSignLink(body, link){
   return body + block;
 }
 
+const EVENT_PAGE_LEAD = 'Your menu, estimate and all your event details are on your event page:';
 function _appendPortalLink(body, link){
   if(!link) return body;
-  if(body && body.indexOf(link) >= 0) return body;
-  const block = '\n\n\u2500\u2500\u2500\nYour event portal (view your menu & estimate, sign your contract, share details, and message us any time):\n' + link + '\n\u2500\u2500\u2500';
+  body = body || '';
+  if(body.indexOf(link) >= 0) return body;
+  const block = EVENT_PAGE_LEAD + '\n' + link;
+  const paras = body.split(/\n\s*\n/);
+  // Right after the opening thank-you (greeting = paragraph 1, thank-you = paragraph 2).
+  if(paras.length >= 3){ paras.splice(2, 0, block); return paras.join('\n\n'); }
   const m = body.match(/\n(Warm regards|Best regards|Best|Sincerely|Thanks|Thank you)[,\n]/i);
-  if(m){ const idx = m.index; return body.slice(0, idx) + block + body.slice(idx); }
-  return body + block;
+  if(m){ return body.slice(0, m.index) + '\n\n' + block + '\n' + body.slice(m.index); }
+  return body + '\n\n' + block;
+}
+
+// HTML version of the menu email: plain text, except the event page block
+// becomes a big button and the booking line becomes a link.
+function _menuEmailHtml(body){
+  const escH = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const urlRe = /(https?:\/\/[^\s<]+)/g;
+  const paras = String(body||'').split(/\n\s*\n/);
+  const html = paras.map(function(p){
+    const lines = p.split('\n');
+    if(lines[0].trim() === EVENT_PAGE_LEAD && lines[1] && /^https?:\/\//.test(lines[1].trim())){
+      const u = escH(lines[1].trim());
+      return '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:4px 0 18px"><tr><td style="border:1px solid #e6e1d8;background:#faf7f2;border-radius:10px;padding:18px;text-align:center">'
+        + '<div style="font-size:14px;color:#333;margin-bottom:12px">Your menu, estimate and all your event details are ready on your event page.</div>'
+        + '<a href="'+u+'" target="_blank" style="display:inline-block;background:#7a2e3d;color:#ffffff;font-weight:bold;font-size:16px;padding:13px 26px;border-radius:8px;text-decoration:none">Open your event page &rarr;</a>'
+        + '<div style="font-size:12px;color:#666;margin-top:12px">Menu &middot; Estimate &middot; Contract &middot; Final checklist &middot; Linen colors &middot; Photos &middot; Chat with us</div>'
+        + '</td></tr></table>';
+    }
+    return '<p style="margin:0 0 14px">' + lines.map(function(l){
+      const bm = l.match(/^Schedule a call with me:\s*(https?:\/\/\S+)\s*$/);
+      if(bm) return '<a href="'+escH(bm[1])+'" target="_blank">\ud83d\udcc5 Schedule a call with me</a>';
+      return escH(l).replace(urlRe,'<a href="$1">$1</a>');
+    }).join('<br>') + '</p>';
+  }).join('');
+  return '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222">' + html + '</div>';
 }
 
 // Called from the send-menu template dropdown when the user picks a different template.
@@ -8461,11 +8552,19 @@ function applyChosenTemplate(tplId){
   const estChk = document.getElementById('menu-email-estimate');
   if(subEl) subEl.value = subject;
   if(bodyEl) bodyEl.value = body;
-  if(estChk) estChk.checked = tpl.attachEstimate !== false;
+  if(bodyEl && _menuEmailPortalUrl) bodyEl.value = _appendPortalLink(bodyEl.value, _menuEmailPortalUrl);
+  if(estChk) estChk.checked = false;
 }
 window.applyChosenTemplate = applyChosenTemplate;
 
 let _menuEmailLink = '';
+let _menuEmailPortalUrl = '';
+function _setPortalLinkStatus(ready){
+  const el = document.getElementById('menu-email-portal-status'); if(!el) return;
+  el.innerHTML = ready
+    ? '<span style="display:inline-flex;gap:6px;align-items:center;padding:6px 10px;border:1.5px solid #3B6D11;background:#EAF3DE;color:#27500A;border-radius:8px">\u2713 Event page link is in the email</span>'
+    : '<span style="display:inline-flex;gap:6px;align-items:center;padding:6px 10px;border:1.5px dashed #8F6A1E;background:#FAF0DC;color:#5C4210;border-radius:8px">\u231b Getting the event page link\u2026</span>';
+}
 let _menuEmailFilename = 'Menu.pdf';
 let _menuEmailInqId = '';
 function openMenuEmail_OLD_UNUSED(){}
@@ -8579,14 +8678,37 @@ window.deleteEmailTemplate = deleteEmailTemplate;
 async function confirmSendMenuEmail(){
   const to = document.getElementById('menu-email-to')?.value?.trim();
   const subject = document.getElementById('menu-email-subject')?.value?.trim();
-  const body = document.getElementById('menu-email-body')?.value?.trim();
+  let body = document.getElementById('menu-email-body')?.value?.trim();
   if(!to){ alert('Please enter a recipient email.'); return; }
   const btn = document.getElementById('menu-email-send');
-  if(btn){ btn.disabled=true; btn.textContent='Preparing PDF...'; }
-  // Build the PDF attachment from the linked menu
+  const wantMenuPdf = !!document.getElementById('menu-email-menupdf')?.checked;
+  // The event page link is now how clients see the menu — make sure it's in.
+  if(body.indexOf('portal.html') === -1){
+    if(btn){ btn.disabled=true; btn.textContent='Getting event page link...'; }
+    try{
+      const inqP = _findInq(_menuEmailInqId);
+      let pid = inqP && (inqP.portalId || _findPortalIdForInquiry(inqP.id));
+      if(!pid && inqP) pid = await createInquiryPortal(inqP.id, { silent:true });
+      for(let k=0; k<20 && pid && !(clientPortals[pid] && clientPortals[pid].token); k++){ await new Promise(r=>setTimeout(r,250)); }
+      if(pid && clientPortals[pid] && clientPortals[pid].token){
+        _menuEmailPortalUrl = PORTAL_BASE_URL + '?p=' + encodeURIComponent(pid) + '&t=' + encodeURIComponent(clientPortals[pid].token);
+        body = _appendPortalLink(body, _menuEmailPortalUrl);
+        const bEl = document.getElementById('menu-email-body'); if(bEl) bEl.value = body;
+        _setPortalLinkStatus(true);
+      }
+    }catch(e){ console.warn('event page link for menu email failed', e); }
+    if(body.indexOf('portal.html') === -1 && !wantMenuPdf){
+      if(!confirm('The event page link could not be added, and no menu PDF is attached.\n\nThe client would not be able to see the menu.\n\nSend anyway?')){
+        if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-send" style="font-size:13px"></i> Send'; }
+        return;
+      }
+    }
+  }
+  if(btn){ btn.disabled=true; btn.textContent= wantMenuPdf ? 'Preparing PDF...' : 'Preparing...'; }
+  // Menu PDF only when ticked — the menu lives on the event page.
   let attachments = [];
   try{
-    if(_menuEmailLink){
+    if(_menuEmailLink && wantMenuPdf){
       const b64 = await fetchMenuPdfBase64(_menuEmailLink);
       attachments = [{ filename:_menuEmailFilename || 'Menu.pdf', mime:'application/pdf', base64:b64 }];
     }
@@ -8614,7 +8736,7 @@ async function confirmSendMenuEmail(){
   }
   attachments = attachments.concat(takeManualAttachments('menu'));
   if(btn) btn.textContent='Sending...';
-  const htmlBody = '<div style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap;line-height:1.6">'+body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1">$1</a>')+'</div>';
+  const htmlBody = _menuEmailHtml(body);
   const fromChoice = (document.getElementById('menu-email-from')||{}).value || 'events';
   const sendAs = fromChoice === 'events' ? '' : fromAddressEmail(fromChoice);
   const ok = await sendGmailEmail(to, subject, body, htmlBody, attachments, sendAs);
@@ -10880,7 +11002,11 @@ async function sendClientEmailFromModal(inqId){
   let bodyMinusSig = bodyText;
   const sigStart = bodyMinusSig.lastIndexOf('\n— ');
   if(sigStart >= 0) bodyMinusSig = bodyMinusSig.slice(0, sigStart);
-  const htmlBody = '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.55;color:#222">'+escapeHtml(bodyMinusSig).replace(/\n/g,'<br>')+_signatureHtmlBlock(authUser)+'</div>';
+  // A template already ends with its own sign-off ("Warm regards, <name> ...") — don't add a second one.
+  const hasTplSignoff = /\nWarm regards,\n/.test(bodyText);
+  const htmlBody = hasTplSignoff
+    ? _menuEmailHtml(bodyText)
+    : '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.55;color:#222">'+escapeHtml(bodyMinusSig).replace(/\n/g,'<br>')+_signatureHtmlBlock(authUser)+'</div>';
   const btn=document.getElementById('cem_send_btn');
   if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i>Sending…'; }
   let ok=false;
@@ -14533,7 +14659,7 @@ function openPaymentConfirmEmail(eid, amount, method, checkNum){
     const methodStr = method + (method==='Check' && checkNum ? (' #' + checkNum) : '');
     // Prepend a one-line summary right after "Dear {name}," if present, else at top.
     const inject = '\n\nPayment received: ' + amtStr + ' (' + methodStr + ').';
-    body = body.replace(/(Dear [^\n]+\n)/, '$1' + inject + '\n');
+    body = body.replace(/^([^\n]+,\n)/, '$1' + inject + '\n');
   } else {
     const balStr = '$' + Math.max(0, tots.balance).toFixed(2);
     const amtStr = '$' + (parseFloat(amount)||0).toFixed(2);
@@ -14541,7 +14667,7 @@ function openPaymentConfirmEmail(eid, amount, method, checkNum){
     const isFullyPaid = tots.balance <= 0.01;
     subject = 'Payment received \u2014 ' + ctx.clientName + (ctx.eventDateFmt?(' ('+ctx.eventDateFmt+')'):'') + ' Premier Caterers';
     body =
-`Dear ${ctx.firstName || ctx.clientName || 'Valued Client'},
+`${ctx.firstName || ctx.clientName || 'Valued Client'},
 
 Thank you \u2014 we've received your payment of ${amtStr} (${methodStr}) for your ${ctx.eventName}${ctx.eventDateFmt?' on '+ctx.eventDateFmt:''}.
 
@@ -14550,8 +14676,10 @@ ${isFullyPaid ? 'Your account is now paid in full. We look forward to serving yo
 Please don't hesitate to reach out with any questions.
 
 Warm regards,
-Premier Caterers
-events@thepremiercaterer.com`;
+${_senderFirstName()}
+${_senderBookingUrl() ? ('Schedule a call with me: '+_senderBookingUrl()+'\n') : ''}Premier Caterers
+(201) 250-9487
+thepremiercaterer.com`;
   }
 
   document.getElementById('sendEmailModal')?.remove();
@@ -14631,7 +14759,7 @@ async function confirmSendPaymentEmail(eid){
   }
   attachments = attachments.concat(takeManualAttachments('payment'));
   if(btn) btn.textContent='Sending...';
-  const htmlBody = '<div style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap;line-height:1.6">'+body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1">$1</a>')+'</div>';
+  const htmlBody = _menuEmailHtml(body);
   const fromChoice = (document.getElementById('pmt-email-from')||{}).value || 'events';
   const sendAs = fromChoice === 'events' ? '' : fromAddressEmail(fromChoice);
   const ok = await sendGmailEmail(to, subject, body, htmlBody, attachments, sendAs);
