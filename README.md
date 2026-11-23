@@ -14,7 +14,6 @@ Rules for making changes are in [CLAUDE.md](CLAUDE.md).
 | `dropoff.html` | Drop-off / à-la-carte ordering | Clients + staff (embedded on the website) |
 | `eventday.html` | Event Day — phone app for event staff | Staff |
 | `hub.html` | Communications hub (one screen for messages and tasks) | Staff |
-| `hub-preview.html` | Earlier preview of the hub | — |
 | `brief.html` | Interactive message brief | Kenny |
 | `purchasing.html` | Purchasing, vendor pricing, invoice scanning | Staff |
 | `grocery.html` | Grocery lists | Kitchen |
