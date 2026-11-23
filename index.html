@@ -2137,7 +2137,7 @@ function startFirebaseListeners(){
  * Gmail. This screen only reads them, and lets staff move, add or remove an
  * email, add more addresses for a client, and rename the attachments folder.
  *
- * Data (all readable only by real staff logins — see firestore.rules):
+ * Data (all readable only by real staff logins — see firebase/firestore.rules):
  *   eventEmails/{id}               one email: who, subject, date, snippet,
  *                                  inquiryIds (the events it is on), attachments
  *   eventEmails/{id}/content/body  the full text, fetched only when opened
