@@ -1688,6 +1688,23 @@ function emailBreakdownHtml(order){
 }
 const APP_URL = 'https://premier-caterers.github.io/premier-caterers/dropoff.html';
 
+// ── SECURITY LOCK (Nov 23, 2026) ──
+// Staff sends to the Apps Script relay carry the signed-in staff login, so
+// the relay can refuse strangers. Client (guest) sends are unchanged.
+(function(){
+  if(window.__pcRelayAuth) return; window.__pcRelayAuth = true;
+  var _fetch = window.fetch.bind(window);
+  window.fetch = function(input, init){
+    if(typeof input !== 'string' || input.indexOf('script.google.com/macros/') < 0) return _fetch(input, init);
+    var u = null;
+    try{ u = (window.firebase && firebase.apps && firebase.apps.length) ? firebase.auth().currentUser : null; }catch(e){}
+    if(!u || u.isAnonymous) return _fetch(input, init);
+    return u.getIdToken().then(function(t){
+      return _fetch(input + (input.indexOf('?') >= 0 ? '&' : '?') + 'pcAuth=' + encodeURIComponent(t), init);
+    }, function(){ return _fetch(input, init); });
+  };
+})();
+
 // Shared "big yellow number" banner + view/PDF links, used at the top and
 // bottom of every order email and the in-app order view. The order's
 // number is "Unlinked" until staff link it to a job — after that, this
@@ -1830,6 +1847,13 @@ async function sendApprovalConfirmationEmail(order, orderId){
 async function sendClientConfirmationEmail(order, orderId){
   const relay = await getRelayUrl();
   if(!relay || !order.contactEmail) return;
+  // Guests: the relay writes this email itself from the saved order (it no
+  // longer sends free-form email for people who aren't signed in as staff).
+  if(!isStaff){
+    try{ await fetch(relay, { method:'POST', body: JSON.stringify({ action:'dropoffClientConfirm', orderId: orderId }) }); }
+    catch(e){ console.warn('client confirmation email failed', e); }
+    return;
+  }
 
   const rows = order.lines.map(l=>
     '<tr>'+
