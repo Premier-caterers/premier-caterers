@@ -78,7 +78,12 @@ var PC_STAFF_ONLY_ACTIONS = {
   aiSummarizeClient: 1, aiParseInquiry: 1,
   deleteFile: 1, getPdf: 1, copyOneTemplate: 1,
   calAdd: 1, calMark: 1, calUpdate: 1,
-  smsSend: 1
+  smsSend: 1,
+  // round 2 (Nov 23, 2026): email sending, AI and document reading
+  sendMenuEmail: 1, parseInvoice: 1, getDocText: 1,
+  generateSuggestions: 1, generateGrocery: 1,
+  processFollowups: 1, followupApi: 1
+  // followupAction stays open: its email buttons carry their own signature
 };
 
 function pcIsStaff_(e) {
