@@ -65,7 +65,9 @@ service cloud.firestore {
         // staff photo albums (clients read the separate galleryAlbums copy)
         'photoAlbums',
         // old purchasing password checks, no longer used by any page (locked Nov 23, 2026)
-        'appAuth'
+        'appAuth',
+        // the weekly events list: client names, emails, phones, addresses (locked Nov 23, 2026)
+        'events'
       ];
     }
 
