@@ -1928,6 +1928,9 @@ async function lookupMyOrders(){
   const listEl = document.getElementById('myOrdersList');
   if(!email){ listEl.innerHTML = '<div class="empty">Enter the email you ordered with.</div>'; return; }
   listEl.innerHTML = '<div class="empty">Looking…</div>';
+  // Nov 23, 2026: looking orders up by email is staff-only, so nobody can see
+  // another person's orders by typing their email. Guests use their order link.
+  if(!isStaff){ listEl.innerHTML = '<div class="empty">For your privacy, please use the link in your order confirmation email to view or reorder a past order. Need help? Reply to that email or call us.</div>'; return; }
   try{
     // Two equality filters alone don't need a custom Firestore index, but
     // adding orderBy on a third field does — so the sort happens here in
