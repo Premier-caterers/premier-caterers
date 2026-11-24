@@ -67,7 +67,9 @@ service cloud.firestore {
         // old purchasing password checks, no longer used by any page (locked Nov 23, 2026)
         'appAuth',
         // the weekly events list: client names, emails, phones, addresses (locked Nov 23, 2026)
-        'events'
+        'events',
+        // invoices and follow-up reminders: no public page needs them (locked Nov 23, 2026)
+        'invoices', 'followupReminders'
       ];
     }
 
@@ -92,6 +94,7 @@ service cloud.firestore {
         && !(coll in kennyOnly())
         && coll != 'settings'
         && !(coll in clientRecords())
+        && coll != 'inquiries'
         && (!(coll in staffOnly()) || isStaff());
     }
 
@@ -99,11 +102,21 @@ service cloud.firestore {
     // event page, contract signing, follow-up buttons) open ONE record by its
     // exact link. Only a real staff login may list or search these, or delete.
     function clientRecords() {
-      return ['inquiries', 'invoices', 'contracts', 'clientPortals', 'followupReminders'];
+      return ['contracts', 'clientPortals', 'dropOffOrders'];
     }
     match /{coll}/{doc=**} {
       allow get, create, update: if coll in clientRecords() && request.auth != null;
       allow list, delete: if coll in clientRecords() && isStaff();
+    }
+
+    // STEP 6 (23 Nov 2026): inquiries. The website form and drop-off create
+    // new ones; the form may then add its menu links. Everything else —
+    // opening, listing, changing, deleting — needs a real staff login.
+    match /inquiries/{doc=**} {
+      allow read, write: if isStaff();
+      allow create: if request.auth != null;
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['menuDocs']);
     }
 
     // STEP 4 (23 Nov 2026): app Settings. Any signed-in page may read it, but only
