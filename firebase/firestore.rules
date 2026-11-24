@@ -94,15 +94,14 @@ service cloud.firestore {
         && !(coll in kennyOnly())
         && coll != 'settings'
         && !(coll in clientRecords())
-        && coll != 'inquiries'
+        && !(coll in ['inquiries', 'contracts', 'clientPortals', 'linkKeys'])
         && (!(coll in staffOnly()) || isStaff());
     }
 
-    // STEP 5 (23 Nov 2026): client records. Public pages (inquiry form, client
-    // event page, contract signing, follow-up buttons) open ONE record by its
-    // exact link. Only a real staff login may list or search these, or delete.
+    // STEP 5 (23 Nov 2026): drop-off orders. Guests open ONE order by its exact
+    // link (a long random ID). Only a real staff login may list or delete.
     function clientRecords() {
-      return ['contracts', 'clientPortals', 'dropOffOrders'];
+      return ['dropOffOrders'];
     }
     match /{coll}/{doc=**} {
       allow get, create, update: if coll in clientRecords() && request.auth != null;
@@ -117,6 +116,48 @@ service cloud.firestore {
       allow create: if request.auth != null;
       allow update: if request.auth != null
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['menuDocs']);
+    }
+
+    // STEP 7 (23 Nov 2026): contracts and client event pages open ONLY for a
+    // visitor who has the secret code from the emailed link (the t= part).
+    // sign.html / portal.html first save that code under the visitor's own
+    // sign-in in linkKeys/<their id>; the rules compare it with the record's
+    // token. Old links keep working because they already carry the code.
+    // Visitors may change only what a client normally fills in.
+    function hasLinkKey(f) {
+      return request.auth != null
+        && resource.data.get('token', '') is string
+        && resource.data.get('token', '').size() >= 8
+        && exists(/databases/$(database)/documents/linkKeys/$(request.auth.uid))
+        && get(/databases/$(database)/documents/linkKeys/$(request.auth.uid)).data.get(f, '') == resource.data.token;
+    }
+    function linkKeyOk(f) {
+      return !(f in request.resource.data)
+        || (request.resource.data[f] is string && request.resource.data[f].size() <= 200);
+    }
+    match /linkKeys/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['c', 'p', 'at'])
+        && linkKeyOk('c') && linkKeyOk('p');
+    }
+    match /contracts/{cid} {
+      allow read, write: if isStaff();
+      allow get: if hasLinkKey('c');
+      allow update: if hasLinkKey('c')
+        && resource.data.get('status', '') != 'signed'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'viewedAt', 'status', 'signedName', 'signedEmail', 'signedAt', 'signedAtISO',
+             'signedTZ', 'signatureDataUrl', 'signedUA', 'signedIP', 'signatureId',
+             'documentHash', 'consent', 'consentedAt']);
+    }
+    match /clientPortals/{pid} {
+      allow read, write: if isStaff();
+      allow get: if hasLinkKey('p');
+      allow update: if hasLinkKey('p')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'lastViewedAt', 'selectedEstimateSlot', 'invoiceSnapshot',
+             'clientIntake', 'clientVendorDocs', 'messages']);
     }
 
     // STEP 4 (23 Nov 2026): app Settings. Any signed-in page may read it, but only
