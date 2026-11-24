@@ -63,7 +63,9 @@ service cloud.firestore {
         'groceryStations', 'groceryLists', 'activity', 'roadmap',
         'regulars', 'followupSuggestions', 'checklistEmailLog',
         // staff photo albums (clients read the separate galleryAlbums copy)
-        'photoAlbums'
+        'photoAlbums',
+        // old purchasing password checks, no longer used by any page (locked Nov 23, 2026)
+        'appAuth'
       ];
     }
 
