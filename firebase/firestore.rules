@@ -89,7 +89,19 @@ service cloud.firestore {
       allow read, write: if request.auth != null
         && !(coll in kennyOnly())
         && coll != 'settings'
+        && !(coll in clientRecords())
         && (!(coll in staffOnly()) || isStaff());
+    }
+
+    // STEP 5 (23 Nov 2026): client records. Public pages (inquiry form, client
+    // event page, contract signing, follow-up buttons) open ONE record by its
+    // exact link. Only a real staff login may list or search these, or delete.
+    function clientRecords() {
+      return ['inquiries', 'invoices', 'contracts', 'clientPortals', 'followupReminders'];
+    }
+    match /{coll}/{doc=**} {
+      allow get, create, update: if coll in clientRecords() && request.auth != null;
+      allow list, delete: if coll in clientRecords() && isStaff();
     }
 
     // STEP 4 (23 Nov 2026): app Settings. Any signed-in page may read it, but only
