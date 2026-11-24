@@ -60,11 +60,59 @@ var TEMPLATE_MAP = {
 };
 
 
+
+// ── SECURITY LOCK (Nov 23, 2026) ─────────────────────────────
+// These actions read email, client data or files, so they now only answer a
+// signed-in Premier Caterers staff login (sent by the app as pcAuth).
+// Anyone else gets "Not signed in as Premier Caterers staff."
+var PC_FIREBASE_API_KEY = 'AIzaSyCeBI51t7ydOt6uOuvJ1BjQhwiX9d8jaJc';
+var PC_STAFF_LOGINS = [
+  'kenny@thepremiercaterer.com',
+  'shelley@thepremiercaterer.com',
+  'joshg@thepremiercaterer.com',
+  'bnash.premiercaterers@gmail.com',
+  'kitchen@thepremiercaterer.com'
+];
+var PC_STAFF_ONLY_ACTIONS = {
+  gmailList: 1, gmailGet: 1, gmailProfile: 1,
+  aiSummarizeClient: 1, aiParseInquiry: 1,
+  deleteFile: 1, getPdf: 1, copyOneTemplate: 1,
+  calAdd: 1, calMark: 1, calUpdate: 1
+};
+
+function pcIsStaff_(e) {
+  var t = e && e.parameter && e.parameter.pcAuth;
+  if (!t) return false;
+  var cache = CacheService.getScriptCache();
+  var key = 'pcA_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, t));
+  var hit = cache.get(key);
+  if (hit) return hit === '1';
+  var ok = false;
+  try {
+    var r = UrlFetchApp.fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + PC_FIREBASE_API_KEY, {
+      method: 'post', contentType: 'application/json',
+      payload: JSON.stringify({ idToken: t }), muteHttpExceptions: true
+    });
+    if (r.getResponseCode() === 200) {
+      var users = JSON.parse(r.getContentText()).users || [];
+      var em = users.length ? String(users[0].email || '').toLowerCase() : '';
+      ok = !!em && PC_STAFF_LOGINS.indexOf(em) >= 0;
+    }
+  } catch (err) { ok = false; }
+  cache.put(key, ok ? '1' : '0', ok ? 1800 : 60);
+  return ok;
+}
+
+function pcDenied_() {
+  return _pcJson({ ok: false, success: false, error: 'Not signed in as Premier Caterers staff.' });
+}
+
 // ── ENTRY POINTS ─────────────────────────────────────────────
 
 function doPost(e) {
   var output = ContentService.createTextOutput();
   output.setMimeType(ContentService.MimeType.JSON);
+  try { var _bL = JSON.parse(e.postData.contents); var _actL = (_bL && _bL.action) || (e.parameter && e.parameter.action); if (PC_STAFF_ONLY_ACTIONS[_actL] && !pcIsStaff_(e)) return pcDenied_(); } catch (_err) { if (e && e.parameter && PC_STAFF_ONLY_ACTIONS[e.parameter.action] && !pcIsStaff_(e)) return pcDenied_(); }
   try { var _b = JSON.parse(e.postData.contents); if (_b && _b.action === 'gmailSend') return _pcJson(pcGmailSend_(_b)); } catch (_err) {}
   try { var _b2 = JSON.parse(e.postData.contents); if (_b2 && _b2.action === 'parseInvoice') return _pcJson(pcParseInvoice_(_b2)); } catch (_err) {}
   try { var _b3 = JSON.parse(e.postData.contents); if (_b3 && _b3.action === 'aiParseInquiry') return _pcJson(pcAiParseInquiry_(_b3)); } catch (_err) {}
@@ -86,6 +134,7 @@ function doGet(e) {
   if (_p.action === 'gmailList' && String(_p.max) === '100' && (_p.q === 'in:inbox' || _p.q === 'in:sent')) {
     return ContentService.createTextOutput(JSON.stringify({ ok: true, messages: [] })).setMimeType(ContentService.MimeType.JSON);
   }
+  if (PC_STAFF_ONLY_ACTIONS[_p.action] && !pcIsStaff_(e)) return pcDenied_();
   var params = e && e.parameter ? e.parameter : {};
   var output = ContentService.createTextOutput();
   output.setMimeType(ContentService.MimeType.JSON);

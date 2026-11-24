@@ -63,7 +63,11 @@ service cloud.firestore {
         'groceryStations', 'groceryLists', 'activity', 'roadmap',
         'regulars', 'followupSuggestions', 'checklistEmailLog',
         // staff photo albums (clients read the separate galleryAlbums copy)
-        'photoAlbums'
+        'photoAlbums',
+        // the Hub's stored emails, WhatsApp messages and send queues (locked Nov 23, 2026)
+        'hubInbox', 'hubLabels', 'hubOutbox', 'hubSenderRules', 'hubSentToApp',
+        'hubSyncStatus', 'hubWaChats', 'hubWaMedia', 'hubWaMsgs', 'hubWaOutbox',
+        'hubFileMemory'
       ];
     }
 

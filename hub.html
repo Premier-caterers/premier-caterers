@@ -542,6 +542,23 @@ const firebaseConfig = {
   appId: "1:471701398759:web:559a7bee3b645ce545ee42"
 };
 const HUB_EMAIL = 'kenny@thepremiercaterer.com';
+
+// ── SECURITY LOCK (Nov 23, 2026) ──
+// Every call to the Apps Script relay now carries the signed-in staff member's
+// login, so the relay can refuse anyone who is not Premier Caterers staff.
+(function(){
+  if(window.__pcRelayAuth) return; window.__pcRelayAuth = true;
+  var _fetch = window.fetch.bind(window);
+  window.fetch = function(input, init){
+    if(typeof input !== 'string' || input.indexOf('script.google.com/macros/') < 0) return _fetch(input, init);
+    var u = null;
+    try{ u = (window.firebase && firebase.apps && firebase.apps.length) ? firebase.auth().currentUser : null; }catch(e){}
+    if(!u) return _fetch(input, init);
+    return u.getIdToken().then(function(t){
+      return _fetch(input + (input.indexOf('?') >= 0 ? '&' : '?') + 'pcAuth=' + encodeURIComponent(t), init);
+    }, function(){ return _fetch(input, init); });
+  };
+})();
 const OWNER_KEY = 'owner';            // how the Operations Hub stores Kenny's My Day items
 const SNOOZE_MS = 2 * 60 * 60 * 1000; // "Later" = 2 hours
 const MAX_DOTS = 12;
