@@ -582,6 +582,23 @@ const authReady = new Promise(function(resolve){
   }, function(e){ console.error('Auth listener failed:', e && e.code); resolve(null); });
 });
 
+// ── SECURITY LOCK (Nov 23, 2026) ──
+// Calls to the Apps Script relays carry the signed-in staff login, so the
+// relays can refuse strangers. Kitchen (no password) sends none.
+(function(){
+  if(window.__pcRelayAuth) return; window.__pcRelayAuth = true;
+  var _fetch = window.fetch.bind(window);
+  window.fetch = function(input, init){
+    if(typeof input !== 'string' || input.indexOf('script.google.com/macros/') < 0) return _fetch(input, init);
+    var u = null;
+    try{ u = firebase.auth().currentUser; }catch(e){}
+    if(!u || u.isAnonymous) return _fetch(input, init);
+    return u.getIdToken().then(function(t){
+      return _fetch(input + (input.indexOf('?') >= 0 ? '&' : '?') + 'pcAuth=' + encodeURIComponent(t), init);
+    }, function(){ return _fetch(input, init); });
+  };
+})();
+
 
 // ── SHARED SETTINGS (Firestore-backed, device-independent) ──
 // Mirrors the main app: relay URLs live at settings/app in Firestore so every
@@ -630,8 +647,8 @@ pcStartSharedSettings();
 
 // ════════ AUTH (shared with the main app) ════════
 const roles = { admin:{canEdit:true}, kenny:{canEdit:true}, shelley:{canEdit:true}, josh:{canEdit:false}, kitchen:{canEdit:false} };
-const OWNER_HASH   = 'd4ae28692a6a51cd93378a6ae5d3c004920edfaaa688e4dbeefb8cbe4730dcae';
-const DEFAULT_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
+// Kenny, Shelley and Josh sign in with their real main-app login (Nov 23, 2026).
+const PC_LOGIN_EMAILS = { owner:'kenny@thepremiercaterer.com', shelley:'shelley@thepremiercaterer.com', josh:'joshg@thepremiercaterer.com' };
 let authUser=null, currentRole=null;
 async function pcHash(s){ const buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(s))); return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
 function loginRoleFor(u){ return u==='owner'?'admin':u; }
@@ -652,7 +669,7 @@ function showLogin(){
 function loginPick(u){
   if(u==='kitchen'){ finishLogin('kitchen'); return; }
   document.getElementById('loginStep').innerHTML =
-    `<div class="lg-title">${prettyName(u)}</div><div class="lg-sub">Enter your password</div>
+    `<div class="lg-title">${prettyName(u)}</div><div class="lg-sub">Enter your main-app password</div>
      <input id="lgPw" type="password" class="lg-input" placeholder="Password" onkeydown="if(event.key==='Enter')loginSubmit('${u}')">
      <div id="lgErr" class="lg-err"></div>
      <button class="lg-go" onclick="loginSubmit('${u}')">Sign in</button>
@@ -661,11 +678,12 @@ function loginPick(u){
 }
 async function loginSubmit(u){
   const pw=(document.getElementById('lgPw')||{}).value||''; const err=document.getElementById('lgErr'); if(err)err.textContent='';
-  const h=await pcHash(pw);
-  if(u==='owner'){ if(h===OWNER_HASH){ finishLogin('owner'); } else if(err){ err.textContent='Incorrect password.'; } return; }
-  let doc=null; try{ const s=await db.collection('appAuth').doc(u).get(); if(s.exists) doc=s.data(); }catch(e){}
-  const storedHash=(doc&&doc.hash)?doc.hash:DEFAULT_HASH;
-  if(h!==storedHash){ if(err)err.textContent='Incorrect password.'; return; }
+  const email=PC_LOGIN_EMAILS[u]; if(!email){ if(err)err.textContent='Unknown user.'; return; }
+  try{ await firebase.auth().signInWithEmailAndPassword(email, pw); }
+  catch(e){
+    if(err) err.textContent = (e && e.code==='auth/network-request-failed') ? 'No connection. Try again.' : 'Incorrect password. Use your main-app password.';
+    return;
+  }
   finishLogin(u);
 }
 function finishLogin(u){
@@ -676,8 +694,17 @@ function finishLogin(u){
   document.getElementById('whoBar').textContent=prettyName(u);
   applyEditPerms(); startData();
 }
-function logout(){ try{ localStorage.removeItem('pcSession'); }catch(e){} showLogin(); }
-function tryResumeSession(){ try{ const s=JSON.parse(localStorage.getItem('pcSession')||'null'); if(s&&s.user&&(s.user==='owner'||roles[loginRoleFor(s.user)])){ finishLogin(s.user); return true; } }catch(e){} return false; }
+function logout(){ try{ localStorage.removeItem('pcSession'); }catch(e){} firebase.auth().signOut().catch(function(){}).then(function(){ location.reload(); }); }
+function tryResumeSession(){
+  try{
+    const s=JSON.parse(localStorage.getItem('pcSession')||'null');
+    if(!s || !s.user) return false;
+    if(s.user==='kitchen'){ finishLogin('kitchen'); return true; }
+    const want=PC_LOGIN_EMAILS[s.user]; const cu=firebase.auth().currentUser;
+    if(want && cu && !cu.isAnonymous && String(cu.email||'').toLowerCase()===want){ finishLogin(s.user); return true; }
+  }catch(e){}
+  return false;
+}
 function applyEditPerms(){ const show=canEdit(); ['addItemBtn','addVendorBtn','bulkAddBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=show?'inline-flex':'none'; }); }
 
 // ════════ DATA ════════
@@ -3979,7 +4006,7 @@ function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.
 window.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
 document.getElementById('modalBg').addEventListener('click',e=>{ if(e.target.id==='modalBg') closeModal(); });
 
-if(!tryResumeSession()) showLogin();
+authReady.then(function(){ if(!tryResumeSession()) showLogin(); });
 </script>
 <div id="slPrintArea"></div>
 </body>
