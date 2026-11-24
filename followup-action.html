@@ -200,6 +200,40 @@ function whoAmI(){
   try{ return localStorage.getItem('pcApproverName') || ''; }catch(e){ return ''; }
 }
 function rememberMe(name){ try{ localStorage.setItem('pcApproverName', name); }catch(e){} }
+
+// ── STAFF SIGN-IN (Nov 23, 2026) ──
+// Reminders and inquiries hold client details, so this page needs a real
+// staff login (same password as the main app). Signed in already on this
+// device = straight through.
+function fuSignIn(){
+  const u0 = firebase.auth().currentUser;
+  if(u0 && !u0.isAnonymous && u0.email && STAFF_EMAILS[String(u0.email).toLowerCase()]) return Promise.resolve();
+  const people = Object.keys(STAFF_EMAILS).map(function(e){ return [STAFF_EMAILS[e], e]; });
+  return new Promise(function(done){
+    const btn='display:block;width:100%;margin:8px 0;padding:12px;font-size:15px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer';
+    function pick(){
+      $body.innerHTML = '<div style="text-align:center"><h2 style="margin:0 0 4px">Sign in to handle this</h2><p style="color:#666;margin:0 0 10px">Who\'s signing in?</p>'
+        + people.map(function(p,i){ return '<button style="'+btn+'" data-i="'+i+'">'+esc(p[0])+'</button>'; }).join('') + '</div>';
+      $body.querySelectorAll('button[data-i]').forEach(function(b){ b.onclick=function(){ pw(+b.getAttribute('data-i')); }; });
+    }
+    function pw(i){
+      $body.innerHTML = '<div style="text-align:center"><h2 style="margin:0 0 4px">'+esc(people[i][0])+'</h2><p style="color:#666;margin:0 0 10px">Enter your main-app password</p>'
+        + '<input id="fuPw" type="password" placeholder="Password" style="width:100%;box-sizing:border-box;padding:11px;font-size:15px;border:1px solid #ccc;border-radius:8px">'
+        + '<div id="fuErr" style="color:#b00020;font-size:13px;min-height:18px;margin-top:6px"></div>'
+        + '<button id="fuGo" style="'+btn+';background:#7A2E3D;color:#fff;border-color:#7A2E3D">Sign in</button>'
+        + '<button id="fuBack" style="'+btn+';border:none;color:#666">&larr; back</button></div>';
+      const inp=document.getElementById('fuPw'), err=document.getElementById('fuErr');
+      async function go(){
+        err.textContent='';
+        try{ await firebase.auth().signInWithEmailAndPassword(people[i][1], inp.value); signedInName = people[i][0]; done(); }
+        catch(e){ err.textContent=(e && e.code==='auth/network-request-failed') ? 'No connection. Try again.' : 'Incorrect password. Use your main-app password.'; }
+      }
+      document.getElementById('fuGo').onclick=go; inp.onkeydown=function(e){ if(e.key==='Enter') go(); };
+      document.getElementById('fuBack').onclick=pick; setTimeout(function(){ inp.focus(); },50);
+    }
+    pick();
+  });
+}
 async function assignedSalesperson(r){
   try{
     if(r.inquiryId){
@@ -281,6 +315,8 @@ authReady = new Promise(function(resolve){
   }catch(e){ renderStop("Couldn't connect", 'Could not start the database connection.'); return; }
 
   await authReady;
+  await fuSignIn();
+  renderLoading();
 
   try{
     const s = await db.collection('settings').doc('app').get();
