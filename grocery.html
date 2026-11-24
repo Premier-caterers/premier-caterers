@@ -664,9 +664,51 @@ const authReady = new Promise(function(resolve){
     firebase.auth().signInAnonymously().then(function(c){ resolve(c && c.user); })
       .catch(function(e){ console.error('Anonymous sign-in failed:', e && e.code); resolve(null); });
   }, function(e){ console.error('Auth listener failed:', e && e.code); resolve(null); });
+
+// ── STAFF SIGN-IN (Nov 23, 2026) ──
+// The events list holds client contact details, so this page now needs a
+// real staff login (same password as the main app). Someone already signed
+// in to the main app on this device goes straight in.
+const GRO_LOGINS = [
+  ['Kenny / Admin','kenny@thepremiercaterer.com'], ['Shelley','shelley@thepremiercaterer.com'],
+  ['Josh','joshg@thepremiercaterer.com'], ['Kitchen','kitchen@thepremiercaterer.com']
+];
+function groStaffSignedIn(){ const u=firebase.auth().currentUser; return !!(u && !u.isAnonymous && u.email); }
+function groSignIn(){
+  if(groStaffSignedIn()) return Promise.resolve();
+  return new Promise(function(done){
+    const ov=document.createElement('div');
+    ov.id='groLogin';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;font-family:inherit';
+    const box='background:#fff;border-radius:12px;max-width:360px;width:100%;padding:22px;text-align:center';
+    const btn='display:block;width:100%;margin:8px 0;padding:12px;font-size:15px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer';
+    function pick(){
+      ov.innerHTML='<div style="'+box+'"><div style="font-size:18px;font-weight:700;margin-bottom:4px">Grocery &amp; Kitchen Copy</div><div style="color:#666;font-size:13px;margin-bottom:10px">Who\'s signing in?</div>'
+        + GRO_LOGINS.map(function(x,i){ return '<button style="'+btn+'" data-i="'+i+'">'+x[0]+'</button>'; }).join('') + '</div>';
+      ov.querySelectorAll('button[data-i]').forEach(function(b){ b.onclick=function(){ pw(+b.getAttribute('data-i')); }; });
+    }
+    function pw(i){
+      ov.innerHTML='<div style="'+box+'"><div style="font-size:18px;font-weight:700;margin-bottom:4px">'+GRO_LOGINS[i][0]+'</div><div style="color:#666;font-size:13px;margin-bottom:10px">Enter your main-app password</div>'
+        + '<input id="groPw" type="password" placeholder="Password" style="width:100%;box-sizing:border-box;padding:11px;font-size:15px;border:1px solid #ccc;border-radius:8px">'
+        + '<div id="groErr" style="color:#b00020;font-size:13px;min-height:18px;margin-top:6px"></div>'
+        + '<button id="groGo" style="'+btn+';background:#7A2E3D;color:#fff;border-color:#7A2E3D">Sign in</button>'
+        + '<button id="groBack" style="'+btn+';border:none;color:#666">&larr; back</button></div>';
+      const inp=ov.querySelector('#groPw'), err=ov.querySelector('#groErr');
+      async function go(){
+        err.textContent='';
+        try{ await firebase.auth().signInWithEmailAndPassword(GRO_LOGINS[i][1], inp.value); ov.remove(); done(); }
+        catch(e){ err.textContent=(e && e.code==='auth/network-request-failed') ? 'No connection. Try again.' : 'Incorrect password. Use your main-app password.'; }
+      }
+      ov.querySelector('#groGo').onclick=go; inp.onkeydown=function(e){ if(e.key==='Enter') go(); };
+      ov.querySelector('#groBack').onclick=pick; setTimeout(function(){ inp.focus(); },50);
+    }
+    pick(); document.body.appendChild(ov);
+  });
+}
 });
 
     await authReady;
+    await groSignIn();
     await loadLibrary();
     await loadEvents();
     initTypeSelects();
