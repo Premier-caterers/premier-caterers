@@ -373,6 +373,9 @@ let activeTab = (focusTab && ['home','overview','menu','invoice','details','docu
 (async function(){
   await authReady;
   if(!pid || !tok){ stateScreen('🔗','Link incomplete','This portal link is missing information. Please use the exact link from your email.'); return; }
+  // SECURITY (Nov 23, 2026): the database only opens an event page for a visitor
+  // who has handed over that page's secret code (the t= part of the link).
+  try{ const u = firebase.auth().currentUser; if(u) await db.collection('linkKeys').doc(u.uid).set({ p: String(tok), at: Date.now() }, { merge:true }); }catch(e){ console.error('link key', e); }
 
   // Extra questions the caterer added for EVERY event (per-event ones live on the portal record).
   db.collection('portalSettings').doc('clientChecklist').onSnapshot(function(s){

@@ -105,6 +105,9 @@ const cid = qp('c'), tok = qp('t');
 (async function(){
   await authReady;
   if(!cid || !tok){ stateScreen('🔗','Link incomplete','This signing link is missing information. Please use the exact link from your email.'); return; }
+  // SECURITY (Nov 23, 2026): the database only opens a contract for a visitor
+  // who has handed over that contract's secret code (the t= part of the link).
+  try{ const u = firebase.auth().currentUser; if(u) await db.collection('linkKeys').doc(u.uid).set({ c: String(tok), at: Date.now() }, { merge:true }); }catch(e){ console.error('link key', e); }
   let doc;
   try{
     const snap = await db.collection('contracts').doc(cid).get();
