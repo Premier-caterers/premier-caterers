@@ -77,7 +77,8 @@ var PC_STAFF_ONLY_ACTIONS = {
   gmailList: 1, gmailGet: 1, gmailProfile: 1,
   aiSummarizeClient: 1, aiParseInquiry: 1,
   deleteFile: 1, getPdf: 1, copyOneTemplate: 1,
-  calAdd: 1, calMark: 1, calUpdate: 1
+  calAdd: 1, calMark: 1, calUpdate: 1,
+  smsSend: 1
 };
 
 function pcIsStaff_(e) {
@@ -103,6 +104,172 @@ function pcIsStaff_(e) {
   return ok;
 }
 
+// ── DROP-OFF SENDING LOCK (Nov 23, 2026) ──────────────────────
+// Strangers (not signed in as staff) may only email Premier's own inboxes
+// and the kitchen printer, a limited number per hour. The client's
+// "we got your order" email is now written HERE from the saved order, so
+// nobody can change what it says or who it goes to.
+var PC_INTERNAL_RECIPIENTS = [
+  'events@thepremiercaterer.com',
+  'bnash.premiercaterers@gmail.com',
+  '47515733707@print.brother.com'
+];
+var PC_DROPOFF_URL = 'https://premier-caterers.github.io/premier-caterers/dropoff.html';
+var PC_FS_PROJECT = 'premier-caterers-internal-app';
+
+function pcHourlyCapOk_(name, limit) {
+  var cache = CacheService.getScriptCache();
+  var key = 'cap_' + name + '_' + Utilities.formatDate(new Date(), 'America/New_York', 'yyyyMMddHH');
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(5000); } catch (e) {}
+  try {
+    var n = parseInt(cache.get(key) || '0', 10);
+    if (n >= limit) return false;
+    cache.put(key, String(n + 1), 3700);
+    return true;
+  } finally { try { lock.releaseLock(); } catch (e) {} }
+}
+
+function pcRecipientsInternal_(to) {
+  var list = String(to || '').toLowerCase().split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  if (!list.length) return false;
+  for (var i = 0; i < list.length; i++) if (PC_INTERNAL_RECIPIENTS.indexOf(list[i]) < 0) return false;
+  return true;
+}
+
+function pcGmailSendGuarded_(b, e) {
+  if (pcIsStaff_(e)) return pcGmailSend_(b);
+  if (!pcRecipientsInternal_(b.to)) return { ok: false, success: false, error: 'Not signed in as Premier Caterers staff.' };
+  if (!pcHourlyCapOk_('internal', 40)) return { ok: false, success: false, error: 'Hourly limit reached.' };
+  return pcGmailSend_({ to: b.to, subject: b.subject, body: b.body, htmlBody: b.htmlBody, attachments: b.attachments });
+}
+
+function pcFsDecode_(v) {
+  if (!v) return null;
+  if ('stringValue' in v) return v.stringValue;
+  if ('integerValue' in v) return parseInt(v.integerValue, 10);
+  if ('doubleValue' in v) return v.doubleValue;
+  if ('booleanValue' in v) return v.booleanValue;
+  if ('timestampValue' in v) return v.timestampValue;
+  if ('arrayValue' in v) return (v.arrayValue.values || []).map(pcFsDecode_);
+  if ('mapValue' in v) { var o = {}, f = v.mapValue.fields || {}; for (var k in f) o[k] = pcFsDecode_(f[k]); return o; }
+  return null;
+}
+
+function pcDoEsc_(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+// Order text comes from the public order form, so web addresses are removed
+// before it goes into an email — the email can't be turned into a scam link.
+function pcDoClean_(s, max) {
+  s = String(s == null ? '' : s)
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/\bwww\.\S+/gi, '')
+    .replace(/\b[\w-]+(\.[\w-]+)*\.[a-z]{2,}\b/gi, '')
+    .replace(/\s+/g, ' ').trim();
+  return s.slice(0, max || 80);
+}
+function pcDoMoney_(n) { return (parseFloat(n) || 0).toFixed(2); }
+function pcDoWhen_(o) {
+  var d = String(o.deliveryDate || '').trim(), out = d;
+  var m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) out = Utilities.formatDate(new Date(+m[1], +m[2] - 1, +m[3], 12), 'America/New_York', 'EEEE, MMM d, yyyy');
+  var t = String(o.deliveryTime || '').trim(), tm = t.match(/^(\d{1,2}):(\d{2})$/);
+  if (tm) { var h = parseInt(tm[1], 10), ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; t = h + ':' + tm[2] + ' ' + ap; }
+  return pcDoClean_([out, t].filter(Boolean).join(' · '), 60);
+}
+
+function pcDropoffClientEmail_(o, orderId) {
+  var PAY = { cash: 'Cash', check: 'Check', zelle: 'Zelle', credit: 'Credit card (3.4% fee added)', masterbill: 'Add to events master bill' };
+  var num = pcDoClean_(o.subLabel || 'Unlinked', 30);
+  var first = pcDoClean_(String(o.contactName || '').split(' ')[0], 30);
+  var lines = (o.lines || []).slice(0, 60);
+  var rows = lines.map(function (l) {
+    l = l || {};
+    var qty = parseFloat(l.qty) || 0;
+    return '<tr>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;font-family:monospace;color:#555">' + pcDoEsc_(qty) + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee">' + pcDoEsc_(pcDoClean_(l.itemName, 80)) +
+        (l.note ? '<div style="font-size:11px;color:#7A2E3D;margin-top:2px">&#9998; ' + pcDoEsc_(pcDoClean_(l.note, 120)) + '</div>' : '') + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee;color:#666;font-size:12px">' + pcDoEsc_(pcDoClean_(l.sizeLabel, 40)) + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:right;font-family:monospace">$' + pcDoMoney_((parseFloat(l.price) || 0) * qty) + '</td></tr>';
+  }).join('');
+  var td = 'padding:4px 10px 4px 0;color:#666', tv = 'padding:4px 0;text-align:right;font-family:monospace';
+  var br = '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:4px">';
+  br += '<tr><td style="' + td + '">Subtotal</td><td style="' + tv + '">$' + pcDoMoney_(o.subtotal != null ? o.subtotal : o.total) + '</td></tr>';
+  if (o.deliveryFee) br += '<tr><td style="' + td + '">Delivery fee</td><td style="' + tv + '">$' + pcDoMoney_(o.deliveryFee) + '</td></tr>';
+  if (o.subtotal != null) br += o.taxExempt
+    ? '<tr><td style="' + td + '">Sales tax</td><td style="padding:4px 0;text-align:right;color:#888">Exempt</td></tr>'
+    : '<tr><td style="' + td + '">Sales tax</td><td style="' + tv + '">$' + pcDoMoney_(o.taxAmount) + '</td></tr>';
+  if (o.ccFeeAmount) br += '<tr><td style="' + td + '">Credit card fee</td><td style="' + tv + '">$' + pcDoMoney_(o.ccFeeAmount) + '</td></tr>';
+  if (o.discount) br += '<tr><td style="' + td + '">Discount</td><td style="' + tv + '">&minus;$' + pcDoMoney_(o.discount) + '</td></tr>';
+  if (PAY[o.paymentType]) br += '<tr><td style="' + td + '">Payment</td><td style="padding:4px 0;text-align:right;color:#666;font-size:12px">' + PAY[o.paymentType] + '</td></tr>';
+  br += '</table>';
+  var when = pcDoWhen_(o);
+  var loc = [pcDoClean_(o.locationName, 80), pcDoClean_(o.address, 120)].filter(Boolean).join(', ');
+  var viewUrl = PC_DROPOFF_URL + '?order=' + encodeURIComponent(orderId);
+  var html = '<div style="font-family:Arial,sans-serif;max-width:600px">'
+    + '<div style="background:#7A2E3D;padding:16px 20px;border-radius:6px 6px 0 0"><h2 style="color:#fff;margin:0;font-size:18px">Thanks — we\'ve got your order</h2></div>'
+    + '<div style="background:#fff;border:1px solid #ddd;padding:20px;border-radius:0 0 6px 6px">'
+    + '<div style="background:#FFE066;color:#1D1F21;text-align:center;padding:12px;font-size:20px;font-weight:bold;border-radius:6px;margin-bottom:16px">Order: ' + pcDoEsc_(num) + '</div>'
+    + (o.approved ? '' : '<div style="background:#FBF1DC;color:#A3760C;text-align:center;padding:10px;font-size:13px;font-weight:600;border-radius:6px;margin-bottom:16px">Pending caterer approval</div>')
+    + '<p style="font-size:14px;color:#333;margin:0 0 16px">Hi ' + pcDoEsc_(first) + ', thanks for your order — here\'s a copy for your records. ' + (o.approved ? 'We\'ll reach out if we have any questions.' : 'We\'ll confirm once we\'ve reviewed it, and reach out if we have any questions.') + '</p>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px">'
+    + '<tr style="background:#f7f7f7"><th style="padding:7px 10px;text-align:center;font-size:11px;color:#888">QTY</th><th style="padding:7px 10px;text-align:left;font-size:11px;color:#888">ITEM</th><th style="padding:7px 10px;text-align:left;font-size:11px;color:#888">SIZE</th><th style="padding:7px 10px;text-align:right;font-size:11px;color:#888">TOTAL</th></tr>'
+    + rows + '</table>' + br
+    + '<div style="text-align:right;margin-top:8px;font-size:16px;font-weight:bold;color:#7A2E3D">Total: $' + pcDoMoney_(o.total) + '</div>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:18px;border-top:1px solid #eee;padding-top:10px">'
+    + (when ? '<tr><td style="padding:5px 12px 5px 0;color:#666;white-space:nowrap">Delivery</td><td style="padding:5px 0"><span style="background:#FFE066;font-weight:bold;color:#000;padding:2px 6px;border-radius:3px">' + pcDoEsc_(when) + '</span></td></tr>' : '')
+    + (loc ? '<tr><td style="padding:5px 12px 5px 0;color:#666;white-space:nowrap;vertical-align:top">Location</td><td style="padding:5px 0;font-weight:500;color:#222">' + pcDoEsc_(loc) + '</td></tr>' : '')
+    + '</table>'
+    + '<div style="margin-top:18px;text-align:center">'
+    + '<a href="' + viewUrl + '" style="display:inline-block;background:#7A2E3D;color:#fff;padding:9px 16px;border-radius:7px;text-decoration:none;font-size:13px;margin:0 4px">View / edit this order</a>'
+    + '<a href="' + viewUrl + '&pdf=1" style="display:inline-block;background:#fff;color:#7A2E3D;border:1px solid #7A2E3D;padding:9px 16px;border-radius:7px;text-decoration:none;font-size:13px;margin:0 4px">Download PDF</a>'
+    + '</div>'
+    + '<p style="margin:20px 0 0;font-size:11px;color:#999">Questions about this order? Just reply to this email, or call us directly.</p>'
+    + '</div></div>';
+  var text = 'Thanks — we\'ve got your order.\n\nOrder: ' + num + '\n\nItems:\n'
+    + lines.map(function (l) { l = l || {}; return (parseFloat(l.qty) || 0) + 'x ' + pcDoClean_(l.itemName, 80) + ' (' + pcDoClean_(l.sizeLabel, 40) + ')'; }).join('\n')
+    + '\n\nTotal: $' + pcDoMoney_(o.total)
+    + (when ? '\n\nDelivery: ' + when : '') + (loc ? '\nLocation: ' + loc : '')
+    + '\n\nView or edit your order: ' + viewUrl + '\n\nQuestions? Just reply to this email.';
+  return { html: html, text: text };
+}
+
+// Called by the drop-off page right after a client places an order.
+// Sends once per order, only to that order's own contact emails, only
+// within 30 minutes of the order being placed, max 15 an hour.
+function pcDropoffClientConfirm_(orderId) {
+  try {
+    orderId = String(orderId || '');
+    if (!/^[A-Za-z0-9_-]{6,64}$/.test(orderId)) return { ok: false, error: 'Bad order id' };
+    var cache = CacheService.getScriptCache();
+    if (cache.get('dcc_' + orderId)) return { ok: true, already: true };
+    var res = UrlFetchApp.fetch('https://firestore.googleapis.com/v1/projects/' + PC_FS_PROJECT + '/databases/(default)/documents/dropOffOrders/' + orderId, {
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'x-goog-user-project': PC_FS_PROJECT },
+      muteHttpExceptions: true
+    });
+    if (res.getResponseCode() !== 200) return { ok: false, error: 'Order not found' };
+    var f = JSON.parse(res.getContentText()).fields || {}, o = {};
+    for (var k in f) o[k] = pcFsDecode_(f[k]);
+    var sub = Number(o.submittedAt || 0), now = Date.now();
+    if (!sub || now - sub > 30 * 60 * 1000 || sub > now + 5 * 60 * 1000) return { ok: false, error: 'Order is not new' };
+    if (o.held) return { ok: false, error: 'Order is on hold' };
+    var list = (o.contactEmails && o.contactEmails.length) ? o.contactEmails : [o.contactEmail];
+    var emails = list.map(function (s) { return String(s || '').trim().toLowerCase(); })
+      .filter(function (s) { return /^[^\s@,;<>]+@[^\s@,;<>]+\.[a-z]{2,}$/.test(s); }).slice(0, 3);
+    if (!emails.length) return { ok: false, error: 'No email on the order' };
+    if (!pcHourlyCapOk_('clientconfirm', 15)) return { ok: false, error: 'Hourly limit reached.' };
+    cache.put('dcc_' + orderId, '1', 21600);
+    var built = pcDropoffClientEmail_(o, orderId);
+    GmailApp.sendEmail(emails.join(','), 'Your order with Premier Caterers', built.text,
+      { name: 'Premier Caterers', htmlBody: built.html, bcc: BCC_ON_SENDS });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+
 function pcDenied_() {
   return _pcJson({ ok: false, success: false, error: 'Not signed in as Premier Caterers staff.' });
 }
@@ -113,7 +280,8 @@ function doPost(e) {
   var output = ContentService.createTextOutput();
   output.setMimeType(ContentService.MimeType.JSON);
   try { var _bL = JSON.parse(e.postData.contents); var _actL = (_bL && _bL.action) || (e.parameter && e.parameter.action); if (PC_STAFF_ONLY_ACTIONS[_actL] && !pcIsStaff_(e)) return pcDenied_(); } catch (_err) { if (e && e.parameter && PC_STAFF_ONLY_ACTIONS[e.parameter.action] && !pcIsStaff_(e)) return pcDenied_(); }
-  try { var _b = JSON.parse(e.postData.contents); if (_b && _b.action === 'gmailSend') return _pcJson(pcGmailSend_(_b)); } catch (_err) {}
+  try { var _b = JSON.parse(e.postData.contents); if (_b && _b.action === 'gmailSend') return _pcJson(pcGmailSendGuarded_(_b, e)); } catch (_err) {}
+  try { var _bd = JSON.parse(e.postData.contents); if (_bd && _bd.action === 'dropoffClientConfirm') return _pcJson(pcDropoffClientConfirm_(_bd.orderId)); } catch (_err) {}
   try { var _b2 = JSON.parse(e.postData.contents); if (_b2 && _b2.action === 'parseInvoice') return _pcJson(pcParseInvoice_(_b2)); } catch (_err) {}
   try { var _b3 = JSON.parse(e.postData.contents); if (_b3 && _b3.action === 'aiParseInquiry') return _pcJson(pcAiParseInquiry_(_b3)); } catch (_err) {}
   try {
