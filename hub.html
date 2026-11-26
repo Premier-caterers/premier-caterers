@@ -726,10 +726,10 @@ function renderSchedDay(){
   const sched = scheduleFor(schedDay, evs, true);
   const word = dayWord(schedDay);
   $('dayLabel').className = 'dlabel' + (isToday ? ' is-today' : '');
-  $('dayLabel').innerHTML = '<b>' + esc(schedDay.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'}) + (schedDay.getFullYear() !== new Date().getFullYear() ? ', ' + schedDay.getFullYear() : '')) + '</b><span>' + (isToday ? '★ ' : '') + esc(word) + '</span>';
+  setHtml($('dayLabel'), '<b>' + esc(schedDay.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'}) + (schedDay.getFullYear() !== new Date().getFullYear() ? ', ' + schedDay.getFullYear() : '')) + '</b><span>' + (isToday ? '★ ' : '') + esc(word) + '</span>');
   $('dayPick').value = ymd(schedDay);
   $('dayBack').classList.toggle('hidden', isToday);
-  $('schedList').innerHTML = sched.length ? sched.map(schedRowEd).join('') : '<div class="empty-line">Nothing scheduled ' + (isToday ? 'today' : 'this day') + '.</div>';
+  setHtml($('schedList'), sched.length ? sched.map(schedRowEd).join('') : '<div class="empty-line">Nothing scheduled ' + (isToday ? 'today' : 'this day') + '.</div>');
 }
 $('dayPick').addEventListener('change', e => { if(e.target.value) setSchedDay(e.target.value + 'T12:00:00'); });
 
@@ -758,7 +758,21 @@ buildSticky($('stickyPhone'), 'P');
 buildSticky($('stickyFull'), 'F');
 
 /* ---------- render ---------- */
+// Only swap a box's contents when they actually changed. Swapping rebuilds every
+// button inside it, and a click that lands mid-swap is lost (the "click twice" bug).
+function setHtml(el, html){ if(el && el._html !== html){ el.innerHTML = html; el._html = html; } }
+// While the mouse button (or a finger) is down, hold any redraw until the click
+// has gone through, so the button under the pointer can't be replaced mid-click.
+let pointerDownAt = 0, renderHeld = false;
+document.addEventListener('pointerdown', () => { pointerDownAt = Date.now(); }, true);
+function releaseRender(){ pointerDownAt = 0; if(renderHeld){ renderHeld = false; setTimeout(render, 0); } }
+document.addEventListener('pointerup', releaseRender, true);
+document.addEventListener('pointercancel', releaseRender, true);
 function render(){
+  if(pointerDownAt && Date.now() - pointerDownAt < 2000){ renderHeld = true; return; }
+  renderNow();
+}
+function renderNow(){
   const now = new Date();
   const up = o => esc(now.toLocaleDateString('en-US', o).toUpperCase());
   $('dateLabel').innerHTML =
@@ -791,27 +805,27 @@ function render(){
 
   // progress dots
   const dotsHtml = (n, on) => { const shown = Math.min(n, MAX_DOTS), filled = Math.min(on, shown); let h = ''; for(let i = 0; i < shown; i++) h += '<span class="dot' + (i < filled ? ' on' : '') + '"></span>'; return h; };
-  $('dots').innerHTML = dotsHtml(total, doneCount);
+  setHtml($('dots'), dotsHtml(total, doneCount));
   $('progressTxt').textContent = total ? doneCount + ' of ' + total + ' done' : 'Nothing on today’s list yet';
-  $('miniDots').innerHTML = dotsHtml(total, doneCount).replace(/class="dot/g, 'style="width:12px;height:12px;border-width:2px" class="dot');
+  setHtml($('miniDots'), dotsHtml(total, doneCount).replace(/class="dot/g, 'style="width:12px;height:12px;border-width:2px" class="dot'));
   $('miniTodoHead').textContent = (pend.length + done.length) ? 'TO DO · ' + done.length + ' OF ' + (pend.length + done.length) : 'TO DO';
   const mini = pend.filter(it => it !== focus).slice(0, 2);
-  $('miniTodo').innerHTML = mini.length ? mini.map(todoRow).join('') : '<div class="empty-line">Nothing else on the list.</div>';
+  setHtml($('miniTodo'), mini.length ? mini.map(todoRow).join('') : '<div class="empty-line">Nothing else on the list.</div>');
 
   // coming up (next 2 still ahead) + full schedule
   const sched = scheduleToday(), nowTs = Date.now();
   const upcoming = sched.filter(s => !s.timed || s.ts >= nowTs - 30 * 60000).slice(0, 2);
   $('comingHead').textContent = window.matchMedia('(max-width:760px)').matches ? 'NEXT ON THE SCHEDULE' : 'COMING UP';
-  $('comingList').innerHTML = upcoming.length ? upcoming.map(schedRow).join('') : '<div class="empty-line">Nothing else scheduled today.</div>';
+  setHtml($('comingList'), upcoming.length ? upcoming.map(schedRow).join('') : '<div class="empty-line">Nothing else scheduled today.</div>');
   renderSchedDay();
 
   // to-do view
   const list = pend.concat(done.slice().sort((a,b) => (a.doneAt||0) - (b.doneAt||0)));
-  $('todoList').innerHTML = list.length ? list.map(todoRowEd).join('') : '<div class="empty-line">Nothing on My Day yet.</div>';
+  setHtml($('todoList'), list.length ? list.map(todoRowEd).join('') : '<div class="empty-line">Nothing on My Day yet.</div>');
   $('todoCount').textContent = total ? done.length + ' OF ' + total + ' DONE' : '';
   const later = laterItems();
   $('laterHead').textContent = later.length ? 'LATER DAYS · ' + later.length : '';
-  $('laterList').innerHTML = later.map(todoRowEd).join('');
+  setHtml($('laterList'), later.map(todoRowEd).join(''));
 
   renderFull(pend, done, pend.length + done.length, sched);
   renderEmail(head);
@@ -1526,13 +1540,13 @@ function renderEmail(head){
   const side = all.filter(x => x.key !== headKey).slice(0, 3);
   $('mailMiniWrap').classList.toggle('hidden', !side.length);
   $('mailMiniHead').textContent = 'WAITING ON YOU · ' + all.length;
-  $('mailMini').innerHTML = side.map(miniAny).join('');
+  setHtml($('mailMini'), side.map(miniAny).join(''));
   // full day list
   $('fInboxHead').textContent = 'INBOX — NEEDS YOU' + (all.length ? ' · ' + all.length : '');
-  $('fInbox').innerHTML = (st === 'off' && wst === 'off')
+  setHtml($('fInbox'), (st === 'off' && wst === 'off')
     ? '<div class="placeholder-box">Email and WhatsApp aren’t connected yet — finish the one-time setup.</div>'
     : (all.length ? all.slice(0, 5).map(miniAny).join('') + (all.length > 5 ? '<button type="button" class="link-btn" data-act="goinbox">See all ' + all.length + '</button>' : '')
-                  : '<div class="empty-line">Nothing waiting on you.</div>');
+                  : '<div class="empty-line">Nothing waiting on you.</div>'));
   // inbox tab
   let notice = '';
   if(st === 'off') notice = '<div class="warn-box"><strong>Email isn’t connected yet.</strong>Finish the one-time setup of the “Premier Hub Sync” script (signed in as kenny@), and your emails will show up here within a minute.</div>';
@@ -1561,7 +1575,7 @@ function renderEmail(head){
     notice += '<div class="warn-box" style="margin-top:8px"><strong>A reply didn’t send.</strong>' + esc(f.subject || '') + ' — ' + esc(f.error || '') +
       '<span><a href="' + GMAIL(f.threadId, f.mailbox) + '" target="_blank" rel="noopener">Open in Gmail</a> · <button type="button" class="link-btn" style="display:inline;min-height:0;padding:0" data-act="eclearfail" data-id="' + esc(f.id) + '">Dismiss</button></span></div>';
   });
-  $('inboxNotice').innerHTML = notice;
+  setHtml($('inboxNotice'), notice);
   $('inboxCount').textContent = all.length ? all.length + ' WAITING' : '';
   const nE = waiting.length, nW = all.length - nE;
   const phoneInbox = window.matchMedia('(max-width:760px)').matches;
@@ -1571,7 +1585,7 @@ function renderEmail(head){
   const fullList = all.concat(snoozed.map(em => ({key: 'e:' + em.id, email: em})), snoozedChats().map(c => ({key: 'w:' + c.id, wa: c})));
   const nOf = k => all.filter(x => boxOf(x) === k).length;
   const chip = (k, label, icon) => '<button type="button" data-act="ifilter" data-id="' + k + '" aria-pressed="' + (inboxFilter === k) + '">' + icon + label + '</button>';
-  $('inboxChips').innerHTML = phoneInbox ? chip('all', 'ALL · ' + all.length, '') + BOXES.map(b => chip(b.k, b.label.toUpperCase() + ' · ' + nOf(b.k), b.icon())).join('') : '';
+  setHtml($('inboxChips'), phoneInbox ? chip('all', 'ALL · ' + all.length, '') + BOXES.map(b => chip(b.k, b.label.toUpperCase() + ' · ' + nOf(b.k), b.icon())).join('') : '');
   $('inboxChips').classList.toggle('hidden', !phoneInbox);
   const list = fullList.filter(x => inboxFilter === 'all' || boxOf(x) === inboxFilter);
   // keep each box where you scrolled it — the list redraws whenever a new message arrives
@@ -1580,7 +1594,7 @@ function renderEmail(head){
   const newInboxHtml = (st === 'off' && wst === 'off') ? '' : !phoneInbox ? qBoxes(fullList)
     : (list.length ? list.map(x => x.wa ? waRow(x.wa, true) : mailRow(x.email, true)).join('')
     : '<div class="empty-line">Nothing waiting on you here.</div>');
-  if($('inboxList').innerHTML !== newInboxHtml) $('inboxList').innerHTML = newInboxHtml;
+  setHtml($('inboxList'), newInboxHtml);
   document.querySelectorAll('#inboxList .qbox').forEach(q => { const l = q.querySelector('.qbox-list'), v = keepScroll[q.getAttribute('aria-label')]; if(l && v) l.scrollTop = v; });
   const waitingKeys = new Set(list.map(x => x.key));
   const recent = Date.now() - 3 * 86400000;
@@ -1589,7 +1603,7 @@ function renderEmail(head){
     .sort((a, b) => b.ts - a.ts);
   $('otherWrap').classList.toggle('hidden', !others.length);
   $('otherHead').textContent = 'Everything else · ' + others.length + ' (older than ' + WAITING_DAYS + ' days, receipts, notices, ones you answered)';
-  $('otherList').innerHTML = others.slice(0, 60).map(x => x.wa ? waRow(x.wa, false) : mailRow(x.email, false)).join('');
+  setHtml($('otherList'), others.slice(0, 60).map(x => x.wa ? waRow(x.wa, false) : mailRow(x.email, false)).join(''));
   inboxFilter = savedFilter;
 }
 function renderLive(){
@@ -1653,9 +1667,9 @@ function renderFull(pend, done, total, sched){
     '<span>' + shortTime(b.ts).replace(/<\/?small>/g, ' ').trim() + ' · ' + esc(b.what) + '</span>' + (b.sub && b.h >= 60 ? '<span class="s">' + esc(b.sub) + '</span>' : '') + '</div>').join('');
   const nowH = new Date().getHours();
   const nowLine = (nowH >= DAY_START && nowH <= DAY_END) ? '<div class="nowline" style="top:' + yFor(Date.now()) + 'px"><span>NOW</span></div>' : '';
-  $('fHours').innerHTML = rows + blk + nowLine;
+  setHtml($('fHours'), rows + blk + nowLine);
   const allDay = sched.filter(s => !s.timed);
-  $('fAllDay').innerHTML = allDay.map(s => '<span>ALL DAY · ' + esc(s.what) + '</span>').join('');
+  setHtml($('fAllDay'), allDay.map(s => '<span>ALL DAY · ' + esc(s.what) + '</span>').join(''));
 
   // priorities (up to 3) — any to-do marked as a priority
   const prios = pend.filter(it => it.priority).slice(0, 3);
@@ -1663,16 +1677,16 @@ function renderFull(pend, done, total, sched){
     '<input type="checkbox" class="ring" data-act="toggle" data-id="' + esc(it.id) + '" aria-label="Done: ' + esc(it.text) + '"></label>').join('');
   if(prios.length < 3) ph += '<div class="prio-row"><span class="n">' + (prios.length + 1) + '.</span><input class="prio-add" id="prioAdd" placeholder="Tap to add a priority" aria-label="Add a priority"></div>';
   const keep = document.activeElement && document.activeElement.id === 'prioAdd' ? $('prioAdd').value : null;
-  $('fPrio').innerHTML = ph;
+  setHtml($('fPrio'), ph);
   if(keep !== null && $('prioAdd')){ $('prioAdd').value = keep; $('prioAdd').focus(); }
 
   // to-do list with round checkboxes + done dots
   const list = pend.concat(done.slice().sort((a,b) => (a.doneAt||0) - (b.doneAt||0)));
-  $('fTodo').innerHTML = list.length ? list.map(todoRowEd).join('') : '<div class="empty-line">Nothing on My Day yet.</div>';
+  setHtml($('fTodo'), list.length ? list.map(todoRowEd).join('') : '<div class="empty-line">Nothing on My Day yet.</div>');
   $('fTodoCount').textContent = total ? done.length + ' OF ' + total : '';
   let dh = ''; const shown = Math.min(total, MAX_DOTS);
   for(let i = 0; i < shown; i++) dh += '<span class="dot' + (i < Math.min(done.length, shown) ? ' on' : '') + '" style="width:18px;height:18px;border-width:2px"></span>';
-  $('fDots').innerHTML = dh;
+  setHtml($('fDots'), dh);
 }
 document.addEventListener('keydown', async e => {
   if(e.target.id !== 'prioAdd' || e.key !== 'Enter') return;
